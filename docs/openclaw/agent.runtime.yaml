@@ -1,0 +1,73 @@
+agent:
+  id: a-share-trading-agent
+  timezone: Asia/Shanghai
+  mode: auto
+  market:
+    region: CN
+    sessions:
+      - { start: "09:30:00", end: "11:30:00" }
+      - { start: "13:00:00", end: "15:00:00" }
+
+paths:
+  pool_dir: data/pools
+  plan_dir: data/plans
+  event_log: data/events/trade_events.jsonl
+  orders_dir: data/orders
+  positions_dir: data/positions
+  params_active: data/params/active.yaml
+  params_history_dir: data/params/history
+  metrics_file: data/metrics/daily_metrics.csv
+  contracts_dir: docs/contracts
+
+contracts:
+  trade_plan: docs/contracts/trade_plan.schema.json
+  order_intent: docs/contracts/order_intent.schema.json
+  risk_decision: docs/contracts/risk_decision.schema.json
+  execution_report: docs/contracts/execution_report.schema.json
+  event_log: docs/contracts/event_log.schema.json
+
+skills:
+  orchestrator: .agents/skills/a-share-trade-orchestrator/SKILL.md
+  selector: .agents/skills/a-share-trend-scanner/SKILL.md
+  plan_compiler: .agents/skills/a-share-trade-plan-compiler/SKILL.md
+  event_executor: .agents/skills/a-share-trade-event-executor/SKILL.md
+  risk_gate: .agents/skills/a-share-trade-risk-gate/SKILL.md
+  broker_adapter: .agents/skills/a-share-trade-broker-jvquant/SKILL.md
+  reflection_evolver: .agents/skills/a-share-trade-reflection-evolver/SKILL.md
+
+trading_rules:
+  max_positions: 5
+  max_daily_fills: 10
+  open_window: { start: "09:30:00", end: "09:35:00" }
+  repost_max_per_symbol: 5
+  add_step_pct: 0.02
+  stop_loss_from_last_buy_pct: 0.20
+  single_order_target_cny: 5000
+  one_lot_exception_price_source: previous_close
+  buy_quote_policy: buy_plus_1pct
+  sell_quote_policy: sell_minus_1pct
+
+execution_guardrails:
+  require_risk_gate_approval: true
+  reject_if_contract_invalid: true
+  reject_if_unknown_symbol: true
+  reject_if_outside_session: true
+  reject_if_fill_limit_reached: true
+
+notifications:
+  on_trade_complete: true
+  on_reject: true
+  on_uncertain_order_state: true
+  channel: user_push
+
+cost_control:
+  trade_api_required: true
+  market_data_primary: websocket
+  non_trade_data_route: cost_aware
+  sql_budget_enabled: true
+
+reliability:
+  broker_timeout_seconds: 8
+  allocate_server_retry: [1, 2, 5]
+  ws_reconnect_seconds: [0, 5, 15]
+  uncertain_order_action: alert_and_pause

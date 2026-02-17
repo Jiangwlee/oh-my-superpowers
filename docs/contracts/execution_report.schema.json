@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution_report.schema.json",
+  "title": "ExecutionReport",
+  "type": "object",
+  "required": [
+    "intent_id",
+    "order_id",
+    "request",
+    "response",
+    "fills",
+    "fill_counted_for_daily_limit"
+  ],
+  "properties": {
+    "intent_id": { "type": "string", "minLength": 1 },
+    "order_id": { "type": "string", "minLength": 1 },
+    "request": {
+      "type": "object",
+      "required": ["symbol", "side", "price", "volume"],
+      "properties": {
+        "symbol": { "type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$" },
+        "side": { "type": "string", "enum": ["buy", "sell"] },
+        "price": { "type": "number", "exclusiveMinimum": 0 },
+        "volume": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "response": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "fills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fill_id", "price", "volume", "amount"],
+        "properties": {
+          "fill_id": { "type": "string", "minLength": 1 },
+          "price": { "type": "number", "exclusiveMinimum": 0 },
+          "volume": { "type": "integer", "minimum": 1 },
+          "amount": { "type": "number", "exclusiveMinimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "fill_counted_for_daily_limit": { "type": "boolean" },
+    "post_position_snapshot_id": { "type": "string" }
+  },
+  "additionalProperties": false
+}
