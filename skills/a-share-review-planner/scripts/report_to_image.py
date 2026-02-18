@@ -35,52 +35,52 @@ CSS = """
 body {
     font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB',
                  'Microsoft YaHei', sans-serif;
-    font-size: 15px;
-    line-height: 1.7;
+    font-size: 17px;
+    line-height: 1.75;
     color: #1a1a1a;
     background: #ffffff;
-    padding: 20px 18px 32px;
+    padding: 24px 20px 40px;
     max-width: 750px;
 }
 h1 {
-    font-size: 19px;
+    font-size: 22px;
     color: #0d47a1;
     border-bottom: 2px solid #0d47a1;
     padding-bottom: 6px;
-    margin: 16px 0 10px;
+    margin: 18px 0 12px;
 }
 h2 {
-    font-size: 16px;
+    font-size: 19px;
     color: #1565c0;
-    margin: 18px 0 8px;
+    margin: 20px 0 10px;
     padding-left: 8px;
     border-left: 3px solid #42a5f5;
 }
-h3 { font-size: 15px; color: #333; margin: 12px 0 6px; }
-p { margin: 6px 0; }
-ul, ol { padding-left: 18px; margin: 6px 0; }
-li { margin: 3px 0; }
+h3 { font-size: 17px; color: #333; margin: 14px 0 7px; }
+p { margin: 7px 0; }
+ul, ol { padding-left: 20px; margin: 7px 0; }
+li { margin: 4px 0; }
 strong { color: #c62828; }
 em { color: #5c6bc0; font-style: normal; font-weight: 500; }
-table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
 th {
     background: #e3f2fd; color: #0d47a1;
-    padding: 6px 8px; text-align: left; border: 1px solid #bbdefb;
+    padding: 7px 10px; text-align: left; border: 1px solid #bbdefb;
 }
-td { padding: 5px 8px; border: 1px solid #e0e0e0; vertical-align: top; }
+td { padding: 6px 10px; border: 1px solid #e0e0e0; vertical-align: top; }
 tr:nth-child(even) td { background: #fafafa; }
 code {
     background: #f3f3f3; padding: 1px 5px; border-radius: 3px;
-    font-size: 13px; font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 15px; font-family: 'SF Mono', Menlo, Consolas, monospace;
 }
 pre {
-    background: #f3f3f3; padding: 12px; border-radius: 6px;
-    font-size: 12px; overflow-x: auto; margin: 8px 0;
+    background: #f3f3f3; padding: 14px; border-radius: 6px;
+    font-size: 14px; overflow-x: auto; margin: 10px 0;
     white-space: pre-wrap; word-break: break-all;
 }
 pre code { background: none; padding: 0; }
-blockquote { border-left: 3px solid #90caf9; padding-left: 12px; color: #555; margin: 8px 0; }
-hr { border: none; border-top: 1px solid #e8e8e8; margin: 14px 0; }
+blockquote { border-left: 3px solid #90caf9; padding-left: 14px; color: #555; margin: 10px 0; }
+hr { border: none; border-top: 1px solid #e8e8e8; margin: 16px 0; }
 """
 
 
