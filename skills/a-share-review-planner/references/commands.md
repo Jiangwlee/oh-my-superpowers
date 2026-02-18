@@ -29,6 +29,26 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 `{DATE}` 替换为当天日期，如 `2026-02-18`。
 `{SKILL_DIR}` 替换为本 Skill 所在目录，如 `/Users/mindora/clawd/skills/a-share-review-planner`。
 
+## 报告转图片（手机/Telegram）
+
+```bash
+# 首次使用安装浏览器（只需一次）
+uv run playwright install chromium
+
+# 默认宽度 750px（Telegram 手机推荐）
+uv run {SKILL_DIR}/scripts/report_to_image.py \
+  /tmp/a-share-review/{DATE}/report.md \
+  /tmp/a-share-review/{DATE}/report.png
+
+# 平板/PC 宽度
+uv run {SKILL_DIR}/scripts/report_to_image.py \
+  /tmp/a-share-review/{DATE}/report.md \
+  /tmp/a-share-review/{DATE}/report.png \
+  --width 1080
+```
+
+依赖：`pandoc`（已有）+ `uv`（已有）+ `playwright`（由 uv 自动安装）。
+
 ## 输出文件一览
 
 | 文件 | 说明 |

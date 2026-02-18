@@ -1,8 +1,8 @@
 ---
 name: a-share-review-planner
 description: Use when user says "复盘"、"今日回顾"、"明日计划"、"选股" or wants to
-  review A-share market after close and generate next-day trading plan.
-  Do NOT use on non-trading days or intraday.
+  review A-share market and generate trading plan. Works on trading days,
+  holidays, and weekends.
 ---
 
 # A股复盘与交易计划
@@ -24,12 +24,18 @@ description: Use when user says "复盘"、"今日回顾"、"明日计划"、"�
 ## When to Use
 
 - 用户说"复盘"、"今日回顾"、"明日计划"、"帮我选股"
-- 每个交易日收盘后（15:00后）
+- 交易日收盘后（最完整）
+- 节假日/周末（市场虽休市，但新热点持续涌现，适合梳理题材线索、预判开盘策略）
 
-## When NOT to Use
+## 数据完整性说明
 
-- 非交易日（节假日、周末）
-- 盘中（数据不完整）
+| 场景 | 新闻/舆情 | 板块资金 | 趋势扫描 |
+|------|-----------|---------|---------|
+| 交易日收盘后 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| 节假日/周末 | ✅ 有效 | ⚠️ 为最后交易日数据 | ⚠️ 为最后交易日数据 |
+| 盘中 | ✅ 有效 | ⚠️ 实时但不完整 | ⚠️ 基于前一日收盘 |
+
+数据有缺失时，在分析中明确标注，不得用臆测填充。
 
 ---
 
@@ -135,6 +141,26 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 - 当前策略评估：[适用/需微调]
 - 调整内容：[无/具体修改]
 ```
+
+---
+
+### 阶段5（可选）：生成手机图片
+
+如果用户需要推送报告到 Telegram 或手机查看，将阶段4的报告保存为 Markdown 文件后执行：
+
+```bash
+# 首次使用需安装浏览器（只需一次）
+uv run {SKILL_DIR}/scripts/report_to_image.py --help
+uv run playwright install chromium
+
+# 生成图片（默认宽度 750px，适合 Telegram 手机）
+uv run {SKILL_DIR}/scripts/report_to_image.py \
+  /tmp/a-share-review/{DATE}/report.md \
+  /tmp/a-share-review/{DATE}/report.png
+```
+
+生成的 PNG 为竖向长图，可直接发送至 Telegram（支持手机滚动查看）。
+如需更宽的图片（平板/PC），添加 `--width 1080`。
 
 ---
 
