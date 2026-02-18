@@ -160,14 +160,18 @@ EOF
 **步骤1：用 Chrome headless 生成 PNG（不依赖 browser relay）**
 
 ```bash
+mkdir -p ~/.openclaw/media/a-share-review/{DATE}
 python3 {SKILL_DIR}/scripts/report_to_image.py \
-  /tmp/a-share-review/{DATE}/report.md
+  /tmp/a-share-review/{DATE}/report.md \
+  --output ~/.openclaw/media/a-share-review/{DATE}/report.png
 # 脚本输出两行：
-#   完成（png，XXkb）：/tmp/a-share-review/{DATE}/report.png
-#   file:///tmp/a-share-review/{DATE}/report.png
+#   完成（png，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report.png
+#   file:///Users/mindora/.openclaw/media/a-share-review/{DATE}/report.png
 ```
 
-脚本直接调用系统 Chrome headless 生成 PNG，**不经过 Openclaw browser relay**，无需额外依赖。
+> **输出到 `~/.openclaw/media/`**：该目录是 Openclaw 硬编码的永久允许目录，所有 channel 和 session 均可发送，不受 agentId 或 workspace 影响。
+>
+> 脚本直接调用系统 Chrome headless，**不经过 Openclaw browser relay**，无需额外依赖。
 
 **步骤2：用 browser 工具发送图片**
 
