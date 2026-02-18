@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+report_to_image.py - 将 Markdown 复盘报告转为图片/PDF，不依赖 Openclaw browser relay
+
+用法：
+    python3 scripts/report_to_image.py <input.md> [--format png|pdf] [--output path]
+
+默认输出 PNG（与输入文件同目录，扩展名替换）。
+PNG 模式：使用 Chrome headless 截图，viewport 宽 750px，自动探测页面高度。
+PDF 模式：使用 Chrome headless --print-to-pdf，生成完整分页 PDF。
+
+依赖：系统已安装 Google Chrome（/Applications/Google Chrome.app），无需额外 pip 包。
+"""
+
+import argparse
+import html
+import json
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+# ── Chrome 可执行路径（按优先级） ───────────────────────────────────────────
+CHROME_CANDIDATES = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+]
+
+# ── 手机友好 CSS（与 report_to_html.py 保持一致）──────────────────────────
+CSS = """
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB',
+                 'Microsoft YaHei', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #1a1a1a;
+    background: #ffffff;
+    padding: 20px 18px 32px;
+    max-width: 750px;
+}
+h1 {
+    font-size: 19px;
+    color: #0d47a1;
+    border-bottom: 2px solid #0d47a1;
+    padding-bottom: 6px;
+    margin: 16px 0 10px;
+}
+h2 {
+    font-size: 16px;
+    color: #1565c0;
+    margin: 18px 0 8px;
+    padding-left: 8px;
+    border-left: 3px solid #42a5f5;
+}
+h3 { font-size: 15px; color: #333; margin: 12px 0 6px; }
+p { margin: 6px 0; }
+ul, ol { padding-left: 18px; margin: 6px 0; }
+li { margin: 3px 0; }
+strong { color: #c62828; }
+em { color: #5c6bc0; font-style: normal; font-weight: 500; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+th {
+    background: #e3f2fd; color: #0d47a1;
+    padding: 6px 8px; text-align: left; border: 1px solid #bbdefb;
+}
+td { padding: 5px 8px; border: 1px solid #e0e0e0; vertical-align: top; }
+tr:nth-child(even) td { background: #fafafa; }
+code {
+    background: #f3f3f3; padding: 1px 5px; border-radius: 3px;
+    font-size: 13px; font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+pre {
+    background: #f3f3f3; padding: 12px; border-radius: 6px;
+    font-size: 12px; overflow-x: auto; margin: 8px 0;
+    white-space: pre-wrap; word-break: break-all;
+}
+pre code { background: none; padding: 0; }
+blockquote { border-left: 3px solid #90caf9; padding-left: 12px; color: #555; margin: 8px 0; }
+hr { border: none; border-top: 1px solid #e8e8e8; margin: 14px 0; }
+"""
+
+
+def find_chrome() -> str | None:
+    for path in CHROME_CANDIDATES:
+        if Path(path).exists():
+            return path
+    return None
+
+
+def markdown_to_html(md_path: Path) -> str:
+    """Markdown → 完整 HTML 字符串"""
+    if shutil.which("pandoc"):
+        try:
+            result = subprocess.run(
+                ["pandoc", "--from=markdown", "--to=html5", str(md_path)],
+                capture_output=True, text=True, check=True
+            )
+            body = result.stdout
+        except subprocess.CalledProcessError:
+            body = _md_fallback(md_path)
+    else:
+        body = _md_fallback(md_path)
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>{CSS}</style>
+</head>
+<body>{body}</body>
+</html>"""
+
+
+def _md_fallback(md_path: Path) -> str:
+    content = md_path.read_text(encoding="utf-8")
+    return f'<pre style="white-space:pre-wrap;font-size:14px;">{html.escape(content)}</pre>'
+
+
+def get_page_height(chrome: str, html_file: Path, width: int = 750) -> int:
+    """
+    启动 Chrome headless remote-debugging，获取实际页面高度。
+    失败时返回默认高度 12000。
+    """
+    port = _find_free_port()
+    proc = subprocess.Popen(
+        [
+            chrome,
+            f"--remote-debugging-port={port}",
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            f"--window-size={width},800",
+            f"file://{html_file.absolute()}",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        # 等待 Chrome 启动
+        _wait_for_port(port, timeout=10)
+
+        # 获取 websocket 调试 URL
+        info = json.loads(
+            urllib.request.urlopen(
+                f"http://localhost:{port}/json", timeout=5
+            ).read()
+        )
+        ws_url = info[0]["webSocketDebuggerUrl"]
+
+        # 通过 CDP 获取 scrollHeight
+        import websocket  # 仅在此处 import，避免影响主流程
+        ws = websocket.create_connection(ws_url, timeout=10)
+        ws.send(json.dumps({
+            "id": 1,
+            "method": "Runtime.evaluate",
+            "params": {"expression": "document.body.scrollHeight"}
+        }))
+        resp = json.loads(ws.recv())
+        ws.close()
+        height = int(resp["result"]["result"]["value"])
+        return max(height + 40, 400)   # +40px padding
+    except Exception:
+        return 12000  # 默认安全高度
+    finally:
+        proc.terminate()
+        proc.wait()
+
+
+def _find_free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _wait_for_port(port: int, timeout: float) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return
+        except OSError:
+            time.sleep(0.2)
+    raise TimeoutError(f"Chrome remote-debugging port {port} 未就绪")
+
+
+def screenshot_png(chrome: str, html_file: Path, output: Path, width: int = 750) -> None:
+    """用 headless Chrome 截全页 PNG"""
+    # 先尝试精确获取高度，失败则用安全默认值
+    try:
+        height = get_page_height(chrome, html_file, width)
+    except Exception:
+        height = 12000
+
+    subprocess.run(
+        [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            f"--screenshot={output.absolute()}",
+            f"--window-size={width},{height}",
+            "--hide-scrollbars",
+            f"file://{html_file.absolute()}",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
+
+
+def generate_pdf(chrome: str, html_file: Path, output: Path) -> None:
+    """用 headless Chrome 生成完整 PDF"""
+    subprocess.run(
+        [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            f"--print-to-pdf={output.absolute()}",
+            "--no-pdf-header-footer",
+            "--print-to-pdf-no-header",
+            f"file://{html_file.absolute()}",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="将 Markdown 复盘报告转为 PNG 图片或 PDF（不依赖 Openclaw browser）"
+    )
+    parser.add_argument("input", help="输入 Markdown 文件路径")
+    parser.add_argument("--format", choices=["png", "pdf"], default="png",
+                        help="输出格式（默认 png）")
+    parser.add_argument("--output", help="输出文件路径（默认与输入同目录）")
+    args = parser.parse_args()
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"错误：找不到输入文件：{input_path}", file=sys.stderr)
+        sys.exit(1)
+
+    chrome = find_chrome()
+    if not chrome:
+        print("错误：未找到 Google Chrome，请安装后重试", file=sys.stderr)
+        sys.exit(1)
+
+    fmt = args.format
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        output_path = input_path.with_suffix(f".{fmt}")
+
+    # 先生成 HTML 中间文件（临时）
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+        html_path = Path(tmp.name)
+
+    try:
+        html_content = markdown_to_html(input_path)
+        html_path.write_text(html_content, encoding="utf-8")
+
+        if fmt == "pdf":
+            generate_pdf(chrome, html_path, output_path)
+        else:
+            screenshot_png(chrome, html_path, output_path)
+    finally:
+        html_path.unlink(missing_ok=True)
+
+    if not output_path.exists():
+        print(f"错误：输出文件未生成：{output_path}", file=sys.stderr)
+        sys.exit(1)
+
+    size_kb = output_path.stat().st_size // 1024
+    print(f"完成（{fmt}，{size_kb}KB）：{output_path}")
+    print(f"file://{output_path.absolute()}")
+
+
+if __name__ == "__main__":
+    main()

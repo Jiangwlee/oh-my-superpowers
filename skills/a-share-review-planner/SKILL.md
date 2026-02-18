@@ -157,23 +157,23 @@ EOF
 
 报告文件保存后，执行以下步骤。**这是默认流程，不是可选项。**
 
-**步骤1：生成 HTML**
+**步骤1：用 Chrome headless 生成 PNG（不依赖 browser relay）**
 
 ```bash
-python3 {SKILL_DIR}/scripts/report_to_html.py \
+python3 {SKILL_DIR}/scripts/report_to_image.py \
   /tmp/a-share-review/{DATE}/report.md
-# 脚本输出 file:// URL，如：file:///tmp/a-share-review/{DATE}/report.html
+# 脚本输出两行：
+#   完成（png，XXkb）：/tmp/a-share-review/{DATE}/report.png
+#   file:///tmp/a-share-review/{DATE}/report.png
 ```
 
-**步骤2：用 browser 工具截图并发送**
+脚本直接调用系统 Chrome headless 生成 PNG，**不经过 Openclaw browser relay**，无需额外依赖。
 
-使用 Openclaw 内置的 `browser` 工具：
-1. 打开脚本输出的 `file://` URL
-2. 对全页截图
-3. 将截图发送给用户
-4. 关闭浏览器
+**步骤2：用 browser 工具发送图片**
 
-**Fallback：若 browser 工具或脚本执行失败**
+使用 Openclaw 内置的 `browser` 工具打开脚本输出的 `file://` URL，将图片发送给用户。
+
+**Fallback：若 browser 工具失败**
 
 直接将 `/tmp/a-share-review/{DATE}/report.md` 的文本内容输出给用户。
 

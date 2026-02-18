@@ -29,22 +29,29 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 `{DATE}` 替换为当天日期，如 `2026-02-18`。
 `{SKILL_DIR}` 替换为本 Skill 所在目录，如 `/Users/mindora/clawd/skills/a-share-review-planner`。
 
-## 报告转 HTML（手机/Telegram）
+## 报告转图片（推荐，不依赖 browser relay）
 
 ```bash
-# 生成 HTML（输出同目录下的 report.html，并打印 file:// URL）
-python3 {SKILL_DIR}/scripts/report_to_html.py \
+# 生成 PNG（默认，Chrome headless 截全页，自动探测页面高度）
+python3 {SKILL_DIR}/scripts/report_to_image.py \
   /tmp/a-share-review/{DATE}/report.md
 
-# 指定输出路径
-python3 {SKILL_DIR}/scripts/report_to_html.py \
+# 生成 PDF（完整分页，Telegram 原生预览）
+python3 {SKILL_DIR}/scripts/report_to_image.py \
   /tmp/a-share-review/{DATE}/report.md \
-  /tmp/a-share-review/{DATE}/report.html
+  --format pdf
 ```
 
-依赖：`pandoc`（可选，无则自动降级纯文本）。无需额外安装。
+依赖：系统已安装 Google Chrome（/Applications/Google Chrome.app），无需 pip 安装任何包。
 
-生成后用 Openclaw `browser` 工具打开 `file://` URL 截图发送。
+## 报告转 HTML（备用，供 browser 工具截图）
+
+```bash
+python3 {SKILL_DIR}/scripts/report_to_html.py \
+  /tmp/a-share-review/{DATE}/report.md
+```
+
+依赖：`pandoc`（可选，无则自动降级纯文本）。生成后用 Openclaw `browser` 工具打开 `file://` URL。
 
 ## 输出文件一览
 
