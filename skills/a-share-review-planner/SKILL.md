@@ -144,23 +144,32 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 
 ---
 
-### 阶段5（可选）：生成手机图片
+### 阶段5（可选）：推送手机图片
 
-如果用户需要推送报告到 Telegram 或手机查看，将阶段4的报告保存为 Markdown 文件后执行：
+如果用户需要推送报告到 Telegram 或手机查看，执行以下步骤：
+
+**步骤1：将阶段4的报告保存为 Markdown 文件，然后生成 HTML**
 
 ```bash
-# 首次使用需安装浏览器（只需一次）
-uv run {SKILL_DIR}/scripts/report_to_image.py --help
-uv run playwright install chromium
-
-# 生成图片（默认宽度 750px，适合 Telegram 手机）
-uv run {SKILL_DIR}/scripts/report_to_image.py \
-  /tmp/a-share-review/{DATE}/report.md \
-  /tmp/a-share-review/{DATE}/report.png
+python3 {SKILL_DIR}/scripts/report_to_html.py \
+  /tmp/a-share-review/{DATE}/report.md
+# 脚本会输出 file:// URL，如：
+# file:///tmp/a-share-review/{DATE}/report.html
 ```
 
-生成的 PNG 为竖向长图，可直接发送至 Telegram（支持手机滚动查看）。
-如需更宽的图片（平板/PC），添加 `--width 1080`。
+脚本自动检测 pandoc：有则富文本渲染，无则降级为纯文本展示。
+
+**步骤2：用 browser 工具打开 HTML，截图发送给用户**
+
+使用 Openclaw 内置的 `browser` 工具：
+1. 打开脚本输出的 `file://` URL
+2. 对全页截图
+3. 将截图发送给用户
+4. 关闭浏览器
+
+**Fallback（browser 工具不可用时）**
+
+直接将 Markdown 报告文本输出给用户，无需截图。
 
 ---
 
