@@ -173,14 +173,18 @@ python3 {SKILL_DIR}/scripts/report_to_image.py \
 >
 > 脚本直接调用系统 Chrome headless，**不经过 Openclaw browser relay**，无需额外依赖。
 
-**步骤2：用 browser 工具发送图片**
+**步骤2：通过 Telegram Bot API 以文件方式发送（无压缩）**
 
-使用 Openclaw 内置的 `browser` 工具打开脚本输出的 `file://` URL，将图片发送给用户。
+```bash
+python3 {SKILL_DIR}/scripts/send_telegram_file.py \
+  ~/.openclaw/media/a-share-review/{DATE}/report.png \
+  --caption "A股复盘报告 {DATE}"
+```
 
-> **图片质量说明**：脚本输出 2250×~3000px（3x DPR，匹配 iPhone 17 原生分辨率）。
-> Telegram 以"照片"方式发送会压缩，若清晰度仍不足，改用"文件"方式发送可保留原始 283KB PNG 质量。
+> 使用 `sendDocument`（而非 `sendPhoto`），Telegram 不压缩文件，iPhone 17 可看到完整 2250×3000px 原始质量。
+> 脚本自动从 `~/.openclaw/openclaw.json` 读取 botToken 和 chat_id，无需手动配置。
 
-**Fallback：若 browser 工具失败**
+**Fallback：若发送失败**
 
 直接将 `/tmp/a-share-review/{DATE}/report.md` 的文本内容输出给用户。
 
