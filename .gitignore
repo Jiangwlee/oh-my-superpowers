@@ -1,3 +1,9 @@
 github_cache
 .skills/
 
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
