@@ -35,7 +35,7 @@ CSS = """
 body {
     font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB',
                  'Microsoft YaHei', sans-serif;
-    font-size: 29px;
+    font-size: 30px;
     line-height: 1.8;
     color: #1a1a1a;
     background: #ffffff;
@@ -43,26 +43,26 @@ body {
     max-width: 750px;
 }
 h1 {
-    font-size: 37px;
+    font-size: 38px;
     color: #0d47a1;
     border-bottom: 2px solid #0d47a1;
     padding-bottom: 8px;
     margin: 20px 0 14px;
 }
 h2 {
-    font-size: 34px;
+    font-size: 35px;
     color: #1565c0;
     margin: 22px 0 12px;
     padding-left: 10px;
     border-left: 4px solid #42a5f5;
 }
-h3 { font-size: 29px; color: #333; margin: 16px 0 8px; }
+h3 { font-size: 30px; color: #333; margin: 16px 0 8px; }
 p { margin: 8px 0; }
 ul, ol { padding-left: 22px; margin: 8px 0; }
 li { margin: 5px 0; }
 strong { color: #c62828; }
 em { color: #5c6bc0; font-style: normal; font-weight: 500; }
-table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 26px; }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 27px; }
 th {
     background: #e3f2fd; color: #0d47a1;
     padding: 8px 12px; text-align: left; border: 1px solid #bbdefb;
@@ -71,11 +71,11 @@ td { padding: 7px 12px; border: 1px solid #e0e0e0; vertical-align: top; }
 tr:nth-child(even) td { background: #fafafa; }
 code {
     background: #f3f3f3; padding: 2px 6px; border-radius: 3px;
-    font-size: 26px; font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 27px; font-family: 'SF Mono', Menlo, Consolas, monospace;
 }
 pre {
     background: #f3f3f3; padding: 16px; border-radius: 6px;
-    font-size: 24px; overflow-x: auto; margin: 12px 0;
+    font-size: 25px; overflow-x: auto; margin: 12px 0;
     white-space: pre-wrap; word-break: break-all;
 }
 pre code { background: none; padding: 0; }
