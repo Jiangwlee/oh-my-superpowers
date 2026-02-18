@@ -14,14 +14,10 @@ PDF 模式：使用 Chrome headless --print-to-pdf，生成完整分页 PDF。
 
 import argparse
 import html
-import json
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
-import time
-import urllib.request
 from pathlib import Path
 
 # ── Chrome 可执行路径（按优先级） ───────────────────────────────────────────
@@ -125,96 +121,32 @@ def _md_fallback(md_path: Path) -> str:
     return f'<pre style="white-space:pre-wrap;font-size:14px;">{html.escape(content)}</pre>'
 
 
-def get_page_height(chrome: str, html_file: Path, width: int = 750) -> int:
+def screenshot_png(html_file: Path, output: Path, dpr: int = 2, width: int = 750) -> None:
     """
-    启动 Chrome headless remote-debugging，获取实际页面高度。
-    失败时返回默认高度 12000。
+    用 Node.js CDP（screenshot.js）截全页 PNG。
+    - 自动探测真实页面高度（无多余空白）
+    - 高 DPR 渲染（默认 2x），文字清晰可读
+    - 需要 Node.js 18+ 和系统 Chrome
     """
-    port = _find_free_port()
-    proc = subprocess.Popen(
-        [
-            chrome,
-            f"--remote-debugging-port={port}",
-            "--headless=new",
-            "--disable-gpu",
-            "--no-sandbox",
-            f"--window-size={width},800",
-            f"file://{html_file.absolute()}",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("未找到 node，无法运行 screenshot.js")
+
+    script = Path(__file__).parent / "screenshot.js"
+    if not script.exists():
+        raise RuntimeError(f"找不到 screenshot.js: {script}")
+
+    result = subprocess.run(
+        [node, str(script), str(html_file.absolute()), str(output.absolute()),
+         str(dpr), str(width)],
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
-    try:
-        # 等待 Chrome 启动
-        _wait_for_port(port, timeout=10)
-
-        # 获取 websocket 调试 URL
-        info = json.loads(
-            urllib.request.urlopen(
-                f"http://localhost:{port}/json", timeout=5
-            ).read()
-        )
-        ws_url = info[0]["webSocketDebuggerUrl"]
-
-        # 通过 CDP 获取 scrollHeight
-        import websocket  # 仅在此处 import，避免影响主流程
-        ws = websocket.create_connection(ws_url, timeout=10)
-        ws.send(json.dumps({
-            "id": 1,
-            "method": "Runtime.evaluate",
-            "params": {"expression": "document.body.scrollHeight"}
-        }))
-        resp = json.loads(ws.recv())
-        ws.close()
-        height = int(resp["result"]["result"]["value"])
-        return max(height + 40, 400)   # +40px padding
-    except Exception:
-        return 12000  # 默认安全高度
-    finally:
-        proc.terminate()
-        proc.wait()
-
-
-def _find_free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def _wait_for_port(port: int, timeout: float) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                return
-        except OSError:
-            time.sleep(0.2)
-    raise TimeoutError(f"Chrome remote-debugging port {port} 未就绪")
-
-
-def screenshot_png(chrome: str, html_file: Path, output: Path, width: int = 750) -> None:
-    """用 headless Chrome 截全页 PNG"""
-    # 先尝试精确获取高度，失败则用安全默认值
-    try:
-        height = get_page_height(chrome, html_file, width)
-    except Exception:
-        height = 12000
-
-    subprocess.run(
-        [
-            chrome,
-            "--headless=new",
-            "--disable-gpu",
-            "--no-sandbox",
-            f"--screenshot={output.absolute()}",
-            f"--window-size={width},{height}",
-            "--hide-scrollbars",
-            f"file://{html_file.absolute()}",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
+    if result.returncode != 0:
+        raise RuntimeError(f"screenshot.js 失败: {result.stderr.strip()}")
+    if result.stdout.strip():
+        print(f"  截图尺寸: {result.stdout.strip()}", file=sys.stderr)
 
 
 def generate_pdf(chrome: str, html_file: Path, output: Path) -> None:
@@ -251,11 +183,6 @@ def main() -> None:
         print(f"错误：找不到输入文件：{input_path}", file=sys.stderr)
         sys.exit(1)
 
-    chrome = find_chrome()
-    if not chrome:
-        print("错误：未找到 Google Chrome，请安装后重试", file=sys.stderr)
-        sys.exit(1)
-
     fmt = args.format
     if args.output:
         output_path = Path(args.output)
@@ -271,9 +198,13 @@ def main() -> None:
         html_path.write_text(html_content, encoding="utf-8")
 
         if fmt == "pdf":
+            chrome = find_chrome()
+            if not chrome:
+                print("错误：未找到 Google Chrome", file=sys.stderr)
+                sys.exit(1)
             generate_pdf(chrome, html_path, output_path)
         else:
-            screenshot_png(chrome, html_path, output_path)
+            screenshot_png(html_path, output_path)
     finally:
         html_path.unlink(missing_ok=True)
 
