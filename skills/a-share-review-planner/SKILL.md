@@ -142,11 +142,13 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 - 调整内容：[无/具体修改]
 ```
 
-报告生成后，**必须**立即将完整报告文本写入文件：
+报告生成后，**立即执行以下命令将报告保存为文件**（不得跳过，不得仅输出到聊天）：
 
 ```bash
-# 将上方报告完整内容写入此文件（不得省略任何章节）
-# 使用 write 工具写入 /tmp/a-share-review/{DATE}/report.md
+mkdir -p /tmp/a-share-review/{DATE}
+cat > /tmp/a-share-review/{DATE}/report.md << 'EOF'
+[在此处粘贴上方完整报告，从"# A股复盘报告"起到"策略调整"结束，不得省略任何章节]
+EOF
 ```
 
 ---
