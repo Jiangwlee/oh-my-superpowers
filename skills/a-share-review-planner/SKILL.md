@@ -177,6 +177,9 @@ python3 {SKILL_DIR}/scripts/report_to_image.py \
 
 使用 Openclaw 内置的 `browser` 工具打开脚本输出的 `file://` URL，将图片发送给用户。
 
+> **图片质量说明**：脚本输出 2250×~3000px（3x DPR，匹配 iPhone 17 原生分辨率）。
+> Telegram 以"照片"方式发送会压缩，若清晰度仍不足，改用"文件"方式发送可保留原始 283KB PNG 质量。
+
 **Fallback：若 browser 工具失败**
 
 直接将 `/tmp/a-share-review/{DATE}/report.md` 的文本内容输出给用户。

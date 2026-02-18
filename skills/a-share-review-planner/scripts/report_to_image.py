@@ -121,11 +121,11 @@ def _md_fallback(md_path: Path) -> str:
     return f'<pre style="white-space:pre-wrap;font-size:14px;">{html.escape(content)}</pre>'
 
 
-def screenshot_png(html_file: Path, output: Path, dpr: int = 2, width: int = 750) -> None:
+def screenshot_png(html_file: Path, output: Path, dpr: int = 3, width: int = 750) -> None:
     """
     用 Node.js CDP（screenshot.js）截全页 PNG。
     - 自动探测真实页面高度（无多余空白）
-    - 高 DPR 渲染（默认 2x），文字清晰可读
+    - DPR=3（iPhone 17 原生 3x Retina），输出宽度 2250px，文字锐利
     - 需要 Node.js 18+ 和系统 Chrome
     """
     node = shutil.which("node")
