@@ -142,24 +142,28 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 - 调整内容：[无/具体修改]
 ```
 
+报告生成后，**必须**立即将完整报告文本写入文件：
+
+```bash
+# 将上方报告完整内容写入此文件（不得省略任何章节）
+# 使用 write 工具写入 /tmp/a-share-review/{DATE}/report.md
+```
+
 ---
 
-### 阶段5（可选）：推送手机图片
+### 阶段5：生成图片推送用户
 
-如果用户需要推送报告到 Telegram 或手机查看，执行以下步骤：
+报告文件保存后，执行以下步骤。**这是默认流程，不是可选项。**
 
-**步骤1：将阶段4的报告保存为 Markdown 文件，然后生成 HTML**
+**步骤1：生成 HTML**
 
 ```bash
 python3 {SKILL_DIR}/scripts/report_to_html.py \
   /tmp/a-share-review/{DATE}/report.md
-# 脚本会输出 file:// URL，如：
-# file:///tmp/a-share-review/{DATE}/report.html
+# 脚本输出 file:// URL，如：file:///tmp/a-share-review/{DATE}/report.html
 ```
 
-脚本自动检测 pandoc：有则富文本渲染，无则降级为纯文本展示。
-
-**步骤2：用 browser 工具打开 HTML，截图发送给用户**
+**步骤2：用 browser 工具截图并发送**
 
 使用 Openclaw 内置的 `browser` 工具：
 1. 打开脚本输出的 `file://` URL
@@ -167,9 +171,9 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 3. 将截图发送给用户
 4. 关闭浏览器
 
-**Fallback（browser 工具不可用时）**
+**Fallback：若 browser 工具或脚本执行失败**
 
-直接将 Markdown 报告文本输出给用户，无需截图。
+直接将 `/tmp/a-share-review/{DATE}/report.md` 的文本内容输出给用户。
 
 ---
 
