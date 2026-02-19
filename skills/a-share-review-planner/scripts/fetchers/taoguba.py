@@ -20,6 +20,7 @@ _LIST_URL = f"{_BASE_URL}/jinghua/1-1"
 _QUOTES_URL = f"{_BASE_URL}/quotes/{{full_code}}"
 _XGGN_URL = f"{_BASE_URL}/quotes/getXGGNStockType"
 _ZH_URL = f"{_BASE_URL}/newIndex/getZh?pageNo={{page_no}}"
+_NOW_RECOMMEND_URL = f"{_BASE_URL}/newIndex/getNowRecommend?pageNo={{page_no}}"
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -29,6 +30,13 @@ _HEADERS = {
     "Referer": "https://www.tgb.cn/",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+}
+# 今日推荐接口需要 agree=enter Cookie，不需要登录 JSESSIONID
+_HEADERS_JSON = {
+    **_HEADERS,
+    "Accept": "*/*",
+    "X-Requested-With": "XMLHttpRequest",
+    "Cookie": "agree=enter",
 }
 
 
@@ -476,6 +484,65 @@ def fetch_taoguba_hot(count: int = 20) -> list[dict]:
 
     except Exception as e:
         logger.exception("fetch_taoguba_hot 出错: %s", e)
+        return []
+
+
+def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
+    """获取淘股吧「今日推荐」帖子列表（实时题材热点）。
+
+    数据源: /newIndex/getNowRecommend，每页固定 15 条。
+    仅需 agree=enter Cookie，不需要登录。
+
+    Args:
+        count: 需要返回的帖子数量，默认 15（一页上限）。
+
+    Returns:
+        帖子列表，每条包含 subject / subinfo / author / date /
+        view_count / reply_count / url / stock_codes 字段。
+    """
+    try:
+        url = _NOW_RECOMMEND_URL.format(page_no=1)
+        req = urllib.request.Request(url, headers=_HEADERS_JSON)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read()
+        try:
+            import gzip as _gzip
+            data = json.loads(_gzip.decompress(raw))
+        except Exception:
+            data = json.loads(raw.decode("utf-8"))
+
+        if not data.get("status"):
+            logger.warning("今日推荐接口返回 status=false")
+            return []
+
+        items = data.get("dto", {}).get("list", [])
+        posts = []
+        for item in items[:count]:
+            new_id = item.get("newTopicID") or ""
+            post_url = f"{_BASE_URL}/a/{new_id}" if new_id else ""
+            ts = item.get("dateTime")
+            if ts:
+                dt = datetime.fromtimestamp(ts / 1000)
+                date_str = dt.strftime("%m-%d %H:%M")
+            else:
+                date_str = ""
+            stock_codes = [
+                s.get("stockCode", "") for s in (item.get("stockList") or []) if s.get("stockCode")
+            ]
+            posts.append({
+                "subject": item.get("subject", ""),
+                "subinfo": item.get("subinfo", ""),
+                "author": item.get("userName", ""),
+                "date": date_str,
+                "view_count": item.get("totalViewNum", 0),
+                "reply_count": item.get("totalReplyNum", 0),
+                "url": post_url,
+                "stock_codes": stock_codes,
+            })
+        return posts
+
+    except Exception as e:
+        logger.exception("fetch_taoguba_now_recommend 出错: %s", e)
         return []
 
 
