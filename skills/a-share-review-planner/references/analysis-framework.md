@@ -316,7 +316,8 @@ EOF
 - **趋势评分**：[星级] [总分] [情绪颜色]
 - **选股理由**：...
 - **入场条件**：[参考 active.yaml 中 trend_stock.entry，结合个股具体均线位置]
-- **目标仓位**：[金额，参考 active.yaml 中 trend_stock.position]
+- **目标仓位**：[基础仓位 × DR仓位乘数 = 最终金额]
+  （基础仓位来自 active.yaml trend_stock.position；DR乘数来自第3.5步校准结论，无DR则乘1.0）
 - **止盈条件**：[参考 active.yaml 中 trend_stock.take_profit]
 - **止损条件**：[参考 active.yaml 中 trend_stock.stop_loss]
 - **持有周期**：[参考 active.yaml 中 trend_stock.holding_period]
@@ -331,7 +332,8 @@ EOF
 - **选股理由**：...
 - **所属题材**：[题材名] | 阶段：[启动/加速]
 - **入场条件**：[参考 active.yaml 中 theme_stock.entry]
-- **目标仓位**：[金额，参考 active.yaml 中 theme_stock.position]
+- **目标仓位**：[基础仓位 × DR仓位乘数 = 最终金额]
+  （基础仓位来自 active.yaml theme_stock.position；DR乘数来自第3.5步校准结论，无DR则乘1.0）
 - **止盈条件**：[参考 active.yaml 中 theme_stock.take_profit]
 - **止损条件**：[参考 active.yaml 中 theme_stock.stop_loss]
 - **持有周期**：[参考 active.yaml 中 theme_stock.holding_period]

@@ -191,39 +191,32 @@ EOF
 
 ---
 
-### 阶段5：生成图片推送用户
+### 阶段5：生成 PDF 推送用户
 
 报告文件保存后，执行以下步骤。**这是默认流程，不是可选项。**
 
-**步骤1：生成分页 PNG（每页约 2000px CSS 高）**
+**步骤1：生成 PDF**
 
 ```bash
 mkdir -p ~/.openclaw/media/a-share-review/{DATE}
 python3 {SKILL_DIR}/scripts/report_to_image.py \
   /tmp/a-share-review/{DATE}/report.md \
-  --output ~/.openclaw/media/a-share-review/{DATE}/report.png \
-  --max-height 2000
-# 脚本按内容自动分页，输出每页路径，例如：
-#   完成（png，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report_1.png
-#   完成（png，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report_2.png
-#   ...（共约4-6页）
+  --format pdf \
+  --output ~/.openclaw/media/a-share-review/{DATE}/report.pdf
+# 脚本输出路径，例如：
+#   完成（pdf，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report.pdf
 ```
 
-> **分页原因**：单张超长图（宽高比1:11）在 Telegram 中会生成压扁变形的缩略图，导致文字无法辨认。分页后每张图约 2250×6000px（宽+高=8250 ≤ Telegram 限制 10000），可用 sendPhoto 直接显示，无需点击。
-
-**步骤2：逐页通过 Telegram Bot API 发送（sendPhoto，直接显示）**
-
-读取步骤1输出的文件路径，对每一个路径执行：
+**步骤2：通过 Telegram Bot API 发送 PDF（sendDocument）**
 
 ```bash
-# 对每一页图片（report_1.png, report_2.png, ...）执行以下命令
 python3 {SKILL_DIR}/scripts/send_telegram_file.py \
-  ~/.openclaw/media/a-share-review/{DATE}/report_N.png \
-  --method photo \
-  --caption "A股复盘报告 {DATE}（第N页）"
+  ~/.openclaw/media/a-share-review/{DATE}/report.pdf \
+  --method document \
+  --caption "A股复盘报告 {DATE}"
 ```
 
-> 使用 `sendPhoto`，图片直接显示在聊天中，无需点击查看，无缩略图变形问题。
+> 使用 `sendDocument`，Telegram 原生预览 PDF，可直接翻页阅读。
 > 脚本自动从 `~/.openclaw/openclaw.json` 读取 botToken 和 chat_id，无需手动配置。
 
 **Fallback：若发送失败**

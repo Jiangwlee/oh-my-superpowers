@@ -124,11 +124,12 @@ def _font_css() -> str:
 
 
 def _font_family() -> str:
-    """根据平台返回 font-family 字符串"""
+    """根据平台返回 font-family 字符串（含 emoji 字体，确保 PDF 中 emoji 正常显示）"""
     is_linux = platform.system() == "Linux"
+    emoji = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'"
     if is_linux:
-        return "'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Micro Hei', sans-serif"
-    return "'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif"
+        return f"'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Micro Hei', {emoji}, sans-serif"
+    return f"'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', {emoji}, sans-serif"
 
 
 def markdown_to_html(md_path: Path) -> str:
