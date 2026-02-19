@@ -46,11 +46,11 @@ def _log(msg: str) -> None:
 # ── 数据精简函数 ──────────────────────────────────────
 
 
-_NEWS_KEEP_FIELDS = {"title", "makeDate", "summary", "emotion"}
+_NEWS_KEEP_FIELDS = {"title", "makeDate", "summary", "emotion", "detail"}
 
 
 def _slim_news(data: list | dict) -> list | dict:
-    """新闻数据只保留 title/makeDate/summary/emotion。"""
+    """新闻数据只保留 title/makeDate/summary/emotion/detail。"""
     if isinstance(data, list):
         return [{k: v for k, v in item.items() if k in _NEWS_KEEP_FIELDS}
                 for item in data]
@@ -85,10 +85,10 @@ def _make_tasks(news_count: int, taoguba_count: int) -> list[dict]:
     """返回采集任务列表，每项包含 name / filename / fn。"""
     return [
         {"name": "trade_date",       "filename": "trade_date.json",       "fn": fetch_trade_date},
-        {"name": "news_headline",    "filename": "news_headline.json",    "fn": lambda: fetch_headline(news_count)},
-        {"name": "news_realtime",    "filename": "news_realtime.json",    "fn": lambda: fetch_realtime(news_count)},
-        {"name": "news_opportunity", "filename": "news_opportunity.json", "fn": lambda: fetch_opportunity(news_count)},
-        {"name": "news_daily",       "filename": "news_daily.json",       "fn": lambda: fetch_daily_finance(news_count)},
+        {"name": "news_headline",    "filename": "news_headline.json",    "fn": lambda: fetch_headline(news_count, fetch_body=True)},
+        {"name": "news_realtime",    "filename": "news_realtime.json",    "fn": lambda: fetch_realtime(news_count, fetch_body=True)},
+        {"name": "news_opportunity", "filename": "news_opportunity.json", "fn": lambda: fetch_opportunity(news_count, fetch_body=True)},
+        {"name": "news_daily",       "filename": "news_daily.json",       "fn": lambda: fetch_daily_finance(news_count, fetch_body=True)},
         {"name": "news_flash",       "filename": "news_flash.json",       "fn": lambda: fetch_news_flash(news_count)},
         {"name": "market_sectors",   "filename": "market_sectors.json",   "fn": lambda: fetch_market_sectors_top_n(5)},
         {"name": "taoguba_hot",      "filename": "taoguba_hot.json",      "fn": lambda: fetch_taoguba_hot(taoguba_count)},

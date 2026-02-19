@@ -319,15 +319,12 @@ class _DetailPageParser(HTMLParser):
         if text and text != "[淘股吧]":
             self.text_parts.append(text)
 
-    def get_text(self, max_len: int = 500) -> str:
+    def get_text(self) -> str:
         content = " ".join(self.text_parts)
         # 合并多余空白
         while "  " in content:
             content = content.replace("  ", " ")
-        content = content.strip()
-        if len(content) > max_len:
-            content = content[:max_len]
-        return content
+        return content.strip()
 
 
 class _HtmlFragmentTextParser(HTMLParser):
@@ -370,14 +367,11 @@ class _HtmlFragmentTextParser(HTMLParser):
         return "\n".join(lines)
 
 
-def _strip_html_fragment(html_text: str, max_len: int = 500) -> str:
+def _strip_html_fragment(html_text: str) -> str:
     parser = _HtmlFragmentTextParser()
     parser.feed(html_text or "")
     parser.close()
-    text = parser.to_text()
-    if len(text) > max_len:
-        text = text[:max_len]
-    return text
+    return parser.to_text()
 
 
 def _extract_js_array(page: str, marker: str) -> list[dict]:
@@ -437,7 +431,7 @@ def _fetch_detail(url: str) -> str:
         html = _fetch_html(url, timeout=15)
         parser = _DetailPageParser()
         parser.feed(html)
-        return parser.get_text(500)
+        return parser.get_text()
     except Exception as e:
         logger.debug("获取详情页失败 %s: %s", url, e)
         return ""
@@ -549,7 +543,7 @@ def fetch_taoguba_quotes_posts(full_code: str, count: int = 20) -> list[dict]:
                     "new_topic_id": str(new_topic_id or ""),
                     "user_name": item.get("userName") or "",
                     "subject": item.get("subject") or "",
-                    "summary": _strip_html_fragment(body, max_len=500),
+                    "summary": _strip_html_fragment(body),
                     "post_time": post_time,
                     "reply_num": item.get("replyNum"),
                     "view_num": item.get("viewNum"),
