@@ -116,6 +116,80 @@ candidates.json 格式：
 
 ---
 
+## Deep Research 个股采集
+
+在完成第三步个股初筛后，对每只候选股执行以下命令：
+
+```bash
+# 东方财富股吧采集（帖子 + 资讯 + 公告）
+python3 {SKILL_DIR}/scripts/collect_eastmoney_guba.py \
+  --code {CODE} \
+  --output /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
+  --post-limit 36 \
+  --detail-limit 5 \
+  --notice-days 3
+
+# 淘股吧个股扩展采集（题材标签 + 个股讨论）
+python3 {SKILL_DIR}/scripts/collect_taoguba_stock.py \
+  --full-code {FULL_CODE} \
+  --output /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \
+  --quotes-count 8 \
+  --zh-count 0
+```
+
+采集完成后，执行 compact 提取脚本（**不调用 LLM**，约 600 tokens），再由主 LLM 读取 compact 文件生成 brief：
+
+```bash
+# compact 提取（规则抽取，不污染上下文）
+python3 {SKILL_DIR}/scripts/summarize_stock_brief.py \
+  --code {CODE} \
+  --em-raw /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
+  --tgb-raw /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \
+  --output /tmp/a-share-review/{DATE}/dr_{CODE}_compact.json \
+  --compact-only
+```
+
+主 LLM 读取 `dr_{CODE}_compact.json` 后，按 `references/analysis-framework.md` 第3.5步生成 brief，并将 brief JSON 写入 `dr_{CODE}_brief.json`。
+
+`{CODE}` = 6位股票代码（如 `002050`）
+`{FULL_CODE}` = 带市场前缀的代码（如 `sz002050`，深市用 `sz`，沪市用 `sh`）
+
+### Deep Research 预算参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| 候选股上限 | **8 只** | 超出按技术评分高的优先执行 |
+| compact token 预算 | ~600 tokens | 规则提取，脚本自动控制 |
+| 每股 brief token 预算 | ~300 tokens | 主 LLM 生成，固定 schema |
+| 全部候选股 brief 总预算 | ~2400 tokens | 8只 × 300 tokens |
+| 帖子正文 detail-limit | 5 | collect_eastmoney_guba.py 默认值 |
+| 淘股吧讨论 quotes-count | 8 | collect_taoguba_stock.py 默认值 |
+| 公告过滤天数 notice-days | 3 | 只取近3天公告 |
+| zh-count（综合推荐） | 0 | 默认关闭，市场级热帖对个股分析价值有限 |
+
+### Deep Research 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `dr_{CODE}_em.json` | 东方财富股吧原始数据（帖子/资讯/公告），追溯用，勿直接传给 LLM |
+| `dr_{CODE}_tgb.json` | 淘股吧原始数据（题材标签/个股讨论），追溯用，勿直接传给 LLM |
+| `dr_{CODE}_compact.json` | 规则提取的精简数据，约 600 tokens，主 LLM 读取此文件 |
+| `dr_{CODE}_brief.json` | 主 LLM 生成的结构化 brief，约 300 tokens，供分析使用 |
+
+### Deep Research 结果追踪
+
+每次复盘完成后，若 deep research 影响了 `position_multiplier` 调整，在 `evolution/feedback.md` 中追加记录：
+
+```markdown
+## {DATE} DR 校准记录
+- 股票：{CODE} {NAME}
+- 关键信号：[触发调整的证据，tier A/B 优先]
+- 仓位调整：×1.0 → ×0.8（轻减）
+- 后续验证：[待填写，3日后]
+```
+
+---
+
 ## jvQuant 配置
 
 ### 配置文件（推荐）

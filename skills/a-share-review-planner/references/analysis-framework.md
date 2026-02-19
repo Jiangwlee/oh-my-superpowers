@@ -173,6 +173,129 @@
 
 ---
 
+## 第3.5步：个股 Deep Research（情绪与事件校准）
+
+> **触发条件**：第三步完成筛选，确定候选股列表后执行。
+> **目的**：对每只候选股采集社区情绪与近期事件，**以仓位乘数和入场时机校准为主**；tier A 严重负面公告（监管处罚/立案调查等）作为强制例外，可触发候选股复核。
+
+### 执行流程
+
+对每只候选股（`{CODE}` 为6位代码，`{FULL_CODE}` 为如 `sz002050`），依次执行：
+
+**第一步：运行采集脚本**
+
+```bash
+# 东方财富股吧采集
+python3 {SKILL_DIR}/scripts/collect_eastmoney_guba.py \
+  --code {CODE} \
+  --output /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
+  --post-limit 36 --detail-limit 5 --notice-days 3
+
+# 淘股吧个股扩展采集
+python3 {SKILL_DIR}/scripts/collect_taoguba_stock.py \
+  --full-code {FULL_CODE} \
+  --output /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \
+  --quotes-count 8
+```
+
+> 详细参数见 `references/commands.md` 的"Deep Research 预算参数"章节。
+
+**第二步：运行 compact 提取脚本**
+
+```bash
+python3 {SKILL_DIR}/scripts/summarize_stock_brief.py \
+  --code {CODE} \
+  --em-raw /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
+  --tgb-raw /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \
+  --output /tmp/a-share-review/{DATE}/dr_{CODE}_compact.json \
+  --compact-only
+```
+
+> 此脚本**不调用任何 LLM**，纯规则提取，输出约 600 tokens 的精简 JSON。
+> 原始 raw 文件（`_em.json` / `_tgb.json`）体积过大（~10k tokens），**不要**直接传给 LLM。
+
+**第三步：读取 compact，生成 brief**
+
+读取 `/tmp/a-share-review/{DATE}/dr_{CODE}_compact.json`，根据下方 schema 和分类规则，**由你直接生成 brief JSON**，然后用 bash 写入文件：
+
+```bash
+cat > /tmp/a-share-review/{DATE}/dr_{CODE}_brief.json << 'EOF'
+{生成的 JSON 内容}
+EOF
+```
+
+### brief 结构与生成规则
+
+按以下 schema 生成（严格 JSON，不含注释）：
+
+```json
+{
+  "code": "{CODE}",
+  "summarized_at": "{当前时间 YYYY-MM-DD HH:MM:SS}",
+  "positive_signals": [
+    {"summary": "简洁描述（20字内）", "source_url": "原始数据中的url字段", "source_type": "announcement|stock_info|eastmoney_guba|taoguba", "evidence_tier": "A|B|C", "hours_ago": 数字}
+  ],
+  "negative_signals": [...],
+  "uncertain_claims": [...],
+  "stock_tags": ["题材1", "题材2"],
+  "community_heat": "high|medium|low"
+}
+```
+
+**数据字段映射（compact JSON 字段）：**
+
+> compact 字段由 `summarize_stock_brief.py --compact-only` 从 raw 文件提取，与 raw 字段名不同。
+
+| compact 字段 | brief 中的 source_type | evidence_tier |
+|-------------|----------------------|---------------|
+| `announcements`（公告） | `announcement` | `A` |
+| `news_infos`（资讯列表） | `stock_info` | `B` |
+| `guba_posts`（东方财富帖子） | `eastmoney_guba` | `C` |
+| `taoguba_posts`（淘股吧讨论） | `taoguba` | `C` |
+
+**分类规则：**
+- `positive_signals`：有明确来源的利好（增持/回购/中标/业绩超预期/题材催化）
+- `negative_signals`：有明确来源的利空（减持/亏损/诉讼/解禁/监管处罚）
+- `uncertain_claims`：无一手来源的传言、推测、模糊情绪
+- 每类最多 5 条，优先 tier A/B，同级别优先 `hours_ago` 小的（越新越优先）
+- `hours_ago`：根据各条数据的时间字段与当前时间计算，单位小时（整数）
+- `community_heat`：根据帖子总量和互动量判断（≥10条=high，4-9条=medium，<4条=low）
+
+### 证据分级与约束规则
+
+| tier | 来源 | 可影响范围 |
+|------|------|-----------|
+| **A**（公告/监管） | `stock_notices_recent` | 仓位/择时校准；严重负面（处罚/立案）可触发候选复核 |
+| **B**（资讯媒体） | `stock_infos` | 仓位乘数和置信度评分 |
+| **C**（社区帖子） | 股吧/淘股吧 | **仅**影响择时（入场时机）和仓位乘数 |
+
+**硬性约束**（不可绕过）：
+- C 层证据**不得**单独改变选股决策（是否选入候选股）
+- B 层证据仅影响仓位乘数，不单独触发候选复核
+- 若 `negative_signals` 中存在 tier A 严重负面（监管处罚/立案调查/重大违规公告），**必须**重新评估是否保留该候选股
+- `uncertain_claims` 仅供参考，不得作为决策依据
+
+### 时效性判断
+
+- `hours_ago <= 6`：信号权重高，事件很可能尚未被市场充分定价
+- `hours_ago 6-24`：正常权重
+- `hours_ago 24-72`：权重降低，市场可能已反映
+- `hours_ago > 72`：低权重，仅作背景参考
+
+### 输出：仓位校准结论
+
+每只候选股完成 brief 分析后，输出一行校准结论（进入第四步交易计划时使用）：
+
+```
+[代码] [名称] | DR校准：
+  - 情绪：[乐观/中性/谨慎/负面]
+  - 关键事件：[1-2条最重要信号，tier A/B 优先]
+  - 仓位乘数调整：[×1.0（不变）/ ×0.8（轻减）/ ×0.5（减半）/ ×1.2（小增）]
+  - 调整依据：[1句话]
+```
+
+---
+
 ## 第四步：交易计划制定
 
 ### 必须读取的数据

@@ -93,15 +93,16 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 
 ### 阶段3：分析
 
-**必须严格按照 `{SKILL_DIR}/references/analysis-framework.md` 的 7 步框架执行**，不得跳过任何步骤或遗漏必答问题：
+**必须严格按照 `{SKILL_DIR}/references/analysis-framework.md` 的框架执行**，不得跳过任何步骤或遗漏必答问题：
 
 1. 市场环境判断 → 强弱评级、主线风格、**账户健康度（account_mode）**、最终仓位建议
 2. 题材线索识别 → 主线题材、新兴线索、衰退警示、市场情绪
 3. 个股筛选 → 趋势股（4星以上）+ 题材股（仅题材驱动市时）
-4. 交易计划制定 → 每只候选股入场/止盈/止损/仓位，参考 active.yaml
-5. 风险检查（LLM 定性）→ 集中度、与昨日对比、持仓调整建议、特殊风险
-6. 策略回顾与微调 → **提案生成 + 4 维度评分（ProposalJudge）**，评分 ≥ 7 才修改 active.yaml
-7. 知识库积累 → 检查是否发现新规律/陷阱，有则追加到 evolution/*.md
+4. **个股 Deep Research（第3.5步）** → 对步骤3筛出的候选股逐一采集股吧情绪与近期事件，生成 brief，输出仓位校准结论（命令详见 `references/commands.md`）
+5. 交易计划制定 → 结合步骤4的 DR 校准结论，制定每只候选股的入场/止盈/止损/仓位
+6. 风险检查（LLM 定性）→ 集中度、与昨日对比、持仓调整建议、特殊风险
+7. 策略回顾与微调 → **提案生成 + 4 维度评分（ProposalJudge）**，评分 ≥ 7 才修改 active.yaml
+8. 知识库积累 → 检查是否发现新规律/陷阱，有则追加到 evolution/*.md
 
 **阶段3 完成后，在输出交易计划之前，执行独立风控校验：**
 
