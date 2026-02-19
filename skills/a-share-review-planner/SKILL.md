@@ -81,14 +81,15 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 | 4 | `/tmp/a-share-review/{DATE}/market_sectors.json` | 板块资金摘要 |
 | 5 | `/tmp/a-share-review/{DATE}/taoguba_recommend.json` | 淘股吧今日推荐（**实时题材热点** ⭐，题材线索首选） |
 | 6 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖（方法论/心理/风控，用于精华言论提炼） |
-| 7 | `/tmp/a-share-review/{DATE}/ths_snapshot.json` | 涨停快照（连板天梯+最强板块） |
-| 8 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
-| 9 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
-| 10 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
-| 11 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
-| 12 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
-| 13 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
-| 14 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
+| 7 | `/tmp/a-share-review/{DATE}/ths_snapshot.json` | 涨停快照（最新交易日，连板天梯+最强板块+个股详情） |
+| 8 | `/tmp/a-share-review/{DATE}/ths_history.json` | 近5交易日涨停历史（**情绪趋势判断** ⭐，用于多日对比） |
+| 9 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
+| 10 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
+| 11 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
+| 12 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
+| 13 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
+| 14 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
+| 15 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
 
 ---
 
@@ -97,6 +98,7 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 **必须严格按照 `{SKILL_DIR}/references/analysis-framework.md` 的框架执行**，不得跳过任何步骤或遗漏必答问题：
 
 1. 市场环境判断 → 强弱评级、主线风格、**账户健康度（account_mode）**、最终仓位建议
+   - **THS 多日情绪分析**：用 `ths_history.json` 制作近5日涨停数量/板块变化表格，判断市场情绪是升温/冷却/持平；`ths_snapshot.json` 高亮当日连板天梯和热门板块内涨停最多的个股
 2. 题材线索识别 → 主线题材、新兴线索、衰退警示、市场情绪
 3. 个股筛选 → 趋势股（4星以上）+ 题材股（仅题材驱动市时）
 4. **个股 Deep Research（第3.5步）** → 对步骤3筛出的候选股逐一采集股吧情绪与近期事件，生成 brief，输出仓位校准结论（命令详见 `references/commands.md`）

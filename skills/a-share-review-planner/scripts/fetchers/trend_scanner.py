@@ -335,16 +335,72 @@ def fetch_ths_snapshot(end_date: str | None = None, timeout: float = 15.0) -> di
         try:
             c1 = http_json(u1, headers=ths_headers, timeout=timeout)
             c2 = http_json(u2, headers=ths_headers, timeout=timeout)
-            if c1.get("status_code") == 0 or c2.get("status_code") == 0:
-                return {
-                    "date": d,
-                    "continuous_limit_up": c1.get("data", []) or [],
-                    "block_top": c2.get("data", []) or [],
-                }
+            lu = c1.get("data", []) or []
+            bt = c2.get("data", []) or []
+            # 只在有实际数据时返回（假期 API 返回 status=0 但数据为空）
+            if (c1.get("status_code") == 0 or c2.get("status_code") == 0) and (lu or bt):
+                return {"date": d, "continuous_limit_up": lu, "block_top": bt}
         except Exception:
             continue
 
     return {"date": None, "continuous_limit_up": [], "block_top": []}
+
+
+# ---------------------------------------------------------------------------
+# 同花顺涨停历史（最近 N 个交易日）
+# ---------------------------------------------------------------------------
+
+def fetch_ths_history(days: int = 5, end_date: str | None = None, timeout: float = 15.0) -> list[dict]:
+    """收集最近 days 个有效交易日的涨停快照，按日期升序排列。
+
+    每日数据精简（去除冗长的 reason_info），只保留：
+    - continuous_limit_up: code/name/continue_num/reason_type/change_rate/change_tag
+    - block_top: name/limit_up_count/stock_list（前5只，同上精简）
+    """
+    if not end_date:
+        end_date = _now_ymd()
+    end_dt = datetime.strptime(end_date, "%Y%m%d")
+    ths_headers = {"Referer": "https://data.10jqka.com.cn/"}
+
+    _STOCK_KEEP = {"code", "name", "continue_num", "reason_type", "change_rate", "change_tag"}
+
+    def _slim_stocks(stocks: list) -> list:
+        return [{k: v for k, v in s.items() if k in _STOCK_KEEP} for s in stocks]
+
+    history: list[dict] = []
+    delta = 0
+    while len(history) < days and delta < 60:
+        d = (end_dt - timedelta(days=delta)).strftime("%Y%m%d")
+        u1 = "https://data.10jqka.com.cn/dataapi/limit_up/continuous_limit_up?" + urlencode(
+            {"filter": "HS,GEM2STAR", "date": d})
+        u2 = "http://data.10jqka.com.cn/dataapi/limit_up/block_top?" + urlencode(
+            {"filter": "HS,GEM2STAR", "date": d})
+        try:
+            c1 = http_json(u1, headers=ths_headers, timeout=timeout)
+            c2 = http_json(u2, headers=ths_headers, timeout=timeout)
+            lu = c1.get("data", []) or []
+            bt = c2.get("data", []) or []
+            if (c1.get("status_code") == 0 or c2.get("status_code") == 0) and (lu or bt):
+                slim_bt = [
+                    {
+                        "name": blk.get("name"),
+                        "limit_up_num": blk.get("limit_up_num"),
+                        "change": blk.get("change"),
+                        "stock_list": _slim_stocks((blk.get("stock_list") or [])[:5]),
+                    }
+                    for blk in bt
+                ]
+                history.append({
+                    "date": d,
+                    "continuous_limit_up": _slim_stocks(lu),
+                    "block_top": slim_bt,
+                })
+        except Exception:
+            pass
+        delta += 1
+
+    history.reverse()  # 升序（最旧在前）
+    return history
 
 
 # ---------------------------------------------------------------------------

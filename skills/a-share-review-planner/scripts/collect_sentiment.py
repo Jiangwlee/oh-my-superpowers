@@ -33,7 +33,7 @@ from scripts.fetchers.market_overview import (                    # noqa: E402
 )
 from scripts.fetchers.taoguba import fetch_taoguba_hot, fetch_taoguba_now_recommend  # noqa: E402
 from scripts.fetchers.trend_scanner import (                     # noqa: E402
-    fetch_eastmoney_top200, fetch_ths_snapshot,
+    fetch_eastmoney_top200, fetch_ths_snapshot, fetch_ths_history,
     scan_all, format_report_md,
 )
 from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
@@ -167,17 +167,31 @@ def collect(
     if scan_trends:
         _log("开始趋势扫描...")
         scan_t0 = time.time()
+
+        # 取最近交易日（优先用已采集结果，避免重复请求）
+        _td_result = results.get("trade_date")
+        _last_trade_date: str | None = None
+        if _td_result and _td_result[0] == "ok":
+            _raw = _td_result[1]
+            _last_trade_date = _raw if isinstance(_raw, str) else None
+
         try:
             # 1) 拉取人气榜
             candidates = fetch_eastmoney_top200(max_rank=min(200, popularity_max))
             _log(f"  人气榜候选: {len(candidates)} 只")
 
-            # 2) 同花顺快照
-            ths = fetch_ths_snapshot()
+            # 2) 同花顺快照（传入最近交易日，避免假期取到空数据）
+            ths = fetch_ths_snapshot(end_date=_last_trade_date)
             results["ths_snapshot"] = ("ok", ths, time.time() - scan_t0)
-            _log(f"  \u2713 ths_snapshot ({time.time() - scan_t0:.1f}s)")
+            _log(f"  \u2713 ths_snapshot ({time.time() - scan_t0:.1f}s, date={ths.get('date')})")
 
-            # 3) 并发 K 线扫描 + 评分
+            # 3) 同花顺历史（最近5个交易日）
+            ths_hist = fetch_ths_history(days=5, end_date=_last_trade_date)
+            results["ths_history"] = ("ok", {"days": len(ths_hist), "history": ths_hist},
+                                      time.time() - scan_t0)
+            _log(f"  \u2713 ths_history ({len(ths_hist)} \u5929)")
+
+            # 4) 并发 K 线扫描 + 评分
             trend_results = scan_all(candidates, workers=10)
             scan_elapsed = time.time() - scan_t0
             _log(f"  \u2713 trend_scan: {len(trend_results)} \u53ea, "
@@ -215,6 +229,7 @@ def collect(
     name_to_file = {t["name"]: t["filename"] for t in tasks}
     # 追加趋势扫描、券商账户的文件映射
     name_to_file["ths_snapshot"] = "ths_snapshot.json"
+    name_to_file["ths_history"] = "ths_history.json"
     name_to_file["trend_scan"] = "trend_scan.json"
     name_to_file["broker_account"] = "broker_account.json"
 

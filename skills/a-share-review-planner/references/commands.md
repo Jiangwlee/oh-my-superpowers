@@ -74,7 +74,8 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 | `market_sectors.json` | 板块资金摘要（净流入前5+后5板块） |
 | `taoguba_hot.json` | 淘股吧精华帖（交易方法论为主，长周期热帖） |
 | `taoguba_recommend.json` | 淘股吧今日推荐（实时题材热点，最重要的舆情源） |
-| `ths_snapshot.json` | 同花顺涨停快照（连板天梯 + 最强板块） |
+| `ths_snapshot.json` | 同花顺涨停快照（最新交易日，连板天梯 + 最强板块） |
+| `ths_history.json` | 近5交易日涨停历史（精简版，去除冗长 reason_info） |
 | `trend_scan.json` | 趋势扫描完整结果（含评分/信号/情绪） |
 | `trend_report.md` | 趋势股筛选报告（人类可读） |
 | `broker_account.json` | 账户资金+持仓+当日委托（仅 --broker 时生成） |
