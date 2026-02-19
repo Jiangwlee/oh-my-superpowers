@@ -5,15 +5,21 @@
 """
 
 import http.client
+import json
 import logging
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from html.parser import HTMLParser
 
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://www.tgb.cn"
 _LIST_URL = f"{_BASE_URL}/jinghua/1-1"
+_QUOTES_URL = f"{_BASE_URL}/quotes/{{full_code}}"
+_XGGN_URL = f"{_BASE_URL}/quotes/getXGGNStockType"
+_ZH_URL = f"{_BASE_URL}/newIndex/getZh?pageNo={{page_no}}"
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -39,6 +45,35 @@ def _fetch_html(url: str, timeout: int = 15) -> str:
     except http.client.IncompleteRead as e:
         raw = e.partial
     return raw.decode("utf-8", errors="replace")
+
+
+def _fetch_json_get(url: str, timeout: int = 15, headers: dict | None = None) -> dict:
+    """GET 请求并解析 JSON。"""
+    req_headers = dict(_HEADERS)
+    req_headers["Accept"] = "application/json, text/javascript, */*; q=0.01"
+    req_headers["X-Requested-With"] = "XMLHttpRequest"
+    if headers:
+        req_headers.update(headers)
+    req = urllib.request.Request(url, headers=req_headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+    return json.loads(raw.decode("utf-8", errors="replace"))
+
+
+def _fetch_json_post_form(url: str, form: dict, timeout: int = 15, headers: dict | None = None) -> dict:
+    """POST form 请求并解析 JSON。"""
+    req_headers = dict(_HEADERS)
+    req_headers["Accept"] = "application/json, text/javascript, */*; q=0.01"
+    req_headers["X-Requested-With"] = "XMLHttpRequest"
+    req_headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+    if headers:
+        req_headers.update(headers)
+
+    data = urllib.parse.urlencode(form).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=req_headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read()
+    return json.loads(raw.decode("utf-8", errors="replace"))
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +330,103 @@ class _DetailPageParser(HTMLParser):
         return content
 
 
+class _HtmlFragmentTextParser(HTMLParser):
+    """提取 HTML 片段中的纯文本。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            self._skip_depth += 1
+            return
+        if self._skip_depth > 0:
+            return
+        if tag in {"br", "p", "div", "li"}:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style"} and self._skip_depth > 0:
+            self._skip_depth -= 1
+            return
+        if self._skip_depth > 0:
+            return
+        if tag in {"p", "div", "li"}:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth > 0:
+            return
+        text = data.strip()
+        if text:
+            self.parts.append(text)
+
+    def to_text(self) -> str:
+        merged = " ".join(p if p != "\n" else "\n" for p in self.parts)
+        lines = [" ".join(line.split()) for line in merged.splitlines()]
+        lines = [l for l in lines if l]
+        return "\n".join(lines)
+
+
+def _strip_html_fragment(html_text: str, max_len: int = 500) -> str:
+    parser = _HtmlFragmentTextParser()
+    parser.feed(html_text or "")
+    parser.close()
+    text = parser.to_text()
+    if len(text) > max_len:
+        text = text[:max_len]
+    return text
+
+
+def _extract_js_array(page: str, marker: str) -> list[dict]:
+    """从页面中抽取形如 `marker + [ ... ]` 的数组（不使用正则）。"""
+    idx = page.find(marker)
+    if idx == -1:
+        return []
+
+    start = page.find("[", idx + len(marker))
+    if start == -1:
+        return []
+
+    depth = 0
+    in_str = False
+    escaped = False
+    end = -1
+
+    for i in range(start, len(page)):
+        ch = page[i]
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_str = False
+            continue
+
+        if ch == '"':
+            in_str = True
+        elif ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+
+    if end == -1:
+        return []
+
+    raw = page[start : end + 1]
+    try:
+        arr = json.loads(raw)
+        return arr if isinstance(arr, list) else []
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # 详情页获取
 # ---------------------------------------------------------------------------
@@ -350,4 +482,121 @@ def fetch_taoguba_hot(count: int = 20) -> list[dict]:
 
     except Exception as e:
         logger.exception("fetch_taoguba_hot 出错: %s", e)
+        return []
+
+
+def fetch_taoguba_stock_tags(full_code: str) -> list[dict]:
+    """获取个股题材标签。
+
+    Args:
+        full_code: 例如 ``sz002050``。
+    """
+    try:
+        resp = _fetch_json_post_form(
+            _XGGN_URL,
+            {"fullCode": full_code},
+            headers={"Referer": _QUOTES_URL.format(full_code=full_code), "Origin": _BASE_URL},
+        )
+        dto = resp.get("dto") if isinstance(resp, dict) else []
+        if not isinstance(dto, list):
+            return []
+
+        tags = []
+        for item in dto:
+            if not isinstance(item, dict):
+                continue
+            tags.append(
+                {
+                    "seq": item.get("seq"),
+                    "gn_name": item.get("gnName") or "",
+                    "gn_code": item.get("gnCode"),
+                    "type": item.get("type"),
+                }
+            )
+        return tags
+    except Exception as e:
+        logger.exception("fetch_taoguba_stock_tags 出错: %s", e)
+        return []
+
+
+def fetch_taoguba_quotes_posts(full_code: str, count: int = 20) -> list[dict]:
+    """获取个股页讨论贴（解析 quotes 页面内嵌 coolAttr）。"""
+    try:
+        html = _fetch_html(_QUOTES_URL.format(full_code=full_code))
+        rows = _extract_js_array(html, "var coolAttr = ")
+        if not rows:
+            return []
+
+        posts = []
+        for item in rows[:count]:
+            if not isinstance(item, dict):
+                continue
+
+            new_topic_id = item.get("newTopicID")
+            topic_id = item.get("topicID") or item.get("rID")
+            body = item.get("body") or item.get("subinfo") or ""
+            post_ts = item.get("postDate")
+            post_time = ""
+            if isinstance(post_ts, (int, float)):
+                post_time = datetime.fromtimestamp(post_ts / 1000).strftime("%Y-%m-%d %H:%M:%S")
+            elif isinstance(item.get("actionDate"), str):
+                # 接口常见格式: 2026-02-19T15:17:28.000+08:00
+                post_time = item.get("actionDate")
+
+            posts.append(
+                {
+                    "topic_id": str(topic_id or ""),
+                    "new_topic_id": str(new_topic_id or ""),
+                    "user_name": item.get("userName") or "",
+                    "subject": item.get("subject") or "",
+                    "summary": _strip_html_fragment(body, max_len=500),
+                    "post_time": post_time,
+                    "reply_num": item.get("replyNum"),
+                    "view_num": item.get("viewNum"),
+                    "r_type": item.get("rType"),
+                    "auth": item.get("auth"),
+                    "url": f"{_BASE_URL}/a/{new_topic_id}" if new_topic_id else None,
+                }
+            )
+        return posts
+    except Exception as e:
+        logger.exception("fetch_taoguba_quotes_posts 出错: %s", e)
+        return []
+
+
+def fetch_taoguba_zh_recommend(page_no: int = 1, count: int = 20) -> list[dict]:
+    """获取淘股吧综合推荐帖。"""
+    try:
+        resp = _fetch_json_get(_ZH_URL.format(page_no=page_no), headers={"Referer": _BASE_URL + "/"})
+        dto = resp.get("dto") if isinstance(resp, dict) else {}
+        items = dto.get("list") if isinstance(dto, dict) else []
+        if not isinstance(items, list):
+            return []
+
+        out = []
+        for item in items[:count]:
+            if not isinstance(item, dict):
+                continue
+            post_ts = item.get("postDate")
+            post_time = ""
+            if isinstance(post_ts, (int, float)):
+                post_time = datetime.fromtimestamp(post_ts / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+            out.append(
+                {
+                    "topic_id": str(item.get("topicID") or ""),
+                    "new_topic_id": str(item.get("newTopicID") or ""),
+                    "user_name": item.get("userName") or "",
+                    "subject": item.get("subject") or "",
+                    "subinfo": item.get("subinfo") or "",
+                    "post_time": post_time,
+                    "reply_num": item.get("replyNum"),
+                    "view_num": item.get("viewNum"),
+                    "r_type": item.get("type"),
+                    "url": f"{_BASE_URL}/a/{item.get('newTopicID')}" if item.get("newTopicID") else None,
+                }
+            )
+        return out
+    except Exception as e:
+        logger.exception("fetch_taoguba_zh_recommend 出错: %s", e)
         return []
