@@ -79,15 +79,16 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 | 2 | `/tmp/a-share-review/{DATE}/news_daily.json` | 每日财经（政策/宏观） |
 | 3 | `/tmp/a-share-review/{DATE}/news_opportunity.json` | 机会情报 |
 | 4 | `/tmp/a-share-review/{DATE}/market_sectors.json` | 板块资金摘要 |
-| 5 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖 ⭐ |
-| 6 | `/tmp/a-share-review/{DATE}/ths_snapshot.json` | 涨停快照（连板天梯+最强板块） |
-| 7 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
-| 8 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
-| 9 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
-| 10 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
-| 11 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
-| 12 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
-| 13 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
+| 5 | `/tmp/a-share-review/{DATE}/taoguba_recommend.json` | 淘股吧今日推荐（**实时题材热点** ⭐，题材线索首选） |
+| 6 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖（方法论/心理/风控，用于精华言论提炼） |
+| 7 | `/tmp/a-share-review/{DATE}/ths_snapshot.json` | 涨停快照（连板天梯+最强板块） |
+| 8 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
+| 9 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
+| 10 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
+| 11 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
+| 12 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
+| 13 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
+| 14 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
 
 ---
 
