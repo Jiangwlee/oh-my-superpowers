@@ -40,6 +40,4 @@
 1.开发阶段
 - 开发阶段的skills保存至`skills`目录
 
-2.部署与测试
-- 将待测试的skills拷贝至当前主机Openclaw skills目录: `/Users/mindora/clawd/skills`
-- 重启Openclaw Gateway: `openclaw gateway restart`
+2.本地部署与远程部署参考`Deployment.md`

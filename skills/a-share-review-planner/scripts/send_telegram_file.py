@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-send_telegram_file.py - 通过 Telegram Bot API sendDocument 发送文件（无压缩）
+send_telegram_file.py - 通过 Telegram Bot API 发送文件/图片
 
 用法：
-    python3 send_telegram_file.py <file_path> [--caption TEXT] [--chat-id ID]
+    python3 send_telegram_file.py <file_path> [--caption TEXT] [--chat-id ID] [--method photo|document]
 
 自动从 ~/.openclaw/openclaw.json 读取 botToken、allowFrom（默认收件人）、proxy。
-使用 sendDocument（而非 sendPhoto），Telegram 不会压缩图片，手机端可看到原始质量。
+
+--method photo    （默认）用 sendPhoto 发送，图片直接显示在聊天中，无需点击，无缩略图变形问题。
+                  每张图片宽+高必须 ≤ 10000px（分页后每页约 2250+6000=8250，满足要求）。
+--method document 用 sendDocument 发送，保留原始文件，但在聊天中显示为文件附件（需点击查看）。
 """
 
 import argparse
@@ -41,15 +44,22 @@ def get_telegram_settings(cfg: dict) -> tuple[str, str, str]:
     return bot_token, chat_id, proxy
 
 
-def send_document(
+def send_file(
     file_path: Path,
     bot_token: str,
     chat_id: str,
     caption: str = "",
     proxy: str = "",
+    method: str = "photo",
 ) -> dict:
-    """用 curl 调 sendDocument API，不压缩文件"""
-    url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+    """
+    发送文件到 Telegram。
+    method="photo"    → sendPhoto（图片直接显示，无需点击，无缩略图压扁）
+    method="document" → sendDocument（原始质量，但显示为文件附件）
+    """
+    api_method = "sendPhoto" if method == "photo" else "sendDocument"
+    field_name = "photo" if method == "photo" else "document"
+    url = f"https://api.telegram.org/bot{bot_token}/{api_method}"
 
     cmd = ["curl", "-s", "--max-time", "60"]
 
@@ -57,7 +67,7 @@ def send_document(
         cmd += ["--proxy", proxy]
 
     cmd += ["-F", f"chat_id={chat_id}"]
-    cmd += ["-F", f"document=@{file_path.absolute()}"]
+    cmd += ["-F", f"{field_name}=@{file_path.absolute()}"]
     if caption:
         cmd += ["-F", f"caption={caption}"]
 
@@ -71,13 +81,20 @@ def send_document(
     return resp
 
 
+# 向后兼容
+def send_document(file_path, bot_token, chat_id, caption="", proxy=""):
+    return send_file(file_path, bot_token, chat_id, caption, proxy, method="document")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="通过 Telegram Bot sendDocument 发送文件（无压缩）"
+        description="通过 Telegram Bot 发送图片或文件"
     )
     parser.add_argument("file", help="要发送的文件路径（PNG/PDF 等）")
     parser.add_argument("--caption", default="", help="文件说明（可选）")
     parser.add_argument("--chat-id", dest="chat_id", default="", help="目标 chat_id（默认读配置）")
+    parser.add_argument("--method", choices=["photo", "document"], default="photo",
+                        help="发送方式：photo=图片直接显示（默认），document=文件附件")
     args = parser.parse_args()
 
     file_path = Path(args.file)
@@ -93,9 +110,9 @@ def main() -> None:
         print("错误：未指定 chat_id 且配置中无 allowFrom", file=sys.stderr)
         sys.exit(1)
 
-    print(f"发送文件：{file_path.name}（{file_path.stat().st_size // 1024}KB）→ {chat_id}")
+    print(f"发送图片（{args.method}）：{file_path.name}（{file_path.stat().st_size // 1024}KB）→ {chat_id}")
 
-    resp = send_document(file_path, bot_token, chat_id, args.caption, proxy)
+    resp = send_file(file_path, bot_token, chat_id, args.caption, proxy, method=args.method)
 
     if resp.get("ok"):
         print("发送成功")

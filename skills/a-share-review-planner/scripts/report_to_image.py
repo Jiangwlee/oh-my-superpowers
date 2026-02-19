@@ -14,6 +14,7 @@ PDF 模式：使用 Chrome headless --print-to-pdf，生成完整分页 PDF。
 
 import argparse
 import html
+import platform
 import shutil
 import subprocess
 import sys
@@ -31,9 +32,10 @@ CHROME_CANDIDATES = [
 
 # ── 手机友好 CSS（与 report_to_html.py 保持一致）──────────────────────────
 CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0;
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
-    font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB',
+    font-family: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB',
                  'Microsoft YaHei', sans-serif;
     font-size: 30px;
     line-height: 1.8;
@@ -91,6 +93,44 @@ def find_chrome() -> str | None:
     return None
 
 
+def _font_css() -> str:
+    """
+    生成字体加载 CSS/HTML 片段。
+    - macOS：优先使用 Google Fonts CDN（Noto Sans SC），fallback 到系统 PingFang SC
+    - Linux：优先使用本地安装的 Noto CJK（fonts-noto-cjk 包），无需 CDN
+    """
+    is_linux = platform.system() == "Linux"
+
+    # 检查本地 Noto CJK 是否已安装（Linux apt 安装后字体名为 "Noto Sans CJK SC"）
+    has_local_noto = False
+    if is_linux:
+        try:
+            result = subprocess.run(
+                ["fc-list", ":lang=zh"],
+                capture_output=True, text=True, timeout=5
+            )
+            has_local_noto = "Noto" in result.stdout
+        except Exception:
+            pass
+
+    if is_linux and has_local_noto:
+        # Linux：本地字体，无需 CDN
+        return '<style>/* 使用本地 Noto CJK 字体 */</style>'
+    else:
+        # macOS 或 Linux 未安装本地字体：使用 Google Fonts CDN
+        return """<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">"""
+
+
+def _font_family() -> str:
+    """根据平台返回 font-family 字符串"""
+    is_linux = platform.system() == "Linux"
+    if is_linux:
+        return "'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Micro Hei', sans-serif"
+    return "'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif"
+
+
 def markdown_to_html(md_path: Path) -> str:
     """Markdown → 完整 HTML 字符串"""
     if shutil.which("pandoc"):
@@ -105,12 +145,18 @@ def markdown_to_html(md_path: Path) -> str:
     else:
         body = _md_fallback(md_path)
 
+    css = CSS.replace(
+        "'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB',\n                 'Microsoft YaHei', sans-serif",
+        _font_family()
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>{CSS}</style>
+{_font_css()}
+<style>{css}</style>
 </head>
 <body>{body}</body>
 </html>"""
@@ -121,12 +167,18 @@ def _md_fallback(md_path: Path) -> str:
     return f'<pre style="white-space:pre-wrap;font-size:14px;">{html.escape(content)}</pre>'
 
 
-def screenshot_png(html_file: Path, output: Path, dpr: int = 3, width: int = 750) -> None:
+def screenshot_png(
+    html_file: Path,
+    output: Path,
+    dpr: int = 3,
+    width: int = 750,
+    max_page_height: int = 2000,
+) -> list[Path]:
     """
-    用 Node.js CDP（screenshot.js）截全页 PNG。
-    - 自动探测真实页面高度（无多余空白）
-    - DPR=3（iPhone 17 原生 3x Retina），输出宽度 2250px，文字锐利
-    - 需要 Node.js 18+ 和系统 Chrome
+    用 Node.js CDP（screenshot.js）截全页 PNG，支持分页。
+
+    max_page_height: CSS 像素。>0 时启用分页模式，生成 output_1.png output_2.png ...
+    返回: 生成的文件路径列表（分页时为多个，单图时为一个）
     """
     node = shutil.which("node")
     if not node:
@@ -138,34 +190,53 @@ def screenshot_png(html_file: Path, output: Path, dpr: int = 3, width: int = 750
 
     result = subprocess.run(
         [node, str(script), str(html_file.absolute()), str(output.absolute()),
-         str(dpr), str(width)],
+         str(dpr), str(width), str(max_page_height)],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=120,
     )
     if result.returncode != 0:
         raise RuntimeError(f"screenshot.js 失败: {result.stderr.strip()}")
-    if result.stdout.strip():
-        print(f"  截图尺寸: {result.stdout.strip()}", file=sys.stderr)
+
+    # 解析输出，收集生成的文件路径
+    generated: list[Path] = []
+    for line in result.stdout.strip().splitlines():
+        if line.startswith("page"):
+            # 分页模式: "page1:/path/to/file.png:2250x6000"
+            parts = line.split(":", 2)
+            if len(parts) >= 2:
+                generated.append(Path(parts[1]))
+                print(f"  {parts[0]}: {parts[2] if len(parts) > 2 else ''}", file=sys.stderr)
+        else:
+            # 单图模式: "2250x25689px (...)"
+            print(f"  截图尺寸: {line}", file=sys.stderr)
+            generated.append(output)
+
+    return generated if generated else [output]
 
 
-def generate_pdf(chrome: str, html_file: Path, output: Path) -> None:
-    """用 headless Chrome 生成完整 PDF"""
-    subprocess.run(
-        [
-            chrome,
-            "--headless=new",
-            "--disable-gpu",
-            "--no-sandbox",
-            f"--print-to-pdf={output.absolute()}",
-            "--no-pdf-header-footer",
-            "--print-to-pdf-no-header",
-            f"file://{html_file.absolute()}",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
+def generate_pdf(html_file: Path, output: Path) -> None:
+    """
+    用 Node.js CDP（screenshot.js --pdf）生成 PDF。
+    等待 document.fonts.ready，确保 Noto Sans SC 字体嵌入，中文正常显示。
+    """
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("未找到 node，无法运行 screenshot.js")
+
+    script = Path(__file__).parent / "screenshot.js"
+    if not script.exists():
+        raise RuntimeError(f"找不到 screenshot.js: {script}")
+
+    result = subprocess.run(
+        [node, str(script), "--pdf",
+         str(html_file.absolute()), str(output.absolute())],
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"screenshot.js --pdf 失败: {result.stderr.strip()}")
 
 
 def main() -> None:
@@ -176,6 +247,8 @@ def main() -> None:
     parser.add_argument("--format", choices=["png", "pdf"], default="png",
                         help="输出格式（默认 png）")
     parser.add_argument("--output", help="输出文件路径（默认与输入同目录）")
+    parser.add_argument("--max-height", type=int, default=2000,
+                        help="分页高度(CSS px)，0=单图模式，默认2000")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -189,6 +262,9 @@ def main() -> None:
     else:
         output_path = input_path.with_suffix(f".{fmt}")
 
+    # 确保输出目录存在
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     # 先生成 HTML 中间文件（临时）
     with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
         html_path = Path(tmp.name)
@@ -198,23 +274,22 @@ def main() -> None:
         html_path.write_text(html_content, encoding="utf-8")
 
         if fmt == "pdf":
-            chrome = find_chrome()
-            if not chrome:
-                print("错误：未找到 Google Chrome", file=sys.stderr)
-                sys.exit(1)
-            generate_pdf(chrome, html_path, output_path)
+            generate_pdf(html_path, output_path)
+            output_files = [output_path]
         else:
-            screenshot_png(html_path, output_path)
+            output_files = screenshot_png(html_path, output_path,
+                                          max_page_height=args.max_height)
     finally:
         html_path.unlink(missing_ok=True)
 
-    if not output_path.exists():
-        print(f"错误：输出文件未生成：{output_path}", file=sys.stderr)
-        sys.exit(1)
-
-    size_kb = output_path.stat().st_size // 1024
-    print(f"完成（{fmt}，{size_kb}KB）：{output_path}")
-    print(f"file://{output_path.absolute()}")
+    # 输出所有生成的文件
+    for f in output_files:
+        if not f.exists():
+            print(f"错误：输出文件未生成：{f}", file=sys.stderr)
+            sys.exit(1)
+        size_kb = f.stat().st_size // 1024
+        print(f"完成（{fmt}，{size_kb}KB）：{f}")
+        print(f"file://{f.absolute()}")
 
 
 if __name__ == "__main__":

@@ -22,6 +22,24 @@ market_position:
   neutral: "3-5成仓位"
   weak: "1-2成仓位或空仓"
 
+# 账户健康度模式（来自持仓数据中的 hold_earn / total）
+# 优先级高于 market_position：账户模式偏保守时，市场再强也不加仓
+# hysteresis_days: 需连续 N 个交易日符合条件才切换，防止单日大波动误判
+account_mode:
+  growth:
+    condition: "账户盈利 ≥ +20%（hold_earn / total ≥ 0.20）"
+    action: "仓位建议上调一档（如市场中性→激进），可优先关注题材机会"
+  normal:
+    condition: "账户在 -10% ~ +20% 范围"
+    action: "按 market_position 正常操作，无额外约束"
+  defensive:
+    condition: "账户回撤 10%~30%（hold_earn / total ≤ -0.10）"
+    action: "不开新题材仓，趋势股只减不增，仓位建议下调一档"
+  critical:
+    condition: "账户回撤 > 30%（hold_earn / total ≤ -0.30）"
+    action: "清仓观望，待连续 3 个交易日净值回升后解除，不接受任何新仓建议"
+  hysteresis_days: 3
+
 evolution_log: []
 # 格式示例：
 # - date: "2026-02-18"

@@ -11,6 +11,13 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
   --news-count 20 \
   --taoguba-count 20
 
+# 含账户持仓数据（需已配置 jvQuant，见下方章节）
+python3 {SKILL_DIR}/scripts/collect_sentiment.py \
+  --output-dir /tmp/a-share-review/{DATE} \
+  --news-count 20 \
+  --taoguba-count 20 \
+  --broker
+
 # 精简采集（测试用，跳过趋势扫描，约 30 秒）
 python3 {SKILL_DIR}/scripts/collect_sentiment.py \
   --output-dir /tmp/a-share-review/{DATE} \
@@ -69,3 +76,73 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 | `ths_snapshot.json` | 同花顺涨停快照（连板天梯 + 最强板块） |
 | `trend_scan.json` | 趋势扫描完整结果（含评分/信号/情绪） |
 | `trend_report.md` | 趋势股筛选报告（人类可读） |
+| `broker_account.json` | 账户资金+持仓+当日委托（仅 --broker 时生成） |
+| `candidates.json` | 候选股计划（LLM 生成，供 risk_check.py 校验） |
+
+## 独立风控校验
+
+LLM 完成第3步个股筛选后，将候选股写成 candidates.json，然后执行：
+
+```bash
+python3 {SKILL_DIR}/scripts/risk_check.py \
+  --input /tmp/a-share-review/{DATE}/candidates.json
+```
+
+candidates.json 格式：
+```json
+{
+  "total_capital": 100000,
+  "market_mode": "strong",
+  "account_mode": "normal",
+  "candidates": [
+    {
+      "code": "000001",
+      "name": "平安银行",
+      "type": "trend",
+      "sector": "银行",
+      "position": 15000
+    }
+  ]
+}
+```
+
+字段说明：
+- `total_capital`：总可用资金（元），来自 broker_account.json 中的 usable，无账户数据时由用户提供
+- `market_mode`：第一步市场环境判断结论（strong/neutral/weak）
+- `account_mode`：第一步账户健康度判断结论（growth/normal/defensive/critical）
+- `type`：trend（趋势股）/ theme（题材股）
+- `sector`：所属板块或题材名称（用于集中度检查）
+- `position`：计划仓位金额（元）
+
+---
+
+## jvQuant 配置
+
+### 配置文件（推荐）
+
+创建 `~/.openclaw/jvquant.json`：
+
+```json
+{
+  "counter": "http://xxx.xxx.xxx.xxx:xxxx",
+  "token": "你的jvquant用户token",
+  "acc": "资金账号",
+  "pass": "资金密码"
+}
+```
+
+### 环境变量（可覆盖配置文件）
+
+```bash
+export JVQUANT_COUNTER="http://xxx.xxx.xxx.xxx:xxxx"
+export JVQUANT_TOKEN="你的jvquant用户token"
+export JVQUANT_ACC="资金账号"
+export JVQUANT_PASS="资金密码"
+```
+
+### 费用说明
+
+- **登录（/login）有计费**：每次登录会产生费用，计费周期为 1 分钟聚合
+- **ticket 缓存机制**：broker_account.py 将 ticket 缓存到 `~/.openclaw/.jvquant_ticket_cache.json`，在 ticket 有效期内（通常 3600 秒）复用，不重新登录
+- `broker_account.json` 中的 `ticket_reused` 字段显示本次是否复用了缓存（true = 未产生登录计费）
+- **建议**：每个交易日只在收盘后复盘时运行一次 `--broker`，充分利用缓存

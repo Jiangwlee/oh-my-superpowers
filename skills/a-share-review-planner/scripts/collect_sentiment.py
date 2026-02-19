@@ -36,6 +36,7 @@ from scripts.fetchers.trend_scanner import (                     # noqa: E402
     fetch_eastmoney_top200, fetch_ths_snapshot,
     scan_all, format_report_md,
 )
+from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -104,6 +105,7 @@ def collect(
     *,
     scan_trends: bool = True,
     popularity_max: int = 200,
+    fetch_broker: bool = False,
 ) -> dict:
     """执行全量数据采集，返回 summary dict。
 
@@ -113,6 +115,10 @@ def collect(
         是否执行趋势扫描（默认 True）。扫描200只股约2-3分钟。
     popularity_max : int
         东方财富人气榜扫描上限（默认200，最大200）。
+    fetch_broker : bool
+        是否采集 jvQuant 账户持仓数据（默认 False）。
+        需配置 ~/.openclaw/jvquant.json 或对应环境变量。
+        注意：每次登录有计费，模块内部已实现 ticket 缓存复用。
     """
     os.makedirs(output_dir, exist_ok=True)
     tasks = _make_tasks(news_count, taoguba_count)
@@ -139,6 +145,22 @@ def collect(
             results[name] = (status, data, elapsed)
             icon = "\u2713" if status == "ok" else "\u2717"
             _log(f"  {icon} {name} ({elapsed:.1f}s)")
+
+    # ── 券商账户采集（可选，独立执行，失败不影响主流程） ──
+    if fetch_broker:
+        _log("采集券商账户数据（jvQuant）...")
+        broker_t0 = time.time()
+        try:
+            broker_data = fetch_broker_account()
+            broker_elapsed = time.time() - broker_t0
+            results["broker_account"] = ("ok", broker_data, broker_elapsed)
+            reused = broker_data.get("ticket_reused", False)
+            _log(f"  ✓ broker_account ({broker_elapsed:.1f}s)"
+                 f"{'，复用缓存ticket（未计费）' if reused else '，已重新登录'}")
+        except Exception as exc:
+            broker_elapsed = time.time() - broker_t0
+            results["broker_account"] = ("error", str(exc), broker_elapsed)
+            _log(f"  ✗ broker_account ({broker_elapsed:.1f}s): {exc}")
 
     # ── 趋势扫描（耗时较长，独立于上面的并发池） ──
     if scan_trends:
@@ -190,9 +212,10 @@ def collect(
 
     # 写入文件
     name_to_file = {t["name"]: t["filename"] for t in tasks}
-    # 追加趋势扫描的文件映射
+    # 追加趋势扫描、券商账户的文件映射
     name_to_file["ths_snapshot"] = "ths_snapshot.json"
     name_to_file["trend_scan"] = "trend_scan.json"
+    name_to_file["broker_account"] = "broker_account.json"
 
     for name, (status, data, elapsed) in results.items():
         filename = name_to_file.get(name)
@@ -252,6 +275,8 @@ def main() -> None:
     parser.add_argument("--taoguba-count", type=int, default=20, help="淘股吧帖子数")
     parser.add_argument("--no-scan-trends", action="store_true", help="跳过趋势扫描")
     parser.add_argument("--popularity-max", type=int, default=200, help="人气榜扫描上限(<=200)")
+    parser.add_argument("--broker", action="store_true",
+                        help="采集 jvQuant 账户持仓数据（需配置 ~/.openclaw/jvquant.json）")
     args = parser.parse_args()
 
     _log(f"开始采集 -> {args.output_dir}")
@@ -259,6 +284,7 @@ def main() -> None:
         args.output_dir, args.news_count, args.taoguba_count,
         scan_trends=not args.no_scan_trends,
         popularity_max=args.popularity_max,
+        fetch_broker=args.broker,
     )
     _log(f"完成: {summary['ok_count']} 成功, {summary['error_count']} 失败, "
          f"耗时 {summary['total_elapsed_sec']}s")

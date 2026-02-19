@@ -48,13 +48,22 @@ description: Use when user says "复盘"、"今日回顾"、"明日计划"、"�
 运行数据采集脚本，收集所有数据源：
 
 ```bash
+# 标准采集（不含账户数据）
 python3 {SKILL_DIR}/scripts/collect_sentiment.py \
   --output-dir /tmp/a-share-review/{DATE} \
   --news-count 20 \
   --taoguba-count 20
+
+# 含账户持仓数据（需已配置 ~/.openclaw/jvquant.json）
+python3 {SKILL_DIR}/scripts/collect_sentiment.py \
+  --output-dir /tmp/a-share-review/{DATE} \
+  --news-count 20 \
+  --taoguba-count 20 \
+  --broker
 ```
 
 > 脚本参数详情及输出文件说明，参见 `references/commands.md`。
+> jvQuant 配置说明，参见 `references/commands.md` 中的"jvQuant 配置"章节。
 
 采集完成后读取 `/tmp/a-share-review/{DATE}/collection_summary.json`，确认各数据源状态。如有失败，告知用户并继续分析可用数据。
 
@@ -74,23 +83,46 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 | 6 | `/tmp/a-share-review/{DATE}/ths_snapshot.json` | 涨停快照（连板天梯+最强板块） |
 | 7 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
 | 8 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
-| 9 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略 |
-| 10 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
-| 11 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
-| 12 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
+| 9 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
+| 10 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
+| 11 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
+| 12 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
+| 13 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
 
 ---
 
 ### 阶段3：分析
 
-**必须严格按照 `{SKILL_DIR}/references/analysis-framework.md` 的 6 步框架执行**，不得跳过任何步骤或遗漏必答问题：
+**必须严格按照 `{SKILL_DIR}/references/analysis-framework.md` 的 7 步框架执行**，不得跳过任何步骤或遗漏必答问题：
 
-1. 市场环境判断 → 强弱评级、主线风格、仓位建议
+1. 市场环境判断 → 强弱评级、主线风格、**账户健康度（account_mode）**、最终仓位建议
 2. 题材线索识别 → 主线题材、新兴线索、衰退警示、市场情绪
 3. 个股筛选 → 趋势股（4星以上）+ 题材股（仅题材驱动市时）
 4. 交易计划制定 → 每只候选股入场/止盈/止损/仓位，参考 active.yaml
-5. 风险检查 → 集中度、与昨日对比、持仓调整建议、特殊风险
-6. 策略回顾与微调 → 评估当前策略是否适配，必要时调整 active.yaml
+5. 风险检查（LLM 定性）→ 集中度、与昨日对比、持仓调整建议、特殊风险
+6. 策略回顾与微调 → **提案生成 + 4 维度评分（ProposalJudge）**，评分 ≥ 7 才修改 active.yaml
+7. 知识库积累 → 检查是否发现新规律/陷阱，有则追加到 evolution/*.md
+
+**阶段3 完成后，在输出交易计划之前，执行独立风控校验：**
+
+```bash
+# 将 LLM 生成的候选股计划输出为 JSON，然后执行硬性规则校验
+python3 {SKILL_DIR}/scripts/risk_check.py --input /tmp/a-share-review/{DATE}/candidates.json
+```
+
+候选股 JSON 格式（先由 LLM 生成此文件，再执行校验）：
+```json
+{
+  "total_capital": 100000,
+  "market_mode": "strong",
+  "account_mode": "normal",
+  "candidates": [
+    {"code": "000001", "name": "平安银行", "type": "trend", "sector": "银行", "position": 15000}
+  ]
+}
+```
+
+如校验有 **error 级别违规**，必须重新调整候选股计划，直至通过才能输出最终报告。warn 级别违规须在报告"风险提示"章节明确标注。
 
 ---
 
@@ -104,16 +136,21 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 ## 一、市场环境
 - 强弱评级：[强/中/弱]
 - 主线风格：[题材驱动/趋势主导/混沌轮动]
-- 仓位建议：[激进/标准/防守]
+- 账户健康度：[growth/normal/defensive/critical/未知]
+- 最终仓位建议：[激进/标准/防守/观望]
 - 判断依据：...
 
 ## 二、题材线索
+
 ### 主线题材
 - [题材名] | 阶段：[启动/加速/分歧/衰退] | 龙头：[个股]
+
 ### 新兴线索
 - [题材名] | 催化：[事件] | 评估：[高/中/低]
+
 ### 衰退警示
 - [题材名] | 信号：[具体信号]
+
 ### 市场情绪
 [乐观/谨慎/恐慌] - [依据]
 
@@ -121,7 +158,7 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 
 ### [代码] [名称] [类型：趋势/题材]
 - **选股理由**：...
-- **趋势评分**：[星级] [总分] [情绪颜色]（趋势股）
+- **趋势评分**：[星级] [总分] | [情绪标签]（趋势股）
 - **所属题材**：[题材名] | 阶段：[X]（题材股）
 - **入场条件**：...
 - **目标仓位**：...
@@ -157,31 +194,35 @@ EOF
 
 报告文件保存后，执行以下步骤。**这是默认流程，不是可选项。**
 
-**步骤1：用 Chrome headless 生成 PNG（不依赖 browser relay）**
+**步骤1：生成分页 PNG（每页约 2000px CSS 高）**
 
 ```bash
 mkdir -p ~/.openclaw/media/a-share-review/{DATE}
 python3 {SKILL_DIR}/scripts/report_to_image.py \
   /tmp/a-share-review/{DATE}/report.md \
-  --output ~/.openclaw/media/a-share-review/{DATE}/report.png
-# 脚本输出两行：
-#   完成（png，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report.png
-#   file:///Users/mindora/.openclaw/media/a-share-review/{DATE}/report.png
+  --output ~/.openclaw/media/a-share-review/{DATE}/report.png \
+  --max-height 2000
+# 脚本按内容自动分页，输出每页路径，例如：
+#   完成（png，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report_1.png
+#   完成（png，XXkb）：~/.openclaw/media/a-share-review/{DATE}/report_2.png
+#   ...（共约4-6页）
 ```
 
-> **输出到 `~/.openclaw/media/`**：该目录是 Openclaw 硬编码的永久允许目录，所有 channel 和 session 均可发送，不受 agentId 或 workspace 影响。
->
-> 脚本直接调用系统 Chrome headless，**不经过 Openclaw browser relay**，无需额外依赖。
+> **分页原因**：单张超长图（宽高比1:11）在 Telegram 中会生成压扁变形的缩略图，导致文字无法辨认。分页后每张图约 2250×6000px（宽+高=8250 ≤ Telegram 限制 10000），可用 sendPhoto 直接显示，无需点击。
 
-**步骤2：通过 Telegram Bot API 以文件方式发送（无压缩）**
+**步骤2：逐页通过 Telegram Bot API 发送（sendPhoto，直接显示）**
+
+读取步骤1输出的文件路径，对每一个路径执行：
 
 ```bash
+# 对每一页图片（report_1.png, report_2.png, ...）执行以下命令
 python3 {SKILL_DIR}/scripts/send_telegram_file.py \
-  ~/.openclaw/media/a-share-review/{DATE}/report.png \
-  --caption "A股复盘报告 {DATE}"
+  ~/.openclaw/media/a-share-review/{DATE}/report_N.png \
+  --method photo \
+  --caption "A股复盘报告 {DATE}（第N页）"
 ```
 
-> 使用 `sendDocument`（而非 `sendPhoto`），Telegram 不压缩文件，iPhone 17 可看到完整 2250×3000px 原始质量。
+> 使用 `sendPhoto`，图片直接显示在聊天中，无需点击查看，无缩略图变形问题。
 > 脚本自动从 `~/.openclaw/openclaw.json` 读取 botToken 和 chat_id，无需手动配置。
 
 **Fallback：若发送失败**
@@ -195,13 +236,20 @@ python3 {SKILL_DIR}/scripts/send_telegram_file.py \
 - `{SKILL_DIR}/strategy/default.yaml` — 基线策略，**不可修改**，仅作参照
 - `{SKILL_DIR}/strategy/active.yaml` — 当前生效策略，每次复盘可微调
 
-修改规则：每次最多改 1-2 个参数，必须在 `evolution_log` 中记录日期和原因：
+**修改门槛（ProposalJudge 机制）**：每次修改前必须对提案进行 4 维度评分，仅当平均分 ≥ 7 且无任何维度 < 4 才写入，否则记录提案但不执行。
 
 ```yaml
 evolution_log:
   - date: "2026-02-18"
     change: "趋势股止损改为'跌破MA10且量能放大2倍以上'"
     reason: "近期MA20止损太慢，导致利润回吐过多"
+    proposal_scores: {relevance: 8, value: 7, safety: 9, feasibility: 8}
 ```
 
 若 active.yaml 与 default.yaml 偏差过大，需提醒用户审核。
+
+## Knowledge Evolution（知识库进化）
+
+- `{SKILL_DIR}/evolution/known_pitfalls.md` — 已知交易陷阱，**每次复盘第七步自动检查更新**
+- `{SKILL_DIR}/evolution/selection_rules.md` — 选股规则修正，**同上**
+- `{SKILL_DIR}/evolution/feedback.md` — 交易诊断反馈，由外部交易诊断工具写入
