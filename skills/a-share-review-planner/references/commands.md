@@ -46,7 +46,8 @@ python3 {SKILL_DIR}/scripts/report_to_image.py \
 # 生成 PDF（完整分页，Telegram 原生预览）
 python3 {SKILL_DIR}/scripts/report_to_image.py \
   /tmp/a-share-review/{DATE}/report.md \
-  --format pdf
+  --format pdf \
+  --output ~/.openclaw/media/a-share-review/{DATE}/report.pdf
 ```
 
 依赖：系统已安装 Google Chrome（/Applications/Google Chrome.app），无需 pip 安装任何包。

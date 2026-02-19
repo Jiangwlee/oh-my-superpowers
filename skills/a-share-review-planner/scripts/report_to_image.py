@@ -5,7 +5,7 @@ report_to_image.py - 将 Markdown 复盘报告转为图片/PDF，不依赖 Openc
 用法：
     python3 scripts/report_to_image.py <input.md> [--format png|pdf] [--output path]
 
-默认输出 PNG（与输入文件同目录，扩展名替换）。
+默认输出到 ~/.openclaw/media/a-share-review/...，确保可被 Openclaw Telegram 通道发送。
 PNG 模式：使用 Chrome headless 截图，viewport 宽 750px，自动探测页面高度。
 PDF 模式：使用 Chrome headless --print-to-pdf，生成完整分页 PDF。
 
@@ -29,6 +29,8 @@ CHROME_CANDIDATES = [
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
 ]
+
+OPENCLAW_MEDIA_ROOT = Path.home() / ".openclaw" / "media"
 
 # ── 手机友好 CSS（与 report_to_html.py 保持一致）──────────────────────────
 CSS = """
@@ -240,6 +242,27 @@ def generate_pdf(html_file: Path, output: Path) -> None:
         raise RuntimeError(f"screenshot.js --pdf 失败: {result.stderr.strip()}")
 
 
+def _default_output_path(input_path: Path, fmt: str) -> Path:
+    """
+    默认输出到 Openclaw 允许目录（~/.openclaw/media）。
+    若输入为 /tmp/a-share-review/{DATE}/report.md，则输出到
+    ~/.openclaw/media/a-share-review/{DATE}/report.{fmt}。
+    """
+    parts = input_path.resolve().parts
+    if len(parts) >= 4 and parts[-4] == "tmp" and parts[-3] == "a-share-review":
+        date_part = parts[-2]
+        return OPENCLAW_MEDIA_ROOT / "a-share-review" / date_part / f"{input_path.stem}.{fmt}"
+    return OPENCLAW_MEDIA_ROOT / "a-share-review" / f"{input_path.stem}.{fmt}"
+
+
+def _is_under_dir(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except Exception:
+        return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="将 Markdown 复盘报告转为 PNG 图片或 PDF（不依赖 Openclaw browser）"
@@ -247,21 +270,27 @@ def main() -> None:
     parser.add_argument("input", help="输入 Markdown 文件路径")
     parser.add_argument("--format", choices=["png", "pdf"], default="png",
                         help="输出格式（默认 png）")
-    parser.add_argument("--output", help="输出文件路径（默认与输入同目录）")
+    parser.add_argument("--output", help="输出文件路径（默认写入 ~/.openclaw/media/a-share-review）")
     parser.add_argument("--max-height", type=int, default=2000,
                         help="分页高度(CSS px)，0=单图模式，默认2000")
     args = parser.parse_args()
 
-    input_path = Path(args.input)
+    input_path = Path(args.input).expanduser()
     if not input_path.exists():
         print(f"错误：找不到输入文件：{input_path}", file=sys.stderr)
         sys.exit(1)
 
     fmt = args.format
     if args.output:
-        output_path = Path(args.output)
+        output_path = Path(args.output).expanduser()
     else:
-        output_path = input_path.with_suffix(f".{fmt}")
+        output_path = _default_output_path(input_path, fmt)
+
+    if not _is_under_dir(output_path, OPENCLAW_MEDIA_ROOT):
+        print(
+            f"警告：输出路径不在 Openclaw 建议目录下，Telegram 通道可能拒绝该文件：{output_path}",
+            file=sys.stderr,
+        )
 
     # 确保输出目录存在
     output_path.parent.mkdir(parents=True, exist_ok=True)
