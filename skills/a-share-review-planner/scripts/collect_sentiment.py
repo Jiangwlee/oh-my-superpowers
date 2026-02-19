@@ -31,7 +31,11 @@ from scripts.fetchers.news import (                               # noqa: E402
 from scripts.fetchers.market_overview import (                    # noqa: E402
     fetch_market_sectors_top_n,
 )
-from scripts.fetchers.taoguba import fetch_taoguba_hot, fetch_taoguba_now_recommend  # noqa: E402
+from scripts.fetchers.taoguba import (                            # noqa: E402
+    fetch_taoguba_hot,
+    fetch_taoguba_hot_discussion,
+    fetch_taoguba_now_recommend,
+)
 from scripts.fetchers.trend_scanner import (                     # noqa: E402
     fetch_eastmoney_top200, fetch_ths_snapshot, fetch_ths_history,
     scan_all, format_report_md, format_ths_md,
@@ -92,7 +96,10 @@ def _make_tasks(news_count: int, taoguba_count: int) -> list[dict]:
         {"name": "news_flash",       "filename": "news_flash.json",       "fn": lambda: fetch_news_flash(news_count)},
         {"name": "market_sectors",   "filename": "market_sectors.json",   "fn": lambda: fetch_market_sectors_top_n(5)},
         {"name": "taoguba_hot",      "filename": "taoguba_hot.json",      "fn": lambda: fetch_taoguba_hot(taoguba_count)},
-        {"name": "taoguba_recommend","filename": "taoguba_recommend.json","fn": fetch_taoguba_now_recommend},
+        {"name": "taoguba_hot_discussion", "filename": "taoguba_hot_discussion.json",
+         "fn": lambda: fetch_taoguba_hot_discussion(page_no=1, count=taoguba_count)},
+        {"name": "taoguba_recommend", "filename": "taoguba_recommend.json",
+         "fn": lambda: fetch_taoguba_now_recommend(count=taoguba_count)},
     ]
 
 

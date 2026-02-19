@@ -73,8 +73,9 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 | `news_daily.json` | 每日财经（政策/宏观） |
 | `news_flash.json` | 7x24快讯 |
 | `market_sectors.json` | 板块资金摘要（净流入前5+后5板块） |
-| `taoguba_hot.json` | 淘股吧精华帖（交易方法论为主，长周期热帖） |
-| `taoguba_recommend.json` | 淘股吧今日推荐（实时题材热点，最重要的舆情源） |
+| `taoguba_recommend.json` | 淘股吧今日推荐（含 `content` 正文，用于潜在/新题材挖掘） |
+| `taoguba_hot_discussion.json` | 淘股吧热门讨论（`subject/body/quotecontent`，用于潜在/新题材挖掘） |
+| `taoguba_hot.json` | 淘股吧精华帖（用于识别已发酵热点题材；方法论提炼） |
 | `ths_snapshot.json` | 同花顺涨停快照（原始 JSON，最新交易日） |
 | `ths_history.json` | 近5交易日涨停历史（原始 JSON，精简版） |
 | `ths_report.md` | 涨停综合报告（**LLM 直接阅读**，含5日趋势表 + 连板天梯 + 板块明细） |

@@ -81,16 +81,17 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 | 2 | `/tmp/a-share-review/{DATE}/news_daily.json` | 每日财经（政策/宏观） |
 | 3 | `/tmp/a-share-review/{DATE}/news_opportunity.json` | 机会情报 |
 | 4 | `/tmp/a-share-review/{DATE}/market_sectors.json` | 板块资金摘要 |
-| 5 | `/tmp/a-share-review/{DATE}/taoguba_recommend.json` | 淘股吧今日推荐（**实时题材热点** ⭐，题材线索首选） |
-| 6 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖（方法论/心理/风控，用于精华言论提炼） |
-| 7 | `/tmp/a-share-review/{DATE}/ths_report.md` | 涨停综合报告（**必读** ⭐，含5日趋势表+连板天梯+最强板块+热门板块个股明细） |
-| 8 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
-| 9 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
-| 10 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
-| 11 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
-| 12 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
-| 13 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
-| 14 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
+| 5 | `/tmp/a-share-review/{DATE}/taoguba_recommend.json` | 淘股吧今日推荐（含帖子正文 `content`，用于**潜在/新题材**挖掘） |
+| 6 | `/tmp/a-share-review/{DATE}/taoguba_hot_discussion.json` | 淘股吧热门讨论（含 `subject/body/quotecontent`，用于**潜在/新题材**挖掘） |
+| 7 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖（用于识别**已发酵热点题材** + 精华言论提炼） |
+| 8 | `/tmp/a-share-review/{DATE}/ths_report.md` | 涨停综合报告（**必读** ⭐，含5日趋势表+连板天梯+最强板块+热门板块个股明细） |
+| 9 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
+| 10 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
+| 11 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
+| 12 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
+| 13 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
+| 14 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
+| 15 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
 
 ---
 
@@ -100,7 +101,7 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 
 1. 市场环境判断 → 强弱评级、主线风格、**账户健康度（account_mode）**、最终仓位建议
    - **同花顺多日情绪分析**：用 `ths_history.json` 制作近5日涨停数量/板块变化表格，判断市场情绪是升温/冷却/持平；`ths_snapshot.json` 高亮当日连板天梯和热门板块内涨停最多的个股
-2. 题材线索识别 → 主线题材、新兴线索、衰退警示、市场情绪
+2. 题材线索识别 → 潜在/新题材（recommend + hot discussion + opportunity）与已发酵热点（taoguba_hot）分层识别
 3. 个股筛选 → 趋势股（4星以上）+ 题材股（仅题材驱动市时）
 4. **个股深度分析（第3.5步）** → 对步骤3筛出的候选股逐一采集股吧情绪与近期事件，生成 brief，并给出仓位校准结论（命令详见 `references/commands.md`）
 5. 交易计划制定 → 将第3.5步的深度分析校准信息**直接并入每只个股计划条目**，制定入场/止盈/止损/仓位；禁止单独再写一节“校准结论”

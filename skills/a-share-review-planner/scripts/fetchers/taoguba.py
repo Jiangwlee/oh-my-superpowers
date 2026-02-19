@@ -21,6 +21,7 @@ _QUOTES_URL = f"{_BASE_URL}/quotes/{{full_code}}"
 _XGGN_URL = f"{_BASE_URL}/quotes/getXGGNStockType"
 _ZH_URL = f"{_BASE_URL}/newIndex/getZh?pageNo={{page_no}}"
 _NOW_RECOMMEND_URL = f"{_BASE_URL}/newIndex/getNowRecommend?pageNo={{page_no}}"
+_HOT_DISCUSSION_URL = f"{_BASE_URL}/quotes/hotDiscussion?groupID=0&pageNo={{page_no}}"
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -497,7 +498,7 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
         count: 需要返回的帖子数量，默认 15（一页上限）。
 
     Returns:
-        帖子列表，每条包含 subject / subinfo / author / date /
+        帖子列表，每条包含 subject / subinfo / content / author / date /
         view_count / reply_count / url / stock_codes 字段。
     """
     try:
@@ -532,6 +533,7 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
             posts.append({
                 "subject": item.get("subject", ""),
                 "subinfo": item.get("subinfo", ""),
+                "content": "",
                 "author": item.get("userName", ""),
                 "date": date_str,
                 "view_count": item.get("totalViewNum", 0),
@@ -539,10 +541,82 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
                 "url": post_url,
                 "stock_codes": stock_codes,
             })
+        # 并发补充正文，便于新题材挖掘时按内容做聚合
+        urls = [p["url"] for p in posts if p.get("url")]
+        if urls:
+            with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
+                contents = list(pool.map(_fetch_detail, urls))
+            i = 0
+            for post in posts:
+                if post.get("url"):
+                    post["content"] = contents[i]
+                    i += 1
         return posts
 
     except Exception as e:
         logger.exception("fetch_taoguba_now_recommend 出错: %s", e)
+        return []
+
+
+def fetch_taoguba_hot_discussion(page_no: int = 1, count: int = 20) -> list[dict]:
+    """获取淘股吧热门讨论（hotDiscussion）。
+
+    Args:
+        page_no: 页码，从 1 开始。
+        count: 返回条数上限。
+
+    Returns:
+        讨论列表，每条包含 subject / body / quotecontent / author / date /
+        view_count / reply_count / url / stock_codes 字段。
+    """
+    try:
+        resp = _fetch_json_get(
+            _HOT_DISCUSSION_URL.format(page_no=page_no),
+            headers={
+                "Referer": f"{_BASE_URL}/quotes/",
+                "Cookie": "agree=enter",
+            },
+        )
+        if not resp.get("status"):
+            logger.warning("hotDiscussion 接口返回 status=false")
+            return []
+
+        dto = resp.get("dto") if isinstance(resp, dict) else {}
+        items = dto.get("list") if isinstance(dto, dict) else []
+        if not isinstance(items, list):
+            return []
+
+        out: list[dict] = []
+        for item in items[:count]:
+            if not isinstance(item, dict):
+                continue
+            new_id = item.get("newTopicID") or ""
+            ts = item.get("dateTime")
+            date_str = ""
+            if ts:
+                date_str = datetime.fromtimestamp(ts / 1000).strftime("%m-%d %H:%M")
+            stock_codes = [
+                s.get("stockCode", "") for s in (item.get("stockList") or []) if s.get("stockCode")
+            ]
+
+            raw_body = item.get("body") or item.get("subinfo") or ""
+            raw_quote = item.get("quoteContent") or item.get("quotecontent") or ""
+            out.append(
+                {
+                    "subject": item.get("subject", ""),
+                    "body": _strip_html_fragment(raw_body),
+                    "quotecontent": _strip_html_fragment(raw_quote),
+                    "author": item.get("userName", ""),
+                    "date": date_str,
+                    "view_count": item.get("totalViewNum", 0),
+                    "reply_count": item.get("totalReplyNum", 0),
+                    "url": f"{_BASE_URL}/a/{new_id}" if new_id else "",
+                    "stock_codes": stock_codes,
+                }
+            )
+        return out
+    except Exception as e:
+        logger.exception("fetch_taoguba_hot_discussion 出错: %s", e)
         return []
 
 
