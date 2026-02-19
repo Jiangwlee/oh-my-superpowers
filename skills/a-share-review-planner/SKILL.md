@@ -41,7 +41,9 @@ description: Use when user says "复盘"、"今日回顾"、"明日计划"、"�
 
 ## Workflow
 
-完整工作流分为 4 个阶段，**必须按顺序执行，不得跳过**。
+完整工作流分为 5 个阶段，**必须按顺序执行，不得跳过**。
+
+> **⚠️ 严格禁止**：不得在未执行阶段1采集脚本的情况下直接口头分析，也不得在未完成阶段4保存文件、阶段5生成PDF发送的情况下结束任务。"已有数据"或"数据是旧的"均不是跳过工作流的理由。
 
 ### 阶段1：数据采集
 
@@ -81,15 +83,14 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 | 4 | `/tmp/a-share-review/{DATE}/market_sectors.json` | 板块资金摘要 |
 | 5 | `/tmp/a-share-review/{DATE}/taoguba_recommend.json` | 淘股吧今日推荐（**实时题材热点** ⭐，题材线索首选） |
 | 6 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖（方法论/心理/风控，用于精华言论提炼） |
-| 7 | `/tmp/a-share-review/{DATE}/ths_snapshot.json` | 涨停快照（最新交易日，连板天梯+最强板块+个股详情） |
-| 8 | `/tmp/a-share-review/{DATE}/ths_history.json` | 近5交易日涨停历史（**情绪趋势判断** ⭐，用于多日对比） |
-| 9 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
-| 10 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
-| 11 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
-| 12 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
-| 13 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
-| 14 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
-| 15 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
+| 7 | `/tmp/a-share-review/{DATE}/ths_report.md` | 涨停综合报告（**必读** ⭐，含5日趋势表+连板天梯+最强板块+热门板块个股明细） |
+| 8 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
+| 9 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
+| 10 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（**如存在**，用于账户健康度判断） |
+| 11 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 account_mode 定义） |
+| 12 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
+| 13 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
+| 14 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
 
 ---
 

@@ -364,8 +364,22 @@ def fetch_ths_history(days: int = 5, end_date: str | None = None, timeout: float
 
     _STOCK_KEEP = {"code", "name", "continue_num", "reason_type", "change_rate", "change_tag"}
 
-    def _slim_stocks(stocks: list) -> list:
+    def _slim_block_stocks(stocks: list) -> list:
+        """精简板块内个股字段（block_top.stock_list 为平铺结构）"""
         return [{k: v for k, v in s.items() if k in _STOCK_KEEP} for s in stocks]
+
+    def _flatten_lu(groups: list) -> list:
+        """展开连板天梯分组（{height, code_list} -> 个股列表）"""
+        out = []
+        for grp in groups:
+            height = grp.get("height", 1)
+            for s in (grp.get("code_list") or []):
+                out.append({
+                    "code": s.get("code"),
+                    "name": s.get("name"),
+                    "continue_num": height,
+                })
+        return out
 
     history: list[dict] = []
     delta = 0
@@ -386,13 +400,13 @@ def fetch_ths_history(days: int = 5, end_date: str | None = None, timeout: float
                         "name": blk.get("name"),
                         "limit_up_num": blk.get("limit_up_num"),
                         "change": blk.get("change"),
-                        "stock_list": _slim_stocks((blk.get("stock_list") or [])[:5]),
+                        "stock_list": _slim_block_stocks((blk.get("stock_list") or [])[:5]),
                     }
                     for blk in bt
                 ]
                 history.append({
                     "date": d,
-                    "continuous_limit_up": _slim_stocks(lu),
+                    "continuous_limit_up": _flatten_lu(lu),
                     "block_top": slim_bt,
                 })
         except Exception:
@@ -401,6 +415,128 @@ def fetch_ths_history(days: int = 5, end_date: str | None = None, timeout: float
 
     history.reverse()  # 升序（最旧在前）
     return history
+
+
+# ---------------------------------------------------------------------------
+# 同花顺涨停报告（Markdown 格式）
+# ---------------------------------------------------------------------------
+
+def format_ths_md(snapshot: dict, history: list[dict]) -> str:
+    """将快照 + 历史数据格式化为可读 Markdown 报告。
+
+    Parameters
+    ----------
+    snapshot : dict
+        fetch_ths_snapshot() 的返回值（最新交易日完整数据）。
+    history : list[dict]
+        fetch_ths_history() 的返回值（近5日精简数据，升序）。
+    """
+    _TAG_ZH = {
+        "FIRST_LIMIT": "首板",
+        "LIMIT_BACK": "连板",
+        "OPEN_LIMIT": "开板",
+        "HIGH_LIMIT": "高位板",
+    }
+
+    def _tag(raw: str | None) -> str:
+        return _TAG_ZH.get(raw or "", raw or "—")
+
+    def _flatten_snap_lu(groups: list) -> list:
+        """展开 snapshot 的连板天梯分组"""
+        out = []
+        for grp in groups:
+            height = grp.get("height", 1)
+            for s in (grp.get("code_list") or []):
+                out.append({"name": s.get("name", "?"), "continue_num": height})
+        return out
+
+    lines: list[str] = []
+    snap_date = snapshot.get("date") or "—"
+    display_date = f"{snap_date[:4]}-{snap_date[4:6]}-{snap_date[6:]}" if snap_date and snap_date != "—" else snap_date
+
+    lines.append(f"# 同花顺涨停分析 — {display_date}")
+    lines.append("")
+
+    # ── 1. 近5日情绪趋势 ───────────────────────────────────
+    lines.append("## 近5日情绪趋势")
+    lines.append("")
+    lines.append("| 日期 | 连板家数 | 当日最强板块（涨停数） |")
+    lines.append("|------|---------|----------------------|")
+    for day in history:
+        d = day.get("date", "")
+        d_str = f"{d[4:6]}/{d[6:]}" if len(d) == 8 else d
+        lu_count = len(day.get("continuous_limit_up") or [])
+        top3 = day.get("block_top", [])[:3]
+        blk_str = "、".join(
+            f"{b['name']}({b.get('limit_up_num', '?')})" for b in top3
+        ) if top3 else "—"
+        lines.append(f"| {d_str} | {lu_count} | {blk_str} |")
+    lines.append("")
+
+    # ── 2. 当日连板天梯 ───────────────────────────────────
+    # snapshot 的 continuous_limit_up 是按板数分组的 {height, code_list} 结构
+    raw_lu = snapshot.get("continuous_limit_up") or []
+    if raw_lu and isinstance(raw_lu[0], dict) and "height" in raw_lu[0]:
+        lu_list = sorted(_flatten_snap_lu(raw_lu), key=lambda x: -(x.get("continue_num") or 0))
+    else:
+        lu_list = sorted(raw_lu, key=lambda x: -(x.get("continue_num") or 0))
+    lines.append(f"## 连板天梯（{display_date}）")
+    lines.append("")
+    if lu_list:
+        lines.append("| 板数 | 股票 |")
+        lines.append("|-----|------|")
+        for s in lu_list:
+            num = s.get("continue_num") or 1
+            name = s.get("name", "?")
+            lines.append(f"| {num}板 | {name} |")
+    else:
+        lines.append("_当日无连板数据_")
+    lines.append("")
+
+    # ── 3. 当日最强板块 ──────────────────────────────────
+    bt_list = snapshot.get("block_top") or []
+    lines.append(f"## 最强板块 Top10（{display_date}）")
+    lines.append("")
+    if bt_list:
+        lines.append("| 排名 | 板块 | 涨停数 | 板块涨幅 | 代表股（前3） |")
+        lines.append("|-----|------|-------|---------|-------------|")
+        for i, blk in enumerate(bt_list[:10], 1):
+            blk_name = blk.get("name", "?")
+            lu_num = blk.get("limit_up_num", "?")
+            chg = blk.get("change")
+            chg_str = f"+{chg:.2f}%" if chg and chg > 0 else (f"{chg:.2f}%" if chg is not None else "—")
+            stocks = blk.get("stock_list") or []
+            rep = "、".join(s.get("name", "") for s in stocks[:3]) or "—"
+            lines.append(f"| {i} | {blk_name} | {lu_num} | {chg_str} | {rep} |")
+    else:
+        lines.append("_当日无板块数据_")
+    lines.append("")
+
+    # ── 4. 热门板块详情（前5板块，每板块列出涨停股） ─────────
+    lines.append(f"## 热门板块个股明细（前5板块）")
+    lines.append("")
+    for blk in bt_list[:5]:
+        blk_name = blk.get("name", "?")
+        lu_num = blk.get("limit_up_num", "?")
+        chg = blk.get("change")
+        chg_str = f"+{chg:.2f}%" if chg and chg > 0 else (f"{chg:.2f}%" if chg is not None else "—")
+        lines.append(f"### {blk_name}（涨停{lu_num}家，板块{chg_str}）")
+        lines.append("")
+        stocks = blk.get("stock_list") or []
+        if stocks:
+            lines.append("| 股票 | 板数 | 涨幅 | 类型 |")
+            lines.append("|------|-----|------|------|")
+            for s in stocks:
+                sname = s.get("name", "?")
+                num = s.get("continue_num") or 1
+                schg = s.get("change_rate")
+                schg_str = f"+{schg:.1f}%" if schg and schg > 0 else (f"{schg:.1f}%" if schg else "—")
+                raw_tag = s.get("change_tag") or s.get("reason_type")
+                tag = _tag(raw_tag)
+                lines.append(f"| {sname} | {num}板 | {schg_str} | {tag} |")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

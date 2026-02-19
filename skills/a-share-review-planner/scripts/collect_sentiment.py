@@ -34,7 +34,7 @@ from scripts.fetchers.market_overview import (                    # noqa: E402
 from scripts.fetchers.taoguba import fetch_taoguba_hot, fetch_taoguba_now_recommend  # noqa: E402
 from scripts.fetchers.trend_scanner import (                     # noqa: E402
     fetch_eastmoney_top200, fetch_ths_snapshot, fetch_ths_history,
-    scan_all, format_report_md,
+    scan_all, format_report_md, format_ths_md,
 )
 from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
 
@@ -190,6 +190,13 @@ def collect(
             results["ths_history"] = ("ok", {"days": len(ths_hist), "history": ths_hist},
                                       time.time() - scan_t0)
             _log(f"  \u2713 ths_history ({len(ths_hist)} \u5929)")
+
+            # 生成 ths_report.md（结构化 Markdown，供 LLM 直接阅读）
+            ths_md = format_ths_md(ths, ths_hist)
+            ths_report_path = os.path.join(output_dir, "ths_report.md")
+            with open(ths_report_path, "w", encoding="utf-8") as f:
+                f.write(ths_md)
+            _log(f"  \u2713 ths_report.md \u5df2\u751f\u6210")
 
             # 4) 并发 K 线扫描 + 评分
             trend_results = scan_all(candidates, workers=10)
