@@ -1,43 +1,186 @@
-# About
+# AGENTS.md - OpenclawSkills 开发指南
 
-本项目开发了一系列满足Openclaw规范的Skills.
+本项目开发了一系列满足 Openclaw 规范的 Skills（智能体技能），主要用于金融数据抓取、分析与研究。
 
-## 规范
+## 规范参考
 
-1.[Agent Skills](https://github.com/agentskills/agentskills): Openclaw遵从的Skills规范
+- [Agent Skills](https://github.com/agentskills/agentskills): Openclaw 遵从的 Skills 规范
+- [Tools](https://docs.openclaw.ai/tools/browser): Openclaw 内置工具
 
-## Openclaw特有机制
+## 技术栈
 
-1.[Tools](https://docs.openclaw.ai/tools/browser): Openclaw有一些内置tools，其中browser可以用来访问需要Javascript渲染的网页。
+- **语言**: Python 3.10+ (标准库为主)
+- **测试**: unittest / pytest
+- **HTML 解析**: html.parser (禁止正则)
 
-## 开发建议
+---
 
-1.开发Skills内置脚本Scripts时，**禁止**使用正则表达式解析html。因为html很容易变化，造成解析不稳定。
+## 开发命令
 
-## 研究与学习
+```bash
+# 运行单个测试文件
+python -m unittest skills/a-share-review-planner/tests/test_taoguba_fetchers.py
 
-1.在开发过程中多参考github上的优秀skills项目，比如：
-- https://github.com/anthropics/skills
-- https://github.com/openai/skills
-- https://github.com/vercel-labs/skills
+# 运行单个测试方法
+python -m unittest skills.a_share_review_planner.tests.test_taoguba_fetchers.TaogubaFetchersTest.test_now_recommend
 
-2.将学习到的经验存储在 `guides/` 目录，`Skills-Dev-Guide.md` 作为索引文件：
+# 运行所有测试
+python -m unittest discover -s skills -p "test_*.py"
 
-| 文件 | 内容 |
-|------|------|
-| [Skills-Dev-Guide.md](Skills-Dev-Guide.md) | 索引入口，含快速问答导航 |
-| [guides/skill-structure.md](guides/skill-structure.md) | 目录结构、命名规范、SKILL.md 最小规范 |
-| [guides/skill-quality-patterns.md](guides/skill-quality-patterns.md) | 高质量模式、提交前检查清单、常见反模式 |
-| [guides/skill-template.md](guides/skill-template.md) | 可复用模板、description 写法参考 |
-| [guides/dev-workflow.md](guides/dev-workflow.md) | 开发流程、部署步骤、持续演进建议 |
-| [guides/openclaw-adaptation.md](guides/openclaw-adaptation.md) | Openclaw 门控、加载优先级、部署命令 |
-| [guides/superpowers-architecture.md](guides/superpowers-architecture.md) | superpowers 项目分析：多平台适配、引导程序机制、可复用设计模式 |
+# 语法检查
+python -m py_compile <file.py>
+```
 
-3.学习过程中可以下载优秀的github项目至本地，研究项目代码。下载的github项目临时存储到`github_cache`目录
+---
 
-## 部署与测试
+## 代码风格
 
-1.开发阶段
-- 开发阶段的skills保存至`skills`目录
+### 1. 导入排序
 
-2.本地部署与远程部署参考`Deployment.md`
+标准库 → 第三方 → 本地模块，组内按字母排序：
+
+```python
+import json
+import logging
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from html.parser import HTMLParser
+from typing import Any
+
+import requests
+from scripts import fetchers
+```
+
+### 2. 类型注解
+
+- Python 3.10+ 联合类型: `str | None` (非 `Optional[str]`)
+- 复杂类型用 type alias:
+
+```python
+Post = dict[str, Any]
+Posts = list[Post]
+```
+
+### 3. 命名
+
+| 类型 | 规则 | 示例 |
+|------|------|------|
+| 模块 | 小写下划线 | `taoguba.py` |
+| 类 | 大驼峰 | `TaogubaFetchersTest` |
+| 函数 | 小写下划线 | `fetch_taoguba_hot()` |
+| 私有函数 | 前缀下划线 | `_fetch_detail()` |
+| 常量 | 全大写 | `_BASE_URL` |
+
+### 4. Docstring (Google 风格)
+
+```python
+def fetch_data(count: int = 20) -> list[dict]:
+    """获取数据。
+
+    Args:
+        count: 返回数量。
+
+    Returns:
+        数据列表，出错时返回空列表。
+    """
+```
+
+### 5. 错误处理
+
+- 数据获取函数: 捕获异常后返回空列表/字典，不抛出
+- 用 `logger.exception()` 记录错误
+- 网络请求设置 timeout (默认 15 秒)
+
+```python
+def fetch_data(url: str) -> list[dict]:
+    try:
+        return data
+    except Exception as e:
+        logger.exception("fetch_data 出错: %s", e)
+        return []
+```
+
+### 6. HTML 解析
+
+**禁止正则**，必须用 `html.parser`：
+
+```python
+from html.parser import HTMLParser
+
+class _MyParser(HTMLParser):
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "div" and self._get_attr(attrs, "id") == "first":
+            self._in_content = True
+
+    def _get_attr(self, attrs, key: str) -> str:
+        for name, val in attrs:
+            if name == key:
+                return val or ""
+        return ""
+```
+
+### 7. 并发
+
+用 `ThreadPoolExecutor`:
+
+```python
+with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
+    contents = list(pool.map(_fetch_detail, urls))
+```
+
+### 8. 日志
+
+`logger = logging.getLogger(__name__)`，用 `logger.debug()` / `logger.warning()` / `logger.exception()`
+
+---
+
+## 项目结构
+
+```
+skills/
+├── a-share-review-planner/
+│   ├── scripts/
+│   │   ├── fetchers/   # 数据抓取
+│   │   └── utils/      # 工具
+│   ├── tests/         # 单元测试
+│   ├── references/    # 参考文档
+│   ├── evolution/     # 演进记录
+│   ├── strategy/      # 策略配置
+│   └── SKILL.md
+├── github-researcher/
+└── openclaw-github-tracker/
+```
+
+---
+
+## 禁止事项
+
+1. 禁止正则解析 HTML
+2. 禁止硬编码敏感信息
+3. 禁止 rsync 部署，只用 `cp` / `scp`
+
+---
+
+## 部署
+
+详见 `Deployment.md`:
+
+```bash
+# 本地
+cp -r skills/<skill-name>/ ~/clawd/skills/<skill-name>/
+openclaw gateway restart
+
+# 远端
+scp -r skills/<skill-name>/ root@43.138.150.96:/root/.openclaw/workspace-smartrader/skills/
+ssh root@43.138.150.96 "source ~/.nvm/nvm.sh && openclaw gateway restart"
+```
+
+---
+
+## 测试检查清单
+
+- [ ] 测试通过: `python -m unittest discover -s skills`
+- [ ] 无语法错误: `python -m py_compile`
+- [ ] 类型注解完整
+- [ ] Docstring 完整
+- [ ] HTML 解析用 html.parser

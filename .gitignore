@@ -1,5 +1,7 @@
 github_cache
 .skills/
+.agents/
+.memory/
 Deployment.md
 
 # Python cache
