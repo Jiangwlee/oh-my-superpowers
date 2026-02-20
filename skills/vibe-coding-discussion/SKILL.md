@@ -1,23 +1,9 @@
 ---
 name: vibe-coding-discussion
-description: >
-  Use when coordinating multiple coding agents (claude-code, codex, opencode) to discuss,
-  brainstorm, or review a project topic and converge on a plan — with durable session logs.
-  Trigger keywords: vibe session, multi-agent discussion, 多agent讨论, 协作讨论,
-  开会话, 新建讨论, 查看会话, 会话列表, watch session, list sessions,
-  append message, 记录发言, 增量读取.
+description: Use when the user says "vibe discussion" to coordinate multiple coding agents (claude-code, codex, opencode) around a topic with durable session logs.
 ---
 
 # Vibe Coding Discussion
-
-## When to Use
-
-直接触发（以下任一即可）：
-- 用户提到 "vibe session" / "vibe coding discussion"
-- 用户要求多个 agent 一起讨论、评审或头脑风暴某个话题
-- 用户说"开一个会话"、"新建讨论"、"查看会话列表"、"监听会话"
-- 用户执行 `init_session` / `append_message` / `read_updates` / `list_sessions` / `watch_session`
-- 任何涉及把多 agent 发言写入 JSONL 日志的场景
 
 ## Overview
 

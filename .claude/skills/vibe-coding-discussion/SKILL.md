@@ -1,6 +1,6 @@
 ---
 name: vibe-coding-discussion
-description: Use when coordinating multiple TUI coding agents (for example claude-code, codex, opencode) to discuss one project topic and converge on a single implementation plan with durable session logs.
+description: Use when the user says "vibe discussion" to coordinate multiple coding agents (claude-code, codex, opencode) around a topic with durable session logs.
 ---
 
 # Vibe Coding Discussion
@@ -68,6 +68,24 @@ python3 {SKILL_DIR}/scripts/read_updates.py \
 ```
 
 4. 讨论收敛后写入最终方案（建议 `message_type=decision`），并同步给所有 agent。
+
+5. 查看会话列表（按最后更新时间排序）或监听会话实时动态：
+
+```bash
+# 列出所有会话（TUI 样式，按最后更新排序）
+python3 {SKILL_DIR}/scripts/watch_session.py --memory-root .memory
+
+# 渲染某个会话的全量内容
+python3 {SKILL_DIR}/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id <session-id>
+
+# 实时监听新消息（Ctrl-C 退出）
+python3 {SKILL_DIR}/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id <session-id> \
+  --follow
+```
 
 ## References
 

@@ -67,8 +67,46 @@ Optional filters:
 
 ## 4) List sessions
 
+Sessions are sorted by **last update time** (most recent first), not creation time.
+
 ```bash
 python3 skills/vibe-coding-discussion/scripts/list_sessions.py --memory-root .memory
+# Output includes "last_updated_at" field for each session.
+```
+
+## 5) Watch session (TUI output)
+
+Render a session with ANSI colors and markdown. Omit `--session-id` to list sessions
+sorted by last update time.
+
+```bash
+# List all sessions (sorted by last update)
+python3 skills/vibe-coding-discussion/scripts/watch_session.py --memory-root .memory
+
+# Watch a specific session (show all events)
+python3 skills/vibe-coding-discussion/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id 20260220-103527-openclaw-coding-agent
+
+# Show only last 10 events
+python3 skills/vibe-coding-discussion/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id 20260220-103527-openclaw-coding-agent \
+  --tail 10
+
+# Follow mode: print new events as they arrive (Ctrl-C to quit)
+python3 skills/vibe-coding-discussion/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id 20260220-103527-openclaw-coding-agent \
+  --follow
+
+# Follow mode starting from a specific index
+python3 skills/vibe-coding-discussion/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id 20260220-103527-openclaw-coding-agent \
+  --since-index 5 \
+  --follow \
+  --interval 2.0
 ```
 
 ## JSONL Event Schema
