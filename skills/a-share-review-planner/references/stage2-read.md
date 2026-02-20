@@ -4,11 +4,12 @@
 
 | # | 文件 | 用途 |
 |---|------|------|
+| 0 | `/tmp/a-share-review/{DATE}/run_id.json` | **本次运行标识**（必读，后续 JSON 输出和 decision_log 均使用其中的 `run_id` 值） |
 | 1 | `/tmp/a-share-review/{DATE}/news_headline.json` | A股头条（指数、成交额） |
 | 2 | `/tmp/a-share-review/{DATE}/news_daily.json` | 每日财经（政策/宏观） |
 | 3 | `/tmp/a-share-review/{DATE}/news_opportunity.json` | 机会情报 |
 | 4 | `/tmp/a-share-review/{DATE}/market_sectors.json` | 板块资金摘要 |
-| 4.1 | `/tmp/a-share-review/{DATE}/funding.json` | 资金面（北向净流入 + 主力净流入 Top20） |
+| 4.1 | `/tmp/a-share-review/{DATE}/funding.json` | 资金面：`northbound_net`（北向净流入亿元）、`main_force_top20`（全市场主力净流入前20）、`trend_candidates_funding`（趋势候选股净流入排名，第三步选股直接使用） |
 | 5 | `/tmp/a-share-review/{DATE}/taoguba_recommend.json` | 淘股吧今日推荐（含帖子正文 `content`，用于潜在/新题材挖掘） |
 | 6 | `/tmp/a-share-review/{DATE}/taoguba_hot_discussion.json` | 淘股吧热门讨论（含 `subject/body/quotecontent`，用于潜在/新题材挖掘） |
 | 7 | `/tmp/a-share-review/{DATE}/taoguba_hot.json` | 淘股吧精华帖（用于识别已发酵热点题材 + 精华言论提炼） |

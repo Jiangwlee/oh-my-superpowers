@@ -32,7 +32,7 @@ from scripts.fetchers.news import (                               # noqa: E402
 from scripts.fetchers.market_overview import (                    # noqa: E402
     fetch_market_sectors_top_n,
 )
-from scripts.fetchers.funding import fetch_funding                # noqa: E402
+from scripts.fetchers.funding import fetch_funding, fetch_funding_for_codes  # noqa: E402
 from scripts.fetchers.taoguba import (                            # noqa: E402
     fetch_taoguba_hot,
     fetch_taoguba_hot_discussion,
@@ -285,6 +285,26 @@ def collect(
             report_path = os.path.join(output_dir, "trend_report.md")
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(report_md)
+
+            # ── 趋势候选股资金交叉验证 ──
+            # 从已缓存的全量排名中查询趋势候选股的主力净流入，补充写入 funding.json
+            uptrend_codes = [
+                r.code if hasattr(r, "code") else r.get("code", "")
+                for r in trend_results
+                if (r.is_uptrend if hasattr(r, "is_uptrend") else r.get("is_uptrend", False))
+            ]
+            uptrend_codes = [c for c in uptrend_codes if c]
+            if uptrend_codes:
+                trend_funding = fetch_funding_for_codes(uptrend_codes)
+                funding_result = results.get("funding")
+                if funding_result and funding_result[0] == "ok":
+                    funding_data = funding_result[1]
+                    if isinstance(funding_data, dict):
+                        funding_data["trend_candidates_funding"] = trend_funding
+                        funding_path = os.path.join(output_dir, "funding.json")
+                        with open(funding_path, "w", encoding="utf-8") as f:
+                            json.dump(funding_data, f, ensure_ascii=False, indent=2)
+                        _log(f"  ✓ trend_candidates_funding: {len(trend_funding)} 只趋势股已补充资金数据")
 
         except Exception as exc:
             scan_elapsed = time.time() - scan_t0

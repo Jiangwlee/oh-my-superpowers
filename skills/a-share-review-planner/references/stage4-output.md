@@ -69,19 +69,14 @@ cat > /tmp/a-share-review/{DATE}/report.md << '__REPORT__'
 __REPORT__
 ```
 
-保存后在 `report.md` 末尾追加 JSON fenced block（内容与 `candidates.json` 一致）：
+**candidates.json 关键字段约束**：
 
-```json
-{完整 schema_v1 JSON}
-```
+1. `run_id`：必须使用阶段2读取的 `run_id.json` 中的值，不得自行生成
+2. `market.regime` 只能是 `strong` / `neutral` / `weak`
+3. `candidates[].action` 只能是 `buy` / `hold` / `sell` / `watch`
+4. `thesis_short` 与 `risk_note` 不超过 30 字
 
-关键字段约束：
-
-1. `market.regime` 只能是 `strong` / `neutral` / `weak`
-2. `candidates[].action` 只能是 `buy` / `hold` / `sell` / `watch`
-3. `thesis_short` 与 `risk_note` 不超过 30 字
-
-若阶段3校验通过，执行：
+若阶段3结构校验通过（`validate_output.py` 返回 `ok=true`），执行：
 
 ```bash
 python3 {SKILL_DIR}/scripts/decision_logger.py \

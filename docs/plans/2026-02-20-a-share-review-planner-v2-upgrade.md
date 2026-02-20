@@ -75,7 +75,7 @@
 
 以下三项是本次升级的核心，互为前置依赖：
 
-1. **LLM 双层输出**：报告末尾新增结构化 JSON block，机器可直接解析（解决复盘数据源问题）
+1. **LLM 结构化输出**：LLM 生成 `candidates.json`（schema_v1 格式），机器直接解析；`report.md` 为纯人类可读报告，不含 JSON（解决复盘数据源问题）
 2. **资金面 Fetcher**：接入北向资金 + 主力净流入 Top20（解决选股信号缺口）
 3. **决策日志闭环**：`decision_logger.py` 记录每次推荐，`diagnose.py` 回填实际涨跌（建立自进化数据基础）
 
@@ -206,24 +206,14 @@ LLM 分析完成后，`candidates.json` 升级为以下格式。所有核心字�
 | `candidates[].thesis_short` | string | 必填 | ≤ 30 字，LLM prompt 强制约束 |
 | `candidates[].risk_note` | string | 必填 | ≤ 30 字 |
 
-### 4.4 LLM 输出格式变更
+### 4.4 LLM 输出格式
 
-**变更内容**：`report.md` 末尾新增 JSON fenced block，`candidates.json` 同步写出。
+**输出文件**：
+- `candidates.json`：机器消费的结构化数据（source of truth）
+- `report.md`：纯人类可读的 Markdown 报告，**不含 JSON**
 
-**报告末尾格式**（阶段4新增保存命令）：
-
-```markdown
-<!-- run_id: {run_id} -->
-
-[原有报告内容...]
-
-```json
-{完整 schema_v1 JSON 对象}
-```
-```
-
-**prompt 约束（新增到阶段3末尾）**：
-- 输出 JSON 时，`thesis_short` 和 `risk_note` 各不超过 30 字
+**candidates.json prompt 约束**：
+- `thesis_short` 和 `risk_note` 各不超过 30 字
 - `action` 必须从 `buy/hold/sell/watch` 中选择，不得使用其他词
 - JSON 必须是有效的单个对象，不得包含注释或省略号
 
@@ -413,7 +403,7 @@ python3 diagnose.py [--dry-run] [--since 2026-02-01]
 ### candidates.json 与 report.md 关系
 
 - `candidates.json` 为机器消费的单一真实来源（source of truth）
-- `report.md` 末尾 JSON block 与 `candidates.json` 内容完全一致（冗余，方便人工核查）
+- `report.md` 为纯人类可读报告，**不含 JSON**
 - `decision_logger.py` 只读 `candidates.json`，不解析 `report.md`
 
 ### 模块间数据流

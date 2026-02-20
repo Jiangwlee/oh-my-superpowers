@@ -2,12 +2,12 @@
 
 必须严格按照 `references/analysis-framework.md` 执行，不得跳步。
 
-分析阶段结论要求：
+分析阶段结论要求（必须按序执行，不得跳步）：
 
 1. 市场环境判断（强弱评级、风格、账户健康度、仓位建议）
 2. 题材线索识别（潜在/新题材与已发酵热点分层）
-3. 个股筛选（趋势股 + 题材股）
-4. 个股深度分析（第3.5步，生成 brief 并做仓位校准）
+3. 个股筛选（四因子评分，输出候选股列表）
+4. **个股深度分析（第3.5步）**：对每只候选股运行 `collect_eastmoney_guba.py` 和 `collect_taoguba_stock.py`，生成 `dr_{CODE}_em.json` / `dr_{CODE}_tgb.json` / `dr_{CODE}_compact.json` / `dr_{CODE}_brief.json`，完成仓位校准 ← **此步骤必须执行，不得跳过**
 5. 交易计划制定（校准信息并入个股条目，不得单独重复一节）
 6. 风险检查（LLM 定性）
 7. 策略回顾与微调（ProposalJudge）
