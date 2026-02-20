@@ -1,5 +1,6 @@
 # 当前生效策略 - LLM 每次复盘时可根据实际表现调整
 # 修改时必须在 evolution_log 中记录变更原因
+strategy_version: "v1.0"
 
 trend_stock:
   description: "趋势股交易策略"

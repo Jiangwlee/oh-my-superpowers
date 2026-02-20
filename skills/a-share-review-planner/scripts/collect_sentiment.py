@@ -17,6 +17,7 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 
 # ── 把 scripts 所在目录加入 sys.path，以便按包导入 ──
 _SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +32,7 @@ from scripts.fetchers.news import (                               # noqa: E402
 from scripts.fetchers.market_overview import (                    # noqa: E402
     fetch_market_sectors_top_n,
 )
+from scripts.fetchers.funding import fetch_funding                # noqa: E402
 from scripts.fetchers.taoguba import (                            # noqa: E402
     fetch_taoguba_hot,
     fetch_taoguba_hot_discussion,
@@ -45,6 +47,45 @@ from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
 
 def _log(msg: str) -> None:
     print(f"[collect] {msg}", file=sys.stderr, flush=True)
+
+
+def _read_strategy_version(skill_root: str) -> tuple[str, bool]:
+    """从 active.yaml 读取策略版本。"""
+    strategy_path = os.path.join(skill_root, "strategy", "active.yaml")
+    try:
+        with open(strategy_path, encoding="utf-8") as handle:
+            lines = handle.readlines()
+    except OSError:
+        return "v0", True
+
+    for line in lines:
+        striped = line.strip()
+        if striped.startswith("strategy_version:"):
+            value = striped.split(":", 1)[1].strip().strip("\"'")
+            if value:
+                return value, False
+    for line in lines:
+        striped = line.strip()
+        if striped.startswith("version:"):
+            value = striped.split(":", 1)[1].strip().strip("\"'")
+            if value:
+                return value, False
+    return "v0", True
+
+
+def _extract_as_of_date(output_dir: str) -> str:
+    """从输出目录推断 YYYY-MM-DD 日期。"""
+    base = os.path.basename(output_dir.rstrip("/"))
+    if len(base) == 10 and base[4] == "-" and base[7] == "-":
+        return base
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _build_run_id(as_of_date: str, strategy_version: str) -> str:
+    """生成 run_id。"""
+    date_part = as_of_date.replace("-", "")
+    time_part = datetime.now().strftime("%H%M%S")
+    return f"{date_part}-{strategy_version}-{time_part}"
 
 
 # ── 数据精简函数 ──────────────────────────────────────
@@ -95,6 +136,7 @@ def _make_tasks(news_count: int, taoguba_count: int) -> list[dict]:
         {"name": "news_daily",       "filename": "news_daily.json",       "fn": lambda: fetch_daily_finance(news_count, fetch_body=True)},
         {"name": "news_flash",       "filename": "news_flash.json",       "fn": lambda: fetch_news_flash(news_count)},
         {"name": "market_sectors",   "filename": "market_sectors.json",   "fn": lambda: fetch_market_sectors_top_n(5)},
+        {"name": "funding",          "filename": "funding.json",          "fn": fetch_funding},
         {"name": "taoguba_hot",      "filename": "taoguba_hot.json",      "fn": lambda: fetch_taoguba_hot(taoguba_count)},
         {"name": "taoguba_hot_discussion", "filename": "taoguba_hot_discussion.json",
          "fn": lambda: fetch_taoguba_hot_discussion(page_no=1, count=taoguba_count)},
@@ -130,7 +172,17 @@ def collect(
     """
     os.makedirs(output_dir, exist_ok=True)
     tasks = _make_tasks(news_count, taoguba_count)
-    summary: dict = {"sources": {}, "output_dir": output_dir}
+    as_of_date = _extract_as_of_date(output_dir)
+    strategy_version, strategy_version_fallback = _read_strategy_version(_SKILL_ROOT)
+    run_id = _build_run_id(as_of_date, strategy_version)
+    summary: dict = {
+        "sources": {},
+        "output_dir": output_dir,
+        "as_of_date": as_of_date,
+        "run_id": run_id,
+        "strategy_version": strategy_version,
+        "strategy_version_fallback": strategy_version_fallback,
+    }
     t0 = time.time()
 
     def _run(task: dict) -> tuple[str, str, object, float]:
@@ -273,6 +325,8 @@ def collect(
                     count = data.get("sector_count", "-")
                 elif "all_results" in data:
                     count = data.get("uptrend_count", len(data["all_results"]))
+                elif name == "funding":
+                    count = len(data.get("main_force_top20", []))
 
         summary["sources"][name] = {
             "status": status,
@@ -291,6 +345,20 @@ def collect(
     summary_path = os.path.join(output_dir, "collection_summary.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
+
+    run_id_path = os.path.join(output_dir, "run_id.json")
+    with open(run_id_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "run_id": run_id,
+                "as_of_date": as_of_date,
+                "strategy_version": strategy_version,
+                "strategy_version_fallback": strategy_version_fallback,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     return summary
 

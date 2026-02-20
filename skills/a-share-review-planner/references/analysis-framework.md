@@ -11,10 +11,11 @@
 ### 必须读取的数据
 
 1. `market_sectors.json` — 板块资金摘要（净流入前5+后5板块）
-2. `news_headline.json` — A股头条（含指数涨跌、成交额等宏观信息）
-3. `news_daily.json` — 每日财经（政策/宏观）
-4. 淘股吧热帖中关于大盘的讨论
-5. `broker_account.json` — 账户资金及持仓盈亏（**如存在**）
+2. `funding.json` — 资金面摘要（北向净流入 + 主力净流入Top20）
+3. `news_headline.json` — A股头条（含指数涨跌、成交额等宏观信息）
+4. `news_daily.json` — 每日财经（政策/宏观）
+5. 淘股吧热帖中关于大盘的讨论
+6. `broker_account.json` — 账户资金及持仓盈亏（**如存在**）
 
 ### 必须回答的问题
 
@@ -34,10 +35,11 @@
    - 来源：market_sectors.json
 
 4. **资金流向什么方向？**
-   - 资金净流入前5板块
-   - 资金净流出前5板块
-   - 是否有明显的板块资金聚集
-   - 来源：market_sectors.json
+   - 资金净流入前5板块、净流出前5板块
+   - 北向净流入是净流入还是净流出、规模大致如何
+   - 主力净流入Top20中是否有明显行业聚集（同题材共振）
+   - 是否有明显的板块资金聚集与个股抱团
+   - 来源：market_sectors.json + funding.json
 
 5. **涨跌停情况如何？**
    - 涨停数量、跌停数量
@@ -172,6 +174,12 @@
 - 情绪因子：（颜色和等级）
 - 风险点：（1-2个主要风险）
 ```
+
+### 结构化字段约束（写入 candidates.json）
+
+- `market.regime` 只能为：`strong` / `neutral` / `weak`
+- `candidates[].action` 只能为：`buy` / `hold` / `sell` / `watch`
+- `candidates[].thesis_short`、`candidates[].risk_note` 各不超过 30 字
 
 ---
 

@@ -1,9 +1,23 @@
 ---
 name: vibe-coding-discussion
-description: Use when coordinating multiple TUI coding agents (for example claude-code, codex, opencode) to discuss one project topic and converge on a single implementation plan with durable session logs.
+description: >
+  Use when coordinating multiple coding agents (claude-code, codex, opencode) to discuss,
+  brainstorm, or review a project topic and converge on a plan — with durable session logs.
+  Trigger keywords: vibe session, multi-agent discussion, 多agent讨论, 协作讨论,
+  开会话, 新建讨论, 查看会话, 会话列表, watch session, list sessions,
+  append message, 记录发言, 增量读取.
 ---
 
 # Vibe Coding Discussion
+
+## When to Use
+
+直接触发（以下任一即可）：
+- 用户提到 "vibe session" / "vibe coding discussion"
+- 用户要求多个 agent 一起讨论、评审或头脑风暴某个话题
+- 用户说"开一个会话"、"新建讨论"、"查看会话列表"、"监听会话"
+- 用户执行 `init_session` / `append_message` / `read_updates` / `list_sessions` / `watch_session`
+- 任何涉及把多 agent 发言写入 JSONL 日志的场景
 
 ## Overview
 
@@ -68,6 +82,24 @@ python3 {SKILL_DIR}/scripts/read_updates.py \
 ```
 
 4. 讨论收敛后写入最终方案（建议 `message_type=decision`），并同步给所有 agent。
+
+5. 查看会话列表（按最后更新时间排序）或监听会话实时动态：
+
+```bash
+# 列出所有会话（TUI 样式，按最后更新排序）
+python3 {SKILL_DIR}/scripts/watch_session.py --memory-root .memory
+
+# 渲染某个会话的全量内容
+python3 {SKILL_DIR}/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id <session-id>
+
+# 实时监听新消息（Ctrl-C 退出）
+python3 {SKILL_DIR}/scripts/watch_session.py \
+  --memory-root .memory \
+  --session-id <session-id> \
+  --follow
+```
 
 ## References
 

@@ -73,6 +73,7 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 | `news_daily.json` | 每日财经（政策/宏观） |
 | `news_flash.json` | 7x24快讯 |
 | `market_sectors.json` | 板块资金摘要（净流入前5+后5板块） |
+| `funding.json` | 资金面摘要（北向净流入 + 主力净流入Top20） |
 | `taoguba_recommend.json` | 淘股吧今日推荐（含 `content` 正文，用于潜在/新题材挖掘） |
 | `taoguba_hot_discussion.json` | 淘股吧热门讨论（`subject/body/quotecontent`，用于潜在/新题材挖掘） |
 | `taoguba_hot.json` | 淘股吧精华帖（用于识别已发酵热点题材；方法论提炼） |
@@ -83,6 +84,7 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 | `trend_report.md` | 趋势股筛选报告（人类可读） |
 | `broker_account.json` | 账户资金+持仓+当日委托（仅 --broker 时生成） |
 | `candidates.json` | 候选股计划（LLM 生成，供 risk_check.py 校验） |
+| `run_id.json` | 本次运行标识（run_id + strategy_version） |
 
 ## 独立风控校验
 
@@ -118,6 +120,28 @@ candidates.json 格式：
 - `type`：trend（趋势股）/ theme（题材股）
 - `sector`：所属板块或题材名称（用于集中度检查）
 - `position`：计划仓位金额（元）
+
+## 结构化输出校验与决策日志
+
+```bash
+# 1) 校验 candidates.json 核心结构
+python3 {SKILL_DIR}/scripts/validate_output.py \
+  --input /tmp/a-share-review/{DATE}/candidates.json
+
+# 2) 风控通过 + 结构通过后，写入 decision_log
+python3 {SKILL_DIR}/scripts/decision_logger.py \
+  --input /tmp/a-share-review/{DATE}/candidates.json \
+  --log-file {SKILL_DIR}/.memory/decision_log.jsonl
+
+# 3) 独立诊断（T+1/T+5，当前实现 T+1）
+python3 {SKILL_DIR}/scripts/diagnose.py \
+  --log-file {SKILL_DIR}/.memory/decision_log.jsonl \
+  --feedback-file {SKILL_DIR}/evolution/feedback.md
+```
+
+失败语义：
+- `validate_output.py` 非0退出：结构不合法，继续出报告但不写 decision_log
+- `decision_logger.py` 非0退出：日志写入失败，主流程继续并在风险提示中标注
 
 ---
 

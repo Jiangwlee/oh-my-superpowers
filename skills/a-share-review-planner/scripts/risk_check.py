@@ -37,8 +37,17 @@ LLM 分析完毕输出候选股 JSON 后，由本脚本执行硬性规则校验�
 
 import argparse
 import json
+import os
 import sys
 from typing import Any
+from pathlib import Path
+
+# ── 把 scripts 所在目录加入 sys.path，以便按包导入 ──
+_SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SKILL_ROOT not in sys.path:
+    sys.path.insert(0, _SKILL_ROOT)
+
+from scripts.decision_logger import append_decision_log
 
 
 # ── 风控规则 ─────────────────────────────────────────────────────
@@ -200,6 +209,7 @@ def _build_result(violations: list[dict], passed: bool) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="A股复盘风控校验")
     parser.add_argument("--input", "-i", help="候选股 JSON 文件路径（不填则从 stdin 读取）")
+    parser.add_argument("--log-file", default="", help="可选：风控通过后写入 decision_log.jsonl")
     args = parser.parse_args()
 
     if args.input:
@@ -209,6 +219,23 @@ def main() -> None:
         plan = json.load(sys.stdin)
 
     result = check(plan)
+    if result["passed"] and args.log_file and args.input:
+        log_result = append_decision_log(Path(args.input), Path(args.log_file))
+        if not log_result.get("ok"):
+            result["violations"].append(
+                {
+                    "rule": "决策日志写入失败",
+                    "detail": log_result.get("error", "unknown"),
+                    "severity": "warn",
+                }
+            )
+            result["summary"] = f"{result['summary']}（日志写入失败，已降级为仅报告）"
+        else:
+            result["decision_log"] = {
+                "status": "ok",
+                "run_id": log_result.get("run_id"),
+                "log_file": log_result.get("log_file"),
+            }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     # 有 error 级别违规时以非零状态退出，方便 shell 流程感知
