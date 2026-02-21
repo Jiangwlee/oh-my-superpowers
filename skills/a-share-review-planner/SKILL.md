@@ -98,6 +98,21 @@ decision_log 已写入（校验通过时）。
 
 按 `references/stage5-delivery.md` 执行。
 
+## 首次部署
+
+在新服务器上安装本 skill 时，先探测目标系统，再执行安装脚本：
+
+```bash
+# 1. 探测系统（让 LLM 了解实际环境）
+uname -s && cat /etc/os-release 2>/dev/null | grep -E "^(ID|ID_LIKE|NAME)=" | head -3
+
+# 2. 执行安装（脚本自动识别 Debian/Ubuntu/RHEL/Fedora，无需手动选命令）
+bash {SKILL_DIR}/setup.sh
+```
+
+`setup.sh` 支持：macOS、Ubuntu/Debian（apt）、RHEL/CentOS/Rocky/AlmaLinux/Fedora（dnf/yum）。
+若系统不在此列，脚本会退出并提示参考 `requirements.txt` 手动安装。
+
 ## Strategy Evolution
 
 - `strategy/default.yaml`：基线策略，不可修改

@@ -11,4 +11,10 @@
 # 可选工具：
 #   pandoc            （Markdown→HTML 精确渲染，缺失时自动降级）
 #
+# 支持平台（setup.sh 自动识别）：
+#   macOS
+#   Ubuntu / Debian          — apt-get
+#   RHEL / CentOS / Rocky
+#     / AlmaLinux / Fedora   — dnf / yum（自动启用 EPEL）
+#
 # 完整安装步骤见 setup.sh
