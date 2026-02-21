@@ -24,4 +24,10 @@ python3 {SKILL_DIR}/scripts/send_telegram_file.py \
 说明：使用 `sendDocument` 方式，Telegram 可直接预览并翻页。
 脚本会从 `~/.openclaw/openclaw.json` 读取 botToken 与 chat_id。
 
-发送失败 fallback：直接将 `/tmp/a-share-review/{DATE}/report.md` 文本返回给用户。
+**PDF 是强制输出格式，不是可选项。**
+
+发送失败 fallback（仅脚本非零退出时启用）：
+1. 将脚本的错误输出展示给用户（告知具体失败原因）
+2. 再将 `/tmp/a-share-review/{DATE}/report.md` 文本作为紧急降级返回
+
+直接返回文本 ≠ 完成任务。未尝试 PDF 生成就返回文本，视为跳过阶段5。

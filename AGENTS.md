@@ -6,12 +6,20 @@
 
 - [Agent Skills](https://github.com/agentskills/agentskills): Openclaw 遵从的 Skills 规范
 - [Tools](https://docs.openclaw.ai/tools/browser): Openclaw 内置工具
+- [Skills Development Guide](Skills-Dev-Guide.md)：Skills开发经验，当发现一种有效的Skill编写模式时，可追加到此文件中。
 
 ## 技术栈
 
 - **语言**: Python 3.10+ (标准库为主)
 - **测试**: unittest / pytest
 - **HTML 解析**: html.parser (禁止正则)
+
+## 研究与参考
+
+开发新的Skills时，要避免重复造轮子。对于用户的需求，首先要在使用`gh search`命令在github上检索相关项目，对于关联度较高的项目，下载代码至`github_cache`目录并深入研究。
+`github_cache`管理规范：
+1.为每个研究主题建立一个子目录，比如：`github_cache/skills`. 与该主题相关的项目将下载至该目录中。
+2.用`github_cache/INDEX.md`为所有github项目建立索引，方便快速检索项目。
 
 ---
 

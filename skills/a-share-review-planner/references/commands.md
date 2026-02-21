@@ -1,6 +1,19 @@
 # 数据采集命令参考
 
-> 本文档由 SKILL.md 按需加载。仅在需要查阅具体命令参数时读取。
+> 本文档按需加载。仅在需要查阅具体命令参数、脚本选项或配置说明时读取。
+
+## 目录
+
+- [采集脚本](#采集脚本) — collect_sentiment.py 完整参数
+- [报告转图片](#报告转图片推荐不依赖-browser-relay) — PNG / PDF 生成
+- [报告转 HTML](#报告转-html备用供-browser-工具截图) — pandoc 降级方案
+- [输出文件一览](#输出文件一览) — 所有采集产物说明
+- [独立风控校验](#独立风控校验) — risk_check.py 用法与 candidates.json 格式
+- [结构化输出校验与决策日志](#结构化输出校验与决策日志) — validate + decision_logger + diagnose
+- [Deep Research 个股采集](#deep-research-个股采集) — 批量并行命令、预算参数、输出文件
+- [jvQuant 配置](#jvquant-配置) — 配置文件、环境变量、费用说明
+
+---
 
 ## 采集脚本
 
@@ -33,8 +46,10 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
   --popularity-max 50
 ```
 
-`{DATE}` 替换为当天日期，如 `2026-02-18`。
-`{SKILL_DIR}` 替换为本 Skill 所在目录，如 `/Users/mindora/clawd/skills/a-share-review-planner`。
+`{DATE}` 替换为当天日期，如 `2026-02-18`（`$(date +%Y-%m-%d)`）。
+`{SKILL_DIR}` 替换为本 Skill 所在目录，如 `~/clawd/skills/a-share-review-planner`。
+
+若不确定路径，可在 stage1-collect.md 的变量声明中确认。
 
 ## 报告转图片（推荐，不依赖 browser relay）
 

@@ -2,6 +2,8 @@
 
 来源：跨仓库（anthropics-skills / openai-skills / vercel-labs-skills）提炼
 
+> 深度分析见 [anthropics-skills-analysis.md](anthropics-skills-analysis.md)
+
 ## 高质量 Skill 的共性
 
 ### 1. 触发条件具体可检索
@@ -62,7 +64,12 @@
 ## 常见反模式
 
 - `description` 只写功能，不写触发条件
-- `SKILL.md` 过长且无导航，导致命中后难执行
+- `SKILL.md` body 里写"When to Use This Skill"（触发前不可见，无意义）
+- `SKILL.md` 过长且无导航，导致命中后难执行（建议 < 500 行）
 - 所有细节堆在主文件，未做 `references/` 拆分
+- 直接读取大脚本源码（应先运行 `--help`，黑盒调用）
+- 在 skill 内创建 README.md / CHANGELOG.md 等辅助文档
 - 示例不可执行，或依赖未声明二进制/环境变量
+- 参考文件嵌套超过1层（应直接从 SKILL.md 链接）
+- 有固定输出模板时从零重建（应先读模板，基于模板修改）
 - 未考虑平台门控，导致技能"写了但不可用"

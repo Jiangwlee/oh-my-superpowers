@@ -1,5 +1,8 @@
 # 阶段4：输出交易计划
 
+**⚠️ STEP 0：必须先对照本文件的报告模板逐章节填写，不得依赖记忆重建。**
+保留所有章节标题，无内容时写"无"。
+
 按以下结构产出完整报告并保存到文件：
 
 ```markdown
@@ -83,3 +86,13 @@ python3 {SKILL_DIR}/scripts/decision_logger.py \
   --input /tmp/a-share-review/{DATE}/candidates.json \
   --log-file {SKILL_DIR}/.memory/decision_log.jsonl
 ```
+
+## ⚠️ 输出自检清单（发送报告前逐条核对）
+
+- [ ] `candidates.json` 中的 `run_id` 与阶段2读取的 `run_id.json` 中一致（非自行生成）
+- [ ] `market.regime` 只使用 `strong` / `neutral` / `weak` 三者之一
+- [ ] 每个候选股的 `action` 只使用 `buy` / `hold` / `sell` / `watch`
+- [ ] `thesis_short` 和 `risk_note` 均不超过 30 字
+- [ ] 报告中无缩写词（同花顺不写 THS，深度分析不写 DR）
+- [ ] 深度分析结论已并入对应个股条目，不存在独立的"深度分析校准结论"章节
+- [ ] 若 validate 失败，已标记 `run_failed=true` 且未写入 decision_log
