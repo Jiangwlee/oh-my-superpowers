@@ -147,6 +147,26 @@ python3 {SKILL_DIR}/scripts/diagnose.py \
 
 ## Deep Research 个股采集
 
+推荐先使用批量并行命令（Phase A 性能优化）：
+
+```bash
+python3 {SKILL_DIR}/scripts/run_deep_research_batch.py \
+  --candidates-file /tmp/a-share-review/{DATE}/candidates.json \
+  --output-dir /tmp/a-share-review/{DATE} \
+  --max-workers 4 \
+  --per-stock-timeout-sec 180 \
+  --total-timeout-sec 900
+```
+
+批量脚本会自动执行：
+1. `collect_eastmoney_guba.py`
+2. `collect_taoguba_stock.py`
+3. `summarize_stock_brief.py --compact-only`
+
+并在 `/tmp/a-share-review/{DATE}/dr_timing.json` 输出单票耗时与状态（ok/error/timeout）。
+
+---
+
 在完成第三步个股初筛后，对每只候选股执行以下命令：
 
 ```bash
