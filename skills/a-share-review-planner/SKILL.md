@@ -22,14 +22,6 @@ Violating the letter of this rule is violating the spirit of this rule.
 No exceptions. Not even when the user asks for a quick summary.
 </HARD-GATE>
 
-## 开始前声明
-
-开始复盘前，先声明：
-> "开始 A 股复盘，共 5 个阶段。当前阶段：[阶段1-数据采集]"
-
-每完成一个阶段，更新声明：
-> "阶段X完成，进入阶段X+1。"
-
 ## 核心约束
 
 - **禁止猜测数据**：某数据源失败时，明确告知并跳过，不得用臆测填充
