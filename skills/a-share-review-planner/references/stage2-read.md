@@ -16,6 +16,7 @@
 | 8 | `/tmp/a-share-review/{DATE}/ths_report.md` | 涨停综合报告（含5日趋势表、连板天梯、最强板块、热门板块个股明细） |
 | 9 | `/tmp/a-share-review/{DATE}/trend_scan.json` | 趋势扫描结果 |
 | 10 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
+| 10.5 | `/tmp/a-share-review/{DATE}/us_market.json` | 美股行情（若文件不存在或 `market_status == "unavailable"` 则跳过，不影响分析流程） |
 | 11 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（如存在） |
 | 12 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 `account_mode` 定义） |
 | 13 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |

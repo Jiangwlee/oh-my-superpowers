@@ -43,6 +43,7 @@ from scripts.fetchers.trend_scanner import (                     # noqa: E402
     scan_all, format_report_md, format_ths_md,
 )
 from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
+from scripts.fetchers.us_market import fetch_us_market            # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -142,6 +143,7 @@ def _make_tasks(news_count: int, taoguba_count: int) -> list[dict]:
          "fn": lambda: fetch_taoguba_hot_discussion(page_no=1, count=taoguba_count)},
         {"name": "taoguba_recommend", "filename": "taoguba_recommend.json",
          "fn": lambda: fetch_taoguba_now_recommend(count=taoguba_count)},
+        {"name": "us_market", "filename": "us_market.json", "fn": fetch_us_market},
     ]
 
 
