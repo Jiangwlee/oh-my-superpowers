@@ -14,8 +14,11 @@ send_telegram_file.py - 通过 Telegram Bot API 发送文件/图片
 
 import argparse
 import json
-import subprocess
+import mimetypes
+import os
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -53,7 +56,7 @@ def send_file(
     method: str = "photo",
 ) -> dict:
     """
-    发送文件到 Telegram。
+    发送文件到 Telegram（使用标准库 urllib，无 curl 依赖）。
     method="photo"    → sendPhoto（图片直接显示，无需点击，无缩略图压扁）
     method="document" → sendDocument（原始质量，但显示为文件附件）
     """
@@ -61,24 +64,51 @@ def send_file(
     field_name = "photo" if method == "photo" else "document"
     url = f"https://api.telegram.org/bot{bot_token}/{api_method}"
 
-    cmd = ["curl", "-s", "--max-time", "60"]
+    # 构建 multipart/form-data
+    boundary = "----TelegramBotBoundary" + os.urandom(8).hex()
+
+    def _field(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode("utf-8")
+
+    def _file_field(name: str, filename: str, data: bytes, mime: str) -> bytes:
+        header = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+            f"Content-Type: {mime}\r\n\r\n"
+        ).encode("utf-8")
+        return header + data + b"\r\n"
+
+    parts: list[bytes] = [_field("chat_id", chat_id)]
+    if caption:
+        parts.append(_field("caption", caption))
+    mime = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    parts.append(_file_field(field_name, file_path.name, file_path.read_bytes(), mime))
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+
+    body = b"".join(parts)
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
 
     if proxy:
-        cmd += ["--proxy", proxy]
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({"https": proxy, "http": proxy})
+        )
+    else:
+        opener = urllib.request.build_opener()
 
-    cmd += ["-F", f"chat_id={chat_id}"]
-    cmd += ["-F", f"{field_name}=@{file_path.absolute()}"]
-    if caption:
-        cmd += ["-F", f"caption={caption}"]
-
-    cmd.append(url)
-
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-    if result.returncode != 0:
-        raise RuntimeError(f"curl 失败: {result.stderr.strip()}")
-
-    resp = json.loads(result.stdout)
-    return resp
+    try:
+        with opener.open(req, timeout=90) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {e.code}: {body_text}") from e
 
 
 # 向后兼容

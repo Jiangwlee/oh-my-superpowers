@@ -1,0 +1,14 @@
+# a-share-review-planner Python 依赖
+#
+# 零第三方包：所有脚本仅使用 Python 标准库。
+# 无需执行 pip install。
+#
+# 运行时要求：
+#   Python  >= 3.10   （使用 str | None 联合类型语法）
+#   Node.js >= 22.0   （screenshot.js 需要内置 WebSocket + fetch）
+#   Chrome / Chromium （PDF 及 PNG 生成）
+#
+# 可选工具：
+#   pandoc            （Markdown→HTML 精确渲染，缺失时自动降级）
+#
+# 完整安装步骤见 setup.sh
