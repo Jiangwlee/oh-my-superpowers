@@ -12,7 +12,7 @@ allowed-tools: Bash(python3 *), Bash(tmux ls *), Bash(tmux kill-session *)
 
 ## Hard Rules
 
-- **禁止读 `scripts/*.py` 源码**。脚本用法见 `references/commands.md`，或运行 `python3 {SKILL_DIR}/scripts/<name>.py --help`。
+- **禁止读 `scripts/*.py` 源码**。脚本用法见 `references/commands.md`，或运行 `python3 scripts/<name>.py --help`。
 - 每个 agent 只需 `spawn` 一次，但可多次 `inject`。
 - `spawn_agent` 必须先于 `inject_round` 运行。
 - 讨论结束必须写入 `--message-type decision` 作为收敛记录。
@@ -33,7 +33,7 @@ allowed-tools: Bash(python3 *), Bash(tmux ls *), Bash(tmux kill-session *)
 一键运行全流程（自动 spawn + 多轮 inject + 收敛检测）：
 
 ```bash
-python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
+python3 scripts/orchestrate_discussion.py \
   --memory-root .memory \
   --topic "讨论话题" \
   --agents "codex:codex,opencode:opencode" \
@@ -44,4 +44,4 @@ python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
 
 所有脚本的完整参数说明见 `references/commands.md`。
 
-快速查看单个脚本：`python3 {SKILL_DIR}/scripts/<name>.py --help`
+快速查看单个脚本：`python3 scripts/<name>.py --help`

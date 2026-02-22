@@ -84,10 +84,13 @@
 - → [anthropics-skills-analysis.md §scripts黑盒执行](guides/anthropics-skills-analysis.md)
 - → [remaining-skills-analysis.md §全环境变量覆盖](guides/remaining-skills-analysis.md)
 
-### 如何组织脚本路径？
-- 使用环境变量定位路径，不硬编码
-- `export SKILL_DIR="${OPENCLAW_HOME}/skills/my-skill"`
-- → [openai-skills-analysis.md §脚本路径变量化](guides/openai-skills-analysis.md)
+### 如何在 SKILL.md 中引用脚本？
+- **直接写相对路径**，不加任何路径变量：`python scripts/foo.py`
+- LLM 从系统上下文知道 skill 目录位置，能自行推理出完整路径
+- ❌ 错误：`export SKILL_DIR="..."` + `python3 $SKILL_DIR/scripts/foo.py`
+- ✅ 正确：`python scripts/foo.py`（与 Anthropic 官方 pptx/xlsx/docx skill 一致）
+- 脚本内部需跨文件引用时，用 `pathlib.Path(__file__).resolve().parent` 自定位，不依赖外部变量
+- 传入 skill 自身配置文件（如 `config.json`）时同理，脚本通过 `__file__` 自定位后读取，无需在 SKILL.md 中传 `--config` 参数
 
 ---
 
@@ -362,6 +365,8 @@
 | 从零重建有模板的输出 | 先读模板，基于模板修改 | [anthropics-skills-analysis.md](guides/anthropics-skills-analysis.md) |
 | 用 web_fetch 抓 GitHub 页面 | 使用 GitHub API | [remaining-skills-analysis.md](guides/remaining-skills-analysis.md) |
 | 说服原则用 Liking（喜好） | 只用 Authority+Commitment+Social Proof | [superpowers-skill-patterns.md](guides/superpowers-skill-patterns.md) |
+| SKILL.md 用 $SKILL_DIR 变量调用脚本 | 直接写相对路径 `python scripts/foo.py` | [Skills-Dev-Guide.md §如何在 SKILL.md 中引用脚本](Skills-Dev-Guide.md) |
+| 脚本调用时传 `--config skill/config.json` | 脚本用 `__file__` 自定位读 config | [Skills-Dev-Guide.md §如何在 SKILL.md 中引用脚本](Skills-Dev-Guide.md) |
 
 ---
 
