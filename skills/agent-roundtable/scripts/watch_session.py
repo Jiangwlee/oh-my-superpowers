@@ -276,7 +276,7 @@ def _render_session_header(meta: dict[str, Any], term_width: int, last_updated: 
     participants = meta.get("participants", [])
     created_at = meta.get("created_at", "")
 
-    title = "vibe-coding-discussion"
+    title = "agent-roundtable"
     top_border = f"{_fg(33)}╭─ {title} {'─' * max(2, term_width - len(title) - 5)}{R}"
     bot_border = f"{_fg(33)}╰{'─' * (term_width - 1)}{R}"
     bar = f"{_fg(33)}│{R}"
@@ -323,7 +323,7 @@ def _list_sessions_tui(memory_root: str, limit: int, term_width: int) -> None:
         candidates.append((entry, mtime))
     candidates.sort(key=lambda t: t[1], reverse=True)
 
-    title = "vibe-coding-discussion sessions"
+    title = "agent-roundtable sessions"
     print(f"{_fg(33)}╭─ {title} {'─' * max(2, term_width - len(title) - 5)}{R}")
     print(f"{_fg(33)}│{R}  {DIM}sorted by last update — most recent first{R}")
     print(f"{_fg(33)}╰{'─' * (term_width - 1)}{R}")
@@ -461,7 +461,7 @@ def watch(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI parser."""
     parser = argparse.ArgumentParser(
-        description="Watch a vibe-coding-discussion session with TUI-style output."
+        description="Watch an agent-roundtable session with TUI-style output."
     )
     parser.add_argument("--memory-root", default=".memory",
                         help="Memory root directory. Default: .memory")

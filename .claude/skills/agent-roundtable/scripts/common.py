@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for vibe-coding-discussion scripts."""
+"""Shared helpers for agent-roundtable scripts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 SESSION_NAME_MAX_LEN = 64
-SKILL_BASE_NAME = "vibe-coding-discussion"
+SKILL_BASE_NAME = "agent-roundtable"
 
 
 def utc_now() -> str:
@@ -21,7 +21,7 @@ def utc_now() -> str:
 def ensure_layout(memory_root: str) -> dict[str, pathlib.Path]:
     """Create required directory layout and return paths."""
     root = pathlib.Path(memory_root).expanduser().resolve()
-    # Accept both ".memory" and ".memory/vibe-coding-discussion" as memory_root.
+    # Accept both ".memory" and ".memory/agent-roundtable" as memory_root.
     if root.name == SKILL_BASE_NAME:
         base = root
     else:

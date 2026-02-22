@@ -71,7 +71,7 @@ def write_attachments_manifest(memory_root: str, session_id: str) -> Path:
 
     Current strategy:
     - Include session-local background.md if present
-    - Include local docs/vibe-coding-discussion/*.md if present
+    - Include local docs/agent-roundtable/*.md if present
     """
     paths = session_paths(memory_root, session_id)
     root = paths["root"]
@@ -90,7 +90,7 @@ def write_attachments_manifest(memory_root: str, session_id: str) -> Path:
             }
         )
 
-    docs_dir = workspace_root() / "docs" / "vibe-coding-discussion"
+    docs_dir = workspace_root() / "docs" / "agent-roundtable"
     if docs_dir.exists():
         for doc in sorted(docs_dir.glob("*.md")):
             items.append(_attachment_entry(doc.relative_to(workspace_root()), "research", True))

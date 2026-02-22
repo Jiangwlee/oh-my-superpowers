@@ -205,7 +205,7 @@ def build_initial_prompt(
     background_path = paths["root"] / "background.md"
 
     script_root = SCRIPT_DIR.as_posix()
-    prompt = f"""# Vibe Coding Discussion - Agent Instructions
+    prompt = f"""# Agent Roundtable - Agent Instructions
 
 You are participating in a group discussion as agent "{agent}" (type: {agent_type}).
 

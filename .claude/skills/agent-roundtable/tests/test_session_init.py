@@ -18,7 +18,7 @@ import init_session
 class SessionInitTest(unittest.TestCase):
     def test_memory_root_accepts_skill_base_without_double_nesting(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            memory_root = Path(tmpdir) / ".memory" / "vibe-coding-discussion"
+            memory_root = Path(tmpdir) / ".memory" / "agent-roundtable"
             memory_root.mkdir(parents=True, exist_ok=True)
 
             layout = common.ensure_layout(str(memory_root))
