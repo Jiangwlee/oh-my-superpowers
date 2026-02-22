@@ -10,7 +10,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-from common import ensure_layout, gh_api, load_index, load_runtime_config, read_watchlist, save_index, slug_from_repo
+from common import (
+    ensure_layout,
+    gh_api,
+    load_index,
+    load_runtime_config,
+    read_watchlist,
+    save_index,
+    slug_from_repo,
+)
 from analyze_project import analyze
 
 
@@ -33,9 +41,15 @@ def _format_delta(now: dict[str, Any], prev: dict[str, Any]) -> list[str]:
     return rows
 
 
-def _recent_commits(repo: str, since_iso: str, token: str | None) -> list[dict[str, Any]]:
+def _recent_commits(
+    repo: str, since_iso: str, token: str | None
+) -> list[dict[str, Any]]:
     try:
-        return gh_api(f"/repos/{repo}/commits", token=token, query={"since": since_iso, "per_page": "10"})
+        return gh_api(
+            f"/repos/{repo}/commits",
+            token=token,
+            query={"since": since_iso, "per_page": "10"},
+        )
     except Exception:
         return []
 
@@ -47,7 +61,9 @@ def _recent_releases(repo: str, token: str | None) -> list[dict[str, Any]]:
         return []
 
 
-def _render_update(repo: str, now: dict[str, Any], prev: dict[str, Any], commits: list[dict[str, Any]]) -> str:
+def _render_update(
+    repo: str, now: dict[str, Any], prev: dict[str, Any], commits: list[dict[str, Any]]
+) -> str:
     lines = [
         "---",
         "type: github_project_update",
@@ -72,7 +88,9 @@ def _render_update(repo: str, now: dict[str, Any], prev: dict[str, Any], commits
         lines.append("- No recent commits detected in the compared window.")
 
     if now.get("latest_release") != prev.get("latest_release"):
-        lines.append(f"- Release changed: {prev.get('latest_release', 'N/A')} -> {now.get('latest_release', 'N/A')}")
+        lines.append(
+            f"- Release changed: {prev.get('latest_release', 'N/A')} -> {now.get('latest_release', 'N/A')}"
+        )
 
     lines.extend(
         [
@@ -85,10 +103,14 @@ def _render_update(repo: str, now: dict[str, Any], prev: dict[str, Any], commits
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Track updates for watchlist repositories.")
+    parser = argparse.ArgumentParser(
+        description="Track updates for watchlist repositories."
+    )
     parser.add_argument("--memory-root", default=".memory")
     parser.add_argument("--repo", default="", help="Optional single repo owner/repo")
-    parser.add_argument("--config", default="", help="Optional config file path for proxy settings.")
+    parser.add_argument(
+        "--config", default="", help="Optional config file path for proxy settings."
+    )
     args = parser.parse_args()
 
     token = os.getenv("GITHUB_TOKEN")
@@ -112,13 +134,26 @@ def main() -> None:
 
         _, prev = _latest_snapshot(project_dir)
         if prev is None:
-            prev = {"analyzed_at": "1970-01-01T00:00:00Z", "stars": 0, "forks": 0, "open_issues": 0, "watchers": 0, "latest_release": "N/A"}
+            prev = {
+                "analyzed_at": "1970-01-01T00:00:00Z",
+                "stars": 0,
+                "forks": 0,
+                "open_issues": 0,
+                "watchers": 0,
+                "latest_release": "N/A",
+            }
 
-        now = analyze(repo, token=token)
-        snapshot_path = project_dir / "snapshots" / f"{now['analyzed_at'].replace(':', '-')}.json"
-        snapshot_path.write_text(json.dumps(now, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        now = analyze(repo, token=token, deep=False)  # Fast analysis by default
+        snapshot_path = (
+            project_dir / "snapshots" / f"{now['analyzed_at'].replace(':', '-')}.json"
+        )
+        snapshot_path.write_text(
+            json.dumps(now, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
 
-        commits = _recent_commits(repo, prev.get("analyzed_at", "1970-01-01T00:00:00Z"), token=token)
+        commits = _recent_commits(
+            repo, prev.get("analyzed_at", "1970-01-01T00:00:00Z"), token=token
+        )
         update_md = _render_update(repo, now, prev, commits)
         day = dt.datetime.now(dt.timezone.utc).date().isoformat()
         update_path = project_dir / "updates" / f"{day}.md"
@@ -128,7 +163,9 @@ def main() -> None:
         index[repo] = {
             "repo": repo,
             "slug": slug,
-            "first_analyzed_at": prev_index.get("first_analyzed_at", now["analyzed_at"]),
+            "first_analyzed_at": prev_index.get(
+                "first_analyzed_at", now["analyzed_at"]
+            ),
             "last_analyzed_at": now["analyzed_at"],
             "profile_path": str(Path("projects") / slug / "profile.md"),
             "last_update_path": str(Path("projects") / slug / "updates" / f"{day}.md"),

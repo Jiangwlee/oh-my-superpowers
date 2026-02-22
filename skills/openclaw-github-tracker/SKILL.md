@@ -1,181 +1,107 @@
 ---
 name: openclaw-github-tracker
-description: Use when tracking GitHub trending repos, managing watchlists, or analyzing projects for OpenClaw workflows.
-version: "1.1.0"
+description: >
+  GitHub trending repository tracker with daily briefs, watchlist monitoring, and deep project analysis.
+  Use when: 
+  (1) user asks "看看今天GitHub热门"、"今日GitHub趋势"、"生成GitHub日报"、"github trending", 
+  (2) user says "深度分析某个项目"、"分析这个仓库"、"建立项目档案"、"clone下来看看",
+  (3) user asks "我的关注列表有更新吗"、"watchlist更新"、"关注项目动态".
+  Generates PDF reports for daily briefs. Fast analysis by default, deep analysis only on request.
+version: "2.0.0"
 ---
 
-# OpenClaw GitHub Tracker
+# GitHub 趋势追踪与项目分析
 
-Track GitHub trending repositories, maintain watchlists, generate project dossiers, and monitor updates.
+<HARD-GATE>
+**NO DEEP ANALYSIS WITHOUT --deep FLAG.**
+Default analysis uses API only (~2s per repo). Git clone only when user explicitly requests deep analysis.
+
+**NO PDF REPORT WITHOUT HTML GENERATION.**
+Daily briefs MUST be converted to HTML and screenshot as PDF for delivery. Text-only output is emergency fallback only.
+
+**NO TRENDING DATA WITHOUT BROWSER VERIFICATION.**
+Must verify URL is github.com/trending (not weekly/monthly) before extraction.
+</HARD-GATE>
+
+## 核心使用场景
+
+本 Skill 支持三个独立场景，根据用户意图自动选择：
+
+### 场景1：每日简报（默认）
+**触发词**："看看今天GitHub热门"、"今日GitHub趋势"、"生成GitHub日报"、"github trending"
+
+**输出**：PDF 格式日报，包含：
+- 当日 Trending 完整列表（25-30个项目）
+- 每个项目的功能描述、技术栈、增长数据
+- 关注列表(Watchlist)项目的一日更新汇总
+- 统计数据与趋势分析
+
+**执行时间**：~30秒（浏览器 + API，无需clone）
+
+### 场景2：深度项目分析
+**触发词**："深度分析某个项目"、"分析这个仓库"、"建立项目档案"、"clone下来看看"
+
+**输出**：项目完整 Profile，包含：
+- 代码结构分析（需clone）
+- 技术栈详细扫描
+- 架构信号与模块划分
+- Roadmap 与里程碑分析
+
+**执行时间**：~15秒（含git clone）
+
+**必须加 --deep 参数**：
+```bash
+python3 scripts/analyze_project.py owner/repo --deep
+```
+
+### 场景3：关注列表监控
+**触发词**："我的关注列表有更新吗"、"watchlist更新"、"关注项目动态"
+
+**输出**：关注项目的变更摘要（Stars/Forks/Issues变化）
+
+**执行时间**：~5秒 × 项目数量
+
+---
 
 ## Prerequisite Check (REQUIRED)
 
 **STOP and resolve before proceeding:**
 
-1. **GitHub CLI**: `command -v gh` → Install if missing: https://cli.github.com
-2. **Authentication**: `gh auth status` → Run `gh auth login` if not authenticated
-3. **Python 3.10+**: `python3 --version` → Required for scripts
-4. **Browser availability**: Confirm OpenClaw browser tool is available
+1. **GitHub CLI**: `command -v gh` → Install: https://cli.github.com
+2. **Authentication**: `gh auth status` → Run `gh auth login` if needed
+3. **Python 3.10+**: `python3 --version`
+4. **Browser**: Confirm OpenClaw browser available
+5. **pandoc**: Optional but recommended for PDF generation
 
-**If any check fails, stop and provide installation steps. Do not continue.**
+---
 
-## Guardrails (HARD CONSTRAINTS)
+## 场景1：生成每日简报（PDF报告）
 
-<HARD-GATE>
-
-### Iron Laws
-
-**NO watchlist additions WITHOUT explicit user confirmation FIRST.**
-- ❌ **WRONG**: "Adding this trending repo to your watchlist..."
-- ✅ **CORRECT**: "Would you like to add owner/repo to watchlist? [yes/no]"
-
-**NO trending data WITHOUT GitHub daily page + browser FIRST.**
-- ❌ **WRONG**: Using `gh search repos --sort stars` for "today's trending"
-- ✅ **CORRECT**: Open browser to https://github.com/trending, read daily tab
-
-### SPA Trap Warning
-
-⚠️ **GitHub is a Single Page Application (SPA).** Direct HTTP requests (curl, wget, urllib, web_fetch) only return the JavaScript shell, NOT the actual content. **Always use browser for Trending collection.**
-
-### Daily vs Weekly Verification
-
-- ❌ **WRONG URL**: `github.com/trending/weekly` or `github.com/trending/monthly`
-- ✅ **CORRECT URL**: `github.com/trending` (this shows daily trending)
-
-**Before extracting data:**
-1. Check browser URL bar shows `/trending` NOT `/trending/weekly` or `/trending/monthly`
-2. Verify page header or tab indicates "Today" or "Daily"
-
-### Authority Statements
-
-- **YOU MUST** ask before adding to watchlist — no exceptions
-- **Always confirm** with user before destructive operations
-- **Never assume** implicit permission from context
-
-### Common Rationalizations (BLOCKED)
-
-| Excuse | Reality |
-|--------|---------|
-| "The user mentioned this repo earlier..." | Mention ≠ permission to add to watchlist |
-| "This is clearly trending/high-value..." | Value assessment is user's prerogative |
-| "I'll add it and they can remove later..." | Opt-out violates user-driven principle |
-| "Let me just list the top 5 most starred..." | MUST include ALL repositories, not filtered subset |
-| "This project has 10k stars so it must be good..." | Functionality matters, not just popularity metrics |
-
-</HARD-GATE>
-
-## Extraction Protocols (Context-Specific)
-
-### Trending Data Collection — BROWSER ONLY
-
-**NO FALLBACK for Trending**: Trending data MUST come from browser at `github.com/trending`. There is no API equivalent for GitHub's trending algorithm.
-
-**If browser fails**:
-- Stop and report: "Cannot fetch trending — browser unavailable"
-- Do NOT substitute with search results or starred repos
-- Ask user to retry later
-
-### Repository Metadata — API with Fallback
-
-For repo details, analysis, and updates:
-
-1. **Primary**: GitHub API via `gh api`
-2. **Fallback**: `gh repo view --json`
-3. **Last resort**: Browser (if API quota exceeded)
-
-**Triggers for fallback**:
-- 401/403 → Check auth, fallback to `gh repo view`
-- 429 → Apply back-off, then try browser
-- Network timeout → Retry once, then fail
-
-## Rate Limit Protection
-
-**Mandatory pauses between API calls**:
-- Minimum 1 second between sequential calls
-- Burst limit: max 10 calls without pause
-- 429 response: read `x-ratelimit-reset`, wait until timestamp
-
-**Back-off strategy**:
-- First 429: wait 60 seconds
-- Second 429: wait 5 minutes
-- Third 429: stop and report "Rate limit exceeded, resume after [timestamp]"
-
-## Workflow & Data Boundaries
-
-Each workflow step produces specific artifacts:
-
-| Step | Input | Output | Tool |
-|------|-------|--------|------|
-| Fetch Trending | None | `briefs/daily/YYYY-MM-DD.md` | Browser |
-| Add to Watchlist | User confirmation | `watchlist/watchlist.json` | Script |
-| Deep Analysis | `owner/repo` string | `projects/<owner>__<repo>/profile.md` + `snapshots/*.json` | Script |
-| Track Updates | Existing snapshot | `projects/<owner>__<repo>/updates/YYYY-MM-DD.md` | Script |
-
-**Tool boundaries**:
-- **Browser ONLY**: Trending collection (GitHub SPA requirement)
-- **gh CLI preferred**: All repo operations (API, clone, metadata)
-- **Scripts**: Watchlist management, analysis, tracking
-
-## Standard Workflow
-
-### Step 1: Fetch Daily Trending
-
-**Input**: None  
-**Output**: `briefs/daily/YYYY-MM-DD.md`  
-**Tool**: Script + OpenClaw browser
-
-**ALWAYS run the script first to get instructions, then execute browser operations.**
+### Step 1: 获取 Trending 数据
 
 ```bash
-# Step 1: Get browser instructions
+# 运行脚本获取浏览器操作指令
 python3 .agents/skills/openclaw-github-tracker/scripts/fetch_trending.py \
   --memory-root .memory
+```
 
-# Step 2: Use OpenClaw browser to extract data per script instructions
-# (Browser tool will be invoked here)
+**然后使用 Browser 工具**：
+1. 打开 `github.com/trending`
+2. 验证 URL 是 `/trending`（不是 `/trending/weekly`）
+3. 提取所有项目数据
 
-# Step 3: Generate brief with extracted data
+### Step 2: 生成简报数据
+
+```bash
 python3 .agents/skills/openclaw-github-tracker/scripts/fetch_trending.py \
   --memory-root .memory \
-  --data-json '[{"repo":"owner/repo","what_it_does":"..."},...]'
+  --data-json '[
+    {"repo":"facebook/react","what_it_does":"A declarative, efficient, and flexible JavaScript library","tech_stack":"JavaScript, TypeScript","stars":"220000","stars_today":"45"},
+    ...
+  ]'
 ```
 
-**Script enforces:**
-- URL hardcoded to `github.com/trending` (daily only)
-- Minimum 10 repositories (fails if incomplete)
-- No duplicate repositories
-- Functional descriptions (not just popularity metrics)
-
-### Step 2: Add to Watchlist
-
-**Input**: User confirmation  
-**Output**: Updated `watchlist/watchlist.json`  
-**Tool**: Script
-
-```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/watchlist.py \
-  add owner/repo \
-  --memory-root .memory
-```
-
-### Step 3: First-Time Deep Analysis
-
-**Input**: `owner/repo`  
-**Output**: `projects/<owner>__<repo>/profile.md` + snapshot  
-**Tool**: Script
-
-```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/analyze_project.py \
-  owner/repo \
-  --memory-root .memory \
-  --config .agents/skills/openclaw-github-tracker/config.json
-```
-
-### Step 4: Track Updates
-
-**Input**: Existing project snapshot  
-**Output**: `projects/<owner>__<repo>/updates/YYYY-MM-DD.md`  
-**Tool**: Script
+### Step 3: 获取 Watchlist 更新
 
 ```bash
 python3 .agents/skills/openclaw-github-tracker/scripts/track_updates.py \
@@ -183,84 +109,168 @@ python3 .agents/skills/openclaw-github-tracker/scripts/track_updates.py \
   --config .agents/skills/openclaw-github-tracker/config.json
 ```
 
-### Step 5: Pipeline (Steps 3-4 automation)
+### Step 4: 生成详细 Markdown 报告
 
-```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/run_pipeline.py \
-  --memory-root .memory \
-  --config .agents/skills/openclaw-github-tracker/config.json \
-  --analyze-mode new
+创建包含以下内容的报告：
+
+```markdown
+# GitHub Trending 日报 - 2026-02-22
+
+## 📊 今日概览
+- **热门项目数**: 28
+- **总新增 Star**: 2,847
+- **主要语言**: TypeScript (8), Python (6), Rust (5)
+
+## 🔥 热门项目详解
+
+### #1 facebook/react
+- **功能**: 用于构建用户界面的 JavaScript 库
+- **技术栈**: JavaScript, TypeScript
+- **Star**: 220,000 (+45 today)
+- **趋势分析**: 持续热门，今日新增45星，主要贡献来自文档改进和新特性讨论
+
+### #2 vercel/next.js
+- **功能**: React 框架，支持SSR和静态生成
+- **技术栈**: TypeScript, Rust
+- **Star**: 120,000 (+32 today)
+- **趋势分析**: v15发布引发关注
+
+[... 所有项目]
+
+## 📌 我的关注列表更新
+
+### langgenius/dify
+- **昨日 Star**: 15,000 → **今日**: 15,032 (+32)
+- **新 Issues**: 3个（2个已关闭）
+- **重要动态**: 发布了v0.8.0，新增workflow功能
+
+## 💡 今日洞察
+1. AI/ML 工具类项目持续霸榜（6/28）
+2. TypeScript 项目增长最快
+3. 开发者工具类新增4个热门项目
+
+---
+*报告生成时间: 2026-02-22 09:30 UTC*
 ```
 
-**TERMINAL STATE**: Analysis artifacts written to `.memory/github-tracker/projects/`. Do NOT invoke additional skills unless user requests.
-
-## Output Format Reference
-
-When generating files, read `references/formats.md` for exact schema.
-
-## Analysis Scope
-
-Each project profile includes:
-
-- Architecture signals (repo layout + branch signals)
-- Technology stack and language mix
-- Main functional modules (top-level structure + README cues)
-- Roadmap signals (README roadmap section + milestones/releases)
-- License and compliance basics
-- Baseline metrics snapshot for future diffs
-
-## Required Dependencies
-
-| Skill/Tool | Purpose | Required |
-|------------|---------|----------|
-| OpenClaw browser | Trending page access | Yes |
-| gh CLI | GitHub API operations | Yes |
-| Python 3.10+ | Script execution | Yes |
-
-## Pre-Execution Checklist
-
-Before completing any task:
-- [ ] Prerequisite checks passed
-- [ ] Watchlist changes have explicit user confirmation
-- [ ] Trending data sourced from browser (not API/search)
-- [ ] **Daily Brief**: URL is `/trending` (NOT `/trending/weekly`)
-- [ ] **Daily Brief**: item_count ≥ 10 (ALL repositories included, not filtered subset)
-- [ ] **Daily Brief**: Each repo includes "What it does" functional description
-- [ ] **Daily Brief**: Watchlist recommendations based on functionality, not just star count
-- [ ] Output follows format schema in references/formats.md
-- [ ] All artifacts written to correct paths
-
-## Directory Layout
-
-Initialize once:
+### Step 5: 转换为 PDF
 
 ```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/bootstrap_layout.py \
+# 生成 HTML
+python3 .agents/skills/openclaw-github-tracker/scripts/report_to_html.py \
+  .memory/github-tracker/briefs/daily/2026-02-22.md \
+  --title "GitHub Trending 日报"
+
+# 使用 Browser 工具打开 HTML 并截图保存为 PDF
+# Browser: open file:///path/to/report.html
+# Browser: screenshot --pdf report.pdf
+```
+
+**PDF 交付**: 通过手机友好的格式展示，包含：
+- 顶部统计卡片
+- 项目卡片式布局（带Star增长标签）
+- 关注列表更新区域
+- 底部生成时间戳
+
+---
+
+## 场景2：深度项目分析
+
+**仅在用户明确要求时使用 `--deep`**
+
+```bash
+# 快速分析（默认，~2秒）
+python3 .agents/skills/openclaw-github-tracker/scripts/analyze_project.py \
+  owner/repo \
   --memory-root .memory
+
+# 深度分析（含git clone，~15秒）
+python3 .agents/skills/openclaw-github-tracker/scripts/analyze_project.py \
+  owner/repo \
+  --memory-root .memory \
+  --deep
 ```
 
-Generated structure:
+### 快速分析输出（API only）
+- 基础信息（description, stars, forks, license）
+- 语言统计
+- 最近更新时间
+- README 内容
 
-```text
-.memory/github-tracker/
-  briefs/daily/
-  indexes/project-index.jsonl
-  trending/raw/
-  watchlist/watchlist.json
-  projects/<owner>__<repo>/
-    profile.md
-    snapshots/
-    updates/
+### 深度分析输出（含clone）
+- 代码目录结构扫描
+- 技术栈标记文件检测（package.json, Cargo.toml等）
+- 模块架构分析
+- 里程碑与发布版本详情
+
+---
+
+## 场景3：关注列表监控
+
+```bash
+# 批量检查 watchlist 中所有项目
+python3 .agents/skills/openclaw-github-tracker/scripts/track_updates.py \
+  --memory-root .memory \
+  --config .agents/skills/openclaw-github-tracker/config.json
 ```
+
+输出每个项目的变更摘要：
+- Stars/Forks/Issues 数量变化
+- 最新 Release 信息
+- 最近 Commit 活动
+
+---
+
+## Guardrails
+
+### 场景识别约束
+| 用户输入 | 识别的场景 | 必须执行的操作 |
+|---------|-----------|--------------|
+| "今天GitHub热门" | 场景1: 每日简报 | 生成PDF报告 |
+| "深度分析X项目" | 场景2: 深度分析 | 加 --deep 参数 |
+| "关注列表更新" | 场景3: Watchlist | 批量检查更新 |
+
+### 性能约束
+- **默认不clone**: 除非用户明确说"深度分析"或"clone"
+- **并行处理**: 批量分析时使用 ThreadPoolExecutor
+- **缓存机制**: 24小时内重复分析同一仓库使用缓存
+
+### 输出约束
+- **PDF优先**: 日报必须生成PDF，仅当工具失败时才文本输出
+- **完整性**: Trending必须包含所有项目（≥10个）
+- **功能性**: 每个项目必须有"what_it_does"描述
+
+---
+
+## 常见错误
+
+| 错误场景 | 原因 | 解决 |
+|---------|------|------|
+| 分析太慢 | 误用了深度模式 | 检查是否有 --deep 参数 |
+| PDF生成失败 | pandoc未安装 | 安装pandoc或使用降级模式 |
+| 项目数量不足 | 浏览器提取不完整 | 重新滚动页面提取 |
+| Weekly数据 | URL错误 | 确保是github.com/trending |
+
+---
 
 ## Configuration
 
-Optional proxy (for urllib fallback):
-
 ```bash
+# HTTP代理
 export GITHUB_TRACKER_HTTP_PROXY="http://127.0.0.1:10801"
 export GITHUB_TRACKER_HTTPS_PROXY="http://127.0.0.1:10801"
-export GITHUB_TRACKER_NO_PROXY="localhost,127.0.0.1"
+
+# 或编辑 config.json
 ```
 
-Or edit `.agents/skills/openclaw-github-tracker/config.json`.
+---
+
+## Pre-Execution Checklist
+
+- [ ] 识别正确的使用场景（1/2/3）
+- [ ] 场景1: 确认生成PDF报告
+- [ ] 场景2: 确认是否需要 --deep
+- [ ] 场景3: 确认watchlist.json存在
+- [ ] 验证github.com/trending URL正确
+- [ ] 确保所有项目包含功能描述
+- [ ] PDF成功生成并准备交付

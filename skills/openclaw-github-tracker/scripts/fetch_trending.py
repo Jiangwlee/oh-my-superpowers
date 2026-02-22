@@ -229,8 +229,16 @@ Example:
     # Ensure directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write file
+    # Write brief file
     output_path.write_text(brief_content, encoding="utf-8")
+
+    # Also save raw data for report generation
+    raw_dir = pathlib.Path(args.memory_root) / "github-tracker" / "trending" / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    raw_path = raw_dir / f"{date_str}.json"
+    raw_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     print(
         json.dumps(
@@ -238,6 +246,7 @@ Example:
                 "status": "ok",
                 "count": len(data),
                 "output_path": str(output_path),
+                "raw_path": str(raw_path),
                 "date": date_str,
             },
             ensure_ascii=False,
