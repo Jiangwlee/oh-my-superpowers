@@ -28,7 +28,7 @@ def load_trending_data(memory_root: str, date_str: str) -> list[dict[str, Any]]:
     return []
 
 
-def load_watchlist_updates(memory_root: str) -> list[dict[str, Any]]:
+def load_watchlist_updates(memory_root: str, date_str: str) -> list[dict[str, Any]]:
     """加载 Watchlist 更新"""
     watchlist_dir = Path(memory_root) / "github-tracker" / "projects"
     updates = []
@@ -36,11 +36,9 @@ def load_watchlist_updates(memory_root: str) -> list[dict[str, Any]]:
     if not watchlist_dir.exists():
         return updates
 
-    today = datetime.now(timezone.utc).date().isoformat()
-
     for project_dir in watchlist_dir.iterdir():
         if project_dir.is_dir():
-            update_file = project_dir / "updates" / f"{today}.md"
+            update_file = project_dir / "updates" / f"{date_str}.md"
             if update_file.exists():
                 # 解析更新文件获取关键信息
                 content = update_file.read_text(encoding="utf-8")
@@ -88,7 +86,15 @@ def analyze_trends(trending_data: list[dict[str, Any]]) -> dict[str, Any]:
     total_stars_today = 0
 
     for item in trending_data:
-        lang = item.get("language", "Unknown")
+        # Try language field first, then extract from tech_stack
+        lang = item.get("language", "")
+        if not lang:
+            tech_stack = item.get("tech_stack", "")
+            if tech_stack:
+                # Extract primary language from tech_stack (first item before comma)
+                lang = tech_stack.split(",")[0].strip()
+        if not lang:
+            lang = "Unknown"
         lang_count[lang] = lang_count.get(lang, 0) + 1
 
         stars_today = item.get("stars_today", "0")
@@ -240,7 +246,7 @@ def main() -> None:
 
     # 加载数据
     trending_data = load_trending_data(args.memory_root, date_str)
-    watchlist_updates = load_watchlist_updates(args.memory_root)
+    watchlist_updates = load_watchlist_updates(args.memory_root, date_str)
 
     # 分析趋势
     trends = analyze_trends(trending_data)

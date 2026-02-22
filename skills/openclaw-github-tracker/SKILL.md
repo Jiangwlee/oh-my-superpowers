@@ -109,49 +109,23 @@ python3 .agents/skills/openclaw-github-tracker/scripts/track_updates.py \
   --config .agents/skills/openclaw-github-tracker/config.json
 ```
 
-### Step 4: 生成详细 Markdown 报告
+### Step 4: 生成综合日报
 
-创建包含以下内容的报告：
+使用脚本自动生成详细报告（整合 Trending + Watchlist 数据）：
 
-```markdown
-# GitHub Trending 日报 - 2026-02-22
-
-## 📊 今日概览
-- **热门项目数**: 28
-- **总新增 Star**: 2,847
-- **主要语言**: TypeScript (8), Python (6), Rust (5)
-
-## 🔥 热门项目详解
-
-### #1 facebook/react
-- **功能**: 用于构建用户界面的 JavaScript 库
-- **技术栈**: JavaScript, TypeScript
-- **Star**: 220,000 (+45 today)
-- **趋势分析**: 持续热门，今日新增45星，主要贡献来自文档改进和新特性讨论
-
-### #2 vercel/next.js
-- **功能**: React 框架，支持SSR和静态生成
-- **技术栈**: TypeScript, Rust
-- **Star**: 120,000 (+32 today)
-- **趋势分析**: v15发布引发关注
-
-[... 所有项目]
-
-## 📌 我的关注列表更新
-
-### langgenius/dify
-- **昨日 Star**: 15,000 → **今日**: 15,032 (+32)
-- **新 Issues**: 3个（2个已关闭）
-- **重要动态**: 发布了v0.8.0，新增workflow功能
-
-## 💡 今日洞察
-1. AI/ML 工具类项目持续霸榜（6/28）
-2. TypeScript 项目增长最快
-3. 开发者工具类新增4个热门项目
-
----
-*报告生成时间: 2026-02-22 09:30 UTC*
+```bash
+python3 .agents/skills/openclaw-github-tracker/scripts/generate_daily_report.py \
+  --memory-root .memory \
+  --date 2026-02-22
 ```
+
+**输出位置**: `.memory/github-tracker/briefs/daily/2026-02-22.md`
+
+**报告内容**:
+- 📊 今日概览（项目数、总 Star、语言分布）
+- 🔥 热门项目详解（功能、技术栈、Star 增长、热度分析）
+- 📌 关注列表更新（Stars/Forks/Release 变更）
+- 💡 今日洞察（趋势总结、建议关注）
 
 ### Step 5: 转换为 PDF
 
