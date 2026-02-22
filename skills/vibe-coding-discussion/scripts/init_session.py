@@ -10,6 +10,8 @@ from typing import Any
 
 from common import append_jsonl, ensure_layout, parse_csv, session_paths, slugify_topic, utc_now
 
+KNOWN_AGENT_TYPES = {"claude-code", "codex", "opencode"}
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI parser."""
@@ -63,6 +65,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         background_file_name = "background.md"
         (paths["root"] / background_file_name).write_text(background.rstrip() + "\n", encoding="utf-8")
 
+    # Build agent registry from participants (v2 schema)
+    agents: dict[str, dict[str, Any]] = {}
+    for participant in participants:
+        if participant not in KNOWN_AGENT_TYPES:
+            continue
+        transport = "self" if participant == "claude-code" else "tmux"
+        agents[participant] = {
+            "type": participant,
+            "kind": participant,
+            "transport": transport,
+            "tmux_session": None,
+            "state": "active" if transport == "self" else "not_spawned",
+        }
+
+    speaker_order = [name for name in participants if name in KNOWN_AGENT_TYPES and name != "claude-code"]
+
     meta = {
         "session_id": session_id,
         "topic": args.topic.strip(),
@@ -70,6 +88,35 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "created_at": utc_now(),
         "background": background,
         "background_file": background_file_name,
+        # v2 schema fields
+        "status": "open",
+        "round": {
+            "current": 0,
+            "max": 10,
+            "speaker_order": speaker_order,
+            "waiting_for": None,
+            "deadline_at": None,
+        },
+        "agents": agents,
+        "attachments": {
+            "background_path": background_file_name or "",
+            "manifest_path": "attachments.json",
+        },
+        "orchestrator": {
+            "mode": "sequential",
+            "status": "open",
+            "round": {
+                "current": 0,
+                "max": 10,
+                "speaker_order": speaker_order,
+                "waiting_for": None,
+                "deadline_at": None,
+            },
+            "auto_close": False,
+            "started_at": utc_now(),
+            "last_run_at": utc_now(),
+            "convergence_no_objection_rounds": 2,
+        },
     }
     paths["meta"].write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
