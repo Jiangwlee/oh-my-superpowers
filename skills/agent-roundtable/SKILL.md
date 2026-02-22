@@ -1,6 +1,7 @@
 ---
 name: agent-roundtable
 description: Use when the user wants to start a multi-agent discussion, asks multiple agents to discuss a topic together, says "roundtable" / "agent roundtable" / "multi-agent discussion", or wants to coordinate claude-code, codex, opencode around a shared topic with durable session logs.
+allowed-tools: Bash(python3 *), Bash(tmux ls *), Bash(tmux kill-session *)
 ---
 
 # Agent Roundtable
