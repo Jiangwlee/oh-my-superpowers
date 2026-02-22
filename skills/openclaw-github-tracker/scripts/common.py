@@ -8,7 +8,6 @@ import datetime as dt
 import json
 import os
 import pathlib
-import re
 import shutil
 import subprocess
 import urllib.parse
@@ -17,7 +16,12 @@ from typing import Any
 
 
 def utc_now() -> str:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        dt.datetime.now(dt.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def today_utc() -> str:
@@ -39,7 +43,10 @@ def ensure_layout(memory_root: str) -> dict[str, pathlib.Path]:
 
     watchlist_file = paths["watchlist"] / "watchlist.json"
     if not watchlist_file.exists():
-        watchlist_file.write_text(json.dumps({"repos": []}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        watchlist_file.write_text(
+            json.dumps({"repos": []}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     index_file = paths["indexes"] / "project-index.jsonl"
     if not index_file.exists():
@@ -57,7 +64,11 @@ def default_config_path() -> pathlib.Path:
 
 
 def load_runtime_config(config_path: str = "") -> dict[str, Any]:
-    cfg_path = pathlib.Path(config_path).expanduser().resolve() if config_path else default_config_path()
+    cfg_path = (
+        pathlib.Path(config_path).expanduser().resolve()
+        if config_path
+        else default_config_path()
+    )
     if not cfg_path.exists():
         return {}
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
@@ -84,7 +95,9 @@ def gh_available() -> bool:
     return shutil.which("gh") is not None
 
 
-def _gh_api_request(path: str, token: str | None = None, query: dict[str, str] | None = None) -> Any:
+def _gh_api_request(
+    path: str, token: str | None = None, query: dict[str, str] | None = None
+) -> Any:
     endpoint = path
     if query:
         endpoint = f"{endpoint}?{urllib.parse.urlencode(query)}"
@@ -119,7 +132,9 @@ def _text_request(url: str, token: str | None = None) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
-def gh_api(path: str, token: str | None = None, query: dict[str, str] | None = None) -> Any:
+def gh_api(
+    path: str, token: str | None = None, query: dict[str, str] | None = None
+) -> Any:
     if gh_available():
         try:
             return _gh_api_request(path, token=token, query=query)
@@ -139,7 +154,9 @@ def gh_web_text(path: str, query: dict[str, str] | None = None) -> str:
     return _text_request(f"https://github.com{path}{query_str}")
 
 
-def gh_repo_clone_shallow(repo: str, dest_dir: pathlib.Path, token: str | None = None) -> bool:
+def gh_repo_clone_shallow(
+    repo: str, dest_dir: pathlib.Path, token: str | None = None
+) -> bool:
     if not gh_available():
         return False
     cmd = ["gh", "repo", "clone", repo, str(dest_dir), "--", "--depth", "1"]
@@ -161,83 +178,6 @@ def decode_readme(content_b64: str) -> str:
         return ""
 
 
-def parse_trending_repos(html: str) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    pattern = re.compile(r'<article[^>]*class="[^"]*Box-row[^"]*"[^>]*>(.*?)</article>', re.DOTALL)
-    rank = 0
-    for block in pattern.findall(html):
-        # Use the repository link in the heading, not any generic link in the card.
-        href_match = re.search(r'<h2[^>]*>.*?<a[^>]*href="/([^"/\s]+/[^"/\s]+)"', block, re.DOTALL)
-        if not href_match:
-            continue
-        repo = href_match.group(1).strip()
-        if repo.startswith("sponsors/"):
-            continue
-        rank += 1
-
-        desc_match = re.search(r'<p class="col-9 color-fg-muted my-1 pr-4">(.*?)</p>', block, re.DOTALL)
-        desc = _clean_html(desc_match.group(1)) if desc_match else ""
-
-        lang_match = re.search(r'itemprop="programmingLanguage">\s*([^<\n]+)\s*</span>', block)
-        language = lang_match.group(1).strip() if lang_match else ""
-
-        repo_escaped = re.escape(repo)
-        stars_total_match = re.search(
-            rf'href="/{repo_escaped}/stargazers"[^>]*>\s*.*?([0-9][0-9,]*)\s*</a>',
-            block,
-            re.DOTALL,
-        )
-        if stars_total_match:
-            stars_total = _to_int(stars_total_match.group(1))
-        else:
-            fallback_total = re.search(r'/stargazers"[^>]*>\s*.*?([0-9][0-9,]*)\s*</a>', block, re.DOTALL)
-            stars_total = _to_int(fallback_total.group(1)) if fallback_total else 0
-
-        # Prefer the "float-sm-right" span which carries period stars (today/week/month),
-        # and avoid relying on localized text like "stars today".
-        stars_period = 0
-        period_span_match = re.search(
-            r'<span[^>]*class="[^"]*float-sm-right[^"]*"[^>]*>(.*?)</span>',
-            block,
-            re.DOTALL,
-        )
-        if period_span_match:
-            period_text = _clean_html(period_span_match.group(1))
-            number_match = re.search(r"([\d,]+)", period_text)
-            if number_match:
-                stars_period = _to_int(number_match.group(1))
-        else:
-            # Fallback for older page structures.
-            period_match = re.search(
-                r'([\d,]+)\s+stars?\s+(?:today|this\s+week|this\s+month)',
-                block,
-                re.IGNORECASE,
-            )
-            stars_period = _to_int(period_match.group(1)) if period_match else 0
-
-        items.append(
-            {
-                "rank": rank,
-                "repo": repo,
-                "description": desc,
-                "language": language,
-                "stars_total": stars_total,
-                "stars_period": stars_period,
-            }
-        )
-    return items
-
-
-def _clean_html(text: str) -> str:
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def _to_int(text: str) -> int:
-    return int(text.replace(",", "").strip()) if text else 0
-
-
 def read_watchlist(path: pathlib.Path) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     repos = data.get("repos", [])
@@ -245,7 +185,10 @@ def read_watchlist(path: pathlib.Path) -> list[str]:
 
 
 def write_watchlist(path: pathlib.Path, repos: list[str]) -> None:
-    path.write_text(json.dumps({"repos": sorted(set(repos))}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps({"repos": sorted(set(repos))}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def load_index(index_path: pathlib.Path) -> dict[str, dict[str, Any]]:
@@ -267,5 +210,8 @@ def load_index(index_path: pathlib.Path) -> dict[str, dict[str, Any]]:
 
 
 def save_index(index_path: pathlib.Path, entries: dict[str, dict[str, Any]]) -> None:
-    lines = [json.dumps(v, ensure_ascii=False) for _, v in sorted(entries.items(), key=lambda kv: kv[0])]
+    lines = [
+        json.dumps(v, ensure_ascii=False)
+        for _, v in sorted(entries.items(), key=lambda kv: kv[0])
+    ]
     index_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")

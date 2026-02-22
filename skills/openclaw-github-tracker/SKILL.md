@@ -1,46 +1,242 @@
 ---
 name: openclaw-github-tracker
-description: Use when building or running an OpenClaw workflow to discover GitHub trending repositories, maintain a watchlist, generate first-time deep project dossiers, and track important updates across followed repositories.
+description: Use when tracking GitHub trending repos, managing watchlists, or analyzing projects for OpenClaw workflows.
+version: "1.1.0"
 ---
 
 # OpenClaw GitHub Tracker
 
-## Overview
+Track GitHub trending repositories, maintain watchlists, generate project dossiers, and monitor updates.
 
-Use this skill to run a repeatable GitHub project intelligence workflow for OpenClaw:
+## Prerequisite Check (REQUIRED)
 
-1. Open browser and collect GitHub Trending (daily) from page
-2. Maintain a watchlist of interesting repositories
-3. Generate first-time deep project dossiers
-4. Track meaningful updates since the previous analysis
-5. Keep a machine-friendly index for memory systems (including claude-mem)
+**STOP and resolve before proceeding:**
 
-## Principles
+1. **GitHub CLI**: `command -v gh` → Install if missing: https://cli.github.com
+2. **Authentication**: `gh auth status` → Run `gh auth login` if not authenticated
+3. **Python 3.10+**: `python3 --version` → Required for scripts
+4. **Browser availability**: Confirm OpenClaw browser tool is available
 
-1. **Watchlist must be user-driven** - AI must NOT add projects to watchlist without explicit user permission. Always ask the user before adding.
-2. **Prefer gh over direct urllib calls** - Use `gh` for GitHub API/clone operations whenever possible to reduce rate-limit risk.
-3. **Trending source must be GitHub daily page data** - For "today hot projects", use `https://github.com/trending` (daily) data. Do not substitute with all-time/top-star search results.
-4. **Trending collection must use browser** - AI must open `https://github.com/trending` in OpenClaw browser and read page data directly. Do not use regex HTML scraping scripts for trending collection.
+**If any check fails, stop and provide installation steps. Do not continue.**
 
-## Directory Layout (claude-mem friendly)
+## Guardrails (HARD CONSTRAINTS)
 
-Run once to initialize:
+<HARD-GATE>
+
+### Iron Laws
+
+**NO watchlist additions WITHOUT explicit user confirmation FIRST.**
+- ❌ **WRONG**: "Adding this trending repo to your watchlist..."
+- ✅ **CORRECT**: "Would you like to add owner/repo to watchlist? [yes/no]"
+
+**NO trending data WITHOUT GitHub daily page + browser FIRST.**
+- ❌ **WRONG**: Using `gh search repos --sort stars` for "today's trending"
+- ✅ **CORRECT**: Open browser to https://github.com/trending, read daily tab
+
+### SPA Trap Warning
+
+⚠️ **GitHub is a Single Page Application (SPA).** Direct HTTP requests (curl, wget, urllib, web_fetch) only return the JavaScript shell, NOT the actual content. **Always use browser for Trending collection.**
+
+### Daily vs Weekly Verification
+
+- ❌ **WRONG URL**: `github.com/trending/weekly` or `github.com/trending/monthly`
+- ✅ **CORRECT URL**: `github.com/trending` (this shows daily trending)
+
+**Before extracting data:**
+1. Check browser URL bar shows `/trending` NOT `/trending/weekly` or `/trending/monthly`
+2. Verify page header or tab indicates "Today" or "Daily"
+
+### Authority Statements
+
+- **YOU MUST** ask before adding to watchlist — no exceptions
+- **Always confirm** with user before destructive operations
+- **Never assume** implicit permission from context
+
+### Common Rationalizations (BLOCKED)
+
+| Excuse | Reality |
+|--------|---------|
+| "The user mentioned this repo earlier..." | Mention ≠ permission to add to watchlist |
+| "This is clearly trending/high-value..." | Value assessment is user's prerogative |
+| "I'll add it and they can remove later..." | Opt-out violates user-driven principle |
+| "Let me just list the top 5 most starred..." | MUST include ALL repositories, not filtered subset |
+| "This project has 10k stars so it must be good..." | Functionality matters, not just popularity metrics |
+
+</HARD-GATE>
+
+## Extraction Protocols (Context-Specific)
+
+### Trending Data Collection — BROWSER ONLY
+
+**NO FALLBACK for Trending**: Trending data MUST come from browser at `github.com/trending`. There is no API equivalent for GitHub's trending algorithm.
+
+**If browser fails**:
+- Stop and report: "Cannot fetch trending — browser unavailable"
+- Do NOT substitute with search results or starred repos
+- Ask user to retry later
+
+### Repository Metadata — API with Fallback
+
+For repo details, analysis, and updates:
+
+1. **Primary**: GitHub API via `gh api`
+2. **Fallback**: `gh repo view --json`
+3. **Last resort**: Browser (if API quota exceeded)
+
+**Triggers for fallback**:
+- 401/403 → Check auth, fallback to `gh repo view`
+- 429 → Apply back-off, then try browser
+- Network timeout → Retry once, then fail
+
+## Rate Limit Protection
+
+**Mandatory pauses between API calls**:
+- Minimum 1 second between sequential calls
+- Burst limit: max 10 calls without pause
+- 429 response: read `x-ratelimit-reset`, wait until timestamp
+
+**Back-off strategy**:
+- First 429: wait 60 seconds
+- Second 429: wait 5 minutes
+- Third 429: stop and report "Rate limit exceeded, resume after [timestamp]"
+
+## Workflow & Data Boundaries
+
+Each workflow step produces specific artifacts:
+
+| Step | Input | Output | Tool |
+|------|-------|--------|------|
+| Fetch Trending | None | `briefs/daily/YYYY-MM-DD.md` | Browser |
+| Add to Watchlist | User confirmation | `watchlist/watchlist.json` | Script |
+| Deep Analysis | `owner/repo` string | `projects/<owner>__<repo>/profile.md` + `snapshots/*.json` | Script |
+| Track Updates | Existing snapshot | `projects/<owner>__<repo>/updates/YYYY-MM-DD.md` | Script |
+
+**Tool boundaries**:
+- **Browser ONLY**: Trending collection (GitHub SPA requirement)
+- **gh CLI preferred**: All repo operations (API, clone, metadata)
+- **Scripts**: Watchlist management, analysis, tracking
+
+## Standard Workflow
+
+### Step 1: Fetch Daily Trending
+
+**Input**: None  
+**Output**: `briefs/daily/YYYY-MM-DD.md`  
+**Tool**: Script + OpenClaw browser
+
+**ALWAYS run the script first to get instructions, then execute browser operations.**
+
+```bash
+# Step 1: Get browser instructions
+python3 .agents/skills/openclaw-github-tracker/scripts/fetch_trending.py \
+  --memory-root .memory
+
+# Step 2: Use OpenClaw browser to extract data per script instructions
+# (Browser tool will be invoked here)
+
+# Step 3: Generate brief with extracted data
+python3 .agents/skills/openclaw-github-tracker/scripts/fetch_trending.py \
+  --memory-root .memory \
+  --data-json '[{"repo":"owner/repo","what_it_does":"..."},...]'
+```
+
+**Script enforces:**
+- URL hardcoded to `github.com/trending` (daily only)
+- Minimum 10 repositories (fails if incomplete)
+- No duplicate repositories
+- Functional descriptions (not just popularity metrics)
+
+### Step 2: Add to Watchlist
+
+**Input**: User confirmation  
+**Output**: Updated `watchlist/watchlist.json`  
+**Tool**: Script
+
+```bash
+python3 .agents/skills/openclaw-github-tracker/scripts/watchlist.py \
+  add owner/repo \
+  --memory-root .memory
+```
+
+### Step 3: First-Time Deep Analysis
+
+**Input**: `owner/repo`  
+**Output**: `projects/<owner>__<repo>/profile.md` + snapshot  
+**Tool**: Script
+
+```bash
+python3 .agents/skills/openclaw-github-tracker/scripts/analyze_project.py \
+  owner/repo \
+  --memory-root .memory \
+  --config .agents/skills/openclaw-github-tracker/config.json
+```
+
+### Step 4: Track Updates
+
+**Input**: Existing project snapshot  
+**Output**: `projects/<owner>__<repo>/updates/YYYY-MM-DD.md`  
+**Tool**: Script
+
+```bash
+python3 .agents/skills/openclaw-github-tracker/scripts/track_updates.py \
+  --memory-root .memory \
+  --config .agents/skills/openclaw-github-tracker/config.json
+```
+
+### Step 5: Pipeline (Steps 3-4 automation)
+
+```bash
+python3 .agents/skills/openclaw-github-tracker/scripts/run_pipeline.py \
+  --memory-root .memory \
+  --config .agents/skills/openclaw-github-tracker/config.json \
+  --analyze-mode new
+```
+
+**TERMINAL STATE**: Analysis artifacts written to `.memory/github-tracker/projects/`. Do NOT invoke additional skills unless user requests.
+
+## Output Format Reference
+
+When generating files, read `references/formats.md` for exact schema.
+
+## Analysis Scope
+
+Each project profile includes:
+
+- Architecture signals (repo layout + branch signals)
+- Technology stack and language mix
+- Main functional modules (top-level structure + README cues)
+- Roadmap signals (README roadmap section + milestones/releases)
+- License and compliance basics
+- Baseline metrics snapshot for future diffs
+
+## Required Dependencies
+
+| Skill/Tool | Purpose | Required |
+|------------|---------|----------|
+| OpenClaw browser | Trending page access | Yes |
+| gh CLI | GitHub API operations | Yes |
+| Python 3.10+ | Script execution | Yes |
+
+## Pre-Execution Checklist
+
+Before completing any task:
+- [ ] Prerequisite checks passed
+- [ ] Watchlist changes have explicit user confirmation
+- [ ] Trending data sourced from browser (not API/search)
+- [ ] **Daily Brief**: URL is `/trending` (NOT `/trending/weekly`)
+- [ ] **Daily Brief**: item_count ≥ 10 (ALL repositories included, not filtered subset)
+- [ ] **Daily Brief**: Each repo includes "What it does" functional description
+- [ ] **Daily Brief**: Watchlist recommendations based on functionality, not just star count
+- [ ] Output follows format schema in references/formats.md
+- [ ] All artifacts written to correct paths
+
+## Directory Layout
+
+Initialize once:
 
 ```bash
 python3 .agents/skills/openclaw-github-tracker/scripts/bootstrap_layout.py \
   --memory-root .memory
-```
-
-Optional proxy configuration (for urllib fallback paths):
-
-Edit `.agents/skills/openclaw-github-tracker/config.json`:
-
-```json
-{
-  "http_proxy": "http://127.0.0.1:7890",
-  "https_proxy": "http://127.0.0.1:7890",
-  "no_proxy": "localhost,127.0.0.1"
-}
 ```
 
 Generated structure:
@@ -57,59 +253,14 @@ Generated structure:
     updates/
 ```
 
-This layout is append-friendly (JSONL + Markdown), stable for retrieval, and easy for claude-mem ingestion.
+## Configuration
 
-## Standard Workflow
-
-1. Fetch daily trending via browser:
-Open OpenClaw browser, navigate to `https://github.com/trending`, and compile the brief from visible page rows (daily tab/page data).
-
-2. Add repository to watchlist:
+Optional proxy (for urllib fallback):
 
 ```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/watchlist.py \
-  add owner/repo \
-  --memory-root .memory
+export GITHUB_TRACKER_HTTP_PROXY="http://127.0.0.1:10801"
+export GITHUB_TRACKER_HTTPS_PROXY="http://127.0.0.1:10801"
+export GITHUB_TRACKER_NO_PROXY="localhost,127.0.0.1"
 ```
 
-3. First-time deep analysis:
-
-```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/analyze_project.py \
-  owner/repo \
-  --memory-root .memory \
-  --config .agents/skills/openclaw-github-tracker/config.json
-```
-
-4. Track updates since last snapshot:
-
-```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/track_updates.py \
-  --memory-root .memory \
-  --config .agents/skills/openclaw-github-tracker/config.json
-```
-
-5. Run analysis + tracking pipeline (trending step remains manual/browser):
-
-```bash
-python3 .agents/skills/openclaw-github-tracker/scripts/run_pipeline.py \
-  --memory-root .memory \
-  --config .agents/skills/openclaw-github-tracker/config.json \
-  --analyze-mode new
-```
-
-## Analysis Scope
-
-Each project profile includes:
-
-- Architecture signals (repo layout + branch signals)
-- Technology stack and language mix
-- Main functional modules (top-level structure + README cues)
-- Roadmap signals (README roadmap section + milestones/releases)
-- License and compliance basics
-- Baseline metrics snapshot for future diffs
-
-## References
-
-- Format definitions: `references/formats.md`
-- Script entrypoints: `scripts/*.py`
+Or edit `.agents/skills/openclaw-github-tracker/config.json`.
