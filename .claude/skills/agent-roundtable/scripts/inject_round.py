@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from common import load_meta, session_paths, utc_now
+from common import load_meta, meta_locked, session_paths, utc_now
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -269,16 +269,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     send_keys_to_tmux(session_name, full_prompt)
     send_keys_to_tmux(session_name, "Enter")
 
-    # Update agent state
-    agent_info["state"] = "responding"
-    agent_info["last_prompted_at"] = utc_now()
-    agent_info["round"] = args.round
-
-    meta["agents"] = agents
-    paths["meta"].write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    # Update agent state (locked)
+    with meta_locked(paths["meta"]) as m:
+        if "agents" not in m:
+            m["agents"] = {}
+        a = m["agents"].setdefault(args.agent, {})
+        a["state"] = "responding"
+        a["last_prompted_at"] = utc_now()
+        a["round"] = args.round
 
     # Wait for response if max_wait > 0
     responded = False
@@ -289,14 +287,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             msg_count_after = count_messages_since(paths["jsonl"], -1, args.agent)
             if msg_count_after > msg_count_before:
                 responded = True
-                # Update agent state
-                agent_info["state"] = "idle"
-                agent_info["last_response_at"] = utc_now()
-                meta["agents"] = agents
-                paths["meta"].write_text(
-                    json.dumps(meta, indent=2, ensure_ascii=False),
-                    encoding="utf-8",
-                )
+                with meta_locked(paths["meta"]) as m:
+                    a = m.get("agents", {}).setdefault(args.agent, {})
+                    a["state"] = "idle"
+                    a["last_response_at"] = utc_now()
                 break
 
     return {

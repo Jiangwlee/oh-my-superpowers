@@ -148,7 +148,59 @@ python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
 
 ---
 
-## 7) list_sessions
+## 7) close_session（Mode B 必须步骤）
+
+关闭讨论会话，写入 `session_close` 事件并 kill 所有关联的 tmux session。幂等：重复执行不报错。
+
+```bash
+python3 {SKILL_DIR}/scripts/close_session.py \
+  --memory-root .memory \
+  --session-id <session-id>
+```
+
+可选参数：
+- `--dry-run`：预演，显示会做什么，不实际执行
+- `--keep-tmux`：只更新 session 状态，不 kill tmux session
+- `--force`：对已关闭的 session 强制重新执行清理
+
+**关键**：tmux session 名从 `meta.json` 的 `agents[*].tmux_session` 读取，不依赖命名规则推断。
+
+---
+
+## 8) cleanup_stale_sessions（维护工具）
+
+扫描所有 session，清理异常退出后残留的 tmux session。
+
+```bash
+# 预览（不实际执行）
+python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+  --memory-root .memory \
+  --dry-run
+
+# 实际清理所有已关闭 session 的残留 tmux
+python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+  --memory-root .memory
+
+# 强制清理所有 session（包括状态为 open 的）
+python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+  --memory-root .memory \
+  --force
+
+# 只清理某一个 session
+python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+  --memory-root .memory \
+  --session-id <session-id> \
+  --force
+```
+
+可选参数：
+- `--dry-run`：预演，不实际 kill
+- `--force`：同时清理状态为 open 的 session（默认只清理 closed）
+- `--session-id`：限定到单个 session
+
+---
+
+## 9) list_sessions
 
 列出所有会话（按最后更新时间排序）。
 
@@ -158,7 +210,7 @@ python3 {SKILL_DIR}/scripts/list_sessions.py --memory-root .memory
 
 ---
 
-## 8) watch_session（TUI 输出）
+## 10) watch_session（TUI 输出）
 
 ```bash
 # 列出所有会话

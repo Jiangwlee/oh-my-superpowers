@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from common import load_meta, session_paths, utc_now
+from common import load_meta, meta_locked, session_paths, utc_now
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -294,25 +294,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.wait_idle:
         idle_detected = wait_for_idle(session_name, args.idle_timeout)
 
-    # Update meta.json with tmux session info
-    meta = load_meta(paths["meta"])
-    if "agents" not in meta:
-        meta["agents"] = {}
-
-    existing = meta["agents"].get(args.agent, {})
-    meta["agents"][args.agent] = {
-        "type": args.agent_type,
-        "kind": args.agent_type,
-        "transport": existing.get("transport", "tmux"),
-        "tmux_session": session_name,
-        "state": "idle" if idle_detected else "starting",
-        "spawned_at": utc_now(),
-    }
-
-    paths["meta"].write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    # Update meta.json with tmux session info (locked to prevent parallel-spawn corruption)
+    with meta_locked(paths["meta"]) as meta:
+        if "agents" not in meta:
+            meta["agents"] = {}
+        existing = meta["agents"].get(args.agent, {})
+        meta["agents"][args.agent] = {
+            "type": args.agent_type,
+            "kind": args.agent_type,
+            "transport": existing.get("transport", "tmux"),
+            "tmux_session": session_name,
+            "state": "idle" if idle_detected else "starting",
+            "spawned_at": utc_now(),
+        }
 
     return {
         "ok": True,

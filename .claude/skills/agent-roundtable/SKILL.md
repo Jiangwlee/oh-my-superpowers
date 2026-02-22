@@ -36,7 +36,10 @@ description: Use when the user wants to start a multi-agent discussion, asks mul
 4. append_message   → claude-code 自身发言
 5. 重复 3-4 直至达成共识
 6. append_message   --message-type decision  → 写入决策
+7. close_session    → 写入 session_close 事件并 kill 所有 tmux session（必须执行）
 ```
+
+> **注意**：step 7 是 Mode B 的必须收尾步骤。跳过会导致 tmux session 永久驻留，即使退出 Claude Code TUI 也不会自动清理。
 
 一键运行全流程（自动 spawn + 多轮 inject + 收敛检测）：
 

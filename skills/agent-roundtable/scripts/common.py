@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 import json
 import pathlib
 import re
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Generator
 
 SESSION_NAME_MAX_LEN = 64
 SKILL_BASE_NAME = "agent-roundtable"
@@ -71,6 +73,41 @@ def load_meta(meta_path: pathlib.Path) -> dict[str, Any]:
         return json.loads(meta_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"invalid meta json: {meta_path}") from exc
+
+
+@contextmanager
+def meta_locked(meta_path: pathlib.Path) -> Generator[dict[str, Any], None, None]:
+    """Context manager for exclusive meta.json read-modify-write.
+
+    Acquires an exclusive file lock, reads the current meta.json, yields the
+    dict for in-place modification, then writes it back atomically via a temp
+    file rename. Prevents concurrent write corruption from parallel spawns.
+
+    Usage::
+        with meta_locked(paths["meta"]) as meta:
+            meta["agents"]["codex"]["state"] = "idle"
+    """
+    lock_path = meta_path.with_suffix(".json.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    meta = {}
+            else:
+                meta = {}
+            yield meta
+            tmp_path = meta_path.with_suffix(".json.tmp")
+            tmp_path.write_text(
+                json.dumps(meta, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            tmp_path.rename(meta_path)
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def read_jsonl(jsonl_path: pathlib.Path) -> list[dict[str, Any]]:
