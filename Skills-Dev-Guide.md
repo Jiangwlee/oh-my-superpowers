@@ -173,6 +173,13 @@
 - 针对平台渲染 bug 内嵌修复，不依赖用户手动处理
 - → [remaining-skills-analysis.md §Telegram渲染修复](guides/remaining-skills-analysis.md)
 
+### 如何设置手机友好的 PDF/HTML 报告字体大小？
+- 基准：`body font-size: 15px`，`line-height: 1.7`，`padding: 20px 18px 32px`
+- 各级标题：`h1: 19px`，`h2: 16px`，`h3: 15px`
+- 辅助文字（tag/label/footer/meta）：最小 12px，不低于 11px
+- 表格：`font-size: 13px`；降级 `<pre>` 模式：`font-size: 14px`
+- 字号过小（body < 14px）在 Telegram PDF 预览中难以阅读，以 `a-share-review-planner/scripts/report_to_html.py` 的 CSS 为参考基准
+
 ---
 
 ## 八、跨 Skill 协作

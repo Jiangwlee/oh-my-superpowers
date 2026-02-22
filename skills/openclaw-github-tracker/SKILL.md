@@ -57,7 +57,7 @@ GitHub is a SPA — web_fetch only returns shell HTML with no content. Browser t
 **触发词**："看看今天GitHub热门"、"今日GitHub趋势"、"生成GitHub日报"、"github trending"
 
 **输出**：PDF 格式日报，包含：
-- 当日 Trending 完整列表（25-30个项目）
+- 当日 Trending 完整列表（10-15个项目）
 - 每个项目的功能描述、技术栈、增长数据
 - 关注列表(Watchlist)项目的一日更新汇总
 - 统计数据与趋势分析
@@ -102,7 +102,7 @@ python3 scripts/fetch_trending.py \
 
 1. `openclaw browser open https://github.com/trending`
 2. 验证 URL 是 `/trending`（不是 `/trending/weekly`）
-3. 滚动页面，提取所有项目数据（目标 ≥25 个）
+3. 滚动页面，提取所有项目数据（目标 ≥10 个）
 4. 提取完成后立即关闭 tab：
    ```bash
    openclaw browser tabs                     # 获取 targetId

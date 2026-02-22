@@ -22,11 +22,11 @@ CSS = """
 body {
     font-family: -apple-system, 'PingFang SC', 'Hiragino Sans GB',
                  'Microsoft YaHei', 'Segoe UI', sans-serif;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 15px;
+    line-height: 1.7;
     color: #24292f;
     background: #ffffff;
-    padding: 16px 14px 24px;
+    padding: 20px 18px 32px;
     max-width: 750px;
 }
 .header {
@@ -41,24 +41,24 @@ body {
     margin: 0 0 8px;
 }
 .header .meta {
-    font-size: 12px;
+    font-size: 13px;
     opacity: 0.9;
 }
 h1 {
-    font-size: 17px;
+    font-size: 19px;
     color: #0d47a1;
     border-bottom: 2px solid #e3f2fd;
     padding-bottom: 8px;
     margin: 24px 0 12px;
 }
 h2 {
-    font-size: 15px;
+    font-size: 16px;
     color: #1565c0;
     margin: 18px 0 10px;
     padding-left: 10px;
     border-left: 3px solid #42a5f5;
 }
-h3 { font-size: 14px; color: #333; margin: 12px 0 6px; }
+h3 { font-size: 15px; color: #333; margin: 12px 0 6px; }
 p { margin: 8px 0; }
 ul, ol { padding-left: 20px; margin: 8px 0; }
 li { margin: 4px 0; }
@@ -74,10 +74,10 @@ strong { color: #d32f2f; }
 .repo-card h3 {
     margin: 0 0 8px;
     color: #0969da;
-    font-size: 15px;
+    font-size: 16px;
 }
 .repo-card .meta {
-    font-size: 12px;
+    font-size: 13px;
     color: #57606a;
     margin-bottom: 10px;
 }
@@ -94,11 +94,11 @@ strong { color: #d32f2f; }
 .repo-card .tag {
     background: #ddf4ff;
     color: #0969da;
-    font-size: 11px;
+    font-size: 12px;
     padding: 3px 8px;
     border-radius: 12px;
 }
-table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 12px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
 th {
     background: #f6f8fa;
     color: #24292f;
@@ -127,7 +127,7 @@ tr:nth-child(even) td { background: #f6f8fa; }
     color: #0d47a1;
 }
 .stat-box .label {
-    font-size: 11px;
+    font-size: 12px;
     color: #57606a;
     margin-top: 4px;
 }
@@ -135,7 +135,7 @@ tr:nth-child(even) td { background: #f6f8fa; }
     margin-top: 30px;
     padding-top: 16px;
     border-top: 1px solid #e1e4e8;
-    font-size: 11px;
+    font-size: 12px;
     color: #57606a;
     text-align: center;
 }
@@ -161,7 +161,7 @@ def markdown_to_html_body(md_path: Path) -> tuple[str, str]:
 
     # Fallback：将原始 Markdown 转义后用 <pre> 展示
     content = md_path.read_text(encoding="utf-8")
-    body = f'<pre style="white-space:pre-wrap;font-size:13px;">{html.escape(content)}</pre>'
+    body = f'<pre style="white-space:pre-wrap;font-size:14px;">{html.escape(content)}</pre>'
     return body, "fallback"
 
 
