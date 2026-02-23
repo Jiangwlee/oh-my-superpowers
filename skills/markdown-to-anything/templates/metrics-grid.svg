@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <rect width="1080" height="1920" fill="{{BG}}"/>
+  <text id="title" x="72" y="148" fill="{{TEXT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{H1}}" font-weight="700"></text>
+  <text id="subtitle" x="72" y="222" fill="{{MUTED}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{META}}"></text>
+
+  <g id="grid">
+    <rect x="72" y="306" width="450" height="320" rx="28" fill="{{CARD_BG}}"/>
+    <text id="metric_label_1" x="108" y="396" fill="{{MUTED}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{META}}"></text>
+    <text id="metric_value_1" x="108" y="500" fill="{{TEXT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{H2}}" font-weight="700"></text>
+
+    <rect x="558" y="306" width="450" height="320" rx="28" fill="{{CARD_BG}}"/>
+    <text id="metric_label_2" x="594" y="396" fill="{{MUTED}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{META}}"></text>
+    <text id="metric_value_2" x="594" y="500" fill="{{TEXT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{H2}}" font-weight="700"></text>
+
+    <rect x="72" y="660" width="450" height="320" rx="28" fill="{{CARD_BG}}"/>
+    <text id="metric_label_3" x="108" y="750" fill="{{MUTED}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{META}}"></text>
+    <text id="metric_value_3" x="108" y="854" fill="{{TEXT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{H2}}" font-weight="700"></text>
+
+    <rect x="558" y="660" width="450" height="320" rx="28" fill="{{CARD_BG}}"/>
+    <text id="metric_label_4" x="594" y="750" fill="{{MUTED}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{META}}"></text>
+    <text id="metric_value_4" x="594" y="854" fill="{{TEXT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{H2}}" font-weight="700"></text>
+  </g>
+
+  <rect x="72" y="1060" width="936" height="700" rx="28" fill="{{ACCENT_SOFT}}"/>
+  <text id="highlight" x="108" y="1140" fill="{{ACCENT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{H3}}" font-weight="700"></text>
+  <text id="bullets" x="108" y="1220" fill="{{TEXT}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{BODY}}"></text>
+  <text id="footer" x="72" y="1840" fill="{{MUTED}}" font-family="-apple-system,'PingFang SC',sans-serif" font-size="{{META}}">markdown-to-anything</text>
+</svg>

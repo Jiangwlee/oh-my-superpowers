@@ -173,12 +173,26 @@
 - 针对平台渲染 bug 内嵌修复，不依赖用户手动处理
 - → [remaining-skills-analysis.md §Telegram渲染修复](guides/remaining-skills-analysis.md)
 
-### 如何设置手机友好的 PDF/HTML 报告字体大小？
-- 基准：`body font-size: 15px`，`line-height: 1.7`，`padding: 20px 18px 32px`
-- 各级标题：`h1: 19px`，`h2: 16px`，`h3: 15px`
-- 辅助文字（tag/label/footer/meta）：最小 12px，不低于 11px
-- 表格：`font-size: 13px`；降级 `<pre>` 模式：`font-size: 14px`
-- 字号过小（body < 14px）在 Telegram PDF 预览中难以阅读，以 `a-share-review-planner/scripts/report_to_html.py` 的 CSS 为参考基准
+### 如何设置手机友好的字体大小？（目标设备：iPhone 17，460 PPI）
+
+字号设计依路径不同，分三种场景：
+
+**场景 A：SVG summary-card（画布 1080×1920 px，全屏查看）**
+- 设计基准：SVG px 单位即物理像素，iPhone 17 全屏显示放大约 1.12×
+- medium（默认）：`body 44px`，`h1 66px`，`h2 55px`，`h3 48px`，`meta 34px`
+- small：body 36px；large：body 52px
+- 标题按比例派生：`h1 = body × 1.50`，`h2 = body × 1.25`，`h3 = body × 1.09`
+
+**场景 B：HTML → Chrome → PDF（750px 视口，3x DPR，A4 输出）**
+- 设计基准：CSS px 在 3x DPR 下渲染，保证 PDF 中文可读
+- medium（默认）：`body 28px`，`line-height 1.65`，`h1 calc(body*1.75)`，`h2 calc(body*1.42)`，`h3 calc(body*1.21)`
+- small：body 24px；large：body 32px
+- 表格：`font-size: body * 0.82`；meta/label：`font-size: body * 0.79`
+- 参考实现：`skills/markdown-to-anything/scripts/report_render.py`
+
+**场景 C：HTML → Chrome → PNG（750px 视口，3x DPR，截图）**
+- 与场景 B 相同字号体系，但 `padding` 可适当加大：`padding: 28px 22px 48px`
+- body < 24px（CSS px）在 3x DPR 截图缩放后难以阅读，勿低于此值
 
 ---
 
