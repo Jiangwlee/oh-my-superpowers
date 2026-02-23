@@ -1,6 +1,6 @@
 ---
 name: markdown-to-anything
-description: Use when a skill or user needs to convert Markdown into Telegram-friendly outputs (PNG summary card and/or PDF report), asks for Markdown rendering/export, report image/pdf generation, or a reusable markdown-to-image/markdown-to-pdf pipeline.
+description: Use when a skill or user needs to convert Markdown into Telegram-friendly outputs (PNG summary card and/or PDF report), asks for Markdown rendering/export, report image/pdf generation, or a reusable markdown-to-image/markdown-to-pdf pipeline. Supports two card modes: (1) LLM-direct SVG — LLM creates the SVG visually, then screenshot.js converts to PNG (recommended for high-quality, designed cards); (2) programmatic templates via convert.py (fast, structured).
 ---
 
 # Markdown To Anything
@@ -20,7 +20,55 @@ description: Use when a skill or user needs to convert Markdown into Telegram-fr
 - 业务分析/摘要生成（调用方可先做摘要，再把 Markdown 交给本 skill）
 - Telegram 发送
 
-## 快速使用
+## LLM 直出 SVG 模式（推荐用于高品质摘要卡）
+
+程序化模板只能生成机械排版。如需更美观的视觉设计，**由 LLM 自行创作 SVG，再交本 skill 转 PNG**。
+
+### 触发时机
+
+用户或调用方说"高品质卡片"、"设计感"、"好看一点"、"自由风格"时，**优先走本路线**。
+
+### 画布规格（LLM 写 SVG 时必须遵守）
+
+| 项目 | 值 |
+|------|-----|
+| 尺寸 | `1080 × 1920`（竖版 9:16） |
+| 命名空间 | `xmlns="http://www.w3.org/2000/svg"` |
+| 背景 | 深色推荐：`#0d1117` / `#1c2432` |
+| 强调色 | `#58a6ff` |
+| 正文色 | `#e6edf3` |
+| 辅助色 | `#8b949e` |
+| 推荐字体 | `-apple-system,'PingFang SC','Noto Sans CJK SC',sans-serif` |
+| 推荐字号 | 标题 60–72px，副标题 32–36px，正文 40–48px |
+| 安全边距 | 左右各留 56px；文字结束 x < 1024，y < 1900 |
+
+### 防文字重叠规则（必须遵守）
+
+- 每行文字竖向间距 ≥ 字号 × 1.5
+- 单行文字宽度估算：CJK 字符 ≈ 字号 px，ASCII ≈ 字号 × 0.6 px
+- 不同文字元素之间 y 方向至少留 字号 × 0.5 px 空隙
+
+### 工作流
+
+```bash
+# 1. LLM 将 Markdown 内容创作为 SVG，写入文件
+#    SVG 根元素必须是: <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
+
+# 2. SVG → PNG（Chrome CDP 渲染）
+node scripts/screenshot.js --png /tmp/card_llm.svg /tmp/card_llm.png 3 1080 0
+
+# 3. 可选：校验布局（检查溢出和文字重叠）
+python scripts/validator.py /tmp/card_llm.svg --json
+# 如果 ok=false，根据错误信息修正 SVG 后重新执行步骤 2
+```
+
+> `screenshot.js --png <svg_file> <png_file> <dpr> <width> 0`
+> - dpr=3 对应 iPhone 高清屏，实际输出为 `3240 × 5760` px（3× 超采样）
+> - dpr=2 输出 `2160 × 3840` px
+
+---
+
+## 快速使用（程序化通道）
 
 ### 1) 自动选择通道（默认）
 
