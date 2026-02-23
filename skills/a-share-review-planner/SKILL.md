@@ -1,9 +1,7 @@
 ---
 name: a-share-review-planner
 description: >
-  A-share daily market review and next-day trading plan. Collects multi-source
-  data (news, sector flows, sentiment, trend scan), performs 4-stage structured
-  analysis, and outputs structured report files (including report.md).
+  A-share daily market review and next-day trading plan. 
   Use when: (1) user says "复盘"、"今日回顾"、"明日计划"、"选股"、"帮我看看大盘"、
   "今天行情"、"大盘分析"、"明天买什么"、"帮我分析行情", (2) user wants A-share market
   analysis or trading plan, (3) user says "板块"、"涨停"、"题材"、"选股".
@@ -11,6 +9,13 @@ description: >
 ---
 
 # A股复盘与交易计划
+
+## Prerequisite check (required)
+
+**STOP and resolve before proceeding:**
+
+1. **Python 3.10+**: `python3 --version`
+2. **Dependencies**: `python3 -c "import requests, bs4, yaml"` -> If missing, run `pip install -r requirements.txt`
 
 <HARD-GATE>
 NO ANALYSIS WITHOUT RUNNING collect_sentiment.py FIRST.

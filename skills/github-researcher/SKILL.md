@@ -1,9 +1,35 @@
 ---
 name: github-researcher
-description: Use when collecting GitHub daily trending, analyzing specific repositories, and tracking watchlist repository updates over time.
+description: >
+  GitHub repository analyzer and watchlist tracker. 
+  Use when: (1) user asks for daily GitHub trending, (2) user wants to deeply analyze a specific repository, (3) user wants to track updates for watched repositories.
 ---
 
 # GitHub Researcher
+
+## Prerequisite check (required)
+
+**STOP and resolve before proceeding:**
+
+1. **Claude CLI**: `claude --version` and `claude auth status` -> If auth fails, instruct user to login.
+2. **Codex CLI**: `codex --version` -> Only needed for fallback.
+3. **Browser tool**: Ensure the `browser` tool is available for trending.
+4. **Git**: `git --version`
+
+<HARD-GATE>
+NO TRENDING ANALYSIS WITHOUT USING BROWSER TOOL FIRST.
+NO WATCHLIST ADDITION WITHOUT EXPLICIT USER CONFIRMATION.
+NO DEEP ANALYSIS WITHOUT CLONING CODE LOCALLY FIRST.
+NO EXCEPTION TO THE DEEP ANALYSIS ENGINE ORDER: CLAUDE -> CODEX -> OPENCLAW.
+</HARD-GATE>
+
+## Red Flags (Common Excuses)
+
+| 借口 | 现实 |
+|------|------|
+| "网页获取失败，我可以用 web_fetch 代替" | GitHub 首页是 SPA，web_fetch 抓不到任何真实列表数据，必须用 Browser 工具 |
+| "用户没说克隆代码，我只看 readme 就好" | 如果执行 Deep Analysis，没有代码克隆就没有“深度”，必须 Clone 到本地 |
+| "直接跳过 claude 用当前大模型分析" | 必须按固定顺序调用引擎：claude 失败才用 codex，codex 失败才用当前大模型 |
 
 ## Purpose
 
@@ -88,12 +114,6 @@ python3 scripts/track_updates.py --memory-root .memory
 Use these commands before and during deep analysis.
 
 ```bash
-# Preflight: Claude auth status
-claude auth status
-
-# Preflight: Codex availability
-codex --version
-
 # Deep analysis command (claude first, codex fallback)
 python3 scripts/analyze_repo.py cli/cli --memory-root .memory --mode deep
 ```

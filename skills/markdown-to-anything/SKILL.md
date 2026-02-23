@@ -2,13 +2,21 @@
 name: markdown-to-anything
 description: >
   Use when converting Markdown into shareable images or documents.
-  (1) "转成图片"/"转成PDF"/"图片报告"/"导出PNG"/"导出文件" -> 程序化路径（MD -> HTML -> PNG/PDF）
-  (2) "高质量图片"/"卡片风格"/"海报"/"好看一点"/"设计感"/"自由风格" -> LLM SVG 路径（LLM 自由 SVG -> PNG）
+  (1) "转成图片"/"转成PDF"/"图片报告"/"导出PNG"/"导出文件" 
+  (2) "高质量图片"/"卡片风格"/"海报"/"好看一点"/"设计感"/"自由风格"
 ---
 
 # Markdown To Anything
 
 通用 Markdown 渲染与导出 Skill。输入 Markdown，输出 PNG / PDF / HTML（调试）。
+
+## Prerequisite check (required)
+
+**STOP and resolve before proceeding:**
+
+1. **Node.js**: `node -v`
+2. **Puppeteer dependencies**: Ensure chrome is installed for puppeteer.
+3. **Python 3.10+**: `python3 --version`
 
 ## 路径分发（Iron Law）
 

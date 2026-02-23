@@ -10,12 +10,23 @@ allowed-tools: Bash(python3 *), Bash(tmux ls *), Bash(tmux kill-session *)
 
 **适用场景**：需要引入外部 agent 参与时。如果只是 user + claude-code 讨论，直接对话即可；引入外部 agent 前，先通过对话梳理背景，再用 `--background-file` 注入，过滤噪音。
 
+## Prerequisite check (required)
+
+**STOP and resolve before proceeding:**
+
+1. **Tmux**: `tmux -V` -> `tmux` must be installed.
+2. **Python 3.10+**: `python3 --version`
+
+<HARD-GATE>
+NO INJECT_ROUND WITHOUT SPAWN_AGENT FIRST.
+NO SESSION CLOSURE WITHOUT WRITING DECISION FIRST.
+NO EXECUTION WITHOUT CLOSE_SESSION FINALLY.
+</HARD-GATE>
+
 ## Hard Rules
 
 - **禁止读 `scripts/*.py` 源码**。脚本用法见 `references/commands.md`，或运行 `python3 scripts/<name>.py --help`。
 - 每个 agent 只需 `spawn` 一次，但可多次 `inject`。
-- `spawn_agent` 必须先于 `inject_round` 运行。
-- 讨论结束必须写入 `--message-type decision` 作为收敛记录。
 - **`close_session` 是必须的收尾步骤**，跳过会导致 tmux session 永久驻留。
 
 ## 工作流
