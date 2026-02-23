@@ -7,18 +7,21 @@ It is designed to be stable for CJK text and emoji in PDF output.
 
 from __future__ import annotations
 
+import base64
 import html
-import platform
 import shutil
 import subprocess
 from pathlib import Path
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+FONTS_DIR = SCRIPT_DIR / ".." / "assets" / "fonts"
+
 _CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0;
     -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
-    font-family: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB',
+    font-family: 'Noto Sans SC Local', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB',
                  'Microsoft YaHei', sans-serif;
     font-size: 30px;
     line-height: 1.8;
@@ -69,42 +72,51 @@ hr { border: none; border-top: 1px solid #e8e8e8; margin: 18px 0; }
 """
 
 
+def _get_font_data_url(font_file: str) -> str:
+    """Read font file and return base64 data URL."""
+    font_path = FONTS_DIR / font_file
+    if font_path.exists():
+        data = font_path.read_bytes()
+        return f"data:font/truetype;base64,{base64.b64encode(data).decode()}"
+    return ""
+
+
 def _font_css() -> str:
-    """Font link snippet.
+    """Return inline @font-face CSS with base64-encoded local fonts."""
+    regular_url = _get_font_data_url("NotoSansSC-Regular.ttf")
+    medium_url = _get_font_data_url("NotoSansSC-Medium.ttf")
+    bold_url = _get_font_data_url("NotoSansSC-Bold.ttf")
 
-    - Linux: prefer local Noto CJK if installed, no CDN.
-    - Others: allow Google Fonts CDN for Noto Sans SC.
-    """
-    is_linux = platform.system() == "Linux"
+    css_parts = []
+    if regular_url:
+        css_parts.append(f"""
+@font-face {{
+  font-family: 'Noto Sans SC Local';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url({regular_url}) format('truetype');
+}}""")
+    if medium_url:
+        css_parts.append(f"""
+@font-face {{
+  font-family: 'Noto Sans SC Local';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url({medium_url}) format('truetype');
+}}""")
+    if bold_url:
+        css_parts.append(f"""
+@font-face {{
+  font-family: 'Noto Sans SC Local';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url({bold_url}) format('truetype');
+}}""")
 
-    has_local_noto = False
-    if is_linux:
-        try:
-            result = subprocess.run(
-                ["fc-list", ":lang=zh"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            has_local_noto = "Noto" in (result.stdout or "")
-        except Exception:
-            has_local_noto = False
-
-    if is_linux and has_local_noto:
-        return "<style>/* local Noto CJK */</style>"
-    return (
-        '<link rel="preconnect" href="https://fonts.googleapis.com">'
-        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-        '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">'
-    )
-
-
-def _font_family() -> str:
-    is_linux = platform.system() == "Linux"
-    emoji = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'"
-    if is_linux:
-        return f"'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Micro Hei', {emoji}, sans-serif"
-    return f"'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', {emoji}, sans-serif"
+    return "\n".join(css_parts)
 
 
 def _md_fallback(md_path: Path) -> str:
@@ -131,20 +143,15 @@ def markdown_to_html(md_path: Path) -> tuple[str, str]:
     else:
         body = _md_fallback(md_path)
 
-    css = _CSS.replace(
-        "'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB',\n                 'Microsoft YaHei', sans-serif",
-        _font_family(),
-    )
+    font_css = _font_css()
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-{_font_css()}
-<style>{css}</style>
+<style>{font_css}{_CSS}</style>
 </head>
 <body>{body}</body>
 </html>"""
     return html_doc, engine_used
-

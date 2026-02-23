@@ -219,15 +219,13 @@ async function printPdf(htmlFile, outputPdf, cssWidth = 750) {
   const ctx = await openPage(htmlFile, cssWidth);
   const { cdp, proc } = ctx;
   try {
-    await cdp.send('Runtime.evaluate', {
-      expression: 'window.__md_rendered ? Promise.resolve(true) : Promise.resolve(true)',
-      awaitPromise: true,
-    }).catch(() => {});
+    // Wait for base64 embedded fonts to load (local Noto Sans SC for CJK text)
     await cdp.send('Runtime.evaluate', {
       expression: 'document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve(true)',
       awaitPromise: true,
+      timeout: 5000,
     }).catch(() => {});
-    await sleep(400);
+    await sleep(300); // Brief wait for font rendering stabilization
     const result = await cdp.send('Page.printToPDF', {
       paperWidth: 8.27,
       paperHeight: 11.69,

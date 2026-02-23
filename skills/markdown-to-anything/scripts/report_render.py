@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import html
 import json
-import platform
 import shutil
 import subprocess
 import sys
@@ -21,9 +20,27 @@ VENDOR_MARKED = SCRIPT_DIR / "vendor" / "marked.min.js"
 SCREENSHOT_JS = SCRIPT_DIR / "screenshot.js"
 
 THEMES: dict[str, dict[str, str]] = {
-    "dark": {"bg": "#0d1117", "text": "#e6edf3", "muted": "#8b949e", "accent": "#58a6ff", "card": "#161b22"},
-    "blue": {"bg": "#f6fbff", "text": "#0f2740", "muted": "#4f6f8f", "accent": "#1976d2", "card": "#ffffff"},
-    "light": {"bg": "#f8fafd", "text": "#111827", "muted": "#6b7280", "accent": "#2563eb", "card": "#ffffff"},
+    "dark": {
+        "bg": "#0d1117",
+        "text": "#e6edf3",
+        "muted": "#8b949e",
+        "accent": "#58a6ff",
+        "card": "#161b22",
+    },
+    "blue": {
+        "bg": "#f6fbff",
+        "text": "#0f2740",
+        "muted": "#4f6f8f",
+        "accent": "#1976d2",
+        "card": "#ffffff",
+    },
+    "light": {
+        "bg": "#f8fafd",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "accent": "#2563eb",
+        "card": "#ffffff",
+    },
 }
 FONT_SIZE_PX = {"small": 24, "medium": 28, "large": 32}
 
@@ -39,23 +56,68 @@ class ReportRenderResult:
     warnings: list[str]
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+FONTS_DIR = SCRIPT_DIR / ".." / "assets" / "fonts"
+
+
 def _font_family() -> str:
-    is_linux = platform.system() == "Linux"
+    """Return font-family string with local fonts as primary."""
     emoji = "'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji'"
-    if is_linux:
-        return f"'Noto Sans CJK SC','Noto Sans SC','WenQuanYi Micro Hei',{emoji},sans-serif"
-    # macOS print-to-PDF is generally more stable with system CJK fonts first.
-    return f"'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC',{emoji},sans-serif"
+    return f"'Noto Sans SC Local','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',{emoji},sans-serif"
 
 
-def _font_link_html(enable_remote_fonts: bool = True) -> str:
-    if not enable_remote_fonts:
-        return ""
-    return (
-        "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">"
-        "<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>"
-        "<link href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap\" rel=\"stylesheet\">"
-    )
+def _get_font_data_url(font_file: str) -> str:
+    """Read font file and return base64 data URL."""
+    font_path = FONTS_DIR / font_file
+    if font_path.exists():
+        import base64
+
+        data = font_path.read_bytes()
+        return f"data:font/truetype;base64,{base64.b64encode(data).decode()}"
+    return ""
+
+
+def _font_css_inline() -> str:
+    """Return inline @font-face CSS with base64-encoded local fonts."""
+    regular_url = _get_font_data_url("NotoSansSC-Regular.ttf")
+    medium_url = _get_font_data_url("NotoSansSC-Medium.ttf")
+    bold_url = _get_font_data_url("NotoSansSC-Bold.ttf")
+
+    css_parts = []
+    if regular_url:
+        css_parts.append(f"""
+@font-face {{
+  font-family: 'Noto Sans SC Local';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url({regular_url}) format('truetype');
+}}""")
+    if medium_url:
+        css_parts.append(f"""
+@font-face {{
+  font-family: 'Noto Sans SC Local';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url({medium_url}) format('truetype');
+}}""")
+    if bold_url:
+        css_parts.append(f"""
+@font-face {{
+  font-family: 'Noto Sans SC Local';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url({bold_url}) format('truetype');
+}}""")
+
+    return "\n".join(css_parts)
+
+
+def _font_link_html(enable_remote_fonts: bool = False) -> str:
+    """Return font CSS - now using inline local fonts only, no CDN."""
+    return f"<style>{_font_css_inline()}</style>"
 
 
 def _build_css(theme: str, font_size: str) -> str:
@@ -72,23 +134,23 @@ body {{
   max-width: 750px;
   margin: 0 auto;
   padding: 24px 20px 40px;
-  background: {tokens['bg']};
-  color: {tokens['text']};
+  background: {tokens["bg"]};
+  color: {tokens["text"]};
   font-family: {_font_family()};
   font-size: {body}px;
   line-height: {line_height};
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }}
-article {{ background: {tokens['card']}; border-radius: 20px; padding: 28px 24px 36px; box-shadow: 0 8px 32px rgba(0,0,0,.08); }}
+article {{ background: {tokens["card"]}; border-radius: 20px; padding: 28px 24px 36px; box-shadow: 0 8px 32px rgba(0,0,0,.08); }}
 h1,h2,h3 {{ line-height: 1.25; margin: 1.1em 0 .45em; }}
-h1 {{ font-size: calc({body}px * 1.75); color: {tokens['accent']}; border-bottom: 2px solid rgba(25,118,210,.25); padding-bottom: .28em; }}
-h2 {{ font-size: calc({body}px * 1.42); color: {tokens['accent']}; border-left: 4px solid {tokens['accent']}; padding-left: .45em; }}
-h3 {{ font-size: calc({body}px * 1.21); color: {tokens['text']}; }}
+h1 {{ font-size: calc({body}px * 1.75); color: {tokens["accent"]}; border-bottom: 2px solid rgba(25,118,210,.25); padding-bottom: .28em; }}
+h2 {{ font-size: calc({body}px * 1.42); color: {tokens["accent"]}; border-left: 4px solid {tokens["accent"]}; padding-left: .45em; }}
+h3 {{ font-size: calc({body}px * 1.21); color: {tokens["text"]}; }}
 p, ul, ol, pre, table, blockquote {{ margin: .5em 0; }}
 ul, ol {{ padding-left: 1.2em; }}
 li {{ margin: .25em 0; }}
-a {{ color: {tokens['accent']}; }}
+a {{ color: {tokens["accent"]}; }}
 strong {{ font-weight: 700; }}
 code {{ background: rgba(127,127,127,.14); border-radius: 6px; padding: .08em .28em; font-size: {table}px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
 pre {{ background: rgba(127,127,127,.14); padding: .7em .8em; border-radius: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }}
@@ -96,9 +158,9 @@ pre code {{ background: transparent; padding: 0; font-size: {table}px; }}
 table {{ border-collapse: collapse; width: 100%; font-size: {table}px; }}
 th, td {{ border: 1px solid rgba(127,127,127,.25); padding: .35em .45em; text-align: left; vertical-align: top; }}
 th {{ background: rgba(25,118,210,.10); }}
-blockquote {{ border-left: 4px solid {tokens['accent']}; padding-left: .7em; color: {tokens['muted']}; }}
+blockquote {{ border-left: 4px solid {tokens["accent"]}; padding-left: .7em; color: {tokens["muted"]}; }}
 hr {{ border: none; border-top: 1px solid rgba(127,127,127,.25); margin: 1em 0; }}
-.meta {{ color: {tokens['muted']}; font-size: {meta}px; }}
+.meta {{ color: {tokens["muted"]}; font-size: {meta}px; }}
 /* Browser PDF exports may omit page backgrounds; force readable print contrast. */
 @media print {{
   html, body {{
@@ -178,7 +240,9 @@ def _simple_markdown_to_html(md_text: str) -> str:
 
     def flush_code() -> None:
         nonlocal code_lines
-        out.append("<pre><code>" + _escape_html("\n".join(code_lines)) + "</code></pre>")
+        out.append(
+            "<pre><code>" + _escape_html("\n".join(code_lines)) + "</code></pre>"
+        )
         code_lines = []
 
     for raw in lines:
@@ -223,7 +287,9 @@ def _simple_markdown_to_html(md_text: str) -> str:
         if stripped.startswith("> "):
             flush_paragraph()
             close_lists()
-            out.append(f"<blockquote>{_inline_text_markup(stripped[2:].strip())}</blockquote>")
+            out.append(
+                f"<blockquote>{_inline_text_markup(stripped[2:].strip())}</blockquote>"
+            )
             continue
         if stripped in {"---", "***"}:
             flush_paragraph()
@@ -245,7 +311,12 @@ def _simple_markdown_to_html(md_text: str) -> str:
         numbered = False
         for idx, ch in enumerate(stripped):
             if ch == ".":
-                numbered = idx > 0 and stripped[:idx].isdigit() and len(stripped) > idx + 1 and stripped[idx + 1] == " "
+                numbered = (
+                    idx > 0
+                    and stripped[:idx].isdigit()
+                    and len(stripped) > idx + 1
+                    and stripped[idx + 1] == " "
+                )
                 break
             if not ch.isdigit():
                 break
@@ -264,7 +335,7 @@ def _simple_markdown_to_html(md_text: str) -> str:
         if stripped.startswith("|") and stripped.endswith("|"):
             flush_paragraph()
             close_lists()
-            out.append(f"<p class=\"meta\">{_inline_text_markup(stripped)}</p>")
+            out.append(f'<p class="meta">{_inline_text_markup(stripped)}</p>')
             continue
 
         paragraph.append(stripped)
@@ -276,9 +347,15 @@ def _simple_markdown_to_html(md_text: str) -> str:
     return "\n".join(out)
 
 
-def _build_marked_shell(md_text: str, theme: str, font_size: str, include_remote_fonts: bool = True) -> str:
+def _build_marked_shell(
+    md_text: str, theme: str, font_size: str, include_remote_fonts: bool = True
+) -> str:
     md_source = _escape_html(md_text)
-    js_source = VENDOR_MARKED.read_text(encoding="utf-8") if VENDOR_MARKED.exists() else "window.marked={parse:(s)=>'<pre>'+s+'</pre>'};"
+    js_source = (
+        VENDOR_MARKED.read_text(encoding="utf-8")
+        if VENDOR_MARKED.exists()
+        else "window.marked={parse:(s)=>'<pre>'+s+'</pre>'};"
+    )
     css = _build_css(theme, font_size)
     return f"""<!DOCTYPE html>
 <html lang=\"zh-CN\">
@@ -305,7 +382,9 @@ def _build_marked_shell(md_text: str, theme: str, font_size: str, include_remote
 </html>"""
 
 
-def _build_static_html(body_html: str, theme: str, font_size: str, include_remote_fonts: bool = True) -> str:
+def _build_static_html(
+    body_html: str, theme: str, font_size: str, include_remote_fonts: bool = True
+) -> str:
     css = _build_css(theme, font_size)
     return f"""<!DOCTYPE html>
 <html lang=\"zh-CN\">
@@ -354,7 +433,9 @@ def render_markdown_to_html(
                 timeout=30,
                 check=True,
             )
-            html_doc = _build_static_html(proc.stdout, theme, font_size, include_remote_fonts=include_remote_fonts)
+            html_doc = _build_static_html(
+                proc.stdout, theme, font_size, include_remote_fonts=include_remote_fonts
+            )
             engine_used = "pandoc"
         except Exception as exc:
             warnings.append(f"pandoc failed, fallback used: {exc}")
@@ -393,7 +474,9 @@ def render_markdown_to_html(
     return engine_used, warnings
 
 
-def render_html_to_pdf(html_path: Path, output_pdf: Path, width: int = 750) -> list[str]:
+def render_html_to_pdf(
+    html_path: Path, output_pdf: Path, width: int = 750
+) -> list[str]:
     """Render HTML to PDF using `screenshot.js` backend."""
     warnings: list[str] = []
     node = shutil.which("node")
@@ -402,7 +485,14 @@ def render_html_to_pdf(html_path: Path, output_pdf: Path, width: int = 750) -> l
     if not SCREENSHOT_JS.exists():
         raise RuntimeError(f"screenshot.js not found: {SCREENSHOT_JS}")
     proc = subprocess.run(
-        [node, str(SCREENSHOT_JS), "--pdf", str(html_path.resolve()), str(output_pdf.resolve()), str(width)],
+        [
+            node,
+            str(SCREENSHOT_JS),
+            "--pdf",
+            str(html_path.resolve()),
+            str(output_pdf.resolve()),
+            str(width),
+        ],
         capture_output=True,
         text=True,
         timeout=180,
@@ -459,7 +549,9 @@ def render_markdown_to_pdf(
 ) -> ReportRenderResult:
     """Render Markdown to PDF (with intermediate HTML temp file)."""
     warnings: list[str] = []
-    with tempfile.NamedTemporaryFile(prefix="mta_report_", suffix=".html", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        prefix="mta_report_", suffix=".html", delete=False
+    ) as tmp:
         tmp_html = Path(tmp.name)
     try:
         html_doc, engine = report_markdown_to_html(markdown_path)
@@ -487,13 +579,19 @@ def render_markdown_to_png(
 ) -> ReportRenderResult:
     """Render Markdown to PNG (with intermediate HTML temp file)."""
     warnings: list[str] = []
-    with tempfile.NamedTemporaryFile(prefix="mta_report_", suffix=".html", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        prefix="mta_report_", suffix=".html", delete=False
+    ) as tmp:
         tmp_html = Path(tmp.name)
     try:
         html_doc, engine = report_markdown_to_html(markdown_path)
         tmp_html.write_text(html_doc, encoding="utf-8")
         warnings.append("png render uses report html renderer for stability")
-        warnings.extend(render_html_to_png(tmp_html, output_png, dpr=3, width=750, max_page_height=0))
+        warnings.extend(
+            render_html_to_png(
+                tmp_html, output_png, dpr=3, width=750, max_page_height=0
+            )
+        )
         return ReportRenderResult(
             html_path=str(tmp_html),
             pdf_path=None,
@@ -508,14 +606,22 @@ def render_markdown_to_png(
 
 def main() -> None:
     """CLI entrypoint."""
-    parser = argparse.ArgumentParser(description="Render Markdown to HTML/PDF for markdown-to-anything")
+    parser = argparse.ArgumentParser(
+        description="Render Markdown to HTML/PDF for markdown-to-anything"
+    )
     parser.add_argument("input", help="Input Markdown file")
     parser.add_argument("--output", required=True, help="Output path (.html or .pdf)")
     parser.add_argument("--format", choices=["html", "pdf", "png"], default="html")
     parser.add_argument("--theme", choices=["dark", "blue", "light"], default="dark")
-    parser.add_argument("--font-size", choices=["small", "medium", "large"], default="medium")
-    parser.add_argument("--engine", choices=["auto", "pandoc", "marked", "fallback"], default="auto")
-    parser.add_argument("--stdout-result", action="store_true", help="Print JSON result")
+    parser.add_argument(
+        "--font-size", choices=["small", "medium", "large"], default="medium"
+    )
+    parser.add_argument(
+        "--engine", choices=["auto", "pandoc", "marked", "fallback"], default="auto"
+    )
+    parser.add_argument(
+        "--stdout-result", action="store_true", help="Print JSON result"
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input).expanduser()
