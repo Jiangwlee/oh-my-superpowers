@@ -15,6 +15,11 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = SCRIPT_DIR.parent / "templates"
 
+# Register SVG as the default namespace so ElementTree writes clean <element> tags
+# and so ET.SubElement tspan tags are correctly namespaced.
+_SVG_NS = "http://www.w3.org/2000/svg"
+ET.register_namespace("", _SVG_NS)
+
 
 THEMES: dict[str, dict[str, str]] = {
     "dark": {
@@ -152,7 +157,7 @@ def _set_text_lines(element: ET.Element, text: str, max_units: float, max_lines:
         element.text = lines[0]
         return
     for i, line in enumerate(lines):
-        tspan = ET.SubElement(element, "tspan")
+        tspan = ET.SubElement(element, f"{{{_SVG_NS}}}tspan")
         tspan.set("x", x_attr)
         tspan.set("y", str(base_y + i * (font_size * 1.35)))
         tspan.text = line
@@ -289,13 +294,29 @@ def render_card_svg(spec: CardSpec, output_path: Path) -> CardRenderResult:
     svg_text = _load_template_text(spec.template, spec.theme, spec.font_size)
     root = ET.fromstring(svg_text)
 
+    # Compute max character-units per line based on actual available pixel width.
+    # The validator uses width = max_units * font_size, so to stay within bounds:
+    #   max_units <= (right_edge - x_start - pad) / font_size_px
+    fs = FONT_SIZES[spec.font_size]
+
+    def _mu(right_px: int, x_px: int, font_key: str, pad: int = 12) -> int:
+        """Max character-units for a text element at x_px within right_px."""
+        avail = right_px - x_px - pad
+        return max(6, int(avail / fs[font_key]))
+
+    # Canvas = 1080. Safe right boundary (56px right pad) = 1024.
+    R = 1024
+
     title_el = _find_by_id(root, "title")
     if title_el is None:
         raise ValueError(f"Template missing required element id=title: {spec.template}")
-    _set_text_lines(title_el, spec.title, 22, 2)
+    title_x = int(float(title_el.attrib.get("x", "96")))
+    _set_text_lines(title_el, spec.title, _mu(R, title_x, "H1"), 2)
+
     subtitle_el = _find_by_id(root, "subtitle")
     if subtitle_el is not None:
-        _set_text_lines(subtitle_el, spec.subtitle, 30, 2)
+        sub_x = int(float(subtitle_el.attrib.get("x", "96")))
+        _set_text_lines(subtitle_el, spec.subtitle, _mu(R, sub_x, "META"), 2)
 
     template = spec.template
     if template == "hero-summary":
@@ -304,13 +325,16 @@ def render_card_svg(spec: CardSpec, output_path: Path) -> CardRenderResult:
             if bullet_el is None:
                 continue
             if idx < len(spec.bullets):
-                _set_text_lines(bullet_el, spec.bullets[idx], 32, 1)
+                bx = int(float(bullet_el.attrib.get("x", "148")))
+                _set_text_lines(bullet_el, spec.bullets[idx], _mu(R, bx, "BODY"), 2)
             else:
                 _hide_element(root, f"bullet_{idx + 1}")
                 _hide_element(root, f"bullet_dot_{idx + 1}")
         highlight_el = _find_by_id(root, "highlight")
         if highlight_el is not None:
-            _set_text_lines(highlight_el, spec.highlight, 28, 2)
+            # highlight box: x=96, width=888 → right=984
+            hx = int(float(highlight_el.attrib.get("x", "136")))
+            _set_text_lines(highlight_el, spec.highlight, _mu(984, hx, "H3"), 3)
     elif template == "headline-list":
         sections = spec.sections or []
         for idx in range(3):
@@ -318,36 +342,50 @@ def render_card_svg(spec: CardSpec, output_path: Path) -> CardRenderResult:
             section_el = _find_by_id(root, f"section_{idx + 1}")
             items_el = _find_by_id(root, f"items_{idx + 1}")
             if section_el is not None:
-                _set_text_lines(section_el, str(sec.get("title", "")), 22, 1)
+                sx = int(float(section_el.attrib.get("x", "88")))
+                _set_text_lines(section_el, str(sec.get("title", "")), _mu(R, sx, "H3"), 1)
             if items_el is not None:
+                ix = int(float(items_el.attrib.get("x", "88")))
                 items = sec.get("items", [])
                 joined = "\n".join(f"• {str(item)}" for item in items[:5])
-                _set_text_lines(items_el, joined, 34, 6)
+                _set_text_lines(items_el, joined, _mu(R, ix, "BODY"), 6)
     elif template == "metrics-grid":
         metrics = spec.metrics or []
+        # Left column cards: x=72 w=450 → right=522; text starts at x=108
+        # Right column cards: x=558 w=450 → right=1008; text starts at x=594
+        card_rights = [522, 1008, 522, 1008]
+        card_text_xs = [108, 594, 108, 594]
         for idx in range(4):
             data = metrics[idx] if idx < len(metrics) else {"label": f"Metric {idx+1}", "value": "--"}
             label_el = _find_by_id(root, f"metric_label_{idx + 1}")
             value_el = _find_by_id(root, f"metric_value_{idx + 1}")
+            cr = card_rights[idx]
+            cx = card_text_xs[idx]
             if label_el is not None:
-                _set_text_lines(label_el, str(data.get("label", "")), 16, 2)
+                _set_text_lines(label_el, str(data.get("label", "")), _mu(cr, cx, "META"), 2)
             if value_el is not None:
-                _set_text_lines(value_el, str(data.get("value", "")), 11, 2)
+                _set_text_lines(value_el, str(data.get("value", "")), _mu(cr, cx, "H2"), 2)
+        # Big lower box: x=72 w=936 → right=1008; text at x=108
         bullets_el = _find_by_id(root, "bullets")
         if bullets_el is not None:
+            bx = int(float(bullets_el.attrib.get("x", "108")))
             joined = "\n".join(f"• {line}" for line in spec.bullets[:6])
-            _set_text_lines(bullets_el, joined, 34, 10)
+            _set_text_lines(bullets_el, joined, _mu(1008, bx, "BODY"), 10)
         highlight_el = _find_by_id(root, "highlight")
         if highlight_el is not None:
-            _set_text_lines(highlight_el, spec.highlight, 26, 2)
+            hx = int(float(highlight_el.attrib.get("x", "108")))
+            _set_text_lines(highlight_el, spec.highlight, _mu(1008, hx, "H3"), 2)
     elif template == "quote-and-bullets":
+        # Quote box: x=64 w=952 → right=1016; text at x=136
         highlight_el = _find_by_id(root, "highlight")
         if highlight_el is not None:
-            _set_text_lines(highlight_el, spec.highlight, 24, 5)
+            hx = int(float(highlight_el.attrib.get("x", "136")))
+            _set_text_lines(highlight_el, spec.highlight, _mu(1016, hx, "H2"), 5)
         bullets_el = _find_by_id(root, "bullets")
         if bullets_el is not None:
+            bx = int(float(bullets_el.attrib.get("x", "72")))
             joined = "\n".join(f"• {line}" for line in spec.bullets[:8])
-            _set_text_lines(bullets_el, joined, 34, 14)
+            _set_text_lines(bullets_el, joined, _mu(R, bx, "BODY"), 14)
     else:
         warnings.append(f"Unknown template-specific layout handler: {template}")
 

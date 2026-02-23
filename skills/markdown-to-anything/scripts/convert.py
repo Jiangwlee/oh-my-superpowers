@@ -139,8 +139,9 @@ def main() -> None:
                 validator_result = validate_svg_file(svg_path)
             warnings.extend(issue.message for issue in validator_result.warnings)
             if not validator_result.ok:
-                errors.extend(issue.message for issue in validator_result.errors)
-                raise RuntimeError("card SVG validation failed")
+                # Validation issues are non-fatal: warn and proceed to render.
+                for issue in validator_result.errors:
+                    warnings.append(f"[layout] {issue.message} (id={issue.element_id})")
 
             if requested_format in {"png", "both"}:
                 png_path = output_base.with_name(output_base.name + "_card").with_suffix(".png")

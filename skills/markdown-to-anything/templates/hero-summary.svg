@@ -9,27 +9,31 @@
   <rect x="56" y="56" width="968" height="1808" rx="36" fill="{{CARD_BG}}" opacity="0.82"/>
   <rect x="56" y="56" width="10" height="1808" rx="5" fill="{{ACCENT}}"/>
 
-  <text id="title" x="96" y="180" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{H1}}" font-weight="700"></text>
-  <text id="subtitle" x="96" y="266" fill="{{MUTED}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{META}}" font-weight="500"></text>
+  <!-- Header -->
+  <text id="title" x="96" y="195" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{H1}}" font-weight="700"></text>
+  <text id="subtitle" x="96" y="285" fill="{{MUTED}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{META}}" font-weight="500"></text>
+  <line x1="96" y1="322" x2="984" y2="322" stroke="{{ACCENT}}" stroke-width="2" opacity="0.35"/>
 
+  <!-- Bullets: 180px pitch; dots at cy=420,600,780,960,1140,1320 -->
   <g id="bullets">
-    <circle id="bullet_dot_1" cx="112" cy="390" r="8" fill="{{ACCENT}}"/>
-    <text id="bullet_1" x="142" y="404" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
-    <circle id="bullet_dot_2" cx="112" cy="490" r="8" fill="{{ACCENT}}"/>
-    <text id="bullet_2" x="142" y="504" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
-    <circle id="bullet_dot_3" cx="112" cy="590" r="8" fill="{{ACCENT}}"/>
-    <text id="bullet_3" x="142" y="604" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
-    <circle id="bullet_dot_4" cx="112" cy="690" r="8" fill="{{ACCENT}}"/>
-    <text id="bullet_4" x="142" y="704" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
-    <circle id="bullet_dot_5" cx="112" cy="790" r="8" fill="{{ACCENT}}"/>
-    <text id="bullet_5" x="142" y="804" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
-    <circle id="bullet_dot_6" cx="112" cy="890" r="8" fill="{{ACCENT}}"/>
-    <text id="bullet_6" x="142" y="904" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
+    <circle id="bullet_dot_1" cx="114" cy="420" r="9" fill="{{ACCENT}}"/>
+    <text id="bullet_1" x="148" y="436" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
+    <circle id="bullet_dot_2" cx="114" cy="600" r="9" fill="{{ACCENT}}"/>
+    <text id="bullet_2" x="148" y="616" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
+    <circle id="bullet_dot_3" cx="114" cy="780" r="9" fill="{{ACCENT}}"/>
+    <text id="bullet_3" x="148" y="796" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
+    <circle id="bullet_dot_4" cx="114" cy="960" r="9" fill="{{ACCENT}}"/>
+    <text id="bullet_4" x="148" y="976" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
+    <circle id="bullet_dot_5" cx="114" cy="1140" r="9" fill="{{ACCENT}}"/>
+    <text id="bullet_5" x="148" y="1156" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
+    <circle id="bullet_dot_6" cx="114" cy="1320" r="9" fill="{{ACCENT}}"/>
+    <text id="bullet_6" x="148" y="1336" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{BODY}}"></text>
   </g>
 
-  <rect id="highlight_box" x="96" y="1510" width="888" height="246" rx="24" fill="{{ACCENT_SOFT}}" stroke="{{ACCENT}}" stroke-opacity="0.25"/>
-  <text x="132" y="1584" fill="{{ACCENT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{META}}" font-weight="600">Highlight</text>
-  <text id="highlight" x="132" y="1656" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{H3}}" font-weight="600"></text>
+  <!-- Highlight block (left accent bar + text) -->
+  <rect id="highlight_box" x="96" y="1466" width="888" height="300" rx="24" fill="{{ACCENT_SOFT}}" stroke="{{ACCENT}}" stroke-opacity="0.22"/>
+  <rect x="96" y="1466" width="8" height="300" rx="4" fill="{{ACCENT}}" opacity="0.75"/>
+  <text id="highlight" x="136" y="1546" fill="{{TEXT}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{H3}}" font-weight="600"></text>
 
-  <text id="footer" x="96" y="1820" fill="{{MUTED}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{META}}">markdown-to-anything</text>
+  <text id="footer" x="96" y="1856" fill="{{MUTED}}" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans CJK SC',sans-serif" font-size="{{META}}">markdown-to-anything</text>
 </svg>
