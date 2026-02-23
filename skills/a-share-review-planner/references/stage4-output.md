@@ -82,9 +82,9 @@ __REPORT__
 若阶段3结构校验通过（`validate_output.py` 返回 `ok=true`），执行：
 
 ```bash
-python3 {SKILL_DIR}/scripts/decision_logger.py \
+python3 scripts/decision_logger.py \
   --input /tmp/a-share-review/{DATE}/candidates.json \
-  --log-file {SKILL_DIR}/.memory/decision_log.jsonl
+  --log-file .memory/decision_log.jsonl
 ```
 
 ## ⚠️ 输出自检清单（发送报告前逐条核对）

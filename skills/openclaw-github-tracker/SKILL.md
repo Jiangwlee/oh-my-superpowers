@@ -15,8 +15,8 @@ version: "2.0.0"
 **NO DEEP ANALYSIS WITHOUT --deep FLAG.**
 Default analysis uses API only (~2s per repo). Git clone only when user explicitly requests deep analysis.
 
-**NO PDF REPORT WITHOUT `openclaw browser pdf`.**
-Daily briefs MUST use `openclaw browser pdf` for delivery. Text-only output is emergency fallback only.
+**NO DAILY BRIEF COMPLETION WITHOUT WRITING MARKDOWN FILE FIRST.**
+Scene 1 completes only after `.memory/github-tracker/briefs/daily/YYYY-MM-DD.md` is written.
 
 **NO TRENDING DATA WITHOUT BROWSER VERIFICATION.**
 Must verify URL is github.com/trending (not weekly/monthly) before extraction.
@@ -29,7 +29,7 @@ GitHub is a SPA — web_fetch only returns shell HTML with no content. Browser t
 
 | 借口 | 现实 |
 |------|------|
-| "用户没明确要 PDF" | 场景1 默认输出就是 PDF，无需额外确认 |
+| "用户没明确要保存文件" | 场景1 默认要落盘 Markdown 日报，不是只在对话里口头总结 |
 | "只抓到 8 个项目，先生成报告" | < 10 个视为提取失败，必须重新滚动页面提取 |
 | "weekly 数据也是 trending" | 必须是 daily，URL 不对则重新导航 |
 | "用户没说 deep，但我想分析深一点" | 无 --deep 则只用 API，不 clone |
@@ -56,7 +56,7 @@ GitHub is a SPA — web_fetch only returns shell HTML with no content. Browser t
 ### 场景1：每日简报（默认）
 **触发词**："看看今天GitHub热门"、"今日GitHub趋势"、"生成GitHub日报"、"github trending"
 
-**输出**：PDF 格式日报，包含：
+**输出**：Markdown 日报（`.md`），包含：
 - 当日 Trending 完整列表（10-15个项目）
 - 每个项目的功能描述、技术栈、增长数据
 - 关注列表(Watchlist)项目的一日更新汇总
@@ -89,7 +89,7 @@ python3 scripts/analyze_project.py owner/repo --deep
 
 ---
 
-## 场景1：生成每日简报（PDF报告）
+## 场景1：生成每日简报（Markdown 报告）
 
 ### Step 1: 获取 Trending 数据
 
@@ -144,30 +144,6 @@ python3 scripts/generate_daily_report.py \
 - 🔥 热门项目详解（功能、技术栈、Star 增长、热度分析）
 - 📌 关注列表更新（Stars/Forks/Release 变更）
 - 💡 今日洞察（趋势总结、建议关注）
-
-### Step 5: 转换为 PDF
-
-```bash
-# 生成 HTML
-python3 scripts/report_to_html.py \
-  .memory/github-tracker/briefs/daily/$(date +%Y-%m-%d).md \
-  --title "GitHub Trending 日报"
-
-# 使用 Browser 工具打开 HTML 并导出 PDF
-openclaw browser open file:///path/to/report.html
-openclaw browser wait --load networkidle
-openclaw browser pdf                          # 直接导出当前页为 PDF
-
-# 导出完成后关闭 tab
-openclaw browser tabs
-openclaw browser tab close <targetId>
-```
-
-**PDF 交付**: 通过手机友好的格式展示，包含：
-- 顶部统计卡片
-- 项目卡片式布局（带Star增长标签）
-- 关注列表更新区域
-- 底部生成时间戳
 
 ---
 
@@ -230,7 +206,7 @@ python3 scripts/track_updates.py \
 ### 场景识别约束
 | 用户输入 | 识别的场景 | 必须执行的操作 |
 |---------|-----------|--------------|
-| "今天GitHub热门" | 场景1: 每日简报 | 生成PDF报告 |
+| "今天GitHub热门" | 场景1: 每日简报 | 生成并落盘 Markdown 日报 |
 | "深度分析X项目" | 场景2: 深度分析 | 加 --deep 参数 |
 | "关注列表更新" | 场景3: Watchlist | 批量检查更新 |
 
@@ -240,7 +216,7 @@ python3 scripts/track_updates.py \
 - **缓存机制**: 24小时内重复分析同一仓库使用缓存
 
 ### 输出约束
-- **PDF优先**: 日报必须用 `openclaw browser pdf` 生成，仅当工具失败时才文本输出
+- **落盘优先**: 日报必须先写入 `.memory/github-tracker/briefs/daily/YYYY-MM-DD.md`
 - **完整性**: Trending必须包含所有项目（≥10个）
 - **功能性**: 每个项目必须有"what_it_does"描述
 
@@ -251,7 +227,6 @@ python3 scripts/track_updates.py \
 | 错误场景 | 原因 | 解决 |
 |---------|------|------|
 | 分析太慢 | 误用了深度模式 | 检查是否有 --deep 参数 |
-| PDF生成失败 | browser 未启动 | `openclaw browser start` 后重试 |
 | 项目数量不足 | 浏览器提取不完整 | 重新滚动页面提取 |
 | Weekly数据 | URL错误 | 确保是 github.com/trending |
 | Trending 抓取内容为空 | 误用了 web_fetch | 改用 Browser 工具 |
@@ -273,14 +248,14 @@ export GITHUB_TRACKER_HTTPS_PROXY="http://127.0.0.1:10801"
 ## Pre-Execution Checklist
 
 - [ ] 识别正确的使用场景（1/2/3）
-- [ ] 场景1: 确认使用 `openclaw browser pdf` 生成PDF
+- [ ] 场景1: 日报 `.md` 已落盘到 `.memory/github-tracker/briefs/daily/`
 - [ ] 场景1: 验证 github.com/trending URL正确（非 weekly/monthly）
 - [ ] 场景1: 确保所有项目包含功能描述（≥10个）
-- [ ] 场景1: Browser tab 用后已关闭（trending tab + HTML tab）
+- [ ] 场景1: Browser tab 用后已关闭（trending tab）
 - [ ] 场景2: 确认是否需要 --deep
 - [ ] 场景3: 确认 watchlist.json 存在
 
 **Terminal state**：
-- 场景1：PDF 已交付给用户，两个 Browser tab 均已关闭
+- 场景1：Markdown 日报已写入 `.memory/github-tracker/briefs/daily/`，trending tab 已关闭
 - 场景2：Profile 文件已写入 `.memory/github-tracker/projects/`
 - 场景3：所有 watchlist 项目变更摘要已输出

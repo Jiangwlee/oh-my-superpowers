@@ -18,7 +18,7 @@
 | 10 | `/tmp/a-share-review/{DATE}/trend_report.md` | 趋势股报告（人类可读） |
 | 10.5 | `/tmp/a-share-review/{DATE}/us_market.json` | 美股行情（若文件不存在或 `market_status == "unavailable"` 则跳过，不影响分析流程） |
 | 11 | `/tmp/a-share-review/{DATE}/broker_account.json` | 账户资金+持仓（如存在） |
-| 12 | `{SKILL_DIR}/strategy/active.yaml` | 当前生效策略（含 `account_mode` 定义） |
-| 13 | `{SKILL_DIR}/evolution/feedback.md` | 诊断反馈（有内容则读） |
-| 14 | `{SKILL_DIR}/evolution/selection_rules.md` | 选股规则修正（有内容则读） |
-| 15 | `{SKILL_DIR}/evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |
+| 12 | `strategy/active.yaml` | 当前生效策略（含 `account_mode` 定义） |
+| 13 | `evolution/feedback.md` | 诊断反馈（有内容则读） |
+| 14 | `evolution/selection_rules.md` | 选股规则修正（有内容则读） |
+| 15 | `evolution/known_pitfalls.md` | 已知交易陷阱（有内容则读） |

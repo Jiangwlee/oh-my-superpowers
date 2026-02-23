@@ -1,6 +1,6 @@
 # Commands Reference
 
-所有路径使用 `{SKILL_DIR}` 表示 skill 根目录（运行时替换为实际路径）。
+脚本调用默认以 skill 根目录作为执行目录，直接使用相对路径。
 `--memory-root .memory` 是统一默认值，所有脚本共用。
 
 ---
@@ -10,7 +10,7 @@
 创建新会话，返回 `session_id`。
 
 ```bash
-python3 {SKILL_DIR}/scripts/init_session.py \
+python3 scripts/init_session.py \
   --memory-root .memory \
   --topic "讨论支付网关重构方案" \
   --participants user,codex,claude-code,opencode \
@@ -30,7 +30,7 @@ python3 {SKILL_DIR}/scripts/init_session.py \
 向 session 追加一条发言。
 
 ```bash
-python3 {SKILL_DIR}/scripts/append_message.py \
+python3 scripts/append_message.py \
   --memory-root .memory \
   --session-id <session-id> \
   --speaker codex \
@@ -54,13 +54,13 @@ python3 {SKILL_DIR}/scripts/append_message.py \
 
 ```bash
 # 从指定 index 读取
-python3 {SKILL_DIR}/scripts/read_updates.py \
+python3 scripts/read_updates.py \
   --memory-root .memory \
   --session-id <session-id> \
   --since-index 18
 
 # 从游标读取并持久化新游标（推荐）
-python3 {SKILL_DIR}/scripts/read_updates.py \
+python3 scripts/read_updates.py \
   --memory-root .memory \
   --session-id <session-id> \
   --consumer codex \
@@ -76,7 +76,7 @@ python3 {SKILL_DIR}/scripts/read_updates.py \
 在 tmux 中启动外部 agent，注入初始参与提示。每个 agent 只需调用一次。
 
 ```bash
-python3 {SKILL_DIR}/scripts/spawn_agent.py \
+python3 scripts/spawn_agent.py \
   --memory-root .memory \
   --session-id <session-id> \
   --agent codex \
@@ -100,7 +100,7 @@ python3 {SKILL_DIR}/scripts/spawn_agent.py \
 向已 spawn 的 agent 注入本轮讨论提示，并等待其 append 回复。
 
 ```bash
-python3 {SKILL_DIR}/scripts/inject_round.py \
+python3 scripts/inject_round.py \
   --memory-root .memory \
   --session-id <session-id> \
   --agent codex \
@@ -123,7 +123,7 @@ python3 {SKILL_DIR}/scripts/inject_round.py \
 一键完成：创建 session → spawn agents → 多轮 inject → 收敛检测。
 
 ```bash
-python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
+python3 scripts/orchestrate_discussion.py \
   --memory-root .memory \
   --topic "讨论话题" \
   --agents "codex:codex,opencode:opencode" \
@@ -135,7 +135,7 @@ python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
 恢复已有 session（不重新 spawn）：
 
 ```bash
-python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
+python3 scripts/orchestrate_discussion.py \
   --memory-root .memory \
   --session-id <session-id> \
   --skip-spawn
@@ -153,7 +153,7 @@ python3 {SKILL_DIR}/scripts/orchestrate_discussion.py \
 关闭讨论会话，写入 `session_close` 事件并 kill 所有关联的 tmux session。幂等：重复执行不报错。
 
 ```bash
-python3 {SKILL_DIR}/scripts/close_session.py \
+python3 scripts/close_session.py \
   --memory-root .memory \
   --session-id <session-id>
 ```
@@ -173,21 +173,21 @@ python3 {SKILL_DIR}/scripts/close_session.py \
 
 ```bash
 # 预览（不实际执行）
-python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+python3 scripts/cleanup_stale_sessions.py \
   --memory-root .memory \
   --dry-run
 
 # 实际清理所有已关闭 session 的残留 tmux
-python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+python3 scripts/cleanup_stale_sessions.py \
   --memory-root .memory
 
 # 强制清理所有 session（包括状态为 open 的）
-python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+python3 scripts/cleanup_stale_sessions.py \
   --memory-root .memory \
   --force
 
 # 只清理某一个 session
-python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
+python3 scripts/cleanup_stale_sessions.py \
   --memory-root .memory \
   --session-id <session-id> \
   --force
@@ -205,7 +205,7 @@ python3 {SKILL_DIR}/scripts/cleanup_stale_sessions.py \
 列出所有会话（按最后更新时间排序）。
 
 ```bash
-python3 {SKILL_DIR}/scripts/list_sessions.py --memory-root .memory
+python3 scripts/list_sessions.py --memory-root .memory
 ```
 
 ---
@@ -214,21 +214,21 @@ python3 {SKILL_DIR}/scripts/list_sessions.py --memory-root .memory
 
 ```bash
 # 列出所有会话
-python3 {SKILL_DIR}/scripts/watch_session.py --memory-root .memory
+python3 scripts/watch_session.py --memory-root .memory
 
 # 查看某会话全量内容
-python3 {SKILL_DIR}/scripts/watch_session.py \
+python3 scripts/watch_session.py \
   --memory-root .memory \
   --session-id <session-id>
 
 # 只看最后 10 条
-python3 {SKILL_DIR}/scripts/watch_session.py \
+python3 scripts/watch_session.py \
   --memory-root .memory \
   --session-id <session-id> \
   --tail 10
 
 # 实时监听新消息（Ctrl-C 退出）
-python3 {SKILL_DIR}/scripts/watch_session.py \
+python3 scripts/watch_session.py \
   --memory-root .memory \
   --session-id <session-id> \
   --follow

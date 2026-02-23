@@ -317,13 +317,13 @@
 
 ```bash
 # 东方财富股吧采集
-python3 {SKILL_DIR}/scripts/collect_eastmoney_guba.py \
+python3 scripts/collect_eastmoney_guba.py \
   --code {CODE} \
   --output /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
   --post-limit 36 --detail-limit 5 --notice-days 3
 
 # 淘股吧个股扩展采集
-python3 {SKILL_DIR}/scripts/collect_taoguba_stock.py \
+python3 scripts/collect_taoguba_stock.py \
   --full-code {FULL_CODE} \
   --output /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \
   --quotes-count 8
@@ -334,7 +334,7 @@ python3 {SKILL_DIR}/scripts/collect_taoguba_stock.py \
 **第二步：运行 compact 提取脚本**
 
 ```bash
-python3 {SKILL_DIR}/scripts/summarize_stock_brief.py \
+python3 scripts/summarize_stock_brief.py \
   --code {CODE} \
   --em-raw /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
   --tgb-raw /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \

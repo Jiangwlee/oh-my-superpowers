@@ -22,6 +22,7 @@ SCREENSHOT_JS = SCRIPT_DIR / "screenshot.js"
 THEMES: dict[str, dict[str, str]] = {
     "dark": {"bg": "#0d1117", "text": "#e6edf3", "muted": "#8b949e", "accent": "#58a6ff", "card": "#161b22"},
     "blue": {"bg": "#f6fbff", "text": "#0f2740", "muted": "#4f6f8f", "accent": "#1976d2", "card": "#ffffff"},
+    "light": {"bg": "#f8fafd", "text": "#111827", "muted": "#6b7280", "accent": "#2563eb", "card": "#ffffff"},
 }
 FONT_SIZE_PX = {"small": 24, "medium": 28, "large": 32}
 
@@ -32,6 +33,7 @@ class ReportRenderResult:
 
     html_path: str | None
     pdf_path: str | None
+    png_path: str | None
     markdown_engine: str
     warnings: list[str]
 
@@ -355,6 +357,42 @@ def render_html_to_pdf(html_path: Path, output_pdf: Path, width: int = 750) -> l
     return warnings
 
 
+def render_html_to_png(
+    html_path: Path,
+    output_png: Path,
+    dpr: int = 3,
+    width: int = 750,
+    max_page_height: int = 0,
+) -> list[str]:
+    """Render HTML to PNG using `screenshot.js` backend."""
+    warnings: list[str] = []
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("node not found; cannot render PNG")
+    if not SCREENSHOT_JS.exists():
+        raise RuntimeError(f"screenshot.js not found: {SCREENSHOT_JS}")
+    proc = subprocess.run(
+        [
+            node,
+            str(SCREENSHOT_JS),
+            "--png",
+            str(html_path.resolve()),
+            str(output_png.resolve()),
+            str(dpr),
+            str(width),
+            str(max_page_height),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "screenshot.js --png failed")
+    if proc.stderr.strip():
+        warnings.append(proc.stderr.strip())
+    return warnings
+
+
 def render_markdown_to_pdf(
     markdown_path: Path,
     output_pdf: Path,
@@ -379,6 +417,40 @@ def render_markdown_to_pdf(
         return ReportRenderResult(
             html_path=str(tmp_html),
             pdf_path=str(output_pdf),
+            png_path=None,
+            markdown_engine=engine,
+            warnings=warnings,
+        )
+    except Exception:
+        tmp_html.unlink(missing_ok=True)
+        raise
+
+
+def render_markdown_to_png(
+    markdown_path: Path,
+    output_png: Path,
+    theme: str = "light",
+    font_size: str = "medium",
+    prefer_engine: str = "auto",
+) -> ReportRenderResult:
+    """Render Markdown to PNG (with intermediate HTML temp file)."""
+    warnings: list[str] = []
+    with tempfile.NamedTemporaryFile(prefix="mta_report_", suffix=".html", delete=False) as tmp:
+        tmp_html = Path(tmp.name)
+    try:
+        engine, render_warnings = render_markdown_to_html(
+            markdown_path,
+            tmp_html,
+            theme=theme,
+            font_size=font_size,
+            prefer_engine=prefer_engine,
+        )
+        warnings.extend(render_warnings)
+        warnings.extend(render_html_to_png(tmp_html, output_png, dpr=3, width=750, max_page_height=0))
+        return ReportRenderResult(
+            html_path=str(tmp_html),
+            pdf_path=None,
+            png_path=str(output_png),
             markdown_engine=engine,
             warnings=warnings,
         )
@@ -392,8 +464,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Render Markdown to HTML/PDF for markdown-to-anything")
     parser.add_argument("input", help="Input Markdown file")
     parser.add_argument("--output", required=True, help="Output path (.html or .pdf)")
-    parser.add_argument("--format", choices=["html", "pdf"], default="html")
-    parser.add_argument("--theme", choices=["dark", "blue"], default="dark")
+    parser.add_argument("--format", choices=["html", "pdf", "png"], default="html")
+    parser.add_argument("--theme", choices=["dark", "blue", "light"], default="dark")
     parser.add_argument("--font-size", choices=["small", "medium", "large"], default="medium")
     parser.add_argument("--engine", choices=["auto", "pandoc", "marked", "fallback"], default="auto")
     parser.add_argument("--stdout-result", action="store_true", help="Print JSON result")
@@ -413,11 +485,20 @@ def main() -> None:
         result = ReportRenderResult(
             html_path=str(output_path),
             pdf_path=None,
+            png_path=None,
             markdown_engine=engine,
             warnings=warnings,
         )
-    else:
+    elif args.format == "pdf":
         result = render_markdown_to_pdf(
+            input_path,
+            output_path,
+            theme=args.theme,
+            font_size=args.font_size,
+            prefer_engine=args.engine,
+        )
+    else:
+        result = render_markdown_to_png(
             input_path,
             output_path,
             theme=args.theme,
@@ -428,7 +509,7 @@ def main() -> None:
     if args.stdout_result:
         print(json.dumps(asdict(result), ensure_ascii=False))
     else:
-        print(result.pdf_path or result.html_path)
+        print(result.pdf_path or result.png_path or result.html_path)
 
 
 if __name__ == "__main__":

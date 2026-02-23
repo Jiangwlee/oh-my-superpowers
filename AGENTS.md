@@ -2,6 +2,11 @@
 
 本项目开发了一系列满足 Openclaw 规范的 Skills（智能体技能），主要用于金融数据抓取、分析与研究。
 
+## IRON RULES
+
+- No coding WITHOUT reading Skills-Dev-Guides.md
+- Every skill in `skills/` is independent and autonomous
+
 ## 规范参考
 
 - [Agent Skills](https://github.com/agentskills/agentskills): Openclaw 遵从的 Skills 规范
