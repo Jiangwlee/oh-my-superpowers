@@ -209,8 +209,8 @@ cp -r skills/<skill-name>/ ~/clawd/skills/<skill-name>/
 openclaw gateway restart
 
 # 远端
-scp -r skills/<skill-name>/ root@43.138.150.96:/root/.openclaw/workspace-smartrader/skills/
-ssh root@43.138.150.96 "source ~/.nvm/nvm.sh && openclaw gateway restart"
+scp -r skills/<skill-name>/ root@tencent-vps:/root/.openclaw/workspace-smartrader/skills/
+ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
 ```
 
 ---
