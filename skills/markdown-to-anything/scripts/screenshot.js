@@ -9,6 +9,8 @@
  */
 
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { spawn } = require('child_process');
 
 const CHROME_CANDIDATES = [
@@ -111,6 +113,7 @@ function startChrome(fileUrl, width) {
   const chrome = findChrome();
   if (!chrome) throw new Error('Chrome not found');
   const port = 10000 + Math.floor(Math.random() * 10000);
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mta-chrome-'));
   const proc = spawn(
     chrome,
     [
@@ -118,18 +121,31 @@ function startChrome(fileUrl, width) {
       '--disable-gpu',
       '--no-sandbox',
       '--disable-extensions',
+      `--user-data-dir=${userDataDir}`,
       `--remote-debugging-port=${port}`,
+      '--remote-debugging-address=127.0.0.1',
       `--window-size=${width},1200`,
       fileUrl,
     ],
-    { stdio: 'ignore' },
+    { stdio: ['ignore', 'ignore', 'pipe'] },
   );
-  return { port, proc };
+  let stderrBuf = '';
+  if (proc.stderr) {
+    proc.stderr.on('data', (chunk) => {
+      stderrBuf += String(chunk);
+      if (stderrBuf.length > 8000) stderrBuf = stderrBuf.slice(-8000);
+    });
+  }
+  return { port, proc, userDataDir, getStderr: () => stderrBuf };
 }
 
 async function openPage(filePath, width) {
   const fileUrl = `file://${filePath}`;
-  const { port, proc } = startChrome(fileUrl, width);
+  const { port, proc, userDataDir, getStderr } = startChrome(fileUrl, width);
+  const cleanup = () => {
+    proc.kill();
+    try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_e) {}
+  };
   try {
     const wsUrl = await connectChrome(port, fileUrl);
     const cdp = await cdpSession(wsUrl);
@@ -137,9 +153,13 @@ async function openPage(filePath, width) {
     await cdp.send('Runtime.enable');
     await Promise.race([cdp.waitForEvent('Page.loadEventFired', 10000), sleep(10000)]);
     await sleep(350);
-    return { cdp, proc, fileUrl };
+    return { cdp, proc, fileUrl, cleanup, getStderr };
   } catch (e) {
-    proc.kill();
+    const stderr = getStderr().trim();
+    cleanup();
+    if (stderr) {
+      throw new Error(`${e.message}; chrome stderr: ${stderr.split('\n').slice(-4).join(' | ')}`);
+    }
     throw e;
   }
 }
@@ -191,7 +211,7 @@ async function capturePng(inputFile, outputPng, dpr = 3, cssWidth = 1080, maxPag
     return outputs;
   } finally {
     cdp.close();
-    proc.kill();
+    ctx.cleanup();
   }
 }
 
@@ -223,7 +243,7 @@ async function printPdf(htmlFile, outputPdf, cssWidth = 750) {
     console.log(JSON.stringify({ ok: true, file: outputPdf }));
   } finally {
     cdp.close();
-    proc.kill();
+    ctx.cleanup();
   }
 }
 
@@ -272,7 +292,7 @@ async function validateSvgBBoxes(svgFile) {
     console.log(JSON.stringify(evalRes.result.value || { ok: false, errors: [{ code: 'empty', message: 'No result', element_id: null }], warnings: [] }));
   } finally {
     cdp.close();
-    proc.kill();
+    ctx.cleanup();
   }
 }
 

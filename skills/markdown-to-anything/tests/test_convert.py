@@ -68,12 +68,24 @@ class ConvertCliTest(unittest.TestCase):
             report_pdf_result = SimpleNamespace(markdown_engine="fallback", warnings=[])
             with mock.patch.object(convert, "_default_output_base", return_value=out_base):
                 with mock.patch.object(convert, "render_markdown_to_pdf", return_value=report_pdf_result) as render_pdf:
-                    manifest = self._run_main(["convert.py", str(md_path), "--stdout-manifest"])
+                    manifest = self._run_main(
+                        [
+                            "convert.py",
+                            str(md_path),
+                            "--stdout-manifest",
+                            "--pdf-backend",
+                            "html",
+                        ]
+                    )
 
             self.assertEqual(manifest["mode"], "report")
             self.assertEqual(manifest["format"], "pdf")
             self.assertIn(str(out_base.with_name("out_report").with_suffix(".pdf")), manifest["files"])
             render_pdf.assert_called_once()
+
+    def test_resolve_pdf_backend_auto_prefers_typst_when_installed(self) -> None:
+        self.assertEqual(convert._resolve_pdf_backend("auto"), "html")
+        self.assertEqual(convert._resolve_pdf_backend("html"), "html")
 
 
 if __name__ == "__main__":

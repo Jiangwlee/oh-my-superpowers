@@ -48,6 +48,12 @@ def _resolve_theme(explicit_theme: str | None, output_format: str) -> str:
     return "blue"
 
 
+def _resolve_pdf_backend(choice: str) -> str:
+    if choice == "auto":
+        return "html"
+    return choice
+
+
 def main() -> None:
     """CLI entrypoint."""
     parser = argparse.ArgumentParser(description="Convert Markdown to PNG/PDF report assets")
@@ -59,6 +65,12 @@ def main() -> None:
     parser.add_argument("--output", help="Output file or base path (without extension for both)")
     parser.add_argument("--stdout-manifest", action="store_true", help="Print JSON manifest")
     parser.add_argument("--engine", choices=["auto", "pandoc", "marked", "fallback"], default="auto")
+    parser.add_argument(
+        "--pdf-backend",
+        choices=["auto", "html"],
+        default="auto",
+        help="PDF backend (auto currently uses html/chrome path)",
+    )
     args = parser.parse_args()
 
     start = time.time()
@@ -75,6 +87,7 @@ def main() -> None:
     actual_mode = "report"
     requested_format = args.format or "pdf"
     resolved_theme = _resolve_theme(args.theme, requested_format)
+    pdf_backend = _resolve_pdf_backend(args.pdf_backend)
 
     output_arg = Path(args.output).expanduser() if args.output else _default_output_base(input_path)
     if args.output and output_arg.suffix:

@@ -14,6 +14,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from report_html_render import markdown_to_html as report_markdown_to_html  # type: ignore  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 VENDOR_MARKED = SCRIPT_DIR / "vendor" / "marked.min.js"
@@ -43,10 +44,13 @@ def _font_family() -> str:
     emoji = "'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji'"
     if is_linux:
         return f"'Noto Sans CJK SC','Noto Sans SC','WenQuanYi Micro Hei',{emoji},sans-serif"
-    return f"'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',{emoji},sans-serif"
+    # macOS print-to-PDF is generally more stable with system CJK fonts first.
+    return f"'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans SC',{emoji},sans-serif"
 
 
-def _font_link_html() -> str:
+def _font_link_html(enable_remote_fonts: bool = True) -> str:
+    if not enable_remote_fonts:
+        return ""
     return (
         "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">"
         "<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>"
@@ -95,6 +99,43 @@ th {{ background: rgba(25,118,210,.10); }}
 blockquote {{ border-left: 4px solid {tokens['accent']}; padding-left: .7em; color: {tokens['muted']}; }}
 hr {{ border: none; border-top: 1px solid rgba(127,127,127,.25); margin: 1em 0; }}
 .meta {{ color: {tokens['muted']}; font-size: {meta}px; }}
+/* Browser PDF exports may omit page backgrounds; force readable print contrast. */
+@media print {{
+  html, body {{
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-family: {_font_family()} !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }}
+  body {{
+    width: auto;
+    max-width: none;
+    margin: 0 !important;
+    padding: 0 !important;
+  }}
+  article {{
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-family: {_font_family()} !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }}
+  h1, h2 {{
+    color: #0f4c81 !important;
+  }}
+  h1, h2, h3, p, li, td, th, blockquote, .meta {{
+    color: #111827 !important;
+    font-family: {_font_family()} !important;
+  }}
+  code, pre {{
+    color: #111827 !important;
+  }}
+  a {{
+    color: #0f4c81 !important;
+  }}
+}}
 @page {{ size: A4; margin: 0.4in; }}
 """
 
@@ -235,7 +276,7 @@ def _simple_markdown_to_html(md_text: str) -> str:
     return "\n".join(out)
 
 
-def _build_marked_shell(md_text: str, theme: str, font_size: str) -> str:
+def _build_marked_shell(md_text: str, theme: str, font_size: str, include_remote_fonts: bool = True) -> str:
     md_source = _escape_html(md_text)
     js_source = VENDOR_MARKED.read_text(encoding="utf-8") if VENDOR_MARKED.exists() else "window.marked={parse:(s)=>'<pre>'+s+'</pre>'};"
     css = _build_css(theme, font_size)
@@ -244,7 +285,7 @@ def _build_marked_shell(md_text: str, theme: str, font_size: str) -> str:
 <head>
 <meta charset=\"utf-8\">
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-{_font_link_html()}
+{_font_link_html(include_remote_fonts)}
 <style>{css}</style>
 </head>
 <body>
@@ -264,14 +305,14 @@ def _build_marked_shell(md_text: str, theme: str, font_size: str) -> str:
 </html>"""
 
 
-def _build_static_html(body_html: str, theme: str, font_size: str) -> str:
+def _build_static_html(body_html: str, theme: str, font_size: str, include_remote_fonts: bool = True) -> str:
     css = _build_css(theme, font_size)
     return f"""<!DOCTYPE html>
 <html lang=\"zh-CN\">
 <head>
 <meta charset=\"utf-8\">
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-{_font_link_html()}
+{_font_link_html(include_remote_fonts)}
 <style>{css}</style>
 </head>
 <body><article>{body_html}</article><script>window.__md_rendered=true;</script></body>
@@ -284,6 +325,7 @@ def render_markdown_to_html(
     theme: str = "dark",
     font_size: str = "medium",
     prefer_engine: str = "auto",
+    include_remote_fonts: bool = True,
 ) -> tuple[str, list[str]]:
     """Render Markdown file to HTML.
 
@@ -312,23 +354,38 @@ def render_markdown_to_html(
                 timeout=30,
                 check=True,
             )
-            html_doc = _build_static_html(proc.stdout, theme, font_size)
+            html_doc = _build_static_html(proc.stdout, theme, font_size, include_remote_fonts=include_remote_fonts)
             engine_used = "pandoc"
         except Exception as exc:
             warnings.append(f"pandoc failed, fallback used: {exc}")
             if prefer_engine == "pandoc":
-                html_doc = _build_static_html(_simple_markdown_to_html(md_text), theme, font_size)
+                html_doc = _build_static_html(
+                    _simple_markdown_to_html(md_text),
+                    theme,
+                    font_size,
+                    include_remote_fonts=include_remote_fonts,
+                )
                 engine_used = "fallback"
 
     if not html_doc and prefer_engine in {"auto", "marked"}:
         if VENDOR_MARKED.exists():
-            html_doc = _build_marked_shell(md_text, theme, font_size)
+            html_doc = _build_marked_shell(
+                md_text,
+                theme,
+                font_size,
+                include_remote_fonts=include_remote_fonts,
+            )
             engine_used = "marked"
         else:
             warnings.append("vendor/marked.min.js missing, using fallback renderer")
 
     if not html_doc:
-        html_doc = _build_static_html(_simple_markdown_to_html(md_text), theme, font_size)
+        html_doc = _build_static_html(
+            _simple_markdown_to_html(md_text),
+            theme,
+            font_size,
+            include_remote_fonts=include_remote_fonts,
+        )
         engine_used = "fallback"
 
     output_html.parent.mkdir(parents=True, exist_ok=True)
@@ -405,14 +462,9 @@ def render_markdown_to_pdf(
     with tempfile.NamedTemporaryFile(prefix="mta_report_", suffix=".html", delete=False) as tmp:
         tmp_html = Path(tmp.name)
     try:
-        engine, render_warnings = render_markdown_to_html(
-            markdown_path,
-            tmp_html,
-            theme=theme,
-            font_size=font_size,
-            prefer_engine=prefer_engine,
-        )
-        warnings.extend(render_warnings)
+        html_doc, engine = report_markdown_to_html(markdown_path)
+        tmp_html.write_text(html_doc, encoding="utf-8")
+        warnings.append("pdf render uses report html renderer for stability")
         warnings.extend(render_html_to_pdf(tmp_html, output_pdf))
         return ReportRenderResult(
             html_path=str(tmp_html),
@@ -438,14 +490,9 @@ def render_markdown_to_png(
     with tempfile.NamedTemporaryFile(prefix="mta_report_", suffix=".html", delete=False) as tmp:
         tmp_html = Path(tmp.name)
     try:
-        engine, render_warnings = render_markdown_to_html(
-            markdown_path,
-            tmp_html,
-            theme=theme,
-            font_size=font_size,
-            prefer_engine=prefer_engine,
-        )
-        warnings.extend(render_warnings)
+        html_doc, engine = report_markdown_to_html(markdown_path)
+        tmp_html.write_text(html_doc, encoding="utf-8")
+        warnings.append("png render uses report html renderer for stability")
         warnings.extend(render_html_to_png(tmp_html, output_png, dpr=3, width=750, max_page_height=0))
         return ReportRenderResult(
             html_path=str(tmp_html),
