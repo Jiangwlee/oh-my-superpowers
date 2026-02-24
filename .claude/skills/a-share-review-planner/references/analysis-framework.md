@@ -194,7 +194,7 @@
 
 1. `trend_report.md` — 通过硬门槛的趋势股列表（作为候选池入口）
 2. `trend_scan.json` — 各股 `score_total_100`、`emotion_level`、`trade_signal`
-3. `funding.json` → `trend_candidates_funding` — 趋势候选股主力净流入排名（若为空则退化用 `main_force_top20`）
+3. `funding.json` → `trend_candidates_funding` — 趋势候选股3日主力净流入排名（若为空则退化用 `main_force_top20`）；`today_top10`（如存在）提供当日实时 Top10 辅助参考
 4. 第一步和第二步的结论（market_regime + 题材识别结果）
 5. `evolution/selection_rules.md` — 选股规则修正（有内容则读）
 
@@ -221,12 +221,14 @@
 
 **② 资金维度标签 (Funding)**：基于 `funding.json` 的流入情况
 
-> **降级规则**：优先使用 `trend_candidates_funding` 中的 rank 字段。若 `trend_candidates_funding` 为空（数据抓取失败），退化使用 `main_force_top20`：出现在 `main_force_top20` 中的股票视为 [绝对主力]，其余所有股票只能在 [资金活跃]（所属板块位列净流入前5）和 [无资金关照] 之间判定。若 `funding.json` 整体为空，所有股票的资金维度标记为 [资金未知]，该维度不参与共振判定（即共振条件从四维降为三维）。
+> **数据说明**：`funding.json` 中 `main_force_top20` 使用 **3日累计** 主力净流入排名（`funding_indicator: "3日"`），反映资金的持续流入方向而非单日波动，对选股参考价值更大。`today_top10`（如存在）提供当日实时 Top10 作为辅助参考。
+>
+> **降级规则**：优先使用 `trend_candidates_funding` 中的 rank 字段（同样基于3日排名）。若 `trend_candidates_funding` 为空（数据抓取失败），退化使用 `main_force_top20`：出现在 `main_force_top20` 中的股票视为 [绝对主力]，其余所有股票只能在 [资金活跃]（所属板块位列净流入前5）和 [无资金关照] 之间判定。若 `funding.json` 整体 `data_degraded: true`，所有股票的资金维度标记为 [资金未知]，该维度不参与共振判定（即共振条件从四维降为三维）。
 
-- [绝对主力]：在 `trend_candidates_funding` 或 `main_force_top20` 中 rank ≤ 20
+- [绝对主力]：在 `trend_candidates_funding` 或 `main_force_top20` 中 rank ≤ 20（3日累计主力净流入全市场前20）
 - [资金活跃]：在名单中但 rank 为 21–300，或未在全市场前300但所属板块当日资金极度活跃（位列净流入前5板块）
 - [无资金关照]：rank > 300 且所属板块无资金聚集，或净流入为负
-- [资金未知]：`funding.json` 整体为空时的降级标签，该维度不参与共振匹配
+- [资金未知]：`funding.json` 的 `data_degraded: true` 时的降级标签，该维度不参与共振匹配
 
 **③ 题材维度标签 (Theme)**：基于第二步题材结论
 - [主线核心]：属于当前处于启动/加速阶段的主线题材
