@@ -4,6 +4,11 @@
 并发调用各数据源 fetcher，将结果写入独立 JSON 文件。
 单个数据源失败不影响其他源。
 
+券商账户数据（jvQuant）自动采集规则：
+  - 若 ~/.openclaw/jvquant.json 存在，则自动采集账户持仓数据。
+  - 若采集失败，脚本以非零退出码终止，并在 stderr 输出明确错误信息。
+  - 若 ~/.openclaw/jvquant.json 不存在，跳过采集并打印提示（不报错）。
+
 用法:
     python3 scripts/collect_sentiment.py \
         --output-dir ~/.ashare-assistant/data/2026-02-17 \
@@ -24,28 +29,35 @@ _SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SKILL_ROOT not in sys.path:
     sys.path.insert(0, _SKILL_ROOT)
 
-from scripts.fetchers.trade_date import fetch_trade_date          # noqa: E402
-from scripts.fetchers.news import (                               # noqa: E402
-    fetch_headline, fetch_realtime, fetch_opportunity,
-    fetch_daily_finance, fetch_news_flash,
+from scripts.fetchers.trade_date import fetch_trade_date  # noqa: E402
+from scripts.fetchers.news import (  # noqa: E402
+    fetch_headline,
+    fetch_realtime,
+    fetch_opportunity,
+    fetch_daily_finance,
+    fetch_news_flash,
 )
-from scripts.fetchers.market_overview import (                    # noqa: E402
+from scripts.fetchers.market_overview import (  # noqa: E402
     fetch_market_sectors_top_n,
 )
 from scripts.fetchers.funding import fetch_funding, fetch_funding_for_codes  # noqa: E402
-from scripts.fetchers.taoguba import (                            # noqa: E402
+from scripts.fetchers.taoguba import (  # noqa: E402
     fetch_taoguba_hot,
     fetch_taoguba_hot_discussion,
     fetch_taoguba_now_recommend,
 )
-from scripts.fetchers.trend_scanner import (                     # noqa: E402
-    fetch_eastmoney_top200, fetch_ths_snapshot, fetch_ths_history,
-    scan_all, format_report_md, format_ths_md,
+from scripts.fetchers.trend_scanner import (  # noqa: E402
+    fetch_eastmoney_top200,
+    fetch_ths_snapshot,
+    fetch_ths_history,
+    scan_all,
+    format_report_md,
+    format_ths_md,
 )
 from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
-from scripts.fetchers.us_market import fetch_us_market            # noqa: E402
-from scripts.core.cache import cache_cleanup                      # noqa: E402
-from scripts.core.config import ensure_dirs                       # noqa: E402
+from scripts.fetchers.us_market import fetch_us_market  # noqa: E402
+from scripts.core.cache import cache_cleanup  # noqa: E402
+from scripts.core.config import ensure_dirs  # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -100,19 +112,33 @@ _NEWS_KEEP_FIELDS = {"title", "makeDate", "summary", "emotion", "detail"}
 def _slim_news(data: list | dict) -> list | dict:
     """新闻数据只保留 title/makeDate/summary/emotion/detail。"""
     if isinstance(data, list):
-        return [{k: v for k, v in item.items() if k in _NEWS_KEEP_FIELDS}
-                for item in data]
+        return [
+            {k: v for k, v in item.items() if k in _NEWS_KEEP_FIELDS} for item in data
+        ]
     if isinstance(data, dict) and "data" in data:
         data["data"] = _slim_news(data["data"])
     return data
 
 
 _TREND_KEEP_FIELDS = {
-    "code", "name", "sc", "rank", "source",
-    "is_uptrend", "star_rating", "score_total_100",
-    "emotion_level", "emotion_label", "emotion_color", "emotion_reason",
-    "trade_signal", "trade_signal_reason",
-    "gain_30_pct", "gain_60_pct", "holding_experience", "reason",
+    "code",
+    "name",
+    "sc",
+    "rank",
+    "source",
+    "is_uptrend",
+    "star_rating",
+    "score_total_100",
+    "emotion_level",
+    "emotion_label",
+    "emotion_color",
+    "emotion_reason",
+    "trade_signal",
+    "trade_signal_reason",
+    "gain_30_pct",
+    "gain_60_pct",
+    "holding_experience",
+    "reason",
 }
 
 
@@ -132,24 +158,66 @@ def _slim_trend_results(data: dict) -> dict:
 def _make_tasks(news_count: int, taoguba_count: int) -> list[dict]:
     """返回采集任务列表，每项包含 name / filename / fn。"""
     return [
-        {"name": "trade_date",       "filename": "trade_date.json",       "fn": fetch_trade_date},
-        {"name": "news_headline",    "filename": "news_headline.json",    "fn": lambda: fetch_headline(news_count, fetch_body=True)},
-        {"name": "news_realtime",    "filename": "news_realtime.json",    "fn": lambda: fetch_realtime(news_count, fetch_body=True)},
-        {"name": "news_opportunity", "filename": "news_opportunity.json", "fn": lambda: fetch_opportunity(news_count, fetch_body=True)},
-        {"name": "news_daily",       "filename": "news_daily.json",       "fn": lambda: fetch_daily_finance(news_count, fetch_body=True)},
-        {"name": "news_flash",       "filename": "news_flash.json",       "fn": lambda: fetch_news_flash(news_count)},
-        {"name": "market_sectors",   "filename": "market_sectors.json",   "fn": lambda: fetch_market_sectors_top_n(5)},
-        {"name": "funding",          "filename": "funding.json",          "fn": fetch_funding},
-        {"name": "taoguba_hot",      "filename": "taoguba_hot.json",      "fn": lambda: fetch_taoguba_hot(taoguba_count)},
-        {"name": "taoguba_hot_discussion", "filename": "taoguba_hot_discussion.json",
-         "fn": lambda: fetch_taoguba_hot_discussion(page_no=1, count=taoguba_count)},
-        {"name": "taoguba_recommend", "filename": "taoguba_recommend.json",
-         "fn": lambda: fetch_taoguba_now_recommend(count=taoguba_count)},
+        {"name": "trade_date", "filename": "trade_date.json", "fn": fetch_trade_date},
+        {
+            "name": "news_headline",
+            "filename": "news_headline.json",
+            "fn": lambda: fetch_headline(news_count, fetch_body=True),
+        },
+        {
+            "name": "news_realtime",
+            "filename": "news_realtime.json",
+            "fn": lambda: fetch_realtime(news_count, fetch_body=True),
+        },
+        {
+            "name": "news_opportunity",
+            "filename": "news_opportunity.json",
+            "fn": lambda: fetch_opportunity(news_count, fetch_body=True),
+        },
+        {
+            "name": "news_daily",
+            "filename": "news_daily.json",
+            "fn": lambda: fetch_daily_finance(news_count, fetch_body=True),
+        },
+        {
+            "name": "news_flash",
+            "filename": "news_flash.json",
+            "fn": lambda: fetch_news_flash(news_count),
+        },
+        {
+            "name": "market_sectors",
+            "filename": "market_sectors.json",
+            "fn": lambda: fetch_market_sectors_top_n(5),
+        },
+        {"name": "funding", "filename": "funding.json", "fn": fetch_funding},
+        {
+            "name": "taoguba_hot",
+            "filename": "taoguba_hot.json",
+            "fn": lambda: fetch_taoguba_hot(taoguba_count),
+        },
+        {
+            "name": "taoguba_hot_discussion",
+            "filename": "taoguba_hot_discussion.json",
+            "fn": lambda: fetch_taoguba_hot_discussion(page_no=1, count=taoguba_count),
+        },
+        {
+            "name": "taoguba_recommend",
+            "filename": "taoguba_recommend.json",
+            "fn": lambda: fetch_taoguba_now_recommend(count=taoguba_count),
+        },
         {"name": "us_market", "filename": "us_market.json", "fn": fetch_us_market},
     ]
 
 
 # ── 主逻辑 ────────────────────────────────────────────
+
+
+_JVQUANT_CONFIG_PATH = os.path.expanduser("~/.openclaw/jvquant.json")
+
+
+def _jvquant_configured() -> bool:
+    """检测 jvQuant 是否已配置（配置文件存在即视为已配置）。"""
+    return os.path.exists(_JVQUANT_CONFIG_PATH)
 
 
 def collect(
@@ -159,9 +227,13 @@ def collect(
     *,
     scan_trends: bool = True,
     popularity_max: int = 200,
-    fetch_broker: bool = False,
 ) -> dict:
     """执行全量数据采集，返回 summary dict。
+
+    券商账户数据（jvQuant）自动采集规则：
+      - 若 ~/.openclaw/jvquant.json 存在，则自动采集。
+      - 若采集失败，直接抛出异常（调用方负责处理）。
+      - 若配置文件不存在，跳过采集并在 summary 中记录 skipped 状态。
 
     Parameters
     ----------
@@ -169,10 +241,6 @@ def collect(
         是否执行趋势扫描（默认 True）。扫描200只股约2-3分钟。
     popularity_max : int
         东方财富人气榜扫描上限（默认200，最大200）。
-    fetch_broker : bool
-        是否采集 jvQuant 账户持仓数据（默认 False）。
-        需配置 ~/.openclaw/jvquant.json 或对应环境变量。
-        注意：每次登录有计费，模块内部已实现 ticket 缓存复用。
     """
     ensure_dirs()
     try:
@@ -216,21 +284,30 @@ def collect(
             icon = "\u2713" if status == "ok" else "\u2717"
             _log(f"  {icon} {name} ({elapsed:.1f}s)")
 
-    # ── 券商账户采集（可选，独立执行，失败不影响主流程） ──
-    if fetch_broker:
-        _log("采集券商账户数据（jvQuant）...")
+    # ── 券商账户采集（自动检测，失败时抛出异常） ──
+    if _jvquant_configured():
+        _log("检测到 jvquant.json，开始采集券商账户数据...")
         broker_t0 = time.time()
         try:
             broker_data = fetch_broker_account()
             broker_elapsed = time.time() - broker_t0
             results["broker_account"] = ("ok", broker_data, broker_elapsed)
             reused = broker_data.get("ticket_reused", False)
-            _log(f"  ✓ broker_account ({broker_elapsed:.1f}s)"
-                 f"{'，复用缓存ticket（未计费）' if reused else '，已重新登录'}")
+            _log(
+                f"  ✓ broker_account ({broker_elapsed:.1f}s)"
+                f"{'，复用缓存ticket（未计费）' if reused else '，已重新登录'}"
+            )
         except Exception as exc:
             broker_elapsed = time.time() - broker_t0
-            results["broker_account"] = ("error", str(exc), broker_elapsed)
             _log(f"  ✗ broker_account ({broker_elapsed:.1f}s): {exc}")
+            raise RuntimeError(
+                f"jvQuant 账户数据采集失败：{exc}\n"
+                f"请检查 {_JVQUANT_CONFIG_PATH} 配置是否正确，"
+                f"或确认网络/API 凭证是否有效。\n"
+                f"交易计划将无法生成，请解决后重新运行。"
+            ) from exc
+    else:
+        _log(f"未检测到 {_JVQUANT_CONFIG_PATH}，跳过券商账户采集（将无法生成交易计划）")
 
     # ── 趋势扫描（耗时较长，独立于上面的并发池） ──
     if scan_trends:
@@ -252,12 +329,17 @@ def collect(
             # 2) 同花顺快照（传入最近交易日，避免假期取到空数据）
             ths = fetch_ths_snapshot(end_date=_last_trade_date)
             results["ths_snapshot"] = ("ok", ths, time.time() - scan_t0)
-            _log(f"  \u2713 ths_snapshot ({time.time() - scan_t0:.1f}s, date={ths.get('date')})")
+            _log(
+                f"  \u2713 ths_snapshot ({time.time() - scan_t0:.1f}s, date={ths.get('date')})"
+            )
 
             # 3) 同花顺历史（最近5个交易日）
             ths_hist = fetch_ths_history(days=5, end_date=_last_trade_date)
-            results["ths_history"] = ("ok", {"days": len(ths_hist), "history": ths_hist},
-                                      time.time() - scan_t0)
+            results["ths_history"] = (
+                "ok",
+                {"days": len(ths_hist), "history": ths_hist},
+                time.time() - scan_t0,
+            )
             _log(f"  \u2713 ths_history ({len(ths_hist)} \u5929)")
 
             # 生成 ths_report.md（结构化 Markdown，供 LLM 直接阅读）
@@ -270,8 +352,10 @@ def collect(
             # 4) 并发 K 线扫描 + 评分
             trend_results = scan_all(candidates, workers=10)
             scan_elapsed = time.time() - scan_t0
-            _log(f"  \u2713 trend_scan: {len(trend_results)} \u53ea, "
-                 f"\u8d8b\u52bf\u80a1 {sum(1 for r in trend_results if r.is_uptrend)} \u53ea ({scan_elapsed:.1f}s)")
+            _log(
+                f"  \u2713 trend_scan: {len(trend_results)} \u53ea, "
+                f"\u8d8b\u52bf\u80a1 {sum(1 for r in trend_results if r.is_uptrend)} \u53ea ({scan_elapsed:.1f}s)"
+            )
 
             # 包装输出
             results["trend_scan"] = (
@@ -301,7 +385,11 @@ def collect(
             uptrend_codes = [
                 r.code if hasattr(r, "code") else r.get("code", "")
                 for r in trend_results
-                if (r.is_uptrend if hasattr(r, "is_uptrend") else r.get("is_uptrend", False))
+                if (
+                    r.is_uptrend
+                    if hasattr(r, "is_uptrend")
+                    else r.get("is_uptrend", False)
+                )
             ]
             uptrend_codes = [c for c in uptrend_codes if c]
             if uptrend_codes:
@@ -314,7 +402,9 @@ def collect(
                         funding_path = os.path.join(output_dir, "funding.json")
                         with open(funding_path, "w", encoding="utf-8") as f:
                             json.dump(funding_data, f, ensure_ascii=False, indent=2)
-                        _log(f"  ✓ trend_candidates_funding: {len(trend_funding)} 只趋势股已补充资金数据")
+                        _log(
+                            f"  ✓ trend_candidates_funding: {len(trend_funding)} 只趋势股已补充资金数据"
+                        )
 
         except Exception as exc:
             scan_elapsed = time.time() - scan_t0
@@ -368,8 +458,12 @@ def collect(
 
     total_elapsed = time.time() - t0
     summary["total_elapsed_sec"] = round(total_elapsed, 2)
-    summary["ok_count"] = sum(1 for v in summary["sources"].values() if v["status"] == "ok")
-    summary["error_count"] = sum(1 for v in summary["sources"].values() if v["status"] == "error")
+    summary["ok_count"] = sum(
+        1 for v in summary["sources"].values() if v["status"] == "ok"
+    )
+    summary["error_count"] = sum(
+        1 for v in summary["sources"].values() if v["status"] == "error"
+    )
 
     # 写 summary
     summary_path = os.path.join(output_dir, "collection_summary.json")
@@ -402,20 +496,28 @@ def main() -> None:
     parser.add_argument("--news-count", type=int, default=20, help="每类新闻条数")
     parser.add_argument("--taoguba-count", type=int, default=20, help="淘股吧帖子数")
     parser.add_argument("--no-scan-trends", action="store_true", help="跳过趋势扫描")
-    parser.add_argument("--popularity-max", type=int, default=200, help="人气榜扫描上限(<=200)")
-    parser.add_argument("--broker", action="store_true",
-                        help="采集 jvQuant 账户持仓数据（需配置 ~/.openclaw/jvquant.json）")
+    parser.add_argument(
+        "--popularity-max", type=int, default=200, help="人气榜扫描上限(<=200)"
+    )
     args = parser.parse_args()
 
     _log(f"开始采集 -> {args.output_dir}")
-    summary = collect(
-        args.output_dir, args.news_count, args.taoguba_count,
-        scan_trends=not args.no_scan_trends,
-        popularity_max=args.popularity_max,
-        fetch_broker=args.broker,
+    try:
+        summary = collect(
+            args.output_dir,
+            args.news_count,
+            args.taoguba_count,
+            scan_trends=not args.no_scan_trends,
+            popularity_max=args.popularity_max,
+        )
+    except RuntimeError as exc:
+        _log(f"[ERROR] 采集中止：{exc}")
+        sys.exit(1)
+
+    _log(
+        f"完成: {summary['ok_count']} 成功, {summary['error_count']} 失败, "
+        f"耗时 {summary['total_elapsed_sec']}s"
     )
-    _log(f"完成: {summary['ok_count']} 成功, {summary['error_count']} 失败, "
-         f"耗时 {summary['total_elapsed_sec']}s")
 
     if summary["error_count"] > 0:
         for name, info in summary["sources"].items():

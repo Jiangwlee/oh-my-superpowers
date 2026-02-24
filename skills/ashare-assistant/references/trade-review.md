@@ -3,6 +3,7 @@
 **触发时机**：阶段 1-4 完成后，或用户主动要求"交易复盘"/"检查执行"/"review"。
 
 **前提条件**：
+
 - 已配置 jvQuant 账户（环境变量或 `~/.openclaw/jvquant.json`）
 - 当日有交易数据（至少 broker_account 可用）
 
@@ -12,8 +13,11 @@
 
 ### 5.1 执行交易复盘脚本
 
+> **必须从 skill 根目录执行**，否则报 `ModuleNotFoundError: No module named 'scripts'`。
+
 ```bash
-python3 scripts/trade_review.py \
+cd <skill_root>   # 即 SKILL.md 所在目录，例如 skills/ashare-assistant/
+PYTHONPATH=. python3 scripts/trade_review.py \
   --decision-log ~/.ashare-assistant/memory/decision_log.jsonl \
   --strategy strategy/active.yaml \
   --output ~/.ashare-assistant/data/{DATE}/trade_review.json \
@@ -97,6 +101,7 @@ python3 scripts/trade_review.py \
 ## 无交易日处理
 
 若当日无委托记录（`total_orders = 0`），脚本仍正常运行：
+
 - 输出 `execution_summary` 全部为 0
 - 如有持仓，仍检测 holding_flaw（MA20 止损、MA5 乖离）
 - 如有 decision_log 且有 action=buy 候选，检测 missed_execution

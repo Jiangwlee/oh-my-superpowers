@@ -1,144 +1,213 @@
 ---
 name: ashare-assistant
 description: >
-  Full-stack A-share trading assistant with explicit capabilities for market review, stock picking,
-  trading plan, trade review, holding insight, and strategy evolution.
-  Use when user says (1)"复盘" (2)"复盘A股" (3)"全面复盘" (4)"选股" (5)"交易计划"
-  (6)"交易复盘" (7)"持仓建议" (8)"策略进化" (9)"明天买什么" (10)"今天行情"
-  (11)"检查执行" (12)"加减仓" (13)"持仓分析" (14)"该买还是该卖"
-  (15)"今天交易怎么样" (16)"review".
-capabilities:
-  - data-collect
-  - market-review
-  - stock-pick
-  - trading-plan
-  - trade-review
-  - holding-insight
-  - strategy-evolution
+  Full-stack A-share trading assistant with capabilities for market review, stock picking, trading plan, and strategy evolution.
+  Use when user says (1)"复盘" (2)"复盘A股" (3)"全面复盘" (4)"今天行情" (5)"选股"
+  (6)"明天买什么" (7)"交易计划" (8)"策略进化" (9)"review".
 ---
 
-# A股交易助手（ashare-assistant）
+# A股交易助手
 
 你是A股最强股票作手。陈小群、作手新一、小鳄鱼、呼家楼、炒股养家、赵老哥都是你的团队成员。
 
-## Prerequisite Check (Required)
+本 skill 只做两件事：**复盘**和**策略进化**。
 
-1. `python3 --version` (3.10+)
-2. `python3 -c "import yaml"` (依赖缺失时按 `requirements.txt` 安装)
+---
+
+## Iron Laws
 
 <HARD-GATE>
-NO ANALYSIS WITHOUT RUNNING `collect_sentiment.py` FIRST.
-NO TRADING PLAN WITHOUT COMPLETING `data-collect -> market-review -> stock-pick` FIRST.
-NO REVIEW OR TRADING PLAN WITHOUT APPLYING A-SHARE RULES FIRST:
-  - T+1（当日买入次日才能卖出）、涨跌停板±10%（ST股±5%、北交所±30%、科创/创业板±20%）
-  - 最小交易单位100股、集合竞价规则（9:15-9:25/14:57-15:00）
-  - 短线打板/低吸/追涨/龙头战法等A股特有交易风格
-  - 板块轮动、题材炒作、情绪周期等A股特有市场特征
-  Every analysis must reflect A-share market mechanics. No exceptions.
-NO COMPLETION WITHOUT WRITING BOTH REPORT FILES:
-  - `~/.ashare-assistant/data/{DATE}/market_review.md`（复盘报告）
-  - `~/.ashare-assistant/data/{DATE}/trading_plan.md`（交易计划）
-MARKET REVIEW INCOMPLETE IF:
-  - 市场情绪节未包含淘股吧帖子直接引用（至少2条）
-  - "七、趋势候选股汇总"表格缺失或未覆盖 trend_report.md 中所有4/5星趋势股
-TRADING PLAN INCOMPLETE IF:
-  - 持仓洞察中存在100股以下的操作建议
-  - 目标仓位未换算为100股整数倍
-FAST LANE MUST NOT PAUSE FOR CONFIRMATION BETWEEN PHASES.
+1. NO analysis or report WITHOUT running the designated script FIRST. 所有数据必须来自脚本输出文件，不得凭记忆、推断或网页抓取填写任何数字、股票名称或事件。
+2. NO step N+1 WITHOUT completing step N FIRST. 必须按工作流顺序逐步执行。
+3. NO confirmation prompts between steps. 不要在步骤之间询问用户"是否继续"，一口气跑完。
+4. NO manual workaround WITHOUT script succeeding FIRST. 脚本报错时立即告知用户并停止，不得绕过脚本手动生成内容。
+5. A股规则：T+1、涨跌停板（主板±10%/ST±5%/创业板科创±20%/北交所±30%）、最小交易单位100股。
 </HARD-GATE>
 
 ---
 
-## 触发词路由表
+## 场景一：复盘（触发词：复盘 / 复盘A股 / 全面复盘 / 今天行情 / 选股 / 明天买什么 / 交易计划）
 
-<EXTREMELY-IMPORTANT>
-收到用户消息后，先匹配下表确定执行模式。匹配成功后，必须先宣布：「正在使用 [模式名称] 模式，执行路径：[路径]」，然后严格按对应路径执行。不要询问用户"是否继续下一阶段"。
+收到以上任意触发词后，宣布「开始复盘」，然后按以下 8 步顺序执行。
 
-| 模式 | 触发词 | 执行路径 | 数据采集模式 |
-|------|--------|---------|-------------|
-| **FAST LANE** | `复盘` / `复盘A股` / `全面复盘` | 1→2→3→4 一口气跑完 | `--broker`（含账户数据） |
-| 单能力 market-review | `今天行情` | 1→2 | 标准（无 `--broker`） |
-| 单能力 stock-pick | `选股` / `明天买什么` | 1→2→3 | 标准 |
-| 单能力 trading-plan | `交易计划` | 1→2→3→4 | `--broker` |
-| 独立能力 trade-review | `交易复盘` / `检查执行` / `review` / `今天交易怎么样` | 仅5 | — |
-| 独立能力 holding-insight | `持仓建议` / `持仓分析` / `加减仓` / `该买还是该卖` | 仅6 | — |
-| 独立能力 strategy-evolution | `策略进化` | 仅7 | — |
+### Step 1. 数据采集
 
-**FAST LANE 规则**：
-1. 用户说"复盘"即等同于"帮我完成从数据采集到交易计划的全流程"，不要反问、不要拆步确认。
-2. 必须使用 `--broker` 采集账户数据，因为交易计划需要持仓信息。
-3. 阶段间自动衔接，每个阶段完成后直接进入下一阶段。
-4. 终态：同时产出 `market_review.md` + `trading_plan.md` + `candidates.json`。The terminal state is writing BOTH report files and candidates.json. Do NOT stop after market-review or stock-pick alone.
-</EXTREMELY-IMPORTANT>
+```bash
+DATE=$(date +%Y-%m-%d)
+PYTHONPATH=. python3 scripts/collect_sentiment.py \
+  --output-dir ~/.ashare-assistant/data/${DATE}/collect \
+  --news-count 20 \
+  --taoguba-count 20
+```
+
+- 脚本自动检测 `~/.openclaw/jvquant.json`，若存在则自动采集券商账户数据。
+- 采集失败 → 脚本以非零退出码终止，**停止复盘并告知用户**。
+- 采集成功 → 读取 `collection_summary.json` 和 `run_id.json`，确认各数据源状态。失败的数据源在后续步骤中明确标注。
+
+### Step 2. 市场分析
+
+读取以下文件，完成市场环境判断（详见 `references/analysis-framework.md` 第0-1步）：
+
+| 文件 | 内容 |
+|------|------|
+| `us_market.json` | 美股前夜走势，预判A股板块联动 |
+| `market_sectors.json` | 板块涨跌排名 |
+| `funding.json` | 北向资金、主力净流入 |
+| `broker_account.json` | 账户持仓（若存在） |
+| `strategy/active.yaml` | 当前策略参数 |
+
+产出：大盘环境判断（regime：bull/neutral/bear/extreme）、account_mode（attack/balanced/defense/critical）、成交额分析。
+
+### Step 3. 舆情分析
+
+读取以下文件，完成题材线索识别（详见 `references/analysis-framework.md` 第2步）：
+
+| 文件 | 内容 |
+|------|------|
+| `news_headline.json` / `news_daily.json` / `news_opportunity.json` | 财经新闻 |
+| `news_flash.json` | 快讯 |
+| `taoguba_hot.json` / `taoguba_hot_discussion.json` / `taoguba_recommend.json` | 淘股吧舆情 |
+
+产出：主线题材、新兴线索、衰退警示、市场情绪标签。**必须直接引用至少2条淘股吧原帖内容作为情绪证据。**
+
+### Step 4. 趋势选股
+
+读取以下文件，完成个股筛选（详见 `references/analysis-framework.md` 第3步、`references/stock-pick.md`）：
+
+| 文件 | 内容 |
+|------|------|
+| `trend_report.md` | 趋势扫描结果（人气榜200只K线评分） |
+| `ths_report.md` | 同花顺板块快照 |
+| `trend_scan.json` | 趋势扫描原始数据 |
+| `funding.json` 中 `trend_candidates_funding` | 趋势股资金交叉验证 |
+
+筛选流程：硬性排除 → 四维标签化（趋势/资金/题材/情绪）→ 多维共振筛选。
+
+对高分候选执行深度研究：
+
+```bash
+PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
+  --codes <code1> <code2> ... \
+  --output-dir ~/.ashare-assistant/data/${DATE}/collect/deep_research
+```
+
+读取深度研究结果，完成候选股证据分级（A/B/C级）。
+
+### Step 5. 生成复盘报告
+
+按 `references/report-templates.md` 模板一，将 Step 2-4 的结论写入复盘报告：
+
+```bash
+# 保存位置
+~/.ashare-assistant/data/${DATE}/market_review.md
+```
+
+**完成标准**：
+- 包含市场环境、美股影响、题材线索、候选股分析、风险提示
+- "精华言论"章节包含淘股吧原帖引用（至少2条）
+- "趋势候选股汇总"表格覆盖 `trend_report.md` 中所有4/5星趋势股
+
+### Step 6. 交易分析
+
+运行交易复盘脚本（**禁止手动分析**）：
+
+```bash
+PYTHONPATH=. python3 scripts/trade_review.py \
+  --decision-log ~/.ashare-assistant/memory/decision_log.jsonl \
+  --strategy strategy/active.yaml \
+  --output ~/.ashare-assistant/data/${DATE}/trade_review.json \
+  --pretty
+```
+
+读取 `trade_review.json`，提取：瑕疵总览、逐条瑕疵明细、择时评分、计划匹配率、改进建议。详见 `references/trade-review.md`。
+
+> 若 `decision_log.jsonl` 不存在（首次使用），脚本仍正常运行，仅产出持仓相关瑕疵检测。
+
+### Step 7. 持仓洞察
+
+运行持仓洞察脚本：
+
+```bash
+PYTHONPATH=. python3 scripts/holding_insight.py \
+  --strategy strategy/active.yaml \
+  --output ~/.ashare-assistant/data/${DATE}/holding_insight.json \
+  --pretty
+```
+
+读取 `holding_insight.json`，提取每只持仓的操作建议（add/hold/sell）。详见 `references/holding-insight.md`。
+
+> 所有操作建议的数量必须为**100股整数倍**。
+
+### Step 8. 生成交易计划
+
+按 `references/report-templates.md` 模板二，结合 Step 5-7 的结论写入交易计划：
+
+```bash
+# 保存位置
+~/.ashare-assistant/data/${DATE}/trading_plan.md
+~/.ashare-assistant/data/${DATE}/candidates.json
+```
+
+**完成标准**：
+- 包含账户状态、交易复盘、持仓洞察、明日交易计划、仓位分配
+- 操作建议中目标仓位换算为100股整数倍
+- `candidates.json` 字段符合 `references/trading-plan.md` 中的约束
+
+写入 `candidates.json` 后执行校验和决策日志记录：
+
+```bash
+PYTHONPATH=. python3 scripts/risk_check.py \
+  --candidates ~/.ashare-assistant/data/${DATE}/candidates.json \
+  --strategy strategy/active.yaml
+PYTHONPATH=. python3 scripts/decision_logger.py \
+  --candidates ~/.ashare-assistant/data/${DATE}/candidates.json \
+  --output ~/.ashare-assistant/memory/decision_log.jsonl
+```
+
+**复盘终态**：同时产出 `market_review.md` + `trading_plan.md` + `candidates.json`。
 
 ---
 
-## 能力矩阵
+## 场景二：策略进化（触发词：策略进化）
 
-- `data-collect`: 统一采集多源数据并写入 `~/.ashare-assistant/data/{DATE}/collect/`，同时执行缓存清理。
-- `market-review`: 收盘后行情复盘、题材/资金/情绪分析。
-- `stock-pick`: 基于趋势扫描与题材筛选候选，触发深度研究批处理。
-- `trading-plan`: 结合候选与持仓，生成次日交易计划并落盘 `market_review.md` / `trading_plan.md` / `candidates.json`。
-- `trade-review`: 计划 vs 实际执行差异复盘，输出 `trade_review.json`。
-- `holding-insight`: 对持仓给出加仓/减仓/持有建议，输出 `holding_insight.json`。
-- `strategy-evolution`: 基于复盘反馈调整策略参数与知识沉淀（谨慎、少量变更）。
+基于历史复盘数据微调策略参数。详见 `references/evolution.md`。
 
-## 核心约束
-
-- 禁止猜测数据；数据源失败时明确标注并降级。
-- 先读落盘文件再总结，不以中间推断替代最终输出。
-- 策略修改每次最多 1-2 个参数，必须写明原因与预期影响。
-- HTML 解析依赖脚本实现，禁止临时正则解析网页。
-
----
-
-## Workflow
-
-### 1. `data-collect`（必需）
-
-按 `references/data-collect.md` 执行。
-- 若路由表指定 `--broker`，必须带 `--broker` 参数采集账户数据。
-- 若路由表指定"标准"，不加 `--broker`。
-
-### 2. `market-review`
-
-按 `references/market-review.md` 执行。
-如需详细分析框架，按需读取 `references/analysis-framework.md`。
-
-### 3. `stock-pick`
-
-按 `references/stock-pick.md` 执行。
-
-### 4. `trading-plan`
-
-按 `references/trading-plan.md` 执行。
-报告模板见 `references/report-templates.md`（必须产出两份独立报告）。
-终态至少包含：
-- `~/.ashare-assistant/data/{DATE}/market_review.md`（复盘报告）
-- `~/.ashare-assistant/data/{DATE}/trading_plan.md`（交易计划）
-- `~/.ashare-assistant/data/{DATE}/candidates.json`
-- `~/.ashare-assistant/memory/decision_log.jsonl`（校验通过时）
-
-### 5. `trade-review`（可独立触发）
-
-按 `references/trade-review.md` 执行。
-
-### 6. `holding-insight`（可独立触发）
-
-按 `references/holding-insight.md` 中"持仓洞察"章节执行。
-
-### 7. `strategy-evolution`（按需）
-
-优先读取：
-- `references/evolution.md`
+输入材料：
+- `~/.ashare-assistant/data/` 下的历史 `trade_review.json`
+- `~/.ashare-assistant/memory/decision_log.jsonl`
 - `evolution/feedback.md`
 - `strategy/active.yaml`
+
+规则：
+- 每次最多修改 1-2 个参数，写明原因与预期影响。
+- 不基于单日结果大幅调整。
+- 修改后更新 `evolution/feedback.md` 记录变更历史。
+
+---
+
+## References（按需加载，勿默认全部读取）
+
+| 条件 | 读取 |
+|------|------|
+| 执行 Step 2-4（市场/舆情/选股分析）时 | `references/analysis-framework.md` |
+| 执行 Step 4（趋势选股）时 | `references/stock-pick.md` |
+| 执行 Step 5（复盘报告）或 Step 8（交易计划）时 | `references/report-templates.md` |
+| 执行 Step 6（交易分析）时 | `references/trade-review.md` |
+| 执行 Step 7（持仓洞察）时 | `references/holding-insight.md` |
+| 执行 Step 8（交易计划）时 | `references/trading-plan.md` |
+| 执行场景二（策略进化）时 | `references/evolution.md` |
+| 需要了解数据采集脚本细节时 | `references/data-collect.md` |
 
 ---
 
 ## 目录约定
 
-- 缓存：`~/.ashare-assistant/cache/`
-- 数据：`~/.ashare-assistant/data/{DATE}/`
-- 记忆：`~/.ashare-assistant/memory/decision_log.jsonl`
-- 券商数据：`~/.ashare-assistant/broker_data/`
+| 用途 | 路径 |
+|------|------|
+| 采集数据 | `~/.ashare-assistant/data/{DATE}/collect/` |
+| 当日报告 | `~/.ashare-assistant/data/{DATE}/` |
+| 决策日志 | `~/.ashare-assistant/memory/decision_log.jsonl` |
+| 券商持仓历史 | `~/.ashare-assistant/broker_data/` |
+| jvQuant 配置 | `~/.openclaw/jvquant.json`（含 token/acc/pass） |
+| 策略文件 | `strategy/active.yaml` |
+| 知识沉淀 | `evolution/feedback.md`、`evolution/known_pitfalls.md`、`evolution/selection_rules.md` |

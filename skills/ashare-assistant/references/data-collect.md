@@ -1,41 +1,34 @@
 # 阶段1：数据采集
 
-**运行前提**：在执行任何脚本前，先确认日期变量：
+**运行前提**：在执行任何脚本前，先确认日期变量和工作目录：
 
 ```bash
 DATE=$(date +%Y-%m-%d)
+cd <skill_root>   # SKILL.md 所在目录，即 skills/ashare-assistant/
 ```
 
-若脚本报错或参数不确定，先查帮助，不要读取脚本源码：
+> 所有脚本必须从 `<skill_root>` 执行，否则报 `ModuleNotFoundError`。
+
+运行数据采集脚本：
 
 ```bash
-python3 scripts/collect_sentiment.py --help
-```
-
-运行数据采集脚本，收集所有数据源。
-
-```bash
-# 标准采集（不含账户数据）
 python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
+  --output-dir ~/.ashare-assistant/data/${DATE}/collect \
   --news-count 20 \
   --taoguba-count 20
-
-# 含账户持仓数据（需已配置 ~/.openclaw/jvquant.json）
-python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
-  --news-count 20 \
-  --taoguba-count 20 \
-  --broker
 ```
 
-脚本参数详情及输出文件说明参见 `references/commands.md`。
-jvQuant 配置说明参见 `references/commands.md` 中的“jvQuant 配置”章节。
+**券商账户数据（jvQuant）自动检测逻辑**：
+
+- 脚本启动时自动检测 `~/.openclaw/jvquant.json` 是否存在：
+  - **存在** → 自动采集账户持仓数据，无需任何额外参数
+  - **采集失败** → 脚本以非零退出码终止，stderr 输出明确错误；此时**不能继续生成交易计划**，须告知用户修复 jvquant.json 配置
+  - **文件不存在** → 打印跳过提示，不报错，但后续将无法生成持仓相关内容
 
 采集完成后必须读取：
 
-1. `~/.ashare-assistant/data/{DATE}/collection_summary.json`
-2. `~/.ashare-assistant/data/{DATE}/run_id.json`
+1. `~/.ashare-assistant/data/${DATE}/collect/collection_summary.json`
+2. `~/.ashare-assistant/data/${DATE}/collect/run_id.json`
 
 要求：
 

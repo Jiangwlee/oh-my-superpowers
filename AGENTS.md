@@ -181,8 +181,6 @@ skills/
 
 ```
 skills/<skill-name>/          ← 源码（在此修改）
-.claude/skills/<skill-name>/  ← 部署副本（Claude Code 用）
-.agents/skills/<skill-name>/  ← 部署副本（其他 agent 用）
 ```
 
 修改 skill 的正确流程：
@@ -190,10 +188,6 @@ skills/<skill-name>/          ← 源码（在此修改）
 ```bash
 # 1. 在源码目录修改
 vim skills/<skill-name>/SKILL.md
-
-# 2. 部署到本地两个部署目录
-cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
-cp -r skills/<skill-name>/ .agents/skills/<skill-name>/
 ```
 
 **禁止直接修改 `.claude/skills/` 或 `.agents/skills/` 下的文件。**

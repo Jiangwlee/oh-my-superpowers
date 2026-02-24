@@ -103,6 +103,7 @@ candidates.json 格式：
 ```
 
 字段说明：
+
 - `total_capital`：总可用资金（元），来自 broker_account.json 中的 usable，无账户数据时由用户提供
 - `market_mode`：第一步市场环境判断结论（strong/neutral/weak）
 - `account_mode`：第一步账户健康度判断结论（growth/normal/defensive/critical）
@@ -129,6 +130,7 @@ python3 scripts/diagnose.py \
 ```
 
 失败语义：
+
 - `validate_output.py` 非0退出：结构不合法，继续出报告但不写 decision_log
 - `decision_logger.py` 非0退出：日志写入失败，主流程继续并在风险提示中标注
 
