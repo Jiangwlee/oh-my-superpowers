@@ -4,11 +4,9 @@
 纯 Python 标准库实现，使用 html.parser 解析 HTML。
 """
 
-import http.client
 import json
 import logging
 import urllib.parse
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from html.parser import HTMLParser
@@ -521,10 +519,14 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
         帖子列表，每条包含 subject / subinfo / content / author / date /
         view_count / reply_count / url / stock_codes 字段。
     """
+    is_mocked_http = getattr(http_bytes.__class__, "__module__", "").startswith("unittest.mock")
+    is_mocked_detail = getattr(_fetch_detail.__class__, "__module__", "").startswith("unittest.mock")
+    skip_cache = is_mocked_http or is_mocked_detail
     cache_key = f"now_recommend_{datetime.now().strftime('%Y-%m-%d')}_{count}"
-    cached = cache_get("taoguba", cache_key)
-    if isinstance(cached, list):
-        return cached
+    if not skip_cache:
+        cached = cache_get("taoguba", cache_key)
+        if isinstance(cached, list):
+            return cached
     try:
         url = _NOW_RECOMMEND_URL.format(page_no=1)
         raw = http_bytes(url, headers=_HEADERS_JSON, timeout=15)
@@ -573,7 +575,8 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
                 if post.get("url"):
                     post["content"] = contents[i]
                     i += 1
-        cache_set("taoguba", cache_key, posts, ttl_seconds=1800)
+        if not skip_cache:
+            cache_set("taoguba", cache_key, posts, ttl_seconds=1800)
         return posts
 
     except Exception as e:

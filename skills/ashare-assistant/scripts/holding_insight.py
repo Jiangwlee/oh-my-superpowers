@@ -41,7 +41,6 @@ from scripts.fetchers.trend_scanner import (
 
 logger = logging.getLogger(__name__)
 _CN_TZ = timezone(timedelta(hours=8))
-_DEFAULT_STRATEGY = dict(shared_core.DEFAULT_STRATEGY)
 
 
 # ---------------------------------------------------------------------------

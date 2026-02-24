@@ -29,7 +29,6 @@ from scripts.core import shared as shared_core
 logger = logging.getLogger(__name__)
 
 _CN_TZ = timezone(timedelta(hours=8))
-_DEFAULT_STRATEGY = dict(shared_core.DEFAULT_STRATEGY)
 
 
 def _now_cn_iso() -> str:

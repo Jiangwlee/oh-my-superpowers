@@ -1,7 +1,6 @@
 """金融界新闻数据抓取模块。"""
 
 import json
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from html.parser import HTMLParser
