@@ -1,29 +1,83 @@
 """资金面抓取：北向净流入 + 主力净流入 Top20 + 趋势候选股资金详情。
 
-依赖：可选 akshare>=1.15.0。
-不可用时自动 fallback，返回 data_degraded=True，不阻断主流程。
-
-接口说明（经实测验证）：
-- 北向净流入：ak.stock_hsgt_fund_flow_summary_em()
-    列名：资金方向（'北向'/'南向'）、资金净流入（亿）
-    过滤 资金方向=='北向' 后对 资金净流入 求和（沪股通+深股通）。
-- 主力净流入排名：ak.stock_individual_fund_flow_rank(indicator=...)
-    indicator 可选：'今日' / '3日' / '5日' / '10日'
-    列名模式：{indicator}主力净流入-净额（元）
-    主用 '3日' 排名（反映资金持续性，且无盘前空数据问题），
-    辅助采集 '今日' 作为当日实时参考（盘前可能为空）。
-- 趋势候选股资金：复用上述 DataFrame 缓存，按代码过滤，零额外 API 调用。
+数据来源（均无需认证，直连可用）：
+- 北向资金净流入：东方财富数据中心 datacenter-web.eastmoney.com
+    reportName=RPT_MUTUAL_DEAL_HISTORY，过滤 MUTUAL_TYPE="006"（北向汇总），
+    取最新一行 NET_DEAL_AMT ÷ 100 = 亿元
+- 主力净流入排名：东方财富延迟行情推送 push2delay.eastmoney.com
+    /api/qt/clist/get，indicator='3日' fid=f267，indicator='今日' fid=f62
+    全市场 A 股，按净额降序，逐页翻取（每页100条）
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import math
+import urllib.parse
 from datetime import datetime
 from typing import Any
 
 from scripts.core.cache import cache_get, cache_set
+from scripts.core.http_client import http_text, http_json
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# 常量
+# ---------------------------------------------------------------------------
+
+_NORTHBOUND_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+_NORTHBOUND_PARAMS = {
+    "reportName": "RPT_MUTUAL_DEAL_HISTORY",
+    "columns": "MUTUAL_TYPE,TRADE_DATE,NET_DEAL_AMT",
+    "filter": '(MUTUAL_TYPE="006")',
+    "pageNumber": "1",
+    "pageSize": "1",
+    "sortTypes": "-1",
+    "sortColumns": "TRADE_DATE",
+    "source": "WEB",
+    "client": "WEB",
+}
+_NORTHBOUND_HEADERS = {
+    "Referer": "https://data.eastmoney.com/",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/147.0",
+}
+
+_FUNDFLOW_URL = "https://push2delay.eastmoney.com/api/qt/clist/get"
+_FUNDFLOW_UT = "b2884a393a59ad64002292a3e90d46a5"
+_FUNDFLOW_FS = (
+    "m:0+t:6+f:!2,m:0+t:13+f:!2,m:0+t:80+f:!2,"
+    "m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:7+f:!2,m:1+t:3+f:!2"
+)
+_FUNDFLOW_HEADERS = {
+    "Referer": "https://data.eastmoney.com/zjlx/detail.html",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/147.0",
+}
+
+# indicator → (fid 排序字段, fields 列表, 净额字段)
+_INDICATOR_CONFIG: dict[str, tuple[str, str, str]] = {
+    "今日": (
+        "f62",
+        "f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f204,f205,f124",
+        "f62",
+    ),
+    "3日": (
+        "f267",
+        "f12,f14,f2,f127,f267,f268,f269,f270,f271,f272,f273,f274,f275,f276,f257,f258,f124",
+        "f267",
+    ),
+    "5日": (
+        "f164",
+        "f12,f14,f2,f109,f164,f165,f166,f167,f168,f169,f170,f171,f172,f173,f257,f258,f124",
+        "f164",
+    ),
+    "10日": (
+        "f174",
+        "f12,f14,f2,f160,f174,f175,f176,f177,f178,f179,f180,f181,f182,f183,f260,f261,f124",
+        "f174",
+    ),
+}
 
 # ---------------------------------------------------------------------------
 # 模块级缓存：fetch_funding() 调用后保存完整排名数据，供后续 cross-reference 使用
@@ -59,11 +113,13 @@ def _build_funding_result(
     return result
 
 
-def _parse_northbound(df: Any) -> float:
-    """从 stock_hsgt_fund_flow_summary_em 返回值中提取北向净流入（亿）。
+# ---------------------------------------------------------------------------
+# 兼容旧测试的 DataFrame 解析函数（保留，以防其他地方引用）
+# ---------------------------------------------------------------------------
 
-    过滤 资金方向=='北向' 后对 资金净流入 列求和（沪股通+深股通）。
-    """
+
+def _parse_northbound(df: Any) -> float:
+    """从 DataFrame 中提取北向净流入（亿）。兼容旧路径，新路径直接用 HTTP。"""
     if df is None or getattr(df, "empty", True):
         return 0.0
     try:
@@ -81,16 +137,7 @@ def _parse_main_force_rows(
     *,
     update_cache: bool = True,
 ) -> list[dict[str, Any]]:
-    """从 stock_individual_fund_flow_rank 返回值中提取全量排名数据。
-
-    Args:
-        df: akshare 返回的 DataFrame。
-        indicator: 数据时间窗口，决定列名前缀（'今日'/'3日'/'5日'/'10日'）。
-        update_cache: 是否更新模块级 _RANK_CACHE（仅主指标应设为 True）。
-
-    Returns:
-        按净流入降序排列的全量列表（含排名），同时可选写入模块缓存。
-    """
+    """从 DataFrame 中提取全量排名数据。兼容旧测试路径，新路径直接用 HTTP。"""
     global _RANK_CACHE
     if update_cache:
         _RANK_CACHE = []
@@ -133,6 +180,128 @@ def _parse_main_force_rows(
     except Exception:
         logger.exception("_parse_main_force_rows 出错 (indicator=%s)", indicator)
         return []
+
+
+# ---------------------------------------------------------------------------
+# 北向资金：datacenter-web.eastmoney.com
+# ---------------------------------------------------------------------------
+
+
+def _fetch_northbound_net() -> float:
+    """获取北向资金今日净流入（沪股通+深股通合计，亿元）。
+
+    接口：datacenter-web.eastmoney.com/api/data/v1/get
+    reportName=RPT_MUTUAL_DEAL_HISTORY，过滤 MUTUAL_TYPE="006"（北向汇总行），
+    取最新一行的 NET_DEAL_AMT ÷ 100 = 亿元。
+
+    Returns:
+        北向净流入（亿元），失败返回 0.0。
+    """
+    try:
+        url = _NORTHBOUND_URL + "?" + urllib.parse.urlencode(_NORTHBOUND_PARAMS)
+        body = http_text(url, headers=_NORTHBOUND_HEADERS, timeout=10)
+        data = json.loads(body)
+        rows = (data.get("result") or {}).get("data") or []
+        if not rows:
+            return 0.0
+        val = rows[0].get("NET_DEAL_AMT")
+        if val is None:
+            return 0.0
+        # NET_DEAL_AMT 原始单位：百万元（÷100 = 亿元）
+        return round(float(val) / 100, 3)
+    except Exception:
+        logger.exception("北向资金采集失败")
+        return 0.0
+
+
+# ---------------------------------------------------------------------------
+# 个股主力净流入排名：push2delay.eastmoney.com
+# ---------------------------------------------------------------------------
+
+
+def _fetch_fund_flow_rank(indicator: str = "3日") -> list[dict[str, Any]]:
+    """获取全市场个股主力净流入排名（东方财富延迟行情接口）。
+
+    Args:
+        indicator: '今日' / '3日' / '5日' / '10日'
+
+    Returns:
+        按净流入降序的全量列表：
+        [{"code": str, "name": str, "net_inflow": float(亿), "rank": int}, ...]
+        失败时返回空列表。
+    """
+    cfg = _INDICATOR_CONFIG.get(indicator)
+    if cfg is None:
+        logger.warning("不支持的 indicator: %s", indicator)
+        return []
+
+    fid, fields, net_field = cfg
+    global _RANK_CACHE
+
+    all_rows: list[dict[str, Any]] = []
+    try:
+        # 第1页：获取总数量
+        base_params = {
+            "fid": fid,
+            "po": "1",
+            "pz": "100",
+            "pn": "1",
+            "np": "1",
+            "fltt": "2",
+            "invt": "2",
+            "ut": _FUNDFLOW_UT,
+            "fs": _FUNDFLOW_FS,
+            "fields": fields,
+        }
+        url = _FUNDFLOW_URL + "?" + urllib.parse.urlencode(base_params)
+        body = http_text(url, headers=_FUNDFLOW_HEADERS, timeout=12)
+        data = json.loads(body)
+        diff = (data.get("data") or {}).get("diff") or []
+        total = (data.get("data") or {}).get("total") or 0
+
+        all_rows.extend(diff)
+
+        # 翻页取剩余数据
+        total_pages = math.ceil(total / 100)
+        for pn in range(2, total_pages + 1):
+            params = dict(base_params)
+            params["pn"] = str(pn)
+            url = _FUNDFLOW_URL + "?" + urllib.parse.urlencode(params)
+            try:
+                body = http_text(url, headers=_FUNDFLOW_HEADERS, timeout=12)
+                page_data = json.loads(body)
+                page_diff = (page_data.get("data") or {}).get("diff") or []
+                all_rows.extend(page_diff)
+            except Exception:
+                logger.warning("第 %s 页翻页失败，已有 %s 条", pn, len(all_rows))
+                break
+
+    except Exception:
+        logger.exception("主力净流入排名采集失败 (indicator=%s)", indicator)
+        return []
+
+    # 转换为标准格式
+    result: list[dict[str, Any]] = []
+    for rank, row in enumerate(all_rows, start=1):
+        code = str(row.get("f12") or "").strip()
+        name = str(row.get("f14") or "").strip()
+        net_yuan = _to_float(row.get(net_field, 0))
+        if code and name and net_yuan != 0.0:
+            result.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "net_inflow": round(net_yuan / 1e8, 3),
+                    "rank": rank,
+                }
+            )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 公开接口
+# ---------------------------------------------------------------------------
 
 
 def fetch_funding_for_codes(codes: list[str]) -> list[dict[str, Any]]:
@@ -181,43 +350,23 @@ def fetch_funding(date: str | None = None) -> dict[str, Any]:
         if isinstance(main_force, list):
             global _RANK_CACHE
             _RANK_CACHE = [
-                row for row in main_force
+                row
+                for row in main_force
                 if isinstance(row, dict) and row.get("code") and row.get("name")
             ]
         return cached
 
-    _ = date
-    try:
-        import akshare as ak  # type: ignore
-    except Exception:
-        return _build_funding_result(northbound_net=0.0, top_rows=[], degraded=True)
-
-    north_net = 0.0
-    top_rows: list[dict[str, Any]] = []
-    today_rows: list[dict[str, Any]] = []
-
     # 北向资金
-    try:
-        north_df = ak.stock_hsgt_fund_flow_summary_em()
-        north_net = _parse_northbound(north_df)
-    except Exception:
-        logger.exception("北向资金采集失败")
+    north_net = _fetch_northbound_net()
 
-    # 主指标：3日主力净流入排名
-    try:
-        main_df = ak.stock_individual_fund_flow_rank(indicator="3日")
-        top_rows = _parse_main_force_rows(main_df, indicator="3日", update_cache=True)
-    except Exception:
-        logger.exception("3日主力净流入排名采集失败")
+    # 主指标：3日主力净流入排名（全量，写入缓存）
+    top_rows = _fetch_fund_flow_rank(indicator="3日")
+    _RANK_CACHE = top_rows  # type: ignore[assignment]
 
-    # 辅助：今日主力净流入（盘前可能为空，不影响主流程）
+    # 辅助：今日排名（盘前可能为空，不写全局缓存）
+    today_rows: list[dict[str, Any]] = []
     try:
-        today_df = ak.stock_individual_fund_flow_rank(indicator="今日")
-        today_rows = _parse_main_force_rows(
-            today_df,
-            indicator="今日",
-            update_cache=False,
-        )
+        today_rows = _fetch_fund_flow_rank(indicator="今日")
     except Exception:
         pass  # 盘前为空是正常的，静默处理
 
@@ -233,4 +382,10 @@ def fetch_funding(date: str | None = None) -> dict[str, Any]:
     return result
 
 
-__all__ = ["fetch_funding", "fetch_funding_for_codes", "_build_funding_result"]
+__all__ = [
+    "fetch_funding",
+    "fetch_funding_for_codes",
+    "_build_funding_result",
+    "_parse_northbound",
+    "_parse_main_force_rows",
+]

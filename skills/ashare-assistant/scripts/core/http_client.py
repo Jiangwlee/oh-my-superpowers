@@ -2,19 +2,86 @@
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import logging
+import os
 import time
+import unittest.mock
 import urllib.error
 import urllib.request
 from typing import Any
 
 logger = logging.getLogger(__name__)
-_DEFAULT_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "Gecko/20100101 Firefox/147.0"
+_DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/147.0"
+
+# 不经过任何代理的专用 opener。
+# urllib 默认 opener 会读取 http_proxy / https_proxy 等系统环境变量，
+# 导致访问东财、淘股吧等国内接口时因调用方设置的代理出错。
+# 使用空 ProxyHandler({}) 明确禁用代理，确保直连。
+_NO_PROXY_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
 )
+
+# 代理相关环境变量列表（大小写均可能出现）。
+_PROXY_ENV_VARS = (
+    "http_proxy",
+    "https_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "all_proxy",
+    "ALL_PROXY",
+    "no_proxy",
+    "NO_PROXY",
+)
+
+
+@contextlib.contextmanager
+def no_proxy_env():
+    """临时禁用代理，使 requests 等第三方库直连网络。
+
+    同时清除进程代理环境变量并 patch ``requests.utils.getproxies`` 返回空字典，
+    彻底阻断两条代理检测路径：
+
+    1. ``os.environ`` 中的 http_proxy / https_proxy 等变量
+    2. macOS 系统代理（通过 ``getproxies_macosx_sysconf()`` 检测），
+       requests 在 env vars 为空时会 fallback 读取系统代理，
+       patch 后同样返回 ``{}`` 使其直连。
+
+    退出上下文后自动恢复原始环境变量和原始函数。
+
+    用法::
+
+        from scripts.core.http_client import no_proxy_env
+
+        with no_proxy_env():
+            resp = requests.get("https://example.com")
+    """
+    saved: dict[str, str] = {}
+    for key in _PROXY_ENV_VARS:
+        if key in os.environ:
+            saved[key] = os.environ.pop(key)
+    try:
+        import requests.utils as _requests_utils  # type: ignore[import]
+
+        patch_target = _requests_utils
+        attr_name = "getproxies"
+    except ImportError:
+        patch_target = None
+        attr_name = ""
+
+    if patch_target is not None:
+        with unittest.mock.patch.object(patch_target, attr_name, return_value={}):
+            try:
+                yield
+            finally:
+                os.environ.update(saved)
+    else:
+        try:
+            yield
+        finally:
+            os.environ.update(saved)
 
 
 def http_text(
@@ -55,11 +122,13 @@ def http_text(
                 headers=merged_headers,
                 method=method_upper,
             )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
                 return resp.read().decode("utf-8")
         except http.client.IncompleteRead as exc:
             partial = exc.partial or b""
-            logger.warning("http_text incomplete read for %s, returning partial body", url)
+            logger.warning(
+                "http_text incomplete read for %s, returning partial body", url
+            )
             return partial.decode("utf-8", errors="replace")
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             last_exc = exc
@@ -111,10 +180,12 @@ def http_bytes(
                 headers=merged_headers,
                 method=method_upper,
             )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
                 return resp.read()
         except http.client.IncompleteRead as exc:
-            logger.warning("http_bytes incomplete read for %s, returning partial body", url)
+            logger.warning(
+                "http_bytes incomplete read for %s, returning partial body", url
+            )
             return exc.partial or b""
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             last_exc = exc

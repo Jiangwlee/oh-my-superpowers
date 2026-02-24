@@ -7,8 +7,8 @@
 #   必须：Python 3.10+
 #   可选：Node.js 22+，Google Chrome / Chromium（供其他渲染类技能使用）
 #   可选：pandoc（有内置 fallback），中文字体（Linux 推荐）
-#   pip 包：yfinance（美股行情采集）
 #   说明：本 skill 本身不负责 PDF/PNG 渲染；Node/Chrome 仅供渲染类技能预装
+#         数据采集均使用标准库 urllib，无需额外 pip 包
 set -e
 
 echo "=== ashare-assistant 依赖安装 ==="
@@ -77,11 +77,6 @@ if [ "$DISTRO" = "macos" ]; then
 
     [ -f "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ] || \
         echo "⚠️  未找到 Google Chrome，请从 https://www.google.com/chrome/ 安装"
-
-    echo "安装 Python 依赖（yfinance）..."
-    python3 -m pip install --quiet yfinance 2>/dev/null || \
-        pip3 install --quiet yfinance 2>/dev/null || \
-        echo "  ⚠️  yfinance 安装失败，美股行情采集将被跳过"
 
     echo "✅ macOS 依赖检查完成（字体由系统自带 PingFang SC 提供）"
     echo "  Python: $(python3 --version)  Node.js: $(node -v)"
@@ -173,12 +168,6 @@ if [ "$DISTRO" = "unknown" ]; then
     echo "   请参考 requirements.txt 手动安装依赖"
     exit 1
 fi
-
-# ── 共用：安装 Python 第三方包 ────────────────────────────────────────────────
-echo "安装 Python 依赖（yfinance）..."
-python3 -m pip install --quiet yfinance 2>/dev/null || \
-    pip3 install --quiet yfinance 2>/dev/null || \
-    echo "  ⚠️  yfinance 安装失败，美股行情采集将被跳过"
 
 # ── 共用：创建目录 + 验证安装 ──────────────────────────────────────────────
 mkdir -p ~/.openclaw/media/a-share-review

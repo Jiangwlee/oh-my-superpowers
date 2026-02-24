@@ -23,7 +23,7 @@
 ## 第0步：美股前夜扫描
 
 > **触发条件**：`us_market.json` 存在且其 `market_status` 不为 `"unavailable"` 时执行。
-> 若文件不存在，或 `market_status == "unavailable"`（yfinance 未安装或网络失败），跳过本步骤，在报告中注明"美股数据不可用"。
+> 若文件不存在，或 `market_status == "unavailable"`（网络失败），跳过本步骤，在报告中注明"美股数据不可用"。
 
 ### 必须读取的数据
 

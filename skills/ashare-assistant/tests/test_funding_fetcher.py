@@ -1,6 +1,8 @@
+import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
@@ -133,6 +135,115 @@ class FundingFetcherTest(unittest.TestCase):
         # 缓存应保持原样
         self.assertEqual(len(funding._RANK_CACHE), 1)
         self.assertEqual(funding._RANK_CACHE[0]["code"], "000001")
+
+
+class FundingHttpPathTest(unittest.TestCase):
+    """测试新 HTTP 路径（mock http_text）。"""
+
+    def _northbound_response(self, net_deal_amt: float | None = 3130.79) -> str:
+        """构造北向资金接口响应体。"""
+        row = {
+            "MUTUAL_TYPE": "006",
+            "TRADE_DATE": "2026-02-24 00:00:00",
+            "NET_DEAL_AMT": net_deal_amt,
+        }
+        return json.dumps(
+            {
+                "result": {"data": [row], "pages": 1, "count": 1},
+                "success": True,
+                "message": "ok",
+            }
+        )
+
+    def _fundflow_response(
+        self,
+        diff: list[dict] | None = None,
+        total: int = 2,
+    ) -> str:
+        """构造个股主力净流入接口响应体。"""
+        if diff is None:
+            diff = [
+                {
+                    "f12": "300750",
+                    "f14": "宁德时代",
+                    "f62": 2750000000,
+                    "f267": 3000000000,
+                },
+                {
+                    "f12": "600519",
+                    "f14": "贵州茅台",
+                    "f62": 1500000000,
+                    "f267": 1800000000,
+                },
+            ]
+        return json.dumps({"data": {"diff": diff, "total": total}, "rc": 0})
+
+    def test_fetch_northbound_net_normal(self) -> None:
+        """正常响应时应正确换算 NET_DEAL_AMT ÷ 100 = 亿元。"""
+        with patch(
+            "scripts.fetchers.funding.http_text",
+            return_value=self._northbound_response(3130.79),
+        ):
+            result = funding._fetch_northbound_net()
+        # 3130.79 ÷ 100 = 31.308
+        self.assertAlmostEqual(result, 31.308, places=2)
+
+    def test_fetch_northbound_net_empty_rows(self) -> None:
+        """接口返回空数据时应返回 0.0。"""
+        body = json.dumps({"result": {"data": [], "pages": 0}, "success": True})
+        with patch("scripts.fetchers.funding.http_text", return_value=body):
+            result = funding._fetch_northbound_net()
+        self.assertEqual(result, 0.0)
+
+    def test_fetch_northbound_net_null_value(self) -> None:
+        """NET_DEAL_AMT 为 None 时应返回 0.0。"""
+        with patch(
+            "scripts.fetchers.funding.http_text",
+            return_value=self._northbound_response(None),
+        ):
+            result = funding._fetch_northbound_net()
+        self.assertEqual(result, 0.0)
+
+    def test_fetch_northbound_net_http_error(self) -> None:
+        """HTTP 异常时应安全降级返回 0.0。"""
+        with patch(
+            "scripts.fetchers.funding.http_text", side_effect=OSError("timeout")
+        ):
+            result = funding._fetch_northbound_net()
+        self.assertEqual(result, 0.0)
+
+    def test_fetch_fund_flow_rank_normal(self) -> None:
+        """正常响应时应正确解析排名数据并换算净流入（÷1e8=亿）。"""
+        with patch(
+            "scripts.fetchers.funding.http_text", return_value=self._fundflow_response()
+        ):
+            rows = funding._fetch_fund_flow_rank(indicator="3日")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["code"], "300750")
+        self.assertEqual(rows[0]["name"], "宁德时代")
+        # f267=3000000000 ÷ 1e8 = 30.0 亿
+        self.assertAlmostEqual(rows[0]["net_inflow"], 30.0, places=1)
+        self.assertEqual(rows[0]["rank"], 1)
+
+    def test_fetch_fund_flow_rank_empty(self) -> None:
+        """接口返回空数据时应返回空列表。"""
+        body = json.dumps({"data": {"diff": [], "total": 0}, "rc": 0})
+        with patch("scripts.fetchers.funding.http_text", return_value=body):
+            rows = funding._fetch_fund_flow_rank(indicator="3日")
+        self.assertEqual(rows, [])
+
+    def test_fetch_fund_flow_rank_invalid_indicator(self) -> None:
+        """不支持的 indicator 应返回空列表，不报错。"""
+        rows = funding._fetch_fund_flow_rank(indicator="无效")
+        self.assertEqual(rows, [])
+
+    def test_fetch_fund_flow_rank_http_error(self) -> None:
+        """HTTP 异常时应安全降级返回空列表。"""
+        with patch(
+            "scripts.fetchers.funding.http_text", side_effect=OSError("timeout")
+        ):
+            rows = funding._fetch_fund_flow_rank(indicator="今日")
+        self.assertEqual(rows, [])
 
 
 if __name__ == "__main__":

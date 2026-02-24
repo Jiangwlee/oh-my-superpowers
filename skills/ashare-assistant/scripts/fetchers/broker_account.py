@@ -51,6 +51,11 @@ from scripts.core.http_client import http_json as core_http_json
 
 logger = logging.getLogger(__name__)
 
+# jvQuant 柜台接口需直连，禁止经过系统 http_proxy。
+_NO_PROXY_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
+)
+
 _CN_TZ = timezone(timedelta(hours=8))
 
 _CACHE_DIR = os.path.expanduser("~/.openclaw")
@@ -169,7 +174,7 @@ def _query_trade_server(token: str) -> str:
 
     try:
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
+        with _NO_PROXY_OPENER.open(req, timeout=_DEFAULT_TIMEOUT) as resp:
             body = resp.read().decode("utf-8")
             data = json.loads(body)
     except (
@@ -337,7 +342,7 @@ def _login(cfg: dict, counter: str) -> str:
 
     try:
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
+        with _NO_PROXY_OPENER.open(req, timeout=_DEFAULT_TIMEOUT) as resp:
             body = resp.read().decode("utf-8")
             data = json.loads(body)
     except (
@@ -371,7 +376,9 @@ def _login(cfg: dict, counter: str) -> str:
 def _http_get(url: str) -> dict:
     """发送 GET 请求并解析 JSON，失败抛出 RuntimeError。"""
     try:
-        return core_http_json(url, method="GET", timeout=_DEFAULT_TIMEOUT, retries=2, sleep_sec=0.5)
+        return core_http_json(
+            url, method="GET", timeout=_DEFAULT_TIMEOUT, retries=2, sleep_sec=0.5
+        )
     except Exception as exc:
         raise RuntimeError(f"HTTP 请求失败: {url} — {exc}") from exc
 

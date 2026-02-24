@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -8,20 +9,6 @@ if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
 from scripts.fetchers import taoguba
-
-
-class _FakeResp:
-    def __init__(self, payload: bytes):
-        self._payload = payload
-
-    def read(self) -> bytes:
-        return self._payload
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
 
 
 class TaogubaFetchersTest(unittest.TestCase):
@@ -43,10 +30,12 @@ class TaogubaFetchersTest(unittest.TestCase):
                 ]
             },
         }
-        raw = taoguba.json.dumps(payload).encode("utf-8")
+        raw = json.dumps(payload).encode("utf-8")
 
-        with mock.patch("scripts.fetchers.taoguba.urllib.request.urlopen", return_value=_FakeResp(raw)):
-            with mock.patch("scripts.fetchers.taoguba._fetch_detail", return_value="正文A") as detail_mock:
+        with mock.patch("scripts.fetchers.taoguba.http_bytes", return_value=raw):
+            with mock.patch(
+                "scripts.fetchers.taoguba._fetch_detail", return_value="正文A"
+            ) as detail_mock:
                 rows = taoguba.fetch_taoguba_now_recommend(count=1)
 
         self.assertEqual(len(rows), 1)
@@ -74,7 +63,9 @@ class TaogubaFetchersTest(unittest.TestCase):
             },
         }
 
-        with mock.patch("scripts.fetchers.taoguba._fetch_json_get", return_value=payload):
+        with mock.patch(
+            "scripts.fetchers.taoguba._fetch_json_get", return_value=payload
+        ):
             rows = taoguba.fetch_taoguba_hot_discussion(page_no=1, count=1)
 
         self.assertEqual(len(rows), 1)

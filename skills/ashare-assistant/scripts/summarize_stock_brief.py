@@ -41,10 +41,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# LLM 网关（通常是本地 127.0.0.1）不应经过系统代理。
+_NO_PROXY_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
+)
+
 
 # ---------------------------------------------------------------------------
 # 配置加载
 # ---------------------------------------------------------------------------
+
 
 def _load_litellm_config() -> tuple[str, str, str]:
     """返回 (base_url, api_key, model_id)。"""
@@ -76,6 +82,7 @@ def _load_litellm_config() -> tuple[str, str, str]:
 # 工具函数
 # ---------------------------------------------------------------------------
 
+
 def _hours_ago(time_str: str, now: datetime) -> int | None:
     """将时间字符串转换为距现在的小时数（整数，向上取整）。
 
@@ -93,7 +100,7 @@ def _hours_ago(time_str: str, now: datetime) -> int | None:
     # 标准格式
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
-            dt = datetime.strptime(s[:19], fmt[:len(s[:19])])
+            dt = datetime.strptime(s[:19], fmt[: len(s[:19])])
             return max(0, int((now - dt).total_seconds() / 3600) + 1)
         except ValueError:
             continue
@@ -139,6 +146,7 @@ def _tier_for_source(source_type: str) -> str:
 # 输入数据精简（控制传给 LLM 的 token 量）
 # ---------------------------------------------------------------------------
 
+
 def _build_compact_input(em: dict, tgb: dict, now: datetime) -> dict:
     """从原始 JSON 中提取关键字段，压缩后传给 LLM。"""
     compact: dict[str, Any] = {}
@@ -149,7 +157,9 @@ def _build_compact_input(em: dict, tgb: dict, now: datetime) -> dict:
         {
             "title": n.get("title", ""),
             "pub_time": n.get("pub_datetime") or n.get("pub_time", ""),
-            "hours_ago": _hours_ago(n.get("pub_datetime") or n.get("pub_time", ""), now),
+            "hours_ago": _hours_ago(
+                n.get("pub_datetime") or n.get("pub_time", ""), now
+            ),
             "url": n.get("url", ""),
         }
         for n in notices[:10]
@@ -172,7 +182,9 @@ def _build_compact_input(em: dict, tgb: dict, now: datetime) -> dict:
     compact["guba_posts"] = [
         {
             "title": d.get("post_title", ""),
-            "abstract": (d.get("post_content_text") or d.get("post_abstract") or "")[:300],
+            "abstract": (d.get("post_content_text") or d.get("post_abstract") or "")[
+                :300
+            ],
             "pub_time": d.get("post_publish_time", ""),
             "hours_ago": _hours_ago(d.get("post_publish_time", ""), now),
             "url": d.get("url", ""),
@@ -235,9 +247,13 @@ _SYSTEM_PROMPT = """\
 """
 
 
-def _call_llm(compact_input: dict, code: str, base_url: str, api_key: str, model_id: str) -> dict | None:
+def _call_llm(
+    compact_input: dict, code: str, base_url: str, api_key: str, model_id: str
+) -> dict | None:
     """调用 LLM，返回解析后的 brief dict，失败返回 None。"""
-    user_content = f"股票代码：{code}\n\n数据：\n{json.dumps(compact_input, ensure_ascii=False)}"
+    user_content = (
+        f"股票代码：{code}\n\n数据：\n{json.dumps(compact_input, ensure_ascii=False)}"
+    )
 
     payload = {
         "model": model_id,
@@ -258,8 +274,10 @@ def _call_llm(compact_input: dict, code: str, base_url: str, api_key: str, model
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
     try:
-        req = urllib.request.Request(endpoint, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        req = urllib.request.Request(
+            endpoint, data=data, headers=headers, method="POST"
+        )
+        with _NO_PROXY_OPENER.open(req, timeout=60) as resp:
             body = json.loads(resp.read().decode("utf-8"))
 
         content = body["choices"][0]["message"]["content"].strip()
@@ -288,6 +306,7 @@ def _call_llm(compact_input: dict, code: str, base_url: str, api_key: str, model
 # 规则降级抽取
 # ---------------------------------------------------------------------------
 
+
 def _fallback_brief(compact: dict, code: str, now: datetime) -> dict:
     """规则降级：取公告标题为 positive/negative，帖子主题为 uncertain_claims。"""
     positive: list[dict] = []
@@ -295,8 +314,30 @@ def _fallback_brief(compact: dict, code: str, now: datetime) -> dict:
     uncertain: list[dict] = []
 
     # 负向关键词
-    neg_kws = {"减持", "亏损", "诉讼", "处罚", "终止", "违规", "跌停", "解禁", "问询", "立案"}
-    pos_kws = {"增持", "回购", "中标", "分红", "并购", "涨停", "业绩", "签约", "获批", "战略"}
+    neg_kws = {
+        "减持",
+        "亏损",
+        "诉讼",
+        "处罚",
+        "终止",
+        "违规",
+        "跌停",
+        "解禁",
+        "问询",
+        "立案",
+    }
+    pos_kws = {
+        "增持",
+        "回购",
+        "中标",
+        "分红",
+        "并购",
+        "涨停",
+        "业绩",
+        "签约",
+        "获批",
+        "战略",
+    }
 
     def _is_negative(text: str) -> bool:
         return any(kw in text for kw in neg_kws)
@@ -348,13 +389,15 @@ def _fallback_brief(compact: dict, code: str, now: datetime) -> dict:
         if not title:
             continue
         ha = _hours_ago(post.get("pub_time", ""), now)
-        uncertain.append({
-            "summary": title[:60],
-            "source_url": post.get("url", ""),
-            "source_type": "eastmoney_guba",
-            "evidence_tier": "C",
-            "hours_ago": ha,
-        })
+        uncertain.append(
+            {
+                "summary": title[:60],
+                "source_url": post.get("url", ""),
+                "source_type": "eastmoney_guba",
+                "evidence_tier": "C",
+                "hours_ago": ha,
+            }
+        )
 
     # 淘股吧帖子（tier C）→ uncertain
     for post in compact.get("taoguba_posts", [])[:3]:
@@ -362,17 +405,23 @@ def _fallback_brief(compact: dict, code: str, now: datetime) -> dict:
         if not subject:
             continue
         ha = _hours_ago(post.get("post_time", ""), now)
-        uncertain.append({
-            "summary": subject[:60],
-            "source_url": post.get("url", ""),
-            "source_type": "taoguba",
-            "evidence_tier": "C",
-            "hours_ago": ha,
-        })
+        uncertain.append(
+            {
+                "summary": subject[:60],
+                "source_url": post.get("url", ""),
+                "source_type": "taoguba",
+                "evidence_tier": "C",
+                "hours_ago": ha,
+            }
+        )
 
     # 社区热度（帖子总数粗估）
-    total_posts = len(compact.get("guba_posts", [])) + len(compact.get("taoguba_posts", []))
-    community_heat = "high" if total_posts >= 10 else ("medium" if total_posts >= 4 else "low")
+    total_posts = len(compact.get("guba_posts", [])) + len(
+        compact.get("taoguba_posts", [])
+    )
+    community_heat = (
+        "high" if total_posts >= 10 else ("medium" if total_posts >= 4 else "low")
+    )
 
     return {
         "positive_signals": positive[:5],
@@ -387,7 +436,10 @@ def _fallback_brief(compact: dict, code: str, now: datetime) -> dict:
 # 主流程
 # ---------------------------------------------------------------------------
 
-def extract_compact(code: str, em_raw_path: str, tgb_raw_path: str, output_path: str) -> None:
+
+def extract_compact(
+    code: str, em_raw_path: str, tgb_raw_path: str, output_path: str
+) -> None:
     """仅做规则提取，输出 compact JSON，供主 LLM 生成 brief 使用。"""
     now = datetime.now()
     em: dict = {}
@@ -414,17 +466,22 @@ def extract_compact(code: str, em_raw_path: str, tgb_raw_path: str, output_path:
         json.dump(compact, f, ensure_ascii=False, indent=2)
 
     size = len(json.dumps(compact, ensure_ascii=False))
-    print(json.dumps({
-        "code": code,
-        "mode": "compact",
-        "chars": size,
-        "est_tokens": size // 4,
-        "announcements": len(compact.get("announcements", [])),
-        "news_infos": len(compact.get("news_infos", [])),
-        "guba_posts": len(compact.get("guba_posts", [])),
-        "taoguba_posts": len(compact.get("taoguba_posts", [])),
-        "stock_tags": len(compact.get("stock_tags", [])),
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "code": code,
+                "mode": "compact",
+                "chars": size,
+                "est_tokens": size // 4,
+                "announcements": len(compact.get("announcements", [])),
+                "news_infos": len(compact.get("news_infos", [])),
+                "guba_posts": len(compact.get("guba_posts", [])),
+                "taoguba_posts": len(compact.get("taoguba_posts", [])),
+                "stock_tags": len(compact.get("stock_tags", [])),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def summarize(code: str, em_raw_path: str, tgb_raw_path: str, output_path: str) -> None:
@@ -466,16 +523,21 @@ def summarize(code: str, em_raw_path: str, tgb_raw_path: str, output_path: str) 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(brief, f, ensure_ascii=False, indent=2)
 
-    print(json.dumps({
-        "code": code,
-        "mode": "full",
-        "positive": len(brief.get("positive_signals", [])),
-        "negative": len(brief.get("negative_signals", [])),
-        "uncertain": len(brief.get("uncertain_claims", [])),
-        "tags": brief.get("stock_tags", [])[:5],
-        "heat": brief.get("community_heat"),
-        "source": brief.get("_source"),
-    }, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "code": code,
+                "mode": "full",
+                "positive": len(brief.get("positive_signals", [])),
+                "negative": len(brief.get("negative_signals", [])),
+                "uncertain": len(brief.get("uncertain_claims", [])),
+                "tags": brief.get("stock_tags", [])[:5],
+                "heat": brief.get("community_heat"),
+                "source": brief.get("_source"),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 def main() -> None:

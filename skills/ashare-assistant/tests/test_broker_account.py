@@ -381,7 +381,7 @@ class CostTrackingTest(unittest.TestCase):
                     "scripts.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
-                mock.patch("urllib.request.urlopen") as mock_urlopen,
+                mock.patch.object(ba._NO_PROXY_OPENER, "open") as mock_open,
             ):
                 from datetime import datetime, timezone, timedelta
 
@@ -394,7 +394,7 @@ class CostTrackingTest(unittest.TestCase):
                 mock_resp.read.return_value = fake_response
                 mock_resp.__enter__ = mock.MagicMock(return_value=mock_resp)
                 mock_resp.__exit__ = mock.MagicMock(return_value=False)
-                mock_urlopen.return_value = mock_resp
+                mock_open.return_value = mock_resp
 
                 cfg = {"token": "t", "acc": "a", "pass": "p"}
                 ticket = ba._login(cfg, "http://fake:1234")
@@ -469,7 +469,7 @@ class TicketBufferTest(unittest.TestCase):
                     "scripts.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
-                mock.patch("urllib.request.urlopen") as mock_urlopen,
+                mock.patch.object(ba._NO_PROXY_OPENER, "open") as mock_open,
             ):
                 from datetime import datetime, timezone, timedelta
 
@@ -482,7 +482,7 @@ class TicketBufferTest(unittest.TestCase):
                 mock_resp.read.return_value = fake_response
                 mock_resp.__enter__ = mock.MagicMock(return_value=mock_resp)
                 mock_resp.__exit__ = mock.MagicMock(return_value=False)
-                mock_urlopen.return_value = mock_resp
+                mock_open.return_value = mock_resp
 
                 ticket = ba._get_valid_ticket(
                     {"token": "t", "acc": "a", "pass": "p"}, "http://fake"
