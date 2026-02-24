@@ -4,10 +4,11 @@
 # 用法: bash setup.sh
 #
 # 依赖摘要：
-#   必须：Python 3.10+，Node.js 22+，Google Chrome / Chromium
+#   必须：Python 3.10+
+#   可选：Node.js 22+，Google Chrome / Chromium（供其他渲染类技能使用）
 #   可选：pandoc（有内置 fallback），中文字体（Linux 推荐）
 #   pip 包：yfinance（美股行情采集）
-#   零 npm 包：screenshot.js 使用 Node.js 22+ 内置 WebSocket + fetch
+#   说明：本 skill 本身不负责 PDF/PNG 渲染；Node/Chrome 仅作环境兼容预装
 set -e
 
 echo "=== a-share-review-planner 依赖安装 ==="
@@ -195,4 +196,4 @@ echo ""
 echo "⚠️  配置提示："
 echo "  1. 发送 Telegram 消息需配置 ~/.openclaw/openclaw.json（botToken + allowFrom）"
 echo "  2. 使用账户持仓数据需配置 ~/.openclaw/jvquant.json（见 references/commands.md）"
-echo "  3. Linux Chromium 路径已内置于 screenshot.js CHROME_CANDIDATES 列表"
+echo "  3. 本 skill 终态为 report.md / candidates.json 落盘，不负责 PDF 推送"

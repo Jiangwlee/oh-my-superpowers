@@ -1,9 +1,7 @@
 ---
 name: a-share-review-planner
 description: >
-  A-share daily market review and next-day trading plan. Collects multi-source
-  data (news, sector flows, sentiment, trend scan), performs 5-stage structured
-  analysis, and outputs a formatted report with PDF delivery to Telegram.
+  A-share daily market review and next-day trading plan. 
   Use when: (1) user says "复盘"、"今日回顾"、"明日计划"、"选股"、"帮我看看大盘"、
   "今天行情"、"大盘分析"、"明天买什么"、"帮我分析行情", (2) user wants A-share market
   analysis or trading plan, (3) user says "板块"、"涨停"、"题材"、"选股".
@@ -12,11 +10,18 @@ description: >
 
 # A股复盘与交易计划
 
+## Prerequisite check (required)
+
+**STOP and resolve before proceeding:**
+
+1. **Python 3.10+**: `python3 --version`
+2. **Dependencies**: `python3 -c "import requests, bs4, yaml"` -> If missing, run `pip install -r requirements.txt`
+
 <HARD-GATE>
 NO ANALYSIS WITHOUT RUNNING collect_sentiment.py FIRST.
 NO TRADING PLAN WITHOUT COMPLETING STAGES 1–3 FIRST.
 NO REPORT WITHOUT PASSING risk_check.py FIRST.
-NO TEXT RETURN WITHOUT FIRST ATTEMPTING PDF GENERATION AND SEND.
+NO COMPLETION WITHOUT WRITING /tmp/a-share-review/{DATE}/report.md FIRST.
 
 Violating the letter of this rule is violating the spirit of this rule.
 No exceptions. Not even when the user asks for a quick summary.
@@ -27,7 +32,7 @@ No exceptions. Not even when the user asks for a quick summary.
 - **禁止猜测数据**：某数据源失败时，明确告知并跳过，不得用臆测填充
 - **策略修改要谨慎**：每次最多调整 active.yaml 中 1-2 个参数，必须写明原因
 - **数据时效性**：采集数据为当日快照，不得使用过期数据分析
-- **严禁跳过阶段**：不得在未执行阶段1采集时直接分析，也不得在未完成阶段4/5时结束任务
+- **严禁跳过阶段**：不得在未执行阶段1采集时直接分析，也不得在未完成阶段4时结束任务
 
 ## 常见借口——一律拒绝
 
@@ -41,13 +46,12 @@ No exceptions. Not even when the user asks for a quick summary.
 ## Overview
 
 目标：完成每日收盘后的A股复盘与次日交易计划。
-流程：采集多源数据 → 分析市场与题材 → 生成候选与计划 → 落盘与结构化校验 → PDF推送。
+流程：采集多源数据 → 分析市场与题材 → 生成候选与计划 → 落盘与结构化校验。
 原则：LLM负责判断，脚本负责执行。
 
-**终态**：PDF 已通过 Telegram 发送给用户，candidates.json 和 report.md 已落盘，
-decision_log 已写入（校验通过时）。
-仅当 report_to_image.py 或 send_telegram_file.py 脚本执行失败时，才允许以文本形式
-紧急降级返回，并须向用户说明失败原因。
+**终态**：`/tmp/a-share-review/{DATE}/report.md` 与 `candidates.json` 已落盘，
+`decision_log` 已写入（校验通过时）。
+最终回复基于已落盘的 `report.md` 内容进行总结，需明确说明关键结论与风险提示。
 
 ## 关键决策分支
 
@@ -58,7 +62,7 @@ decision_log 已写入（校验通过时）。
   └─ 若 collection_summary 有失败源 → 标注失败源，继续处理可用数据，不中止
 
 阶段2完成
-  └─ 若 account_mode = critical → 阶段3仅做市场分析，跳过交易计划，直接进阶段5
+  └─ 若 account_mode = critical → 阶段3仅做市场分析，跳过交易计划，直接进阶段4
 
 阶段3完成
   ├─ 若 risk_check 有 error 级违规 → 必须修改候选并重跑，不得继续
@@ -67,7 +71,7 @@ decision_log 已写入（校验通过时）。
 
 ## Workflow
 
-完整工作流共 5 个阶段，必须按顺序执行。
+完整工作流共 4 个阶段，必须按顺序执行。
 
 ### 阶段1：数据采集
 
@@ -85,10 +89,6 @@ decision_log 已写入（校验通过时）。
 ### 阶段4：输出交易计划
 
 按 `references/stage4-output.md` 执行。
-
-### 阶段5：PDF推送
-
-按 `references/stage5-delivery.md` 执行。
 
 ## 首次部署
 

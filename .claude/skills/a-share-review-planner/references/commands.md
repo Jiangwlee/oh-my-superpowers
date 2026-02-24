@@ -5,8 +5,6 @@
 ## 目录
 
 - [采集脚本](#采集脚本) — collect_sentiment.py 完整参数
-- [报告转图片](#报告转图片推荐不依赖-browser-relay) — PNG / PDF 生成
-- [报告转 HTML](#报告转-html备用供-browser-工具截图) — pandoc 降级方案
 - [输出文件一览](#输出文件一览) — 所有采集产物说明
 - [独立风控校验](#独立风控校验) — risk_check.py 用法与 candidates.json 格式
 - [结构化输出校验与决策日志](#结构化输出校验与决策日志) — validate + decision_logger + diagnose
@@ -19,27 +17,27 @@
 
 ```bash
 # 完整采集（推荐，含趋势扫描，约 2-3 分钟）
-python3 {SKILL_DIR}/scripts/collect_sentiment.py \
+python3 scripts/collect_sentiment.py \
   --output-dir /tmp/a-share-review/{DATE} \
   --news-count 20 \
   --taoguba-count 20
 
 # 含账户持仓数据（需已配置 jvQuant，见下方章节）
-python3 {SKILL_DIR}/scripts/collect_sentiment.py \
+python3 scripts/collect_sentiment.py \
   --output-dir /tmp/a-share-review/{DATE} \
   --news-count 20 \
   --taoguba-count 20 \
   --broker
 
 # 精简采集（测试用，跳过趋势扫描，约 30 秒）
-python3 {SKILL_DIR}/scripts/collect_sentiment.py \
+python3 scripts/collect_sentiment.py \
   --output-dir /tmp/a-share-review/{DATE} \
   --news-count 5 \
   --taoguba-count 5 \
   --no-scan-trends
 
 # 限制扫描范围（仅前50名，约 40 秒）
-python3 {SKILL_DIR}/scripts/collect_sentiment.py \
+python3 scripts/collect_sentiment.py \
   --output-dir /tmp/a-share-review/{DATE} \
   --news-count 20 \
   --taoguba-count 20 \
@@ -47,34 +45,7 @@ python3 {SKILL_DIR}/scripts/collect_sentiment.py \
 ```
 
 `{DATE}` 替换为当天日期，如 `2026-02-18`（`$(date +%Y-%m-%d)`）。
-`{SKILL_DIR}` 替换为本 Skill 所在目录，如 `~/clawd/skills/a-share-review-planner`。
-
 若不确定路径，可在 stage1-collect.md 的变量声明中确认。
-
-## 报告转图片（推荐，不依赖 browser relay）
-
-```bash
-# 生成 PNG（默认，Chrome headless 截全页，自动探测页面高度）
-python3 {SKILL_DIR}/scripts/report_to_image.py \
-  /tmp/a-share-review/{DATE}/report.md
-
-# 生成 PDF（完整分页，Telegram 原生预览）
-python3 {SKILL_DIR}/scripts/report_to_image.py \
-  /tmp/a-share-review/{DATE}/report.md \
-  --format pdf \
-  --output ~/.openclaw/media/a-share-review/{DATE}/report.pdf
-```
-
-依赖：系统已安装 Google Chrome（/Applications/Google Chrome.app），无需 pip 安装任何包。
-
-## 报告转 HTML（备用，供 browser 工具截图）
-
-```bash
-python3 {SKILL_DIR}/scripts/report_to_html.py \
-  /tmp/a-share-review/{DATE}/report.md
-```
-
-依赖：`pandoc`（可选，无则自动降级纯文本）。生成后用 Openclaw `browser` 工具打开 `file://` URL。
 
 ## 输出文件一览
 
@@ -106,7 +77,7 @@ python3 {SKILL_DIR}/scripts/report_to_html.py \
 LLM 完成第3步个股筛选后，将候选股写成 candidates.json，然后执行：
 
 ```bash
-python3 {SKILL_DIR}/scripts/risk_check.py \
+python3 scripts/risk_check.py \
   --input /tmp/a-share-review/{DATE}/candidates.json
 ```
 
@@ -140,18 +111,18 @@ candidates.json 格式：
 
 ```bash
 # 1) 校验 candidates.json 核心结构
-python3 {SKILL_DIR}/scripts/validate_output.py \
+python3 scripts/validate_output.py \
   --input /tmp/a-share-review/{DATE}/candidates.json
 
 # 2) 风控通过 + 结构通过后，写入 decision_log
-python3 {SKILL_DIR}/scripts/decision_logger.py \
+python3 scripts/decision_logger.py \
   --input /tmp/a-share-review/{DATE}/candidates.json \
-  --log-file {SKILL_DIR}/.memory/decision_log.jsonl
+  --log-file .memory/decision_log.jsonl
 
 # 3) 独立诊断（T+1/T+5，当前实现 T+1）
-python3 {SKILL_DIR}/scripts/diagnose.py \
-  --log-file {SKILL_DIR}/.memory/decision_log.jsonl \
-  --feedback-file {SKILL_DIR}/evolution/feedback.md
+python3 scripts/diagnose.py \
+  --log-file .memory/decision_log.jsonl \
+  --feedback-file evolution/feedback.md
 ```
 
 失败语义：
@@ -165,7 +136,7 @@ python3 {SKILL_DIR}/scripts/diagnose.py \
 推荐先使用批量并行命令（Phase A 性能优化）：
 
 ```bash
-python3 {SKILL_DIR}/scripts/run_deep_research_batch.py \
+python3 scripts/run_deep_research_batch.py \
   --candidates-file /tmp/a-share-review/{DATE}/candidates.json \
   --output-dir /tmp/a-share-review/{DATE} \
   --max-workers 4 \
@@ -186,7 +157,7 @@ python3 {SKILL_DIR}/scripts/run_deep_research_batch.py \
 
 ```bash
 # 东方财富股吧采集（帖子 + 资讯 + 公告）
-python3 {SKILL_DIR}/scripts/collect_eastmoney_guba.py \
+python3 scripts/collect_eastmoney_guba.py \
   --code {CODE} \
   --output /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
   --post-limit 36 \
@@ -194,7 +165,7 @@ python3 {SKILL_DIR}/scripts/collect_eastmoney_guba.py \
   --notice-days 3
 
 # 淘股吧个股扩展采集（题材标签 + 个股讨论）
-python3 {SKILL_DIR}/scripts/collect_taoguba_stock.py \
+python3 scripts/collect_taoguba_stock.py \
   --full-code {FULL_CODE} \
   --output /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \
   --quotes-count 8 \
@@ -205,7 +176,7 @@ python3 {SKILL_DIR}/scripts/collect_taoguba_stock.py \
 
 ```bash
 # compact 提取（规则抽取，不污染上下文）
-python3 {SKILL_DIR}/scripts/summarize_stock_brief.py \
+python3 scripts/summarize_stock_brief.py \
   --code {CODE} \
   --em-raw /tmp/a-share-review/{DATE}/dr_{CODE}_em.json \
   --tgb-raw /tmp/a-share-review/{DATE}/dr_{CODE}_tgb.json \

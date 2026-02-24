@@ -22,7 +22,7 @@
 推荐的第3.5步批量命令：
 
 ```bash
-python3 {SKILL_DIR}/scripts/run_deep_research_batch.py \
+python3 scripts/run_deep_research_batch.py \
   --candidates-file /tmp/a-share-review/{DATE}/candidates.json \
   --output-dir /tmp/a-share-review/{DATE} \
   --max-workers 4 \
@@ -33,14 +33,14 @@ python3 {SKILL_DIR}/scripts/run_deep_research_batch.py \
 执行后会写入 `/tmp/a-share-review/{DATE}/dr_timing.json`，用于定位慢点与超时股票。
 
 ```bash
-python3 {SKILL_DIR}/scripts/risk_check.py --input /tmp/a-share-review/{DATE}/candidates.json
+python3 scripts/risk_check.py --input /tmp/a-share-review/{DATE}/candidates.json
 ```
 
 如 `risk_check.py` 有 error 级别违规，必须调整候选计划并重试，直至通过。
 warn 级别违规需在报告“风险提示”章节显式说明。
 
 ```bash
-python3 {SKILL_DIR}/scripts/validate_output.py \
+python3 scripts/validate_output.py \
   --input /tmp/a-share-review/{DATE}/candidates.json
 ```
 

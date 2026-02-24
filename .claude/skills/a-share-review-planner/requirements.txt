@@ -5,8 +5,8 @@
 #
 # 运行时要求：
 #   Python  >= 3.10   （使用 str | None 联合类型语法）
-#   Node.js >= 22.0   （screenshot.js 需要内置 WebSocket + fetch）
-#   Chrome / Chromium （PDF 及 PNG 生成）
+#   Node.js >= 22.0   （可选：若在同机使用其他渲染类 skill）
+#   Chrome / Chromium （可选：若在同机使用其他渲染类 skill）
 #
 # 可选工具：
 #   pandoc            （Markdown→HTML 精确渲染，缺失时自动降级）
