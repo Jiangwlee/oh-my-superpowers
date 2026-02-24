@@ -8,8 +8,8 @@
 - agents-roundtable
 
 ```bash
-cp -r skills/<skill-name>/ .agents/skills/<skill-name>/
-cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
+cp -r skills/<skill-name>/ .agents/skills/
+cp -r skills/<skill-name>/ .claude/skills/
 ```
 
 ## 1. 部署至本机
@@ -20,7 +20,7 @@ cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
 - markdown-to-anything
 
 ```bash
-cp -r skills/<skill-name>/ ~/clawd/skills/<skill-name>/
+cp -r skills/<skill-name>/ ~/clawd/skills/
 openclaw gateway restart
 ```
 
@@ -33,11 +33,11 @@ Skill与Agent绑定关系：
 
 ```bash
 # 整个 skill 目录
-scp -r skills/<skill-name>/ root@tencent-vps:/root/.openclaw/<agent-workspace>/skills/<skill-name>/
+scp -r skills/<skill-name>/ root@tencent-vps:/root/.openclaw/<agent-workspace>/skills/
 
 # 单个文件（如只更新脚本）
 scp skills/<skill-name>/scripts/foo.py root@tencent-vps:/root/.openclaw/<agent-workspace>/skills/<skill-name>/scripts/
 
 # 重启 Gateway
-ssh root@<vps-ip-address> "source ~/.nvm/nvm.sh && openclaw gateway restart"
+ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
 ```
