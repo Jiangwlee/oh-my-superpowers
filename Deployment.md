@@ -15,7 +15,7 @@ cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
 ## 1. 部署至本机
 
 只有以下`skill`需要部署到当前项目：
-- a-share-review-planner
+- ashare-assistant
 - openclaw-github-tracker
 - markdown-to-anything
 
@@ -27,7 +27,7 @@ openclaw gateway restart
 ## 2. 部署至远端 VPS（Tencent VPS）
 
 Skill与Agent绑定关系：
-- a-share-review-planner: 绑定`smartrader`，工作目录为`workspace-smartrader` 
+- ashare-assistant: 绑定`smartrader`，工作目录为`workspace-smartrader` 
 - openclaw-github-tracker: 绑定`researcher`，工作目录为`workspace-researcher` 
 - markdown-to-anything: 同时部署至`smartrader`和`researcher`
 

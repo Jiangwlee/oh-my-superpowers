@@ -1,7 +1,7 @@
 """大盘云图与资金流向数据抓取模块。"""
 
-import json
-import urllib.request
+from scripts.core.cache import cache_get, cache_set
+from scripts.core.http_client import http_json as core_http_json
 
 
 def _http_json(
@@ -12,13 +12,16 @@ def _http_json(
     headers: dict | None = None,
 ) -> dict:
     """纯标准库实现的 HTTP JSON 请求函数。"""
+    cache_key = f"market_http|{method}|{url}|{body}"
+    cached = cache_get("news", cache_key)
+    if isinstance(cached, dict):
+        return cached
     _headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if headers:
         _headers.update(headers)
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data, headers=_headers, method=method)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    data = core_http_json(url, method=method, payload=body, headers=_headers, timeout=15)
+    cache_set("news", cache_key, data, ttl_seconds=1800)
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -141,15 +144,20 @@ def fetch_market_overview() -> dict:
     Returns:
         {"trade_date": "20260213", "sectors": [...]}
     """
+    cached = cache_get("news", "market_overview_latest")
+    if isinstance(cached, dict):
+        return cached
     market_data = fetch_market_cloud()
     flow_data = fetch_capital_flow()
 
     trade_date = market_data.get("data", {}).get("td", "")
 
-    return {
+    result = {
         "trade_date": trade_date,
         "sectors": build_sector_summary(market_data, flow_data),
     }
+    cache_set("news", "market_overview_latest", result, ttl_seconds=1800)
+    return result
 
 
 def fetch_market_sectors_top_n(n: int = 5) -> dict:

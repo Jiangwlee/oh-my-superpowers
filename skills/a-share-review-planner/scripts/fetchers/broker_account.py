@@ -46,6 +46,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from scripts.core.config import BROKER_DIR
 
 # ── 常量 ────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ _COUNTER_CACHE_PATH = os.path.join(_CACHE_DIR, ".jvquant_counter_cache.json")
 _CONFIG_PATH = os.path.join(_CACHE_DIR, "jvquant.json")
 
 # 持久化存储目录
-_DATA_DIR = os.path.join(_CACHE_DIR, "broker_data")
+_DATA_DIR = str(BROKER_DIR)
 _POSITIONS_DIR = os.path.join(_DATA_DIR, "positions")
 _ORDERS_DIR = os.path.join(_DATA_DIR, "orders")
 _COSTS_DIR = os.path.join(_DATA_DIR, "costs")

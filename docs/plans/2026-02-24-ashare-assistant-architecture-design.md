@@ -116,3 +116,50 @@ references/ 重命名：`data-collect.md`, `market-review.md`, `stock-pick.md`, 
 3. 所有产物在 `~/.ashare-assistant/data/{DATE}/` 下可追溯，`.memory/decision_log.jsonl` 成功迁移到 `~/.ashare-assistant/memory/`。
 4. `holding_insight.py` 与 `trade_review.py` 代码重复率显著下降，公共函数仅维护于 `core/shared.py`。
 5. docs/plans 中的本设计被审阅通过，并作为实施依据。
+
+---
+
+## 11. 实施状态（更新于 2026-02-24）
+
+### 已完成
+
+- 已创建新 skill：`skills/ashare-assistant/`
+- `SKILL.md` 已声明 `capabilities`，并显式暴露：
+  - `data-collect`
+  - `market-review`
+  - `stock-pick`
+  - `trading-plan`
+  - `trade-review`
+  - `holding-insight`
+  - `strategy-evolution`
+- 路径迁移已落地：
+  - `~/.ashare-assistant/cache/`
+  - `~/.ashare-assistant/data/{DATE}/`
+  - `~/.ashare-assistant/memory/decision_log.jsonl`
+  - `~/.ashare-assistant/broker_data/`
+- `scripts/core/` 基础设施已落地：
+  - `config.py`
+  - `cache.py`
+  - `http_client.py`
+  - `shared.py`
+- `collect_sentiment.py` 已接入目录初始化和 `cache_cleanup(max_age_days=7)`
+- fetcher 层已大范围接入统一缓存与 HTTP（含 `trend_scanner`、`news`、`taoguba`、`eastmoney_guba`、`market_overview`、`trade_date`、`funding`、`us_market`）
+- `holding_insight.py` / `trade_review.py` 已将关键重复函数委托到 `core/shared.py`
+- references 重组已完成（新文件名与链接可用），且错误副本已修复：
+  - `holding-insight.md`
+  - `evolution.md`
+- `ashare-assistant` 单测全量通过（当前为 85 个测试）
+
+### 与原设计的偏差 / 未完全完成项
+
+- `collect_sentiment.py` 仍通过 `--output-dir` 接收输出目录，尚未强制落盘到 `~/.ashare-assistant/data/{DATE}/collect/`
+  - 当前为“路径能力已支持 + 文档已迁移”，不是“目录结构强约束”
+- 缓存命中率（≥ 80%）尚未实现自动统计与报表，仅实现了缓存层与清理策略
+- `python -m unittest discover -s skills` 在本仓库因 `skills/*` 目录名含连字符导致 `NO TESTS RAN`
+  - 实际验证采用按测试文件列表执行
+
+### 待最终收口（需用户操作后再执行）
+
+- 删除旧目录：`skills/a-share-review-planner/`
+- 删除后执行最终全仓库测试（避免 `scripts` 包名在单进程聚合测试时发生冲突）
+- 如需部署，再按 `Deployment.md` 执行本机/远端复制与 gateway 重启

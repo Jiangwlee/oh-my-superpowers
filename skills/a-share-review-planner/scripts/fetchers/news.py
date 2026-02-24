@@ -3,18 +3,30 @@
 import json
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from html.parser import HTMLParser
+
+from scripts.core.cache import cache_get, cache_set
+from scripts.core.http_client import http_json as core_http_json
+
+
+def _today_ymd() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 def _http_json(url: str, *, method: str = "GET", body: dict | None = None, headers: dict | None = None) -> dict:
     """纯标准库实现的 HTTP JSON 请求函数。"""
+    cache_key = f"news_http|{method}|{url}|{json.dumps(body or {}, ensure_ascii=False, sort_keys=True)}"
+    cached = cache_get("news", cache_key)
+    if isinstance(cached, dict):
+        return cached
     _headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if headers:
         _headers.update(headers)
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data, headers=_headers, method=method)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    data = core_http_json(url, method=method, payload=body, headers=_headers, timeout=15)
+    ttl = 7200 if "queryNewsFlash" in url else 1800
+    cache_set("news", cache_key, data, ttl_seconds=ttl)
+    return data
 
 
 def _extract_list(resp: dict) -> list[dict]:
@@ -89,6 +101,10 @@ def _fetch_article_body(url: str) -> str:
     """抓取文章详情页，返回正文纯文本。失败返回空字符串。"""
     if not url:
         return ""
+    cache_key = f"news_body|{_today_ymd()}|{url}"
+    cached = cache_get("news", cache_key)
+    if isinstance(cached, str):
+        return cached
     try:
         req = urllib.request.Request(
             url,
@@ -98,7 +114,9 @@ def _fetch_article_body(url: str) -> str:
             html = resp.read().decode("utf-8", errors="replace")
         parser = _ArticleContentParser()
         parser.feed(html)
-        return parser.get_text()
+        text = parser.get_text()
+        cache_set("news", cache_key, text, ttl_seconds=1800)
+        return text
     except Exception:
         return ""
 

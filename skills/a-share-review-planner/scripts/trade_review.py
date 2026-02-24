@@ -23,53 +23,33 @@ except Exception:  # pragma: no cover - 环境未安装时降级
 
 from scripts.fetchers.broker_account import fetch_broker_account, load_history
 from scripts.fetchers.trend_scanner import fetch_jrj_daily_kline, fetch_jrj_minute_kline
+from scripts.core.config import DECISION_LOG
+from scripts.core import shared as shared_core
 
 logger = logging.getLogger(__name__)
 
 _CN_TZ = timezone(timedelta(hours=8))
-_DEFAULT_STRATEGY = {
-    "strategy_version": "unknown",
-    "trend_stock": {"position": "单只不超过总仓位20%"},
-    "theme_stock": {"position": "单只不超过总仓位15%"},
-    "market_position": {"strong": "60-80%", "neutral": "30-50%", "weak": "10-20%"},
-}
+_DEFAULT_STRATEGY = dict(shared_core.DEFAULT_STRATEGY)
 
 
 def _now_cn_iso() -> str:
-    return datetime.now(_CN_TZ).strftime("%Y-%m-%dT%H:%M:%S+08:00")
+    return shared_core.now_cn_iso()
 
 
 def _today_cn() -> str:
-    return datetime.now(_CN_TZ).strftime("%Y-%m-%d")
+    return shared_core.today_cn()
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        if value is None or value == "":
-            return default
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+    return shared_core.safe_float(value, default)
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
-    try:
-        if value is None or value == "":
-            return default
-        return int(float(value))
-    except (TypeError, ValueError):
-        return default
+    return shared_core.safe_int(value, default)
 
 
 def _norm_code(value: Any) -> str:
-    text = str(value or "").strip().upper()
-    if not text:
-        return ""
-    if "." in text:
-        text = text.split(".")[0]
-    if text.startswith(("SH", "SZ", "BJ")) and len(text) > 2:
-        text = text[2:]
-    return text.zfill(6) if text.isdigit() and len(text) < 6 else text
+    return shared_core.norm_code(value)
 
 
 def _order_direction(order: dict[str, Any]) -> str:
@@ -183,65 +163,17 @@ def _load_latest_decision(log_path: str, target_date: str) -> dict[str, Any] | N
 
 def _load_strategy(yaml_path: str) -> dict[str, Any]:
     """读取 active.yaml。缺失或解析失败时返回默认值。"""
-    path = Path(yaml_path)
-    if not path.exists():
-        return dict(_DEFAULT_STRATEGY)
-    if yaml is None:
-        logger.warning("PyYAML 不可用，使用内置默认策略值")
-        return dict(_DEFAULT_STRATEGY)
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            data = yaml.safe_load(handle) or {}
-        if not isinstance(data, dict):
-            return dict(_DEFAULT_STRATEGY)
-        merged = dict(_DEFAULT_STRATEGY)
-        merged.update(data)
-        return merged
-    except Exception:
-        logger.exception("读取策略文件失败: %s", yaml_path)
-        return dict(_DEFAULT_STRATEGY)
+    return shared_core.load_strategy(yaml_path, logger=logger)
 
 
 def _extract_pct_limit(text: str, fallback: float) -> float:
     """从类似“单只不超过总仓位20%”或“15%”的文本中提取比例。"""
-    text = str(text or "")
-    num = ""
-    last_num = ""
-    for ch in text:
-        if ch.isdigit() or ch == ".":
-            num += ch
-        else:
-            if num:
-                last_num = num
-                num = ""
-    if num:
-        last_num = num
-    if not last_num:
-        return fallback
-    v = _safe_float(last_num, fallback * 100)
-    return v / 100.0 if v > 1 else v
+    return shared_core.extract_pct_limit(text, fallback)
 
 
 def _parse_range_to_pct(text: str) -> tuple[float, float] | None:
     """解析仓位区间文本，返回百分比数值（0-100）。"""
-    raw = str(text or "")
-    nums: list[float] = []
-    current = ""
-    for ch in raw:
-        if ch.isdigit() or ch == ".":
-            current += ch
-        else:
-            if current:
-                nums.append(_safe_float(current))
-                current = ""
-    if current:
-        nums.append(_safe_float(current))
-    if len(nums) < 2:
-        return None
-
-    # “6-8成仓位” -> 60~80；“30-50%” -> 30~50
-    scale = 10.0 if "成" in raw and "%" not in raw else 1.0
-    return nums[0] * scale, nums[1] * scale
+    return shared_core.parse_range_to_pct(text)
 
 
 def _parse_position_limits(strategy: dict[str, Any]) -> dict[str, Any]:
@@ -273,16 +205,7 @@ def _parse_position_limits(strategy: dict[str, Any]) -> dict[str, Any]:
 
 def _determine_account_mode(total: float, hold_earn: float) -> str:
     """根据账户盈亏比例判断账户模式（首版无滞后逻辑）。"""
-    if total <= 0:
-        return "normal"
-    pnl_pct = hold_earn / total
-    if pnl_pct <= -0.30:
-        return "critical"
-    if pnl_pct <= -0.10:
-        return "defensive"
-    if pnl_pct >= 0.20:
-        return "growth"
-    return "normal"
+    return shared_core.determine_account_mode(total, hold_earn)
 
 
 def _candidate_map(candidates: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -1112,7 +1035,7 @@ def _append_evolution_feedback(result: dict[str, Any], base_dir: Path) -> None:
 
 def run_trade_review(
     broker_data: dict[str, Any] | None = None,
-    decision_log_path: str = ".memory/decision_log.jsonl",
+    decision_log_path: str = str(DECISION_LOG),
     strategy_path: str = "strategy/active.yaml",
     output_path: str = "trade_review.json",
 ) -> dict[str, Any]:
@@ -1265,7 +1188,7 @@ def run_trade_review(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="交易复盘模块")
-    parser.add_argument("--decision-log", default=".memory/decision_log.jsonl")
+    parser.add_argument("--decision-log", default=str(DECISION_LOG))
     parser.add_argument("--strategy", default="strategy/active.yaml")
     parser.add_argument("--output", default="trade_review.json")
     parser.add_argument("--pretty", action="store_true", help="打印格式化 JSON")

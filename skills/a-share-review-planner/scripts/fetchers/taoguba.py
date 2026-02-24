@@ -13,6 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from html.parser import HTMLParser
 
+from scripts.core.cache import cache_get, cache_set
+
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://www.tgb.cn"
@@ -47,17 +49,27 @@ _HEADERS_JSON = {
 
 def _fetch_html(url: str, timeout: int = 15) -> str:
     """获取页面 HTML，容忍 IncompleteRead。"""
+    cache_key = f"html|{datetime.now().strftime('%Y-%m-%d')}|{url}"
+    cached = cache_get("taoguba", cache_key)
+    if isinstance(cached, str):
+        return cached
     req = urllib.request.Request(url, headers=_HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read()
     except http.client.IncompleteRead as e:
         raw = e.partial
-    return raw.decode("utf-8", errors="replace")
+    text = raw.decode("utf-8", errors="replace")
+    cache_set("taoguba", cache_key, text, ttl_seconds=1800)
+    return text
 
 
 def _fetch_json_get(url: str, timeout: int = 15, headers: dict | None = None) -> dict:
     """GET 请求并解析 JSON。"""
+    cache_key = f"get|{datetime.now().strftime('%Y-%m-%d')}|{url}"
+    cached = cache_get("taoguba", cache_key)
+    if isinstance(cached, dict):
+        return cached
     req_headers = dict(_HEADERS)
     req_headers["Accept"] = "application/json, text/javascript, */*; q=0.01"
     req_headers["X-Requested-With"] = "XMLHttpRequest"
@@ -66,11 +78,20 @@ def _fetch_json_get(url: str, timeout: int = 15, headers: dict | None = None) ->
     req = urllib.request.Request(url, headers=req_headers, method="GET")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read()
-    return json.loads(raw.decode("utf-8", errors="replace"))
+    data = json.loads(raw.decode("utf-8", errors="replace"))
+    cache_set("taoguba", cache_key, data, ttl_seconds=1800)
+    return data
 
 
 def _fetch_json_post_form(url: str, form: dict, timeout: int = 15, headers: dict | None = None) -> dict:
     """POST form 请求并解析 JSON。"""
+    cache_key = (
+        f"post|{datetime.now().strftime('%Y-%m-%d')}|{url}|"
+        f"{urllib.parse.urlencode(sorted((str(k), str(v)) for k, v in form.items()))}"
+    )
+    cached = cache_get("taoguba", cache_key)
+    if isinstance(cached, dict):
+        return cached
     req_headers = dict(_HEADERS)
     req_headers["Accept"] = "application/json, text/javascript, */*; q=0.01"
     req_headers["X-Requested-With"] = "XMLHttpRequest"
@@ -82,7 +103,9 @@ def _fetch_json_post_form(url: str, form: dict, timeout: int = 15, headers: dict
     req = urllib.request.Request(url, data=data, headers=req_headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read()
-    return json.loads(raw.decode("utf-8", errors="replace"))
+    out = json.loads(raw.decode("utf-8", errors="replace"))
+    cache_set("taoguba", cache_key, out, ttl_seconds=1800)
+    return out
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,9 @@ description: >
 
 # A股复盘与交易计划
 
+> DEPRECATED: 新能力入口已迁移至 `skills/ashare-assistant/`（skill 名：`ashare-assistant`）。
+> 旧 skill 保留用于过渡兼容；新增调度与能力声明请优先使用新 skill。
+
 ## Prerequisite check (required)
 
 **STOP and resolve before proceeding:**

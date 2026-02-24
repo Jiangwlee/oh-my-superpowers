@@ -33,7 +33,7 @@
 
 ```bash
 # 运行单个测试文件
-python -m unittest skills/a-share-review-planner/tests/test_taoguba_fetchers.py
+python -m unittest skills/ashare-assistant/tests/test_taoguba_fetchers.py
 
 # 运行单个测试方法
 python -m unittest skills.a_share_review_planner.tests.test_taoguba_fetchers.TaogubaFetchersTest.test_now_recommend
@@ -152,7 +152,7 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 
 ```
 skills/
-├── a-share-review-planner/
+├── ashare-assistant/
 │   ├── scripts/
 │   │   ├── fetchers/   # 数据抓取
 │   │   └── utils/      # 工具

@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
+from scripts.core.cache import cache_get, cache_set
 from scripts.utils.http_client import http_json
 
 # ---------------------------------------------------------------------------
@@ -194,6 +195,10 @@ class TrendResult:
 def fetch_eastmoney_top_rank_xuangu(
     max_rank: int = 200, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
+    cache_key = f"xuangu_top_rank|max_rank={max_rank}"
+    cached = cache_get("eastmoney", cache_key)
+    if isinstance(cached, list):
+        return cached
     max_rank = max(1, min(200, max_rank))
     page = 1
     page_size = 50
@@ -262,12 +267,18 @@ def fetch_eastmoney_top_rank_xuangu(
             }
         )
     out.sort(key=lambda x: x["rank"])
-    return out[:max_rank]
+    result = out[:max_rank]
+    cache_set("eastmoney", cache_key, result, ttl_seconds=1800)
+    return result
 
 
 def _fetch_eastmoney_current_rank(
     limit: int = 100, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
+    cache_key = f"current_rank|limit={limit}"
+    cached = cache_get("eastmoney", cache_key)
+    if isinstance(cached, list):
+        return cached
     url = "https://emappdata.eastmoney.com/stockrank/getAllCurrentList"
     payload = {
         "appId": "appId01",
@@ -276,13 +287,19 @@ def _fetch_eastmoney_current_rank(
         "pageNo": 1,
         "pageSize": min(100, limit),
     }
-    return (
+    result = (
         http_json(url, method="POST", payload=payload, timeout=timeout).get("data", [])
         or []
     )
+    cache_set("eastmoney", cache_key, result, ttl_seconds=1800)
+    return result
 
 
 def _fetch_eastmoney_names(sc_list: list[str], timeout: float = 15.0) -> dict[str, str]:
+    cache_key = "names|" + ",".join(sorted(sc_list))
+    cached = cache_get("eastmoney", cache_key)
+    if isinstance(cached, dict):
+        return {str(k): str(v) for k, v in cached.items()}
     out: dict[str, str] = {}
     for i in range(0, len(sc_list), 50):
         batch = sc_list[i : i + 50]
@@ -308,6 +325,7 @@ def _fetch_eastmoney_names(sc_list: list[str], timeout: float = 15.0) -> dict[st
                     out[f"{prefix}{code}"] = name
         except Exception:
             continue
+    cache_set("eastmoney", cache_key, out, ttl_seconds=1800)
     return out
 
 
@@ -358,6 +376,11 @@ def fetch_eastmoney_top200(
 def fetch_ths_snapshot(
     end_date: str | None = None, timeout: float = 15.0
 ) -> dict[str, Any]:
+    cache_date = end_date or _now_ymd()
+    cache_key = f"snapshot|{cache_date}"
+    cached = cache_get("ths", cache_key)
+    if isinstance(cached, dict):
+        return cached
     if not end_date:
         end_date = _now_ymd()
     end_dt = datetime.strptime(end_date, "%Y%m%d")
@@ -381,11 +404,15 @@ def fetch_ths_snapshot(
             if (c1.get("status_code") == 0 or c2.get("status_code") == 0) and (
                 lu or bt
             ):
-                return {"date": d, "continuous_limit_up": lu, "block_top": bt}
+                result = {"date": d, "continuous_limit_up": lu, "block_top": bt}
+                cache_set("ths", cache_key, result, ttl_seconds=1800)
+                return result
         except Exception:
             continue
 
-    return {"date": None, "continuous_limit_up": [], "block_top": []}
+    result = {"date": None, "continuous_limit_up": [], "block_top": []}
+    cache_set("ths", cache_key, result, ttl_seconds=1800)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -402,6 +429,10 @@ def fetch_ths_history(
     - continuous_limit_up: code/name/continue_num/reason_type/change_rate/change_tag
     - block_top: name/limit_up_count/stock_list（前5只，同上精简）
     """
+    cache_key = f"history|days={days}|end={end_date or _now_ymd()}"
+    cached = cache_get("ths", cache_key)
+    if isinstance(cached, list):
+        return cached
     if not end_date:
         end_date = _now_ymd()
     end_dt = datetime.strptime(end_date, "%Y%m%d")
@@ -477,6 +508,7 @@ def fetch_ths_history(
         delta += 1
 
     history.reverse()  # 升序（最旧在前）
+    cache_set("ths", cache_key, history, ttl_seconds=1800)
     return history
 
 
@@ -631,6 +663,10 @@ def format_ths_md(snapshot: dict, history: list[dict]) -> str:
 def fetch_jrj_daily_kline(
     code: str, range_num: int = 80, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
+    cache_key = f"{code}_daily_{_now_ymd()}_{range_num}"
+    cached = cache_get("kline", cache_key)
+    if isinstance(cached, list):
+        return cached
     secid = _to_jrj_security_id(code)
     url = "https://gateway.jrj.com/quot-kline?" + urlencode(
         {
@@ -668,6 +704,7 @@ def fetch_jrj_daily_kline(
         lp = _norm_price(item.get("low") if "low" in item else item.get("nLowPx"))
         out.append({"time": int(t), "open": op, "close": cp, "high": hp, "low": lp})
     out.sort(key=lambda x: x["time"])
+    cache_set("kline", cache_key, out, ttl_seconds=None)
     return out
 
 
@@ -702,6 +739,10 @@ def fetch_jrj_minute_kline(
     """
     if date is None:
         date = _now_ymd()
+    cache_key = f"{code}_minute_{date}_{range_num}"
+    cached = cache_get("kline", cache_key)
+    if isinstance(cached, list):
+        return cached
 
     secid = _to_jrj_security_id(code)
     url = "https://gateway.jrj.com/quot-kline?" + urlencode(
@@ -760,6 +801,8 @@ def fetch_jrj_minute_kline(
             }
         )
     out.sort(key=lambda x: x["time"])
+    # 盘中高时效，按设计 5 分钟；盘后也先保守缓存 5 分钟（后续可根据交易时段优化）
+    cache_set("kline", cache_key, out, ttl_seconds=300)
     return out
 
 

@@ -44,6 +44,8 @@ from scripts.fetchers.trend_scanner import (                     # noqa: E402
 )
 from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
 from scripts.fetchers.us_market import fetch_us_market            # noqa: E402
+from scripts.core.cache import cache_cleanup                      # noqa: E402
+from scripts.core.config import ensure_dirs                       # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -172,6 +174,12 @@ def collect(
         需配置 ~/.openclaw/jvquant.json 或对应环境变量。
         注意：每次登录有计费，模块内部已实现 ticket 缓存复用。
     """
+    ensure_dirs()
+    try:
+        cleanup_result = cache_cleanup(max_age_days=7)
+        _log(f"cache cleanup: removed={cleanup_result.get('removed_files', 0)}")
+    except Exception as exc:
+        _log(f"cache cleanup skipped: {exc}")
     os.makedirs(output_dir, exist_ok=True)
     tasks = _make_tasks(news_count, taoguba_count)
     as_of_date = _extract_as_of_date(output_dir)

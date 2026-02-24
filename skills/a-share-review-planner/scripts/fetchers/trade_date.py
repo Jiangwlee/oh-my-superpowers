@@ -1,5 +1,6 @@
 """获取 A 股最近交易日期。"""
 
+from scripts.core.cache import cache_get, cache_set
 from scripts.utils.http_client import http_json
 
 _TRADE_DATE_URL = "https://gateway.jrj.com/quot-feed/tradedate"
@@ -25,6 +26,9 @@ def fetch_trade_date() -> str:
     RuntimeError
         接口返回异常或解析失败时抛出。
     """
+    cached = cache_get("kline", "trade_date_latest")
+    if isinstance(cached, str) and len(cached) == 8:
+        return cached
     resp = http_json(
         url=_TRADE_DATE_URL,
         method="POST",
@@ -37,4 +41,5 @@ def fetch_trade_date() -> str:
     except (KeyError, TypeError) as exc:
         raise RuntimeError(f"解析 tradedate 响应失败: {resp}") from exc
 
+    cache_set("kline", "trade_date_latest", trade_date, ttl_seconds=1800)
     return trade_date

@@ -8,6 +8,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from scripts.core.cache import cache_get, cache_set
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -106,16 +108,22 @@ def fetch_us_market() -> dict[str, Any]:
         yfinance 未安装时，market_status 为 "unavailable"，indices/tech_stocks 为空列表，
         并附带 "error" 字段说明原因。
     """
+    cache_day = datetime.now().strftime("%Y-%m-%d")
+    cached = cache_get("news", f"us_market_{cache_day}")
+    if isinstance(cached, dict):
+        return cached
     fetched_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if not _YF_AVAILABLE:
-        return {
+        result = {
             "fetched_at": fetched_at,
             "market_status": "unavailable",
             "error": "yfinance not installed",
             "indices": [],
             "tech_stocks": [],
         }
+        cache_set("news", f"us_market_{cache_day}", result, ttl_seconds=1800)
+        return result
 
     indices: list[dict[str, Any]] = []
     market_status = "unknown"
@@ -147,9 +155,11 @@ def fetch_us_market() -> dict[str, Any]:
             }
         )
 
-    return {
+    result = {
         "fetched_at": fetched_at,
         "market_status": market_status,
         "indices": indices,
         "tech_stocks": tech_stocks,
     }
+    cache_set("news", f"us_market_{cache_day}", result, ttl_seconds=1800)
+    return result

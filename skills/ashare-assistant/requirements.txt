@@ -1,0 +1,22 @@
+# ashare-assistant Python 依赖
+#
+# 第三方包：yfinance（美股行情采集）
+# 安装：pip install yfinance
+#
+# 运行时要求：
+#   Python  >= 3.10   （使用 str | None 联合类型语法）
+#   Node.js >= 22.0   （可选：若在同机使用其他渲染类 skill）
+#   Chrome / Chromium （可选：若在同机使用其他渲染类 skill）
+#
+# 可选工具：
+#   pandoc            （Markdown→HTML 精确渲染，缺失时自动降级）
+#
+# 支持平台（setup.sh 自动识别）：
+#   macOS
+#   Ubuntu / Debian          — apt-get
+#   RHEL / CentOS / Rocky
+#     / AlmaLinux / Fedora   — dnf / yum（自动启用 EPEL）
+#
+# 完整安装步骤见 setup.sh
+
+yfinance>=0.2.50

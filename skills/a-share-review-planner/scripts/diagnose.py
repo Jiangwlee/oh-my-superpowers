@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+from scripts.core.config import DECISION_LOG
 from scripts.fetchers.trend_scanner import fetch_jrj_daily_kline
 from scripts.utils.http_client import http_json
 
@@ -308,7 +309,7 @@ def process_diagnose(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="回填 decision_log 的 T+1/T+5 结果")
-    parser.add_argument("--log-file", default=".memory/decision_log.jsonl", help="决策日志路径")
+    parser.add_argument("--log-file", default=str(DECISION_LOG), help="决策日志路径")
     parser.add_argument("--feedback-file", default="evolution/feedback.md", help="反馈文件路径")
     parser.add_argument("--today", default="", help="覆盖当前日期 YYYY-MM-DD")
     parser.add_argument("--dry-run", action="store_true", help="只演算，不写回")
