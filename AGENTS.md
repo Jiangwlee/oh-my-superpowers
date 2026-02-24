@@ -202,17 +202,7 @@ cp -r skills/<skill-name>/ .agents/skills/<skill-name>/
 
 ## 部署
 
-详见 `Deployment.md`:
-
-```bash
-# 本地
-cp -r skills/<skill-name>/ ~/clawd/skills/<skill-name>/
-openclaw gateway restart
-
-# 远端
-scp -r skills/<skill-name>/ root@tencent-vps:/root/.openclaw/workspace-smartrader/skills/
-ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
-```
+详见[Deployment.md](Deployment.md):
 
 ---
 
