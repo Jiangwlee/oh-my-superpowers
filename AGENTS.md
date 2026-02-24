@@ -12,6 +12,7 @@
 - [Agent Skills](https://github.com/agentskills/agentskills): Openclaw 遵从的 Skills 规范
 - [Tools](https://docs.openclaw.ai/tools/browser): Openclaw 内置工具
 - [Skills Development Guide](Skills-Dev-Guide.md)：Skills开发经验，当发现一种有效的Skill编写模式时，可追加到此文件中。
+- [JVQuant 平台参考](docs/jvquant-reference.md)：JVQuant 券商交易接口文档，含 API 规格、计费标准、费用优化策略。
 
 ## 技术栈
 

@@ -8,6 +8,7 @@
 - [输出文件一览](#输出文件一览) — 所有采集产物说明
 - [独立风控校验](#独立风控校验) — risk_check.py 用法与 candidates.json 格式
 - [结构化输出校验与决策日志](#结构化输出校验与决策日志) — validate + decision_logger + diagnose
+- [交易执行复盘](#交易执行复盘) — trade_review.py 用法与输出
 - [Deep Research 个股采集](#deep-research-个股采集) — 批量并行命令、预算参数、输出文件
 - [jvQuant 配置](#jvquant-配置) — 配置文件、环境变量、费用说明
 
@@ -71,6 +72,7 @@ python3 scripts/collect_sentiment.py \
 | `broker_account.json` | 账户资金+持仓+当日委托（仅 --broker 时生成） |
 | `candidates.json` | 候选股计划（LLM 生成，供 risk_check.py 校验） |
 | `run_id.json` | 本次运行标识（run_id + strategy_version） |
+| `trade_review.json` | 交易执行复盘结果（阶段5生成，含瑕疵检测+择时评分） |
 
 ## 独立风控校验
 
@@ -128,6 +130,63 @@ python3 scripts/diagnose.py \
 失败语义：
 - `validate_output.py` 非0退出：结构不合法，继续出报告但不写 decision_log
 - `decision_logger.py` 非0退出：日志写入失败，主流程继续并在风险提示中标注
+
+---
+
+## 交易执行复盘
+
+阶段5 独立脚本，对比交易计划 vs 实际执行，检测六大类交易瑕疵。
+
+```bash
+# 标准用法（阶段4完成后执行）
+python3 scripts/trade_review.py \
+  --decision-log .memory/decision_log.jsonl \
+  --strategy strategy/active.yaml \
+  --output /tmp/a-share-review/{DATE}/trade_review.json \
+  --pretty
+
+# 独立执行（用户直接要求交易复盘，不依赖阶段1-4）
+python3 scripts/trade_review.py \
+  --output /tmp/a-share-review/{DATE}/trade_review.json \
+  --pretty
+```
+
+### 参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--decision-log` | `.memory/decision_log.jsonl` | 交易计划日志路径 |
+| `--strategy` | `strategy/active.yaml` | 策略配置文件路径 |
+| `--output` | `trade_review.json` | 复盘结果输出路径 |
+| `--pretty` | off | 终端打印格式化 JSON |
+
+### 数据来源
+
+脚本自动获取以下数据（无需手动准备）：
+
+| 数据 | 来源 | 费用 |
+|------|------|------|
+| 当日持仓 + 委托 | jvQuant broker_account（复用 ticket 缓存） | 首次登录 0.5 元 |
+| 历史持仓/委托 | `~/.openclaw/broker_data/` 本地快照 | 免费 |
+| 分钟K线（择时分析） | JRJ 免费 API | 免费 |
+| 日K线（持仓管理） | JRJ 免费 API | 免费 |
+| 交易计划 | `.memory/decision_log.jsonl` | 免费 |
+| 策略限制 | `strategy/active.yaml` | 免费 |
+
+### 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `trade_review.json` | 结构化复盘结果（六类瑕疵 + 择时评分 + 仓位检查） |
+| `evolution/feedback.md` | 追加当日复盘摘要（瑕疵统计 + 关键问题） |
+
+### 瑕疵类别与严重程度
+
+六类瑕疵：`unplanned_trade`、`missed_execution`、`timing_flaw`、`position_flaw`、`holding_flaw`、`discipline_flaw`
+
+三级严重程度：`error`（必须标注）、`warning`（需说明）、`info`（参考）
+
+详见 `references/stage5-trade-review.md`。
 
 ---
 

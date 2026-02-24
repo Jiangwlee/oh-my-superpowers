@@ -4,7 +4,8 @@ description: >
   A-share daily market review and next-day trading plan. 
   Use when: (1) user says "复盘"、"今日回顾"、"明日计划"、"选股"、"帮我看看大盘"、
   "今天行情"、"大盘分析"、"明天买什么"、"帮我分析行情", (2) user wants A-share market
-  analysis or trading plan, (3) user says "板块"、"涨停"、"题材"、"选股".
+  analysis or trading plan, (3) user says "板块"、"涨停"、"题材"、"选股",
+  (4) user says "交易复盘"、"检查执行"、"review"、"今天交易怎么样"、"执行回顾".
   Works on trading days, holidays, and weekends.
 ---
 
@@ -45,12 +46,13 @@ No exceptions. Not even when the user asks for a quick summary.
 
 ## Overview
 
-目标：完成每日收盘后的A股复盘与次日交易计划。
-流程：采集多源数据 → 分析市场与题材 → 生成候选与计划 → 落盘与结构化校验。
+目标：完成每日收盘后的A股复盘与次日交易计划，并可选执行交易复盘（对比计划 vs 实际执行）。
+流程：采集多源数据 → 分析市场与题材 → 生成候选与计划 → 落盘与结构化校验 → 交易执行复盘。
 原则：LLM负责判断，脚本负责执行。
 
 **终态**：`/tmp/a-share-review/{DATE}/report.md` 与 `candidates.json` 已落盘，
 `decision_log` 已写入（校验通过时）。
+若执行了交易复盘，`trade_review.json` 已落盘。
 最终回复基于已落盘的 `report.md` 内容进行总结，需明确说明关键结论与风险提示。
 
 ## 关键决策分支
@@ -71,7 +73,7 @@ No exceptions. Not even when the user asks for a quick summary.
 
 ## Workflow
 
-完整工作流共 4 个阶段，必须按顺序执行。
+完整工作流共 5 个阶段。阶段 1-4 必须按顺序执行；阶段 5 可独立触发。
 
 ### 阶段1：数据采集
 
@@ -89,6 +91,19 @@ No exceptions. Not even when the user asks for a quick summary.
 ### 阶段4：输出交易计划
 
 按 `references/stage4-output.md` 执行。
+
+### 阶段5：交易执行复盘（可独立触发）
+
+按 `references/stage5-trade-review.md` 执行。
+
+**触发条件**（满足任一即执行）：
+- 用户在阶段 4 完成后主动要求
+- 用户直接说"交易复盘"/"检查执行"/"review"/"今天交易怎么样"
+- 当日有 broker 数据（`--broker` 采集过或 jvQuant 配置可用）
+
+**跳过条件**：
+- 无 jvQuant 配置且用户未要求 → 跳过并告知
+- 非交易日且无历史持仓 → 跳过
 
 ## 首次部署
 
@@ -116,4 +131,4 @@ bash setup.sh
 
 - `evolution/known_pitfalls.md`：已知交易陷阱
 - `evolution/selection_rules.md`：选股规则修正
-- `evolution/feedback.md`：诊断反馈（由诊断脚本写入）
+- `evolution/feedback.md`：诊断反馈（由诊断脚本和交易复盘脚本写入）

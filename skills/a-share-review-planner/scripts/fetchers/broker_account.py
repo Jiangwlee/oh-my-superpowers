@@ -8,6 +8,12 @@
   - 本模块通过本地 ticket 缓存复用登录凭证，在 expire 时间内不重新登录
   - 缓存路径：~/.openclaw/.jvquant_ticket_cache.json
   - 柜台地址通过 /query/server 自动获取并缓存
+  - 每日费用自动追踪，超过限额（默认 5 元）拒绝调用
+
+费用追踪：
+  - 路径：~/.openclaw/broker_data/costs/YYYY-MM-DD.json
+  - 每次 login 自动记录 0.5 元
+  - 每日累计费用达到限额后，新的 API 调用会被拒绝（抛出 RuntimeError）
 
 持久化存储：
   - 路径：~/.openclaw/broker_data/
@@ -56,17 +62,22 @@ _CONFIG_PATH = os.path.join(_CACHE_DIR, "jvquant.json")
 _DATA_DIR = os.path.join(_CACHE_DIR, "broker_data")
 _POSITIONS_DIR = os.path.join(_DATA_DIR, "positions")
 _ORDERS_DIR = os.path.join(_DATA_DIR, "orders")
+_COSTS_DIR = os.path.join(_DATA_DIR, "costs")
 
 # 柜台地址分配 API
 _SERVER_QUERY_URL = "http://jvquant.com/query/server"
 
-# ticket 提前失效窗口（秒），留 60 秒 buffer 避免边界过期
-_EXPIRE_BUFFER_SEC = 60
+# ticket 提前失效窗口（秒），留 5 分钟 buffer 避免边界过期
+_EXPIRE_BUFFER_SEC = 300
 
 # 柜台地址缓存有效期（秒），30 分钟
 _COUNTER_CACHE_TTL = 1800
 
 _DEFAULT_TIMEOUT = 15.0
+
+# 费用控制
+_LOGIN_COST_CNY = 0.5  # 每次 login 计费（元）
+_DAILY_BUDGET_CNY = 5.0  # 每日费用上限（元）
 
 
 # ── 配置加载 ─────────────────────────────────────────────────────
@@ -212,15 +223,106 @@ def _save_ticket_cache(ticket: str, expire_at: float) -> None:
 
 
 def _get_valid_ticket(cfg: dict, counter: str) -> str:
-    """获取有效 ticket。优先复用缓存，过期才重新登录。"""
+    """获取有效 ticket。优先复用缓存，5 分钟内过期则重新登录。"""
     cache = _load_ticket_cache()
     now = time.time()
 
     if cache and cache.get("ticket") and cache.get("expire_at"):
         if now < cache["expire_at"] - _EXPIRE_BUFFER_SEC:
+            logger.debug(
+                "复用 ticket 缓存, 剩余 %.0f 秒",
+                cache["expire_at"] - now,
+            )
             return cache["ticket"]
+        logger.debug(
+            "ticket 将在 %.0f 秒内过期, 重新登录",
+            max(0, cache["expire_at"] - now),
+        )
 
     return _login(cfg, counter)
+
+
+# ── 每日费用追踪 ─────────────────────────────────────────────────
+
+
+def _load_daily_cost(date_str: str | None = None) -> dict:
+    """读取当日费用记录。
+
+    Returns:
+        {"date": "YYYY-MM-DD", "total_cost": float, "calls": [...]}
+    """
+    if date_str is None:
+        date_str = _today_str()
+    path = os.path.join(_COSTS_DIR, f"{date_str}.json")
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"date": date_str, "total_cost": 0.0, "calls": []}
+
+
+def _record_cost(api_name: str, cost: float) -> float:
+    """记录一次 API 调用费用，返回当日累计费用。
+
+    Args:
+        api_name: 接口名称（如 "login"）。
+        cost: 本次费用（元）。
+
+    Returns:
+        当日累计费用。
+    """
+    date_str = _today_str()
+    record = _load_daily_cost(date_str)
+    record["total_cost"] = round(record["total_cost"] + cost, 2)
+    record["calls"].append(
+        {
+            "api": api_name,
+            "cost": cost,
+            "time": datetime.now(_CN_TZ).strftime("%H:%M:%S"),
+        }
+    )
+
+    os.makedirs(_COSTS_DIR, exist_ok=True)
+    path = os.path.join(_COSTS_DIR, f"{date_str}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
+    logger.debug(
+        "记录费用: %s %.2f 元, 当日累计 %.2f 元", api_name, cost, record["total_cost"]
+    )
+    return record["total_cost"]
+
+
+def _check_daily_budget() -> None:
+    """检查当日费用是否已超出预算，超出则抛出 RuntimeError。"""
+    record = _load_daily_cost()
+    if record["total_cost"] >= _DAILY_BUDGET_CNY:
+        raise RuntimeError(
+            f"JVQuant 当日费用已达 {record['total_cost']:.2f} 元，"
+            f"超出每日预算 {_DAILY_BUDGET_CNY:.2f} 元，拒绝调用。"
+            f"调用明细: {len(record['calls'])} 次"
+        )
+
+
+def get_daily_cost_summary(date_str: str | None = None) -> dict:
+    """查询指定日期的费用摘要（公开接口）。
+
+    Args:
+        date_str: 日期字符串 YYYY-MM-DD，默认当日。
+
+    Returns:
+        {"date": "YYYY-MM-DD", "total_cost": float, "call_count": int,
+         "budget": float, "remaining": float}
+    """
+    record = _load_daily_cost(date_str)
+    return {
+        "date": record["date"],
+        "total_cost": record["total_cost"],
+        "call_count": len(record["calls"]),
+        "budget": _DAILY_BUDGET_CNY,
+        "remaining": round(_DAILY_BUDGET_CNY - record["total_cost"], 2),
+    }
 
 
 def _login(cfg: dict, counter: str) -> str:
@@ -228,7 +330,10 @@ def _login(cfg: dict, counter: str) -> str:
 
     计费说明：此接口每次调用计费 5毛，请勿随意调用。
     模块已实现缓存机制，正常情况下每个 expire 周期只登录一次。
+    调用前自动检查每日预算，超出则拒绝。
     """
+    _check_daily_budget()
+
     params = urllib.parse.urlencode(
         {
             "token": cfg["token"],
@@ -259,7 +364,12 @@ def _login(cfg: dict, counter: str) -> str:
     expire_at = time.time() + expire_sec
 
     _save_ticket_cache(ticket, expire_at)
-    logger.debug("login 成功, ticket 有效期 %d 秒", expire_sec)
+    total_cost = _record_cost("login", _LOGIN_COST_CNY)
+    logger.debug(
+        "login 成功, ticket 有效期 %d 秒, 当日累计费用 %.2f 元",
+        expire_sec,
+        total_cost,
+    )
     return ticket
 
 
@@ -419,6 +529,10 @@ def load_history(days: int = 30) -> dict:
 def fetch_broker_account() -> dict:
     """获取账户完整信息（资金 + 持仓 + 当日委托），自动持久化到本地。
 
+    调用前自动执行 guard 检查：
+      1. 检查每日费用是否超出预算（5 元/天）
+      2. 检查 ticket 是否在 5 分钟内过期，过期则重新登录
+
     Returns:
         包含以下字段的字典：
         - total        : 账户总资产
@@ -431,8 +545,11 @@ def fetch_broker_account() -> dict:
         - ticket_reused: 是否复用了缓存 ticket
 
     Raises:
-        RuntimeError: 配置缺失、网络失败或接口返回错误码时抛出。
+        RuntimeError: 配置缺失、网络失败、接口返回错误码或每日费用超出预算时抛出。
     """
+    # Guard: 费用预算检查（在任何计费操作之前）
+    _check_daily_budget()
+
     cfg = _require_config()
 
     # 动态获取柜台地址
@@ -448,6 +565,7 @@ def fetch_broker_account() -> dict:
         and now < cache["expire_at"] - _EXPIRE_BUFFER_SEC
     )
 
+    # Guard: ticket 过期检查（_get_valid_ticket 内部处理）
     ticket = _get_valid_ticket(cfg, counter)
 
     positions = _fetch_positions(counter, cfg["token"], ticket)

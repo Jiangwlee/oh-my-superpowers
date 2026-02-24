@@ -4,12 +4,20 @@
 
 ## 0. 部署至当前项目
 
+只有以下`skill`需要部署到当前项目：
+- agents-roundtable
+
 ```bash
 cp -r skills/<skill-name>/ .agents/skills/<skill-name>/
 cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
 ```
 
 ## 1. 部署至本机
+
+只有以下`skill`需要部署到当前项目：
+- a-share-review-planner
+- openclaw-github-tracker
+- markdown-to-anything
 
 ```bash
 cp -r skills/<skill-name>/ ~/clawd/skills/<skill-name>/
