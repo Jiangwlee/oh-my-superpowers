@@ -5,7 +5,9 @@ description: >
   Use when: (1) user says "复盘"、"今日回顾"、"明日计划"、"选股"、"帮我看看大盘"、
   "今天行情"、"大盘分析"、"明天买什么"、"帮我分析行情", (2) user wants A-share market
   analysis or trading plan, (3) user says "板块"、"涨停"、"题材"、"选股",
-  (4) user says "交易复盘"、"检查执行"、"review"、"今天交易怎么样"、"执行回顾".
+  (4) user says "交易复盘"、"检查执行"、"review"、"今天交易怎么样"、"执行回顾",
+  (5) user says "持仓建议"、"持仓分析"、"加减仓"、"holding insight"、"我的持仓怎么样"、
+  "该买还是该卖"、"持仓洞察".
   Works on trading days, holidays, and weekends.
 ---
 
@@ -53,6 +55,7 @@ No exceptions. Not even when the user asks for a quick summary.
 **终态**：`/tmp/a-share-review/{DATE}/report.md` 与 `candidates.json` 已落盘，
 `decision_log` 已写入（校验通过时）。
 若执行了交易复盘，`trade_review.json` 已落盘。
+若执行了持仓洞察，`holding_insight.json` 已落盘。
 最终回复基于已落盘的 `report.md` 内容进行总结，需明确说明关键结论与风险提示。
 
 ## 关键决策分支
@@ -73,7 +76,7 @@ No exceptions. Not even when the user asks for a quick summary.
 
 ## Workflow
 
-完整工作流共 5 个阶段。阶段 1-4 必须按顺序执行；阶段 5 可独立触发。
+完整工作流共 5 个阶段。阶段 1-4 必须按顺序执行；阶段 5 和阶段 6 可独立触发。
 
 ### 阶段1：数据采集
 
@@ -104,6 +107,22 @@ No exceptions. Not even when the user asks for a quick summary.
 **跳过条件**：
 - 无 jvQuant 配置且用户未要求 → 跳过并告知
 - 非交易日且无历史持仓 → 跳过
+
+### 阶段6：持仓洞察（可独立触发）
+
+按 `references/commands.md` 中"持仓洞察"章节执行。
+
+对每只持仓运行规则引擎决策，输出 **加仓/持有/卖出** 建议，附带具体价格和数量。
+决策基于瀑布式规则链（Level 0-5），纯规则驱动，不依赖 LLM 判断。
+
+**触发条件**（满足任一即执行）：
+- 用户说"持仓建议"/"持仓分析"/"加减仓"/"holding insight"/"我的持仓怎么样"/"该买还是该卖"
+- 阶段 5 完成后用户要求进一步分析
+- 用户直接要求对持仓给出操作建议
+
+**跳过条件**：
+- 无 jvQuant 配置且用户未要求 → 跳过并告知
+- 无持仓 → 输出空结果并告知
 
 ## 首次部署
 

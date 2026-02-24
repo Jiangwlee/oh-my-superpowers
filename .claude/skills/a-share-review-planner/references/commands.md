@@ -9,6 +9,7 @@
 - [独立风控校验](#独立风控校验) — risk_check.py 用法与 candidates.json 格式
 - [结构化输出校验与决策日志](#结构化输出校验与决策日志) — validate + decision_logger + diagnose
 - [交易执行复盘](#交易执行复盘) — trade_review.py 用法与输出
+- [持仓洞察](#持仓洞察) — holding_insight.py 用法与输出
 - [Deep Research 个股采集](#deep-research-个股采集) — 批量并行命令、预算参数、输出文件
 - [jvQuant 配置](#jvquant-配置) — 配置文件、环境变量、费用说明
 
@@ -187,6 +188,114 @@ python3 scripts/trade_review.py \
 三级严重程度：`error`（必须标注）、`warning`（需说明）、`info`（参考）
 
 详见 `references/stage5-trade-review.md`。
+
+---
+
+## 持仓洞察
+
+阶段6 独立脚本，对每只持仓运行瀑布式规则引擎，输出加仓/持有/卖出建议（含具体价格和数量）。
+
+```bash
+# 标准用法（独立执行）
+python3 scripts/holding_insight.py \
+  --strategy strategy/active.yaml \
+  --regime neutral \
+  --output /tmp/a-share-review/{DATE}/holding_insight.json
+
+# 输出可读文本摘要
+python3 scripts/holding_insight.py \
+  --strategy strategy/active.yaml \
+  --regime neutral \
+  --text
+```
+
+### 参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--strategy` | `strategy/active.yaml` | 策略配置文件路径 |
+| `--regime` | `neutral` | 市场状态（strong / neutral / weak） |
+| `--output` | 无 | 输出 JSON 路径，不指定则输出到 stdout |
+| `--text` | off | 输出可读文本而非 JSON |
+
+### 数据来源
+
+| 数据 | 来源 | 费用 |
+|------|------|------|
+| 当日持仓 + 资金 | jvQuant broker_account（复用 ticket 缓存） | 首次登录 0.5 元 |
+| 历史持仓 | `~/.openclaw/broker_data/` 本地快照 | 免费 |
+| 日K线（趋势分析） | JRJ 免费 API | 免费 |
+| 趋势评分 | analyze_trend() + apply_scoring() | 免费 |
+| 资金面 | fetch_funding_for_codes()（缓存） | 免费 |
+| 策略限制 | `strategy/active.yaml` | 免费 |
+
+### 决策规则链（瀑布式，命中即停）
+
+| Level | 名称 | 触发条件 | 动作 |
+|-------|------|---------|------|
+| 0 | 账户模式 | critical + 趋势破 → 清仓；defensive → 禁加仓 | sell / hold |
+| 1 | 硬止损 | MA20跌破>=3日 → 卖；亏损>=15% + 趋势破 → 卖 | sell |
+| 2 | 止盈 | MA5偏离>=20% → 卖50%；>=15% → 卖30%；2星+趋势破 → 卖 | sell |
+| 3 | 技术弱化 | 趋势破+持仓>5日+2星 → 卖；MA20跌破1-2日 → 观察 | sell / hold |
+| 4 | 加仓 | 8项前提全满足 + 4星 + 趋势完好 → 加仓 | add |
+| 5 | 默认 | 以上均未命中 | hold |
+
+### 加仓前提条件（Level 4，全部必须满足）
+
+1. account_mode = normal 或 growth
+2. 单股仓位 < 策略上限（默认20%）
+3. 总仓位 < 市场状态上限
+4. 可用资金充足（>=100股买入金额）
+5. 当前持仓不亏损（pnl >= 0）
+6. 当前浮盈 < 20%（锁利优先）
+7. defense_safe_ratio >= 0.7（防守能力充足）
+8. emotion_level >= 3（情绪不弱）
+
+### 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `holding_insight.json` | 结构化决策结果（每股一条决策记录） |
+
+### 输出结构
+
+```json
+{
+  "review_date": "2026-02-24",
+  "account_snapshot": {
+    "total_assets": 100000,
+    "usable_cash": 30000,
+    "account_mode": "normal",
+    "total_position_pct": 70.0,
+    "market_regime": "neutral",
+    "position_count": 5
+  },
+  "decisions": [
+    {
+      "code": "000001",
+      "name": "平安银行",
+      "action": "sell",
+      "urgency": "immediate",
+      "target_price": 12.50,
+      "target_qty": 500,
+      "price_type": "market",
+      "sell_pct": 1.0,
+      "reasons": ["MA20止损: 连续3日跌破MA20未收回"],
+      "risk_level": "high",
+      "rule_level": 1,
+      "star_rating": 2,
+      "position_pct": 15.0,
+      "pnl_pct": -8.5
+    }
+  ],
+  "summary": {
+    "sell_count": 1,
+    "hold_count": 3,
+    "add_count": 1,
+    "high_risk_count": 1
+  }
+}
+```
 
 ---
 

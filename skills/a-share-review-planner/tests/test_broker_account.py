@@ -366,6 +366,7 @@ class CostTrackingTest(unittest.TestCase):
         """_login 成功后应自动记录费用。"""
         with tempfile.TemporaryDirectory() as tmp:
             costs_dir = str(Path(tmp) / "costs")
+            ticket_cache_path = str(Path(tmp) / ".jvquant_ticket_cache.json")
 
             fake_response = json.dumps(
                 {"code": "0", "ticket": "test_ticket", "expire": "9000"}
@@ -375,6 +376,7 @@ class CostTrackingTest(unittest.TestCase):
                 mock.patch.object(ba, "_COSTS_DIR", costs_dir),
                 mock.patch.object(ba, "_today_str", return_value="2026-02-24"),
                 mock.patch.object(ba, "_CACHE_DIR", tmp),
+                mock.patch.object(ba, "_TICKET_CACHE_PATH", ticket_cache_path),
                 mock.patch(
                     "scripts.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
@@ -456,11 +458,13 @@ class TicketBufferTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             costs_dir = str(Path(tmp) / "costs")
+            ticket_cache_path = str(Path(tmp) / ".jvquant_ticket_cache.json")
             with (
                 mock.patch.object(ba, "_load_ticket_cache", return_value=cache),
                 mock.patch.object(ba, "_COSTS_DIR", costs_dir),
                 mock.patch.object(ba, "_today_str", return_value="2026-02-24"),
                 mock.patch.object(ba, "_CACHE_DIR", tmp),
+                mock.patch.object(ba, "_TICKET_CACHE_PATH", ticket_cache_path),
                 mock.patch(
                     "scripts.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
