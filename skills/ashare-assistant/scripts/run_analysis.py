@@ -46,10 +46,10 @@ _SKILL_DIR = os.path.dirname(_SCRIPT_DIR)  # skills/ashare-assistant/
 _DEFAULT_MODEL = "github-copilot/gpt-5-mini"
 
 _MODEL_OVERRIDES: dict[str, str] = {
-    "news": "anthropic/claude-opus-4-20250514",
-    "social": "anthropic/claude-opus-4-20250514",
-    "review": "anthropic/claude-opus-4-20250514",
-    "plan": "anthropic/claude-opus-4-20250514",
+    "news": "github-copilot/claude-opus-4.6",
+    "social": "github-copilot/claude-opus-4.6",
+    "review": "github-copilot/claude-opus-4.6",
+    "plan": "github-copilot/claude-opus-4.6",
     "stock": "github-copilot/gpt-5-mini",
 }
 

@@ -73,10 +73,10 @@ python3 scripts/filter_to_markdown.py \
 
 | 任务 | 模型 | 说明 |
 |------|------|------|
-| news | `anthropic/claude-opus-4-20250514` | 新闻情绪分析（高质量） |
-| social | `anthropic/claude-opus-4-20250514` | 社交情绪分析（高质量） |
-| review | `anthropic/claude-opus-4-20250514` | 复盘报告生成（高质量） |
-| plan | `anthropic/claude-opus-4-20250514` | 交易计划生成（高质量） |
+| news | `github-copilot/claude-opus-4.6` | 新闻情绪分析（高质量） |
+| social | `github-copilot/claude-opus-4.6` | 社交情绪分析（高质量） |
+| review | `github-copilot/claude-opus-4.6` | 复盘报告生成（高质量） |
+| plan | `github-copilot/claude-opus-4.6` | 交易计划生成（高质量） |
 | stock | `github-copilot/gpt-5-mini` | 个股深研（快速、低成本） |
 
 `--model` 参数可覆盖所有任务的模型，但不建议用于生产环境。
