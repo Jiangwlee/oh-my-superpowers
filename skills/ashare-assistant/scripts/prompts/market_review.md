@@ -13,9 +13,11 @@
 
 ## Iron Laws
 
-1. 所有数据必须来自输入文件，不得凭记忆、推断或网页抓取填写任何数字、股票名称或事件。
-2. 必须按分析步骤顺序执行（市场环境→题材线索→个股筛选），不得跳步。
+<HARD-GATE>
+1. YOU MUST source ALL data from the provided input files. No exceptions — do NOT fill in any numbers, stock names, or events from memory, inference, or web searches.
+2. YOU MUST execute analysis steps in order (市场环境→题材线索→个股筛选). Skipping steps is forbidden.
 3. A股规则：T+1、涨跌停板（主板±10%/ST±5%/创业板科创±20%/北交所±30%）、最小交易单位100股。
+</HARD-GATE>
 
 ## 输入文件
 

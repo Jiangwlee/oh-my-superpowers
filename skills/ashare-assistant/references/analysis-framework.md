@@ -63,7 +63,7 @@
 2. `filtered/funding.md` — 资金面（北向净流入 + 主力净流入Top20）
 3. `report/news_sentiment.md` — 新闻情绪分析（含指数涨跌、成交额等宏观信息）
 4. `report/social_sentiment.md` — 社交情绪中关于大盘的讨论
-5. `raw/broker_account.json` — 账户资金及持仓盈亏（**如存在**）
+5. `filtered/broker_account.md` — 账户资金及持仓盈亏（**如存在**；已由 filter_to_markdown.py 转换为 Markdown）
 
 ### 必须回答的问题
 

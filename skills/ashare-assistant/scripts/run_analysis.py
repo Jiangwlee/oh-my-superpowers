@@ -56,8 +56,8 @@ _MODEL_OVERRIDES: dict[str, str] = {
 # ── 超时配置 ──────────────────────────────────────────
 
 _TIMEOUT_OVERRIDES: dict[str, int] = {
-    "review": 300,
-    "plan": 300,
+    "review": 600,
+    "plan": 600,
 }
 
 _DEFAULT_TIMEOUT = 300
@@ -584,12 +584,16 @@ def run_trading_plan(
     )
 
     if success:
-        # 检查 candidates.json 是否也生成了
+        # 强校验双文件都已生成
         if os.path.exists(candidates_output):
             size_kb = os.path.getsize(candidates_output) / 1024
             logger.info("candidates.json 已生成 (%.1f KB)", size_kb)
         else:
-            logger.warning("trading_plan.md 已生成，但 candidates.json 未生成")
+            logger.error(
+                "trading_plan.md 已生成，但 candidates.json 缺失——"
+                "视为 plan 失败，后续 risk_check/decision_logger 无法执行"
+            )
+            return False
 
     return success
 
@@ -739,9 +743,14 @@ def main() -> None:
                 data_dir, model=task_model, timeout=task_timeout
             )
         elif task == "plan":
-            results["plan"] = run_trading_plan(
-                data_dir, model=task_model, timeout=task_timeout
-            )
+            # plan 依赖 review 成功，如果 review 在本次运行中失败则阻断
+            if results.get("review") is False:
+                logger.error("review 任务失败，跳过 plan 任务（依赖流水线阻断）")
+                results["plan"] = False
+            else:
+                results["plan"] = run_trading_plan(
+                    data_dir, model=task_model, timeout=task_timeout
+                )
         elif task == "stock":
             if not args.stock_code or not args.stock_name:
                 logger.error("stock 任务需要 --stock-code 和 --stock-name 参数")

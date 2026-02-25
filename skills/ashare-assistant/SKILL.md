@@ -104,11 +104,13 @@ PYTHONPATH=. python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/${DATE} \
   --tasks review
 
-# ── 第三轮：个股深研（可选，对 market_review.md 中的候选股并行执行） ──
+# ── 第三轮：个股深研（可选） ──
+# 3a. 从 market_review.md 提取候选股列表（由主 agent 读取报告后手动提供代码）
+# 3b. 批量采集个股原始数据
 PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/${DATE}/candidates.json \
+  --codes <CODE1> <CODE2> ... \
   --output-dir ~/.ashare-assistant/data/${DATE}
-# 然后对每只候选股运行子代理：
+# 3c. 对每只候选股运行深研子代理（可并行分批调用）
 PYTHONPATH=. python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/${DATE} \
   --tasks stock \
@@ -148,6 +150,17 @@ PYTHONPATH=. python3 scripts/run_analysis.py \
 | 第三轮 | stock ×N | gpt-5-mini | `report/dr_{CODE}_brief.md`（每只约 2 KB） |
 | 第四轮 | plan | claude-opus-4 | `trading_plan.md` + `candidates.json` |
 
+**子代理失败处理规则：**
+
+| 失败轮次 | 处置 |
+|----------|------|
+| 第一轮（news / social）失败 | 警告但**继续**；review 子代理在对应数据文件缺失时自动降级（跳过该维度分析） |
+| 第二轮（review）失败 | **停止**，不得继续执行 plan；告知用户并保留已生成的 sentiment 文件 |
+| 第三轮（stock 深研）部分失败 | 警告但**继续**；plan 子代理对缺失深研报告的股票降级处理 |
+| 第四轮（plan）失败 | **停止**；告知用户，保留 `market_review.md` 作为中间产物 |
+
+`run_analysis.py` 以非零退出码反映失败，主 agent 必须在每轮后检查返回值，不得盲目继续。
+
 > 模型映射硬编码在 `run_analysis.py` 中，详见 `references/commands.md` "子代理分析" 部分。
 
 ### Step 3. 结果输出
@@ -156,10 +169,9 @@ PYTHONPATH=. python3 scripts/run_analysis.py \
 
 ```bash
 PYTHONPATH=. python3 scripts/risk_check.py \
-  --candidates ~/.ashare-assistant/data/${DATE}/candidates.json \
-  --strategy strategy/active.yaml
+  --input ~/.ashare-assistant/data/${DATE}/candidates.json
 PYTHONPATH=. python3 scripts/decision_logger.py \
-  --candidates ~/.ashare-assistant/data/${DATE}/candidates.json \
+  --input ~/.ashare-assistant/data/${DATE}/candidates.json \
   --output ~/.ashare-assistant/memory/decision_log.jsonl
 ```
 

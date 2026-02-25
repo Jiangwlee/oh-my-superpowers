@@ -14,10 +14,12 @@
 
 ## Iron Laws
 
-1. 所有数据必须来自输入文件，不得凭记忆、推断或网页抓取填写任何数字、股票名称或事件。
+<HARD-GATE>
+1. YOU MUST source ALL data from the provided input files. No exceptions — do NOT fill in any numbers, stock names, or events from memory, inference, or web searches.
 2. A股规则：T+1、涨跌停板（主板±10%/ST±5%/创业板科创±20%/北交所±30%）、最小交易单位100股。
-3. 目标仓位必须换算为股数，并向下取整至100的整数倍。持仓≤100股时不建议减仓操作。
-4. `candidates.json` 中的字段必须严格遵循约束（见下方）。
+3. YOU MUST convert target positions to share counts rounded DOWN to multiples of 100.
+4. `candidates.json` 必须严格遵循 schema_v1（见下方"文件2"约束）。No exceptions — `action` 只允许 `buy/hold/sell/watch`，**禁止使用 `trim`**（减仓请用 `sell`）。
+</HARD-GATE>
 
 ## 输入文件
 
@@ -195,34 +197,50 @@ account_mode 判断优先级高于 market_mode：
 
 ### 文件2：候选股计划（candidates.json）
 
+严格按以下 schema_v1 输出，**字段名不得变更，不得增减顶层字段**：
+
 ```json
 {
-  "run_id": "[从复盘报告或 filtered/run_id.md 中获取]",
-  "date": "{DATE}",
+  "run_id": "[从 filtered/run_id.md 或复盘报告中获取，格式: YYYYMMDD-xxx-HHMMSS]",
+  "as_of_date": "{DATE}",
   "market": {
     "regime": "[strong/neutral/weak]"
   },
   "account_mode": "[growth/normal/defensive/critical/unknown]",
   "total_capital": 0,
+  "funding": {
+    "data_degraded": false
+  },
   "candidates": [
     {
       "code": "[6位代码]",
       "name": "[名称]",
+      "score": 4.0,
       "type": "[trend/theme]",
-      "action": "[buy/hold/sell/trim/watch]",
+      "action": "[buy/hold/sell/watch]",
       "sector": "[板块或题材]",
       "position": 0,
       "thesis_short": "[30字以内]",
       "risk_note": "[30字以内]"
     }
-  ]
+  ],
+  "risk_flags": {
+    "data_degraded": false,
+    "output_schema_invalid": false,
+    "strategy_version_fallback": false
+  }
 }
 ```
 
-**candidates.json 字段约束**：
+**candidates.json 字段约束（schema_v1）**：
+- `run_id`：格式必须是 `YYYYMMDD-xxx-HHMMSS`（如 `20260220-v1.0-103000`）
+- `as_of_date`：`YYYY-MM-DD` 格式，与 `{DATE}` 一致
 - `market.regime`：只能是 `strong` / `neutral` / `weak`
-- `candidates[].action`：只能是 `buy` / `hold` / `sell` / `trim` / `watch`
+- `candidates[].score`：数值，4星→4.0，5星→5.0，无评分→0.0
+- `candidates[].action`：只能是 `buy` / `hold` / `sell` / `watch`（**禁止使用 `trim`，减仓用 `sell`**）
 - `thesis_short` 和 `risk_note`：各不超过 30 字
+- `funding.data_degraded`：若 funding 数据缺失则填 `true`，否则 `false`
+- `risk_flags`：三个布尔字段均必须填写
 
 请将 `trading_plan.md` 写入 `{TRADING_PLAN_OUTPUT}`。
 请将 `candidates.json` 写入 `{CANDIDATES_OUTPUT}`。
