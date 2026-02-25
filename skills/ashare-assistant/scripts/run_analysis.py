@@ -215,8 +215,9 @@ def _run_opencode(
     full_prompt = (
         f"{prompt}\n\n"
         f"---\n\n"
-        f"请将分析结果写入文件: `{output_path}`\n"
-        f"使用 Write 工具直接写入上述路径，不要输出到终端。"
+        f"请将完整的 Markdown 分析结果直接输出到终端（stdout）。\n"
+        f"不要使用 Write 工具写文件，直接输出文本即可。\n"
+        f"输出必须以 `#` 开头的一级标题开始，之后是完整的分析内容。"
     )
 
     cmd = ["opencode", "run"]
@@ -257,27 +258,28 @@ def _run_opencode(
             )
             return False
 
-        # 检查输出文件是否生成
-        if os.path.exists(output_path):
-            size_kb = os.path.getsize(output_path) / 1024
-            logger.info(
-                "子代理完成: %s (%.1f秒, 输出 %.1f KB)",
+        # 从 stdout 提取 Markdown 并写入输出文件
+        stdout = result.stdout or ""
+        if not stdout.strip():
+            logger.error("子代理完成但 stdout 为空: %s (%.1f秒)", title, elapsed)
+            return False
+
+        content = _extract_markdown_from_stdout(stdout)
+        if not content:
+            logger.error(
+                "子代理 stdout 无 Markdown 内容（未找到 # 标题）: %s (%.1f秒)",
                 title,
                 elapsed,
-                size_kb,
             )
-            return True
-        else:
-            logger.error("子代理完成但未生成输出文件: %s (%.1f秒)", title, elapsed)
-            # 如果 stdout 有内容，可能是子代理没有使用 Write 工具
-            if result.stdout:
-                logger.info("子代理 stdout 长度: %d 字符", len(result.stdout))
-                # 尝试从 stdout 提取并保存
-                _try_save_from_stdout(result.stdout, output_path)
-                if os.path.exists(output_path):
-                    logger.info("从 stdout 提取内容并保存到: %s", output_path)
-                    return True
+            logger.debug("stdout 前500字符: %s", stdout[:500])
             return False
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        size_kb = len(content) / 1024
+        logger.info("子代理完成: %s (%.1f秒, 输出 %.1f KB)", title, elapsed, size_kb)
+        return True
 
     except subprocess.TimeoutExpired:
         logger.error("子代理超时 (%s): %d 秒", title, timeout)
@@ -290,26 +292,17 @@ def _run_opencode(
         return False
 
 
-def _try_save_from_stdout(stdout: str, output_path: str) -> None:
-    """尝试从 stdout 提取 Markdown 内容并保存。
+def _extract_markdown_from_stdout(stdout: str) -> str:
+    """从 stdout 提取 Markdown 内容（从第一个 # 标题开始）。
 
-    如果子代理没有使用 Write 工具而是直接输出了内容，
-    我们尝试提取 # 开头的 Markdown 内容。
+    Returns:
+        提取的 Markdown 文本，未找到时返回空字符串。
     """
-    # 查找第一个 Markdown 标题
     lines = stdout.split("\n")
-    start_idx = -1
     for i, line in enumerate(lines):
         if line.startswith("# "):
-            start_idx = i
-            break
-
-    if start_idx >= 0:
-        content = "\n".join(lines[start_idx:])
-        if len(content) > 100:  # 至少有一定内容
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(content)
+            return "\n".join(lines[i:])
+    return ""
 
 
 # ── 任务实现 ──────────────────────────────────────────

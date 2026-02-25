@@ -57,3 +57,70 @@ class RunOpencodeIdempotencyTest(unittest.TestCase):
                     overwrite=True,
                 )
             self.assertFalse(result)
+
+
+class StdoutRedirectTest(unittest.TestCase):
+
+    def test_stdout_markdown_written_to_file(self):
+        """opencode 输出 Markdown stdout 时，内容应写入 output_path。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "result.md")
+            fake_stdout = "# 新闻情绪分析\n\n## 结论\n内容在这里"
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stdout = fake_stdout
+            mock_result.stderr = ""
+
+            with mock.patch("scripts.run_analysis.subprocess.run", return_value=mock_result):
+                result = _run_opencode(
+                    prompt="test",
+                    output_path=output_path,
+                    title="test-stdout",
+                    overwrite=True,
+                )
+
+            self.assertTrue(result)
+            with open(output_path, encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("# 新闻情绪分析", content)
+
+    def test_empty_stdout_returns_false(self):
+        """stdout 为空时返回 False。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "result.md")
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stdout = ""
+            mock_result.stderr = ""
+
+            with mock.patch("scripts.run_analysis.subprocess.run", return_value=mock_result):
+                result = _run_opencode(
+                    prompt="test",
+                    output_path=output_path,
+                    title="test-empty",
+                    overwrite=True,
+                )
+
+            self.assertFalse(result)
+
+    def test_no_markdown_header_returns_false(self):
+        """stdout 有内容但没有 # 标题时返回 False。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "result.md")
+
+            mock_result = mock.Mock()
+            mock_result.returncode = 0
+            mock_result.stdout = "这是一段没有标题的文字\n没有 # 开头"
+            mock_result.stderr = ""
+
+            with mock.patch("scripts.run_analysis.subprocess.run", return_value=mock_result):
+                result = _run_opencode(
+                    prompt="test",
+                    output_path=output_path,
+                    title="test-no-header",
+                    overwrite=True,
+                )
+
+            self.assertFalse(result)
