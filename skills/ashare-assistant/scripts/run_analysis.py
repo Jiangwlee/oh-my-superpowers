@@ -274,7 +274,8 @@ def _run_opencode(
             logger.debug("stdout 前500字符: %s", stdout[:500])
             return False
 
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        if parent := os.path.dirname(output_path):
+            os.makedirs(parent, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
         size_kb = len(content) / 1024
