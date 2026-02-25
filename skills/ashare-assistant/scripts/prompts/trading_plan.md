@@ -18,7 +18,6 @@
 1. YOU MUST source ALL data from the provided input files. No exceptions — do NOT fill in any numbers, stock names, or events from memory, inference, or web searches.
 2. A股规则：T+1、涨跌停板（主板±10%/ST±5%/创业板科创±20%/北交所±30%）、最小交易单位100股。
 3. YOU MUST convert target positions to share counts rounded DOWN to multiples of 100.
-4. `candidates.json` 必须严格遵循 schema_v1（见下方"文件2"约束）。No exceptions — `action` 只允许 `buy/hold/sell/watch`，**禁止使用 `trim`**（减仓请用 `sell`）。
 </HARD-GATE>
 
 ## 输入文件
@@ -123,9 +122,7 @@ account_mode 判断优先级高于 market_mode：
 
 ## 输出
 
-你需要生成两个文件。
-
-### 文件1：交易计划（trading_plan.md）
+生成一份交易计划（trading_plan.md），严格按以下模板输出：
 
 ```markdown
 # 交易计划 - {DATE}
@@ -155,7 +152,7 @@ account_mode 判断优先级高于 market_mode：
 ### [代码] [名称] [动作：买入/加仓/减仓/清仓/观察/持有]
 
 - **当前持仓**：[X股 / 无持仓]
-- **action**：buy / hold / sell / trim / watch
+- **action**：buy / hold / sell / watch
 - **选股理由**：...
 - **深度分析校准**：
   - 情绪：[乐观/中性/谨慎/负面]
@@ -195,55 +192,7 @@ account_mode 判断优先级高于 market_mode：
 [新规律/陷阱，或"本次复盘未发现新规律/陷阱，知识库无更新"]
 ```
 
-### 文件2：候选股计划（candidates.json）
-
-严格按以下 schema_v1 输出，**字段名不得变更，不得增减顶层字段**：
-
-```json
-{
-  "run_id": "[从 filtered/run_id.md 或复盘报告中获取，格式: YYYYMMDD-xxx-HHMMSS]",
-  "as_of_date": "{DATE}",
-  "market": {
-    "regime": "[strong/neutral/weak]"
-  },
-  "account_mode": "[growth/normal/defensive/critical/unknown]",
-  "total_capital": 0,
-  "funding": {
-    "data_degraded": false
-  },
-  "candidates": [
-    {
-      "code": "[6位代码]",
-      "name": "[名称]",
-      "score": 4.0,
-      "type": "[trend/theme]",
-      "action": "[buy/hold/sell/watch]",
-      "sector": "[板块或题材]",
-      "position": 0,
-      "thesis_short": "[30字以内]",
-      "risk_note": "[30字以内]"
-    }
-  ],
-  "risk_flags": {
-    "data_degraded": false,
-    "output_schema_invalid": false,
-    "strategy_version_fallback": false
-  }
-}
-```
-
-**candidates.json 字段约束（schema_v1）**：
-- `run_id`：格式必须是 `YYYYMMDD-xxx-HHMMSS`（如 `20260220-v1.0-103000`）
-- `as_of_date`：`YYYY-MM-DD` 格式，与 `{DATE}` 一致
-- `market.regime`：只能是 `strong` / `neutral` / `weak`
-- `candidates[].score`：数值，4星→4.0，5星→5.0，无评分→0.0
-- `candidates[].action`：只能是 `buy` / `hold` / `sell` / `watch`（**禁止使用 `trim`，减仓用 `sell`**）
-- `thesis_short` 和 `risk_note`：各不超过 30 字
-- `funding.data_degraded`：若 funding 数据缺失则填 `true`，否则 `false`
-- `risk_flags`：三个布尔字段均必须填写
-
-请将 `trading_plan.md` 写入 `{TRADING_PLAN_OUTPUT}`。
-请将 `candidates.json` 写入 `{CANDIDATES_OUTPUT}`。
+请将交易计划写入 `{TRADING_PLAN_OUTPUT}`。
 
 ## 重要约束
 

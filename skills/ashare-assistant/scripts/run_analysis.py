@@ -2,15 +2,16 @@
 """运行子代理分析，将 filtered/ 中的大文件交给子代理生成 report/。
 
 子代理使用 OpenCode CLI (`opencode run`) 实现，每个子代理独立运行一个会话。
-支持完整的 4+N 轮子代理流水线：
+支持完整的 5 阶段流水线：
 
   第一轮（并行）: news + social → 情绪分析报告
   第二轮: review → 复盘报告 (market_review.md)
-  第三轮（并行）: stock ×N → 个股深研
-  第四轮: plan → 交易计划 (trading_plan.md + candidates.json)
+  第三轮: candidates → 候选股提取 (candidates.json)
+  第四轮（并行）: stock ×N → 个股深研
+  第五轮: plan → 交易计划 (trading_plan.md)
 
 用法:
-    # 运行完整流水线（news → social → review → plan）
+    # 运行完整流水线（news → social → review → candidates → stock×N → plan）
     python3 scripts/run_analysis.py \
         --data-dir ~/.ashare-assistant/data/2026-02-24 \
         --tasks all
@@ -28,6 +29,7 @@
 """
 
 import argparse
+import json
 import logging
 import os
 import subprocess
@@ -49,6 +51,7 @@ _MODEL_OVERRIDES: dict[str, str] = {
     "news": "deepseek/deepseek-reasoner",
     "social": "deepseek/deepseek-reasoner",
     "review": "deepseek/deepseek-reasoner",
+    "candidates": "github-copilot/gpt-5-mini",
     "plan": "deepseek/deepseek-reasoner",
     "stock": "github-copilot/gpt-5-mini",
 }
@@ -57,6 +60,7 @@ _MODEL_OVERRIDES: dict[str, str] = {
 
 _TIMEOUT_OVERRIDES: dict[str, int] = {
     "review": 600,
+    "candidates": 120,
     "plan": 600,
 }
 
@@ -191,6 +195,7 @@ def _run_opencode(
     model: str | None = None,
     timeout: int = 300,
     overwrite: bool = False,
+    output_format: str = "markdown",
 ) -> bool:
     """调用 opencode run 执行子代理任务。
 
@@ -201,24 +206,35 @@ def _run_opencode(
         attached_files: 附加文件列表（使用 --file 参数）。
         model: 模型名称（如 "anthropic/claude-sonnet-4-20250514"）。
         timeout: 超时时间（秒）。
+        overwrite: 强制覆盖已存在的输出文件。
+        output_format: 输出格式，"markdown" 或 "json"。
 
     Returns:
         True 如果成功，False 如果失败。
     """
     # 幂等跳过：输出文件已存在且非空时直接复用
-    if not overwrite and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+    if (
+        not overwrite
+        and os.path.exists(output_path)
+        and os.path.getsize(output_path) > 0
+    ):
         size_kb = os.path.getsize(output_path) / 1024
         logger.info("跳过（已存在）: %s (%.1f KB)", title, size_kb)
         return True
 
-    # 在 prompt 末尾追加输出指令
-    full_prompt = (
-        f"{prompt}\n\n"
-        f"---\n\n"
-        f"请将完整的 Markdown 分析结果直接输出到终端（stdout）。\n"
-        f"不要使用 Write 工具写文件，直接输出文本即可。\n"
-        f"输出必须以 `#` 开头的一级标题开始，之后是完整的分析内容。"
-    )
+    # 在 prompt 末尾追加输出指令（按格式区分）
+    if output_format == "json":
+        output_instruction = (
+            "请将完整的 JSON 结果直接输出到终端（stdout）。\n"
+            "输出必须以 `{` 开头，以 `}` 结尾，中间是合法的 JSON。\n"
+            "不要输出任何 Markdown、注释或解释文字。"
+        )
+    else:
+        output_instruction = (
+            "请将完整的 Markdown 分析结果直接输出到终端（stdout）。\n"
+            "输出必须以 `#` 开头的一级标题开始，之后是完整的分析内容。"
+        )
+    full_prompt = f"{prompt}\n\n---\n\n{output_instruction}"
 
     cmd = ["opencode", "run"]
 
@@ -258,21 +274,32 @@ def _run_opencode(
             )
             return False
 
-        # 从 stdout 提取 Markdown 并写入输出文件
+        # 从 stdout 提取内容并写入输出文件
         stdout = result.stdout or ""
         if not stdout.strip():
             logger.error("子代理完成但 stdout 为空: %s (%.1f秒)", title, elapsed)
             return False
 
-        content = _extract_markdown_from_stdout(stdout)
-        if not content:
-            logger.error(
-                "子代理 stdout 无 Markdown 内容（未找到 # 标题）: %s (%.1f秒)",
-                title,
-                elapsed,
-            )
-            logger.debug("stdout 前500字符: %s", stdout[:500])
-            return False
+        if output_format == "json":
+            content = _extract_json_from_stdout(stdout)
+            if not content:
+                logger.error(
+                    "子代理 stdout 无合法 JSON 内容: %s (%.1f秒)",
+                    title,
+                    elapsed,
+                )
+                logger.debug("stdout 前500字符: %s", stdout[:500])
+                return False
+        else:
+            content = _extract_markdown_from_stdout(stdout)
+            if not content:
+                logger.error(
+                    "子代理 stdout 无 Markdown 内容（未找到 # 标题）: %s (%.1f秒)",
+                    title,
+                    elapsed,
+                )
+                logger.debug("stdout 前500字符: %s", stdout[:500])
+                return False
 
         if parent := os.path.dirname(output_path):
             os.makedirs(parent, exist_ok=True)
@@ -306,11 +333,31 @@ def _extract_markdown_from_stdout(stdout: str) -> str:
     return ""
 
 
+def _extract_json_from_stdout(stdout: str) -> str:
+    """从 stdout 提取 JSON 内容（第一个 { 到最后一个 } 之间的内容）。
+
+    子代理可能在 JSON 前后输出解释性文字，此函数只提取 JSON 部分。
+
+    Returns:
+        提取的 JSON 文本，未找到或解析失败时返回空字符串。
+    """
+    first_brace = stdout.find("{")
+    last_brace = stdout.rfind("}")
+    if first_brace == -1 or last_brace == -1 or last_brace <= first_brace:
+        return ""
+    candidate = stdout[first_brace : last_brace + 1]
+    try:
+        json.loads(candidate)
+        return candidate
+    except json.JSONDecodeError:
+        return ""
+
+
 # ── 任务实现 ──────────────────────────────────────────
 
 
 def run_news_sentiment(
-    data_dir: str, model: str | None = None, timeout: int = 300
+    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
 ) -> bool:
     """运行新闻情绪分析子代理。"""
     filtered_dir = os.path.join(data_dir, "filtered")
@@ -339,11 +386,12 @@ def run_news_sentiment(
         attached_files=attached_files,
         model=model,
         timeout=timeout,
+        overwrite=overwrite,
     )
 
 
 def run_social_sentiment(
-    data_dir: str, model: str | None = None, timeout: int = 300
+    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
 ) -> bool:
     """运行社交情绪分析子代理。"""
     filtered_dir = os.path.join(data_dir, "filtered")
@@ -369,6 +417,7 @@ def run_social_sentiment(
         attached_files=attached_files,
         model=model,
         timeout=timeout,
+        overwrite=overwrite,
     )
 
 
@@ -379,6 +428,7 @@ def run_stock_deep_research(
     context: str = "",
     model: str | None = None,
     timeout: int = 300,
+    overwrite: bool = False,
 ) -> bool:
     """运行个股深度研究子代理。
 
@@ -433,11 +483,12 @@ def run_stock_deep_research(
         attached_files=stock_files,
         model=model,
         timeout=timeout,
+        overwrite=overwrite,
     )
 
 
 def run_market_review(
-    data_dir: str, model: str | None = None, timeout: int = 300
+    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
 ) -> bool:
     """运行复盘报告生成子代理。
 
@@ -498,17 +549,79 @@ def run_market_review(
         attached_files=attached_files,
         model=model,
         timeout=timeout,
+        overwrite=overwrite,
+    )
+
+
+def run_candidates(
+    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
+) -> bool:
+    """运行候选股提取子代理。
+
+    从 market_review.md 中提取候选股列表，生成 candidates.json。
+    这是一个轻量级 LLM 调用，输入仅为复盘报告，输出为结构化 JSON。
+
+    输入: market_review.md, strategy/
+    输出: {data_dir}/candidates.json
+    """
+    # 检查前置依赖
+    review_path = os.path.join(data_dir, "market_review.md")
+    if not os.path.exists(review_path):
+        logger.error("market_review.md 不存在: %s\n请先运行 review 任务", review_path)
+        return False
+
+    # 加载模板并替换占位符
+    template = _load_prompt_template("candidates")
+    date_str = _extract_date_from_data_dir(data_dir)
+
+    # 策略文件
+    strategy_files = _collect_existing_files(_SKILL_DIR, _STRATEGY_FILES)
+    if strategy_files:
+        strategy_section_lines = []
+        for fpath in strategy_files:
+            size_kb = os.path.getsize(fpath) / 1024
+            strategy_section_lines.append(f"- `{fpath}` ({size_kb:.1f} KB)")
+        strategy_files_section = "\n".join(strategy_section_lines)
+    else:
+        strategy_files_section = "（无可用文件）"
+
+    prompt = (
+        template.replace("{DATE}", date_str)
+        .replace("{REVIEW_FILE}", review_path)
+        .replace("{STRATEGY_FILES_SECTION}", strategy_files_section)
+    )
+
+    # 输出路径
+    candidates_output = os.path.join(data_dir, "candidates.json")
+
+    # 附加文件
+    attached_files = [review_path]
+    attached_files.extend(strategy_files)
+    # run_id.md 用于提取 run_id 字段
+    run_id_path = os.path.join(data_dir, "filtered", "run_id.md")
+    if os.path.exists(run_id_path):
+        attached_files.append(run_id_path)
+
+    return _run_opencode(
+        prompt=prompt,
+        output_path=candidates_output,
+        title="候选股提取",
+        attached_files=attached_files,
+        model=model,
+        timeout=timeout,
+        overwrite=overwrite,
+        output_format="json",
     )
 
 
 def run_trading_plan(
-    data_dir: str, model: str | None = None, timeout: int = 300
+    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
 ) -> bool:
     """运行交易计划生成子代理。
 
     输入: market_review.md, report/dr_*_brief.md,
           trade_review.json, holding_insight.json, strategy/, evolution/
-    输出: {data_dir}/trading_plan.md + {data_dir}/candidates.json
+    输出: {data_dir}/trading_plan.md
     """
     report_dir = os.path.join(data_dir, "report")
 
@@ -556,7 +669,6 @@ def run_trading_plan(
 
     # 输出路径
     trading_plan_output = os.path.join(data_dir, "trading_plan.md")
-    candidates_output = os.path.join(data_dir, "candidates.json")
 
     prompt = (
         template.replace("{DATE}", date_str)
@@ -565,7 +677,6 @@ def run_trading_plan(
         .replace("{SCRIPT_FILES_SECTION}", script_files_section)
         .replace("{STRATEGY_FILES_SECTION}", strategy_files_section)
         .replace("{TRADING_PLAN_OUTPUT}", trading_plan_output)
-        .replace("{CANDIDATES_OUTPUT}", candidates_output)
     )
 
     # 附加文件
@@ -574,29 +685,15 @@ def run_trading_plan(
     attached_files.extend(_collect_existing_files(data_dir, _SCRIPT_OUTPUT_FILES))
     attached_files.extend(strategy_files)
 
-    # 对 plan 任务，输出有两个文件，用 trading_plan.md 作为主输出检测
-    success = _run_opencode(
+    return _run_opencode(
         prompt=prompt,
         output_path=trading_plan_output,
         title="交易计划生成",
         attached_files=attached_files,
         model=model,
         timeout=timeout,
+        overwrite=overwrite,
     )
-
-    if success:
-        # 强校验双文件都已生成
-        if os.path.exists(candidates_output):
-            size_kb = os.path.getsize(candidates_output) / 1024
-            logger.info("candidates.json 已生成 (%.1f KB)", size_kb)
-        else:
-            logger.error(
-                "trading_plan.md 已生成，但 candidates.json 缺失——"
-                "视为 plan 失败，后续 risk_check/decision_logger 无法执行"
-            )
-            return False
-
-    return success
 
 
 # ── 索引生成 ──────────────────────────────────────────
@@ -654,6 +751,166 @@ def generate_report_index(data_dir: str) -> None:
     )
 
 
+# ── all 流水线辅助 ────────────────────────────────────
+
+
+def _collect_deep_research_targets(data_dir: str) -> list[dict]:
+    """从 candidates.json 读取 buy/watch 候选股。
+
+    Returns:
+        候选股列表，每项含 code/name/thesis_short，空列表表示无候选或读取失败。
+    """
+    candidates_path = os.path.join(data_dir, "candidates.json")
+    if not os.path.exists(candidates_path):
+        return []
+    try:
+        with open(candidates_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return [
+            c for c in data.get("candidates", []) if c.get("action") in ("buy", "watch")
+        ]
+    except Exception as e:
+        logger.warning("读取 candidates.json 失败: %s", e)
+        return []
+
+
+def _collect_stock_data(codes: list[str], data_dir: str) -> None:
+    """调用 run_deep_research_batch.py 批量采集个股原始数据。
+
+    已有 dr_{code}_em.json 或 dr_{code}_tgb.json 的股票自动跳过。
+    """
+    missing = [
+        code
+        for code in codes
+        if not any(
+            os.path.exists(os.path.join(data_dir, f"dr_{code}_{src}.json"))
+            for src in ("em", "tgb")
+        )
+    ]
+    if not missing:
+        logger.info("个股原始数据已存在，跳过批量采集")
+        return
+
+    batch_script = os.path.join(_SCRIPT_DIR, "run_deep_research_batch.py")
+    cmd = [
+        sys.executable,
+        batch_script,
+        "--codes",
+        ",".join(missing),
+        "--output-dir",
+        data_dir,
+        "--skill-root",
+        _SKILL_DIR,
+    ]
+    logger.info("批量采集个股数据: %s", missing)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+            logger.warning("批量采集失败: %s", result.stderr[:300])
+        else:
+            logger.info("批量采集完成")
+    except subprocess.TimeoutExpired:
+        logger.warning("批量采集超时")
+    except Exception as e:
+        logger.warning("批量采集异常: %s", e)
+
+
+def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool]:
+    """执行完整的 all 流水线。
+
+    流程:
+      1. news + social（情绪分析）
+      2. review（复盘报告 → market_review.md）
+      3. candidates（从复盘报告提取候选股 → candidates.json）
+      4. 对 buy/watch 候选股采集数据并逐只运行深研子代理
+      5. plan（交易计划 → trading_plan.md，一次到位）
+
+    Returns:
+        各任务的成功状态字典。
+    """
+    results: dict[str, bool] = {}
+
+    # ── 阶段 1: 情绪分析 ──────────────────────────────
+    for task in ["news", "social"]:
+        m = _get_model(task, args.model)
+        t = _get_timeout(task, args.timeout)
+        logger.info("任务 [%s] 使用模型: %s, 超时: %ds", task, m, t)
+        if task == "news":
+            results["news"] = run_news_sentiment(
+                data_dir, model=m, timeout=t, overwrite=args.overwrite
+            )
+        else:
+            results["social"] = run_social_sentiment(
+                data_dir, model=m, timeout=t, overwrite=args.overwrite
+            )
+
+    # ── 阶段 2: 复盘报告 ──────────────────────────────
+    m = _get_model("review", args.model)
+    t = _get_timeout("review", args.timeout)
+    logger.info("任务 [review] 使用模型: %s, 超时: %ds", m, t)
+    results["review"] = run_market_review(
+        data_dir, model=m, timeout=t, overwrite=args.overwrite
+    )
+    if not results["review"]:
+        logger.error("review 失败，中止流水线")
+        results["candidates"] = False
+        results["plan"] = False
+        return results
+
+    # ── 阶段 3: 候选股提取 ────────────────────────────
+    candidates_model = _get_model("candidates", args.model)
+    candidates_timeout = _get_timeout("candidates", args.timeout)
+    logger.info(
+        "任务 [candidates] 使用模型: %s, 超时: %ds",
+        candidates_model,
+        candidates_timeout,
+    )
+    results["candidates"] = run_candidates(
+        data_dir,
+        model=candidates_model,
+        timeout=candidates_timeout,
+        overwrite=args.overwrite,
+    )
+    if not results["candidates"]:
+        logger.warning("candidates 提取失败，跳过个股深研，继续生成交易计划")
+
+    # ── 阶段 4: 个股深研 ──────────────────────────────
+    targets = _collect_deep_research_targets(data_dir)
+    if targets:
+        codes = [c["code"] for c in targets]
+        logger.info("发现 %d 只 buy/watch 候选股，启动深研: %s", len(codes), codes)
+        _collect_stock_data(codes, data_dir)
+
+        stock_model = _get_model("stock", args.model)
+        stock_timeout = _get_timeout("stock", args.timeout)
+        for c in targets:
+            key = f"stock_{c['code']}"
+            logger.info(
+                "任务 [%s] 使用模型: %s, 超时: %ds", key, stock_model, stock_timeout
+            )
+            results[key] = run_stock_deep_research(
+                data_dir,
+                stock_code=c["code"],
+                stock_name=c["name"],
+                context=c.get("thesis_short", ""),
+                model=stock_model,
+                timeout=stock_timeout,
+                overwrite=args.overwrite,
+            )
+    else:
+        logger.info("无 buy/watch 候选股，跳过个股深研")
+
+    # ── 阶段 5: 交易计划 ──────────────────────────────
+    plan_model = _get_model("plan", args.model)
+    plan_timeout = _get_timeout("plan", args.timeout)
+    logger.info("任务 [plan] 使用模型: %s, 超时: %ds", plan_model, plan_timeout)
+    results["plan"] = run_trading_plan(
+        data_dir, model=plan_model, timeout=plan_timeout, overwrite=args.overwrite
+    )
+
+    return results
+
+
 # ── 主逻辑 ────────────────────────────────────────────
 
 
@@ -670,9 +927,9 @@ def main() -> None:
     parser.add_argument(
         "--tasks",
         nargs="+",
-        choices=["news", "social", "review", "plan", "stock", "all"],
+        choices=["news", "social", "review", "candidates", "plan", "stock", "all"],
         default=["all"],
-        help="要运行的任务（默认 all = news + social + review + plan）",
+        help="要运行的任务（默认 all = 完整5阶段流水线：情绪→复盘→候选股→深研→交易计划）",
     )
     parser.add_argument(
         "--stock-code",
@@ -697,6 +954,11 @@ def main() -> None:
         help="覆盖所有任务的超时时间（秒）",
     )
     parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="强制重新运行，忽略已存在的输出文件（覆盖幂等跳过）",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="显示详细日志",
@@ -719,11 +981,28 @@ def main() -> None:
         sys.exit(1)
 
     tasks = args.tasks
+    start_time = time.time()
+
+    # all 模式：走完整5阶段流水线（情绪→复盘→候选股→深研→交易计划）
     if "all" in tasks:
-        tasks = ["news", "social", "review", "plan"]
+        results = _run_all_pipeline(args, data_dir)
+        generate_report_index(data_dir)
+        elapsed = time.time() - start_time
+        success = sum(1 for v in results.values() if v)
+        failed = sum(1 for v in results.values() if not v)
+        print(
+            f"[analysis] 完成: {success} 成功, {failed} 失败 ({elapsed:.1f}秒)",
+            file=sys.stderr,
+        )
+        for task_name, ok in results.items():
+            print(
+                f"[analysis]   {task_name}: {'OK' if ok else 'FAILED'}", file=sys.stderr
+            )
+        if failed > 0:
+            sys.exit(1)
+        return
 
     results: dict[str, bool] = {}
-    start_time = time.time()
 
     for task in tasks:
         task_model = _get_model(task, args.model)
@@ -733,16 +1012,37 @@ def main() -> None:
 
         if task == "news":
             results["news"] = run_news_sentiment(
-                data_dir, model=task_model, timeout=task_timeout
+                data_dir,
+                model=task_model,
+                timeout=task_timeout,
+                overwrite=args.overwrite,
             )
         elif task == "social":
             results["social"] = run_social_sentiment(
-                data_dir, model=task_model, timeout=task_timeout
+                data_dir,
+                model=task_model,
+                timeout=task_timeout,
+                overwrite=args.overwrite,
             )
         elif task == "review":
             results["review"] = run_market_review(
-                data_dir, model=task_model, timeout=task_timeout
+                data_dir,
+                model=task_model,
+                timeout=task_timeout,
+                overwrite=args.overwrite,
             )
+        elif task == "candidates":
+            # candidates 依赖 review 成功
+            if results.get("review") is False:
+                logger.error("review 任务失败，跳过 candidates 任务（依赖流水线阻断）")
+                results["candidates"] = False
+            else:
+                results["candidates"] = run_candidates(
+                    data_dir,
+                    model=task_model,
+                    timeout=task_timeout,
+                    overwrite=args.overwrite,
+                )
         elif task == "plan":
             # plan 依赖 review 成功，如果 review 在本次运行中失败则阻断
             if results.get("review") is False:
@@ -750,7 +1050,10 @@ def main() -> None:
                 results["plan"] = False
             else:
                 results["plan"] = run_trading_plan(
-                    data_dir, model=task_model, timeout=task_timeout
+                    data_dir,
+                    model=task_model,
+                    timeout=task_timeout,
+                    overwrite=args.overwrite,
                 )
         elif task == "stock":
             if not args.stock_code or not args.stock_name:
@@ -763,6 +1066,7 @@ def main() -> None:
                 context=args.stock_context,
                 model=task_model,
                 timeout=task_timeout,
+                overwrite=args.overwrite,
             )
 
     # 生成报告索引
