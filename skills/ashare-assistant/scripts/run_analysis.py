@@ -46,10 +46,10 @@ _SKILL_DIR = os.path.dirname(_SCRIPT_DIR)  # skills/ashare-assistant/
 _DEFAULT_MODEL = "github-copilot/gpt-5-mini"
 
 _MODEL_OVERRIDES: dict[str, str] = {
-    "news": "github-copilot/claude-opus-4.6",
-    "social": "github-copilot/claude-opus-4.6",
-    "review": "github-copilot/claude-opus-4.6",
-    "plan": "github-copilot/claude-opus-4.6",
+    "news": "deepseek/deepseek-reasoner",
+    "social": "deepseek/deepseek-reasoner",
+    "review": "deepseek/deepseek-reasoner",
+    "plan": "deepseek/deepseek-reasoner",
     "stock": "github-copilot/gpt-5-mini",
 }
 
@@ -190,6 +190,7 @@ def _run_opencode(
     attached_files: list[str] | None = None,
     model: str | None = None,
     timeout: int = 300,
+    overwrite: bool = False,
 ) -> bool:
     """调用 opencode run 执行子代理任务。
 
@@ -204,6 +205,12 @@ def _run_opencode(
     Returns:
         True 如果成功，False 如果失败。
     """
+    # 幂等跳过：输出文件已存在且非空时直接复用
+    if not overwrite and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        size_kb = os.path.getsize(output_path) / 1024
+        logger.info("跳过（已存在）: %s (%.1f KB)", title, size_kb)
+        return True
+
     # 在 prompt 末尾追加输出指令
     full_prompt = (
         f"{prompt}\n\n"
