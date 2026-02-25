@@ -96,6 +96,7 @@ def _convert_news(data: list, category: str) -> str:
 
     每条新闻保留 title、makeDate、detail（完整正文）。
     丢弃 emotion（始终为 null）和 summary（始终为空）。
+    数据在渲染前会经过 _filter_recent_24h() 过滤，只保留最近 24 小时内的条目。
 
     Args:
         data: 新闻条目列表。

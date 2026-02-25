@@ -50,3 +50,17 @@ class FilterRecent24hTest(unittest.TestCase):
 
     def test_empty_list(self):
         self.assertEqual(_filter_recent_24h([], hours=24), [])
+
+    def test_boundary_exactly_24h_is_kept(self):
+        """恰好在 24h 边界上的条目应被保留（>= 语义）。"""
+        now = datetime.now()
+        cutoff = now - timedelta(hours=24)
+        items = [{"title": "boundary", "makeDate": cutoff.strftime("%Y-%m-%d %H:%M:%S")}]
+        result = _filter_recent_24h(items, hours=24)
+        self.assertEqual(len(result), 1)
+
+    def test_missing_makedate_key_kept(self):
+        """makeDate 键不存在（返回 None）时，宽容保留该条目。"""
+        items = [{"title": "no-date"}]
+        result = _filter_recent_24h(items, hours=24)
+        self.assertEqual(len(result), 1)
