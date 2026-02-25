@@ -19,7 +19,7 @@ import logging
 import os
 import sys
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,40 @@ def _yuan_to_yi(value: float | int) -> str:
     return f"{value / 1e8:.2f}"
 
 
+def _filter_recent_24h(data: list, hours: int = 24) -> list:
+    """过滤新闻列表，只保留最近 N 小时内的条目。
+
+    使用 makeDate 字段（格式: 'YYYY-MM-DD HH:MM:SS'）做比对。
+    解析失败的条目视为有效（宽容策略，防止数据格式变化导致全量丢弃）。
+    全部过期时返回列表中的第一条（最新一条）作为兜底。
+
+    Args:
+        data: 新闻条目列表，每项含 makeDate 字段。
+        hours: 时间窗口（小时），默认 24。
+
+    Returns:
+        过滤后的列表，至少包含 1 条（若原列表非空）。
+    """
+    if not data:
+        return []
+    cutoff = datetime.now() - timedelta(hours=hours)
+    result = []
+    for item in data:
+        raw_date = str(item.get("makeDate") or "").strip()
+        if not raw_date:
+            result.append(item)
+            continue
+        try:
+            item_time = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            result.append(item)  # 格式异常，宽容保留
+            continue
+        if item_time >= cutoff:
+            result.append(item)
+    # 兜底：全部过滤掉时返回第一条（最新一条）
+    return result if result else [data[0]]
+
+
 # ── 新闻类转换 ────────────────────────────────────────
 
 
@@ -71,6 +105,7 @@ def _convert_news(data: list, category: str) -> str:
         Markdown 格式文本。
     """
     lines = [f"# {category}", ""]
+    data = _filter_recent_24h(data)
 
     for i, item in enumerate(data, 1):
         title = item.get("title", "").strip()
@@ -140,6 +175,7 @@ def convert_news_flash(raw_dir: str) -> tuple[str, str]:
         return "", "news_flash.md"
 
     lines = ["# 7x24 快讯", ""]
+    data = _filter_recent_24h(data)
 
     for item in data:
         title = item.get("title", "").strip()
