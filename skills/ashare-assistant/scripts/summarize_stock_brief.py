@@ -4,9 +4,10 @@
 
 两种运行模式：
 
-1. --compact-only（Skill 主流程使用）
-   仅做规则提取，输出 compact JSON（约 600 tokens），
+1. --compact-only（Skill 主流程备用方式）
+   仅做规则提取，输出 compact JSON（保留完整文本），
    不调用任何 LLM API。输出供主 LLM 读取后自行生成 brief。
+   注意：推荐方式是使用 run_analysis.py 子代理直接分析原始文件。
 
 2. 完整模式（离线/批处理）
    调用 litellm gateway 直接生成 brief JSON。
@@ -177,14 +178,12 @@ def _build_compact_input(em: dict, tgb: dict, now: datetime) -> dict:
         for n in infos[:5]
     ]
 
-    # --- 东方财富：帖子正文（tier C，截取前 300 字）---
+    # --- 东方财富：帖子正文（tier C，保留完整内容）---
     details = em.get("latest_post_details", [])
     compact["guba_posts"] = [
         {
             "title": d.get("post_title", ""),
-            "abstract": (d.get("post_content_text") or d.get("post_abstract") or "")[
-                :300
-            ],
+            "abstract": d.get("post_content_text") or d.get("post_abstract") or "",
             "pub_time": d.get("post_publish_time", ""),
             "hours_ago": _hours_ago(d.get("post_publish_time", ""), now),
             "url": d.get("url", ""),
@@ -197,12 +196,12 @@ def _build_compact_input(em: dict, tgb: dict, now: datetime) -> dict:
     tags = tgb.get("stock_tags", [])
     compact["stock_tags"] = [t.get("gn_name", "") for t in tags if t.get("gn_name")]
 
-    # --- 淘股吧：个股讨论（tier C）---
+    # --- 淘股吧：个股讨论（tier C，保留完整内容）---
     qposts = tgb.get("quotes_posts", [])
     compact["taoguba_posts"] = [
         {
             "subject": p.get("subject", ""),
-            "summary": (p.get("summary") or "")[:200],
+            "summary": p.get("summary") or "",
             "post_time": p.get("post_time", ""),
             "hours_ago": _hours_ago(p.get("post_time", ""), now),
             "url": p.get("url", ""),

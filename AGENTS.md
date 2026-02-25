@@ -4,7 +4,7 @@
 
 ## IRON RULES
 
-- No coding WITHOUT reading Skills-Dev-Guides.md
+- NO SKILL DESIGN WITHOUT reading `Skills-Dev-Guides.md` and `Claude-Skill-Dev-Guide.md`.
 - Every skill in `skills/` is independent and autonomous
 
 ## 规范参考
@@ -12,6 +12,7 @@
 - [Agent Skills](https://github.com/agentskills/agentskills): Openclaw 遵从的 Skills 规范
 - [Tools](https://docs.openclaw.ai/tools/browser): Openclaw 内置工具
 - [Skills Development Guide](Skills-Dev-Guide.md)：Skills开发经验，当发现一种有效的Skill编写模式时，可追加到此文件中。
+- [Claude Skill Development Guide](Claude-Skill-Dev-Guide.md)：Claude官方Skill开发手册。
 - [JVQuant 平台参考](docs/jvquant-reference.md)：JVQuant 券商交易接口文档，含 API 规格、计费标准、费用优化策略。
 
 ## 技术栈
@@ -26,24 +27,6 @@
 `github_cache`管理规范：
 1.为每个研究主题建立一个子目录，比如：`github_cache/skills`. 与该主题相关的项目将下载至该目录中。
 2.用`github_cache/INDEX.md`为所有github项目建立索引，方便快速检索项目。
-
----
-
-## 开发命令
-
-```bash
-# 运行单个测试文件
-python -m unittest skills/ashare-assistant/tests/test_taoguba_fetchers.py
-
-# 运行单个测试方法
-python -m unittest skills.a_share_review_planner.tests.test_taoguba_fetchers.TaogubaFetchersTest.test_now_recommend
-
-# 运行所有测试
-python -m unittest discover -s skills -p "test_*.py"
-
-# 语法检查
-python -m py_compile <file.py>
-```
 
 ---
 

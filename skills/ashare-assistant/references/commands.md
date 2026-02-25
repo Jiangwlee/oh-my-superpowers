@@ -5,6 +5,8 @@
 ## 目录
 
 - [采集脚本](#采集脚本) — collect_sentiment.py 完整参数
+- [格式转换](#格式转换) — filter_to_markdown.py（raw/ → filtered/）
+- [子代理分析](#子代理分析) — run_analysis.py（filtered/ → report/）
 - [输出文件一览](#输出文件一览) — 所有采集产物说明
 - [独立风控校验](#独立风控校验) — risk_check.py 用法与 candidates.json 格式
 - [结构化输出校验与决策日志](#结构化输出校验与决策日志) — validate + decision_logger + diagnose
@@ -20,27 +22,27 @@
 ```bash
 # 完整采集（推荐，含趋势扫描，约 2-3 分钟）
 python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
+  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
   --news-count 20 \
   --taoguba-count 20
 
 # 含账户持仓数据（需已配置 jvQuant，见下方章节）
 python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
+  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
   --news-count 20 \
   --taoguba-count 20 \
   --broker
 
 # 精简采集（测试用，跳过趋势扫描，约 30 秒）
 python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
+  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
   --news-count 5 \
   --taoguba-count 5 \
   --no-scan-trends
 
 # 限制扫描范围（仅前50名，约 40 秒）
 python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
+  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
   --news-count 20 \
   --taoguba-count 20 \
   --popularity-max 50
@@ -49,7 +51,98 @@ python3 scripts/collect_sentiment.py \
 `{DATE}` 替换为当天日期，如 `2026-02-18`（`$(date +%Y-%m-%d)`）。
 若不确定路径，可在 `references/data-collect.md` 的变量声明中确认。
 
+## 格式转换
+
+将 raw/ JSON 数据转换为 filtered/ Markdown 文件（纯规则转换，不调用 LLM）：
+
+```bash
+python3 scripts/filter_to_markdown.py \
+  --input-dir ~/.ashare-assistant/data/{DATE}/raw \
+  --output-dir ~/.ashare-assistant/data/{DATE}/filtered
+```
+
+生成 `filtered/index.md` 索引文件，标注每个文件的读取方式（direct/subagent）。
+
+## 子代理分析
+
+对 filtered/ 中的大文件运行子代理语义压缩，以及生成复盘报告和交易计划。
+
+完整流水线：news → social → review → plan（4 + N 轮子代理）。
+
+### 内置模型映射
+
+| 任务 | 模型 | 说明 |
+|------|------|------|
+| news | `anthropic/claude-opus-4-20250514` | 新闻情绪分析（高质量） |
+| social | `anthropic/claude-opus-4-20250514` | 社交情绪分析（高质量） |
+| review | `anthropic/claude-opus-4-20250514` | 复盘报告生成（高质量） |
+| plan | `anthropic/claude-opus-4-20250514` | 交易计划生成（高质量） |
+| stock | `github-copilot/gpt-5-mini` | 个股深研（快速、低成本） |
+
+`--model` 参数可覆盖所有任务的模型，但不建议用于生产环境。
+
+### 常用命令
+
+```bash
+# 运行完整流水线（news + social + review + plan）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks all
+
+# 仅运行情绪分析（第一轮）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks news social
+
+# 仅运行复盘报告（需 news/social 已完成）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks review
+
+# 仅运行交易计划（需 review 已完成）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks plan
+
+# 运行个股深研子代理（使用 gpt-5-mini）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks stock \
+  --stock-code 002050 --stock-name 三花智控
+
+# 覆盖模型（调试用）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks social \
+  --model anthropic/claude-sonnet-4-20250514
+```
+
+### 任务依赖关系
+
+```
+news ──┐
+       ├──→ review ──→ plan
+social ┘        ↑
+              stock ×N（并行，输出 dr_*_brief.md 供 plan 读取）
+```
+
+- `review` 依赖 `report/news_sentiment.md` + `report/social_sentiment.md`
+- `plan` 依赖 `market_review.md`（+ 可选的 `report/dr_*_brief.md`）
+- `stock` 独立运行，但输出供 `plan` 使用
+
+### 输出文件
+
+| 任务 | 输出路径 | 说明 |
+|------|---------|------|
+| news | `report/news_sentiment.md` | 新闻情绪分析摘要 |
+| social | `report/social_sentiment.md` | 社交情绪分析摘要 |
+| review | `market_review.md` | 复盘报告（根目录） |
+| plan | `trading_plan.md` + `candidates.json` | 交易计划 + 候选股 JSON |
+| stock | `report/dr_{CODE}_brief.md` | 个股深研报告 |
+
 ## 输出文件一览
+
+### raw/ — 采集脚本输出
 
 | 文件 | 说明 |
 |------|------|
@@ -62,18 +155,54 @@ python3 scripts/collect_sentiment.py \
 | `news_flash.json` | 7x24快讯 |
 | `market_sectors.json` | 板块资金摘要（净流入前5+后5板块） |
 | `funding.json` | 资金面摘要（北向净流入 + 主力净流入Top20） |
-| `taoguba_recommend.json` | 淘股吧今日推荐（含 `content` 正文，用于潜在/新题材挖掘） |
-| `taoguba_hot_discussion.json` | 淘股吧热门讨论（`subject/body/quotecontent`，用于潜在/新题材挖掘） |
-| `taoguba_hot.json` | 淘股吧精华帖（用于识别已发酵热点题材；方法论提炼） |
-| `ths_snapshot.json` | 同花顺涨停快照（原始 JSON，最新交易日） |
-| `ths_history.json` | 近5交易日涨停历史（原始 JSON，精简版） |
-| `ths_report.md` | 涨停综合报告（**LLM 直接阅读**，含5日趋势表 + 连板天梯 + 板块明细） |
-| `trend_scan.json` | 趋势扫描完整结果（含评分/信号/情绪） |
-| `trend_report.md` | 趋势股筛选报告（人类可读） |
+| `taoguba_recommend.json` | 淘股吧今日推荐（含 `content` 正文） |
+| `taoguba_hot_discussion.json` | 淘股吧热门讨论（`subject/body/quotecontent`） |
+| `taoguba_hot.json` | 淘股吧精华帖 |
+| `ths_snapshot.json` | 同花顺涨停快照（原始 JSON） |
+| `ths_history.json` | 近5交易日涨停历史 |
+| `ths_report.md` | 涨停综合报告 |
+| `trend_scan.json` | 趋势扫描完整结果 |
+| `trend_report.md` | 趋势股筛选报告 |
+| `us_market.json` | 美股行情 |
 | `broker_account.json` | 账户资金+持仓+当日委托（仅 --broker 时生成） |
-| `candidates.json` | 候选股计划（LLM 生成，供 risk_check.py 校验） |
 | `run_id.json` | 本次运行标识（run_id + strategy_version） |
-| `trade_review.json` | 交易执行复盘结果（阶段5生成，含瑕疵检测+择时评分） |
+
+### filtered/ — 格式转换输出
+
+| 文件 | 读取方式 | 说明 |
+|------|---------|------|
+| `index.md` | — | 文件索引 |
+| `market_sectors.md` | direct | 板块资金 Markdown |
+| `funding.md` | direct | 资金面 Markdown |
+| `us_market.md` | direct | 美股行情 Markdown |
+| `news_flash.md` | direct | 7x24快讯 Markdown |
+| `ths_report.md` | direct | 涨停综合报告 |
+| `trend_report.md` | direct | 趋势股报告 |
+| `news_headline.md` | subagent | A股头条 Markdown（大文件） |
+| `news_daily.md` | subagent | 每日财经 Markdown（大文件） |
+| `news_opportunity.md` | subagent | 机会情报 Markdown（大文件） |
+| `news_realtime.md` | subagent | 市况直击 Markdown（大文件） |
+| `taoguba_hot.md` | subagent | 精华帖 Markdown（大文件） |
+| `taoguba_recommend.md` | subagent | 今日推荐 Markdown（大文件） |
+| `taoguba_hot_discussion.md` | subagent | 热门讨论 Markdown |
+
+### report/ — 子代理分析输出
+
+| 文件 | 说明 |
+|------|------|
+| `index.md` | 报告索引 |
+| `news_sentiment.md` | 新闻情绪分析摘要（~3-5 KB） |
+| `social_sentiment.md` | 社交情绪分析摘要（~3-5 KB） |
+| `dr_{CODE}_brief.md` | 个股深研报告（第3.5步生成，~2 KB/只） |
+
+### 根目录 — 最终产物
+
+| 文件 | 说明 |
+|------|------|
+| `candidates.json` | 候选股计划（LLM 生成，供 risk_check.py 校验） |
+| `market_review.md` | 复盘报告（最终产物） |
+| `trading_plan.md` | 交易计划（最终产物） |
+| `trade_review.json` | 交易执行复盘结果 |
 
 ## 独立风控校验
 

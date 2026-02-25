@@ -1,8 +1,10 @@
 # A股复盘分析框架
 
-> 本文档是 LLM 执行复盘分析的详细思考模板。
-> 按顺序完成 7 个步骤，每个步骤都必须有明确结论。
-> 不要跳过任何步骤，不要遗漏任何必答问题。
+> 本文档是 LLM 执行复盘分析的思考模板。按顺序完成各步骤，每步必须有明确结论。
+>
+> **数据来源**：所有数据引用均指 `~/.ashare-assistant/data/{DATE}/` 下的文件。
+> 主 agent 读取 `filtered/` 中的 direct 文件和 `report/` 中的子代理分析报告。
+> 具体文件清单见 `references/market-review.md`。
 >
 > **按需加载**：遇到某步骤疑问时，直接跳至对应章节，无需全文读取。
 
@@ -22,57 +24,46 @@
 
 ## 第0步：美股前夜扫描
 
-> **触发条件**：`us_market.json` 存在且其 `market_status` 不为 `"unavailable"` 时执行。
-> 若文件不存在，或 `market_status == "unavailable"`（网络失败），跳过本步骤，在报告中注明"美股数据不可用"。
+> **触发条件**：`filtered/us_market.md` 存在且内容不为"数据不可用"时执行。
+> 若文件不存在或数据不可用，跳过本步骤，在报告中注明"美股数据不可用"。
 
-### 必须读取的数据
+### 数据来源
 
-1. `us_market.json` — 美股指数与科技股行情
+- `filtered/us_market.md` — 美股指数与科技股行情（已从 JSON 转为 Markdown）
 
 ### 必须回答的问题
 
 1. **美股三大指数整体表现如何？**
    - 纳斯达克、道琼斯、标普500 各自涨跌幅
    - VIX 恐慌指数水平（< 20 正常 / 20–30 警戒 / > 30 恐慌）
-   - 整体基调：正面 / 中性 / 负面
 
-2. **核心科技股如何表现？**
-   - 英伟达、苹果、特斯拉、微软、谷歌、Meta 各自涨跌幅
+2. **核心科技股如何表现？**（英伟达、苹果、特斯拉、微软、谷歌、Meta）
    - 是否有个股异常波动（≥ ±3%）
 
 3. **对 A 股主要板块的预期影响是什么？**
-   - 基于 `a_share_sectors` 映射，逐一说明各科技股对 A 股相关板块的预期影响
-   - 影响判断阈值：≥+2% 强利好 / +0.5%~+2% 弱利好 / -0.5%~+0.5% 中性 / -2%~-0.5% 弱利空（承压）/ ≤-2% 强利空（重挫）
+   - 影响阈值：≥+2% 强利好 / +0.5%~+2% 弱利好 / ±0.5% 中性 / -2%~-0.5% 弱利空 / ≤-2% 强利空
 
 ### 输出格式
 
 ```
 美股影响评估：
-
 - 指数基调：纳斯达克 X% / 道琼斯 X% / 标普500 X% → 整体：正面/中性/负面
-- VIX恐慌指数：XX（<20正常 / 20-30警戒 / >30恐慌）
-- 核心科技股联动：
-  - 英伟达 X% → A股影响：半导体/AI算力板块 [利好/中性/承压]
-  - 特斯拉 X% → A股影响：新能源汽车/锂电池板块 [利好/中性/承压]
-  - 苹果 X% → A股影响：消费电子/果链板块 [利好/中性/承压]
-  - 微软 X% → A股影响：云计算/AI应用板块 [利好/中性/承压]
-  - 谷歌 X% → A股影响：AI应用/算力产业链板块 [利好/中性/承压]
-  - Meta X% → A股影响：VR/AR/元宇宙板块 [利好/中性/承压]
-- 综合预判：（1-2句，说明美股对A股今日开盘的整体拖累或提振预期，及最值得关注的板块）
+- VIX恐慌指数：XX
+- 核心科技股联动：（逐一列出对A股板块的影响）
+- 综合预判：（1-2句）
 ```
 
 ---
 
 ## 第一步：市场环境判断
 
-### 必须读取的数据
+### 数据来源
 
-1. `market_sectors.json` — 板块资金摘要（净流入前5+后5板块）
-2. `funding.json` — 资金面摘要（北向净流入 + 主力净流入Top20）
-3. `news_headline.json` — A股头条（含指数涨跌、成交额等宏观信息）
-4. `news_daily.json` — 每日财经（政策/宏观）
-5. 淘股吧热帖中关于大盘的讨论
-6. `broker_account.json` — 账户资金及持仓盈亏（**如存在**）
+1. `filtered/market_sectors.md` — 板块资金摘要
+2. `filtered/funding.md` — 资金面（北向净流入 + 主力净流入Top20）
+3. `report/news_sentiment.md` — 新闻情绪分析（含指数涨跌、成交额等宏观信息）
+4. `report/social_sentiment.md` — 社交情绪中关于大盘的讨论
+5. `raw/broker_account.json` — 账户资金及持仓盈亏（**如存在**）
 
 ### 必须回答的问题
 
@@ -81,26 +72,23 @@
    - 美股前夜整体表现（直接引用第0步"美股影响评估"中的指数基调结论，无需重复提取）
 
 2. **市场成交额是多少？**
-   - 今日总成交额
-   - 与近期（5日/20日）平均比较，放量还是缩量
-   - 来源：从新闻中提取
+   - 今日总成交额，与近期（5日/20日）平均比较
+   - 来源：`report/news_sentiment.md` 中的市场数据提取
 
 3. **板块涨跌格局如何？**
    - 上涨板块数 vs 下跌板块数
    - 涨幅前5和跌幅前5的板块
-   - 来源：market_sectors.json
+   - 来源：`filtered/market_sectors.md`
 
 4. **资金流向什么方向？**
    - 资金净流入前5板块、净流出前5板块
-   - 北向净流入是净流入还是净流出、规模大致如何
-   - 主力净流入Top20中是否有明显行业聚集（同题材共振）
-   - 是否有明显的板块资金聚集与个股抱团
-   - 来源：market_sectors.json + funding.json
+   - 北向净流入方向与规模
+   - 主力净流入Top20中是否有行业聚集
+   - 来源：`filtered/market_sectors.md` + `filtered/funding.md`
 
 5. **涨跌停情况如何？**
-   - 涨停数量、跌停数量
-   - 连板高度（最高几板）
-   - 来源：`ths_snapshot.json`（同花顺涨停快照）
+   - 涨停/跌停数量，连板高度
+   - 来源：`filtered/ths_report.md`
 
 6. **账户健康度如何？**（仅当 broker_account.json 存在时作答）
    - 账户总资产和可用资金
@@ -137,40 +125,33 @@
 
 ## 第二步：题材线索识别
 
-### 必须读取的数据
+### 数据来源
 
-1. `ths_snapshot.json` — 同花顺最强板块数据
-2. `ths_snapshot.json` — 同花顺连板天梯数据
-3. `news_headline.json` — A股头条
-4. `news_opportunity.json` — 机会情报
-5. `taoguba_recommend.json` — 淘股吧今日推荐（含 `content`，用于潜在/新题材挖掘）
-6. `taoguba_hot_discussion.json` — 淘股吧热门讨论（`subject/body/quotecontent`，用于潜在/新题材挖掘）
-7. `taoguba_hot.json` — 淘股吧精华帖（用于识别已发酵热点题材）
+1. `filtered/ths_report.md` — 同花顺最强板块 + 连板天梯数据
+2. `report/news_sentiment.md` — 新闻情绪分析中的行业催化与关键新闻
+3. `report/social_sentiment.md` — 社交情绪分析（热点题材、个股热度、精华观点）
+4. `filtered/news_flash.md` — 7x24快讯
 
 ### 必须回答的问题
 
 1. **当前市场有主线题材吗？**
-   - 如有：名称、已持续几天、处于什么阶段（启动/加速/分歧/衰退）
-   - 核心标的有哪些、龙头股是谁
-   - 来源：连板天梯 + 最强板块 + `taoguba_hot.json`
+   - 名称、持续天数、阶段（启动/加速/分歧/衰退）
+   - 核心标的和龙头股
+   - 来源：`filtered/ths_report.md` 连板天梯 + 最强板块 + `report/social_sentiment.md`
 
 2. **有什么新兴题材线索？**
-   - 催化事件是什么（政策/新闻/突发事件）
-   - 受益板块和个股
-   - 参与价值评估：高（强催化+资金认可）/ 中（有催化但尚未确认）/ 低（概念炒作）
-   - 来源：`news_opportunity.json` + `taoguba_recommend.json` + `taoguba_hot_discussion.json`
+   - 催化事件、受益板块和个股
+   - 参与价值：高（强催化+资金认可）/ 中（有催化尚未确认）/ 低（概念炒作）
+   - 来源：`report/news_sentiment.md` + `report/social_sentiment.md`
 
 3. **哪些题材在衰退？**
-   - 名称、衰退信号（龙头跌停/板块分化/资金撤离）
-   - 如果持有相关个股，需要注意什么
+   - 衰退信号（龙头跌停/板块分化/资金撤离）
 
-4. **市场情绪如何？**（⚠️ 此项必须有淘股吧帖子直接证据，不得仅凭资金面推断）
-   - 淘股吧热帖的整体基调：乐观 / 谨慎 / 恐慌（**必须**引用至少 2 条 `taoguba_hot.json` 中的具体帖子标题或内容作为依据）
-   - 今日推荐帖（`taoguba_recommend.json`）中散户关注哪些题材？热度如何？（**必须**引用至少 1 条帖子主题）
-   - 热门讨论（`taoguba_hot_discussion.json`）中有无新题材冒头或情绪异常（**必须**交叉验证）
-   - 散户关注的热点是否与机构资金方向一致
+4. **市场情绪如何？**（⚠️ 必须有帖子/新闻直接证据）
+   - 整体基调：乐观 / 谨慎 / 恐慌
+   - 来源：`report/social_sentiment.md` 已提取淘股吧帖子引用，**必须**引用至少 2 条具体帖子/新闻标题作为依据
+   - 散户关注热点是否与机构资金方向一致
    - 是否有明显的一致性预期（注意反向风险）
-   - 新闻层面（`news_headline.json` + `news_opportunity.json`）有哪些具体标题与情绪相关（至少引用 1 条）
 
 ### 输出格式
 
@@ -193,29 +174,28 @@
 
 市场情绪：[乐观/谨慎/恐慌]
 
-情绪判断依据（必须引用原始帖子/新闻）：
+情绪判断依据（必须引用原始帖子/新闻，来自子代理报告中的引用）：
 
 - 淘股吧精华帖：「[帖子标题或核心观点]」（[作者]/[日期]）
 - 淘股吧精华帖：「[帖子标题或核心观点]」（[作者]/[日期]）
-- 今日推荐热点：[帖子主题]（散户关注度：高/中/低）
 - 新闻情绪：「[新闻标题]」→ 市场解读：[正面/负面/中性]
 - 资金与情绪一致性：[是/否，1句说明]
-- 反向风险提示：[有/无，如有请描述]
+- 反向风险提示：[有/无]
 ```
 
 ---
 
 ## 第三步：个股筛选（定性多维共振）
 
-### 必须读取的数据
+### 数据来源
 
-1. `trend_report.md` — 通过硬门槛的趋势股列表（作为候选池入口）⚠️ **必须完整读取，不得只读部分**
-2. `trend_scan.json` — 各股 `score_total_100`、`emotion_level`、`trade_signal`
-3. `funding.json` → `trend_candidates_funding` — 趋势候选股3日主力净流入排名（若为空则退化用 `main_force_top20`）；`today_top10`（如存在）提供当日实时 Top10 辅助参考
+1. `filtered/trend_report.md` — 通过硬门槛的趋势股列表（候选池入口）⚠️ **必须完整读取**
+2. `raw/trend_scan.json` — 各股 `score_total_100`、`emotion_level`、`trade_signal`
+3. `filtered/funding.md` — 趋势候选股3日主力净流入排名
 4. 第一步和第二步的结论（market_regime + 题材识别结果）
 5. `evolution/selection_rules.md` — 选股规则修正（有内容则读）
 
-> ⚠️ **趋势候选股汇总硬性要求**：第三步完成后，**必须**将 `trend_report.md` 中所有4星和5星趋势股完整列入复盘报告"七、趋势候选股汇总"表格。不得因数量多而省略。若某只股票被排除出候选名单，可在表格备注列注明排除原因，但不得从表格中直接删去。
+> ⚠️ **趋势候选股汇总硬性要求**：第三步完成后，**必须**将 `filtered/trend_report.md` 中所有4星和5星趋势股完整列入复盘报告"七、趋势候选股汇总"表格。不得因数量多而省略。
 
 ---
 
@@ -238,16 +218,16 @@
 - [稳健趋势]：60 ≤ score < 80
 - [弱趋势]：score < 60
 
-**② 资金维度标签 (Funding)**：基于 `funding.json` 的流入情况
+**② 资金维度标签 (Funding)**：基于 `filtered/funding.md` 的流入情况
 
-> **数据说明**：`funding.json` 中 `main_force_top20` 使用 **3日累计** 主力净流入排名（`funding_indicator: "3日"`），反映资金的持续流入方向而非单日波动，对选股参考价值更大。`today_top10`（如存在）提供当日实时 Top10 作为辅助参考。
+> **数据说明**：`filtered/funding.md` 中主力净流入 Top20 使用 **3日累计** 排名，反映资金的持续流入方向。趋势候选股资金排名在同一文件中。
 >
-> **降级规则**：优先使用 `trend_candidates_funding` 中的 rank 字段（同样基于3日排名）。若 `trend_candidates_funding` 为空（数据抓取失败），退化使用 `main_force_top20`：出现在 `main_force_top20` 中的股票视为 [绝对主力]，其余所有股票只能在 [资金活跃]（所属板块位列净流入前5）和 [无资金关照] 之间判定。若 `funding.json` 整体 `data_degraded: true`，所有股票的资金维度标记为 [资金未知]，该维度不参与共振判定（即共振条件从四维降为三维）。
+> **降级规则**：优先使用趋势候选股资金排名中的 rank。若趋势候选股资金为空，退化使用主力净流入 Top20。若资金数据整体降级，所有股票资金维度标记为 [资金未知]，该维度不参与共振判定。
 
-- [绝对主力]：在 `trend_candidates_funding` 或 `main_force_top20` 中 rank ≤ 20（3日累计主力净流入全市场前20）
-- [资金活跃]：在名单中但 rank 为 21–300，或未在全市场前300但所属板块当日资金极度活跃（位列净流入前5板块）
-- [无资金关照]：rank > 300 且所属板块无资金聚集，或净流入为负
-- [资金未知]：`funding.json` 的 `data_degraded: true` 时的降级标签，该维度不参与共振匹配
+- [绝对主力]：主力净流入全市场前20（3日累计）
+- [资金活跃]：rank 21–300，或所属板块当日资金极度活跃
+- [无资金关照]：rank > 300 且所属板块无资金聚集
+- [资金未知]：资金数据降级时的标签，该维度不参与共振
 
 **③ 题材维度标签 (Theme)**：基于第二步题材结论
 - [主线核心]：属于当前处于启动/加速阶段的主线题材
@@ -255,7 +235,7 @@
 - [新锐题材]：属于刚刚冒头、有强催化的高评级新兴题材
 - [无题材热度]：不属于以上任何热门题材
 
-**④ 情绪维度标签 (Emotion)**：基于 `trend_scan.json` 的 `emotion_level`
+**④ 情绪维度标签 (Emotion)**：基于 `raw/trend_scan.json` 的 `emotion_level`
 - [情绪极热]：L4 或 L5
 - [情绪温和]：L3
 - [情绪冷淡]：L1 或 L2
@@ -312,117 +292,68 @@
 ## 第3.5步：个股深度分析（情绪与事件校准）
 
 > **触发条件**：第三步完成筛选，确定候选股列表后执行。
-> **目的**：对每只候选股采集社区情绪与近期事件，**以仓位乘数和入场时机校准为主**；tier A 严重负面公告（监管处罚/立案调查等）作为强制例外，可触发候选股复核。
+> **目的**：对每只候选股采集社区情绪与近期事件，以仓位乘数和入场时机校准为主。
 
 ### 执行流程
 
-对每只候选股（`{CODE}` 为6位代码，`{FULL_CODE}` 为如 `sz002050`），依次执行：
+**方式一：子代理分析（推荐）**
 
-**第一步：运行采集脚本**
+对每只候选股运行子代理：
 
 ```bash
-# 东方财富股吧采集
-python3 scripts/collect_eastmoney_guba.py \
-  --code {CODE} \
-  --output ~/.ashare-assistant/data/{DATE}/dr_{CODE}_em.json \
-  --post-limit 36 --detail-limit 5 --notice-days 3
-
-# 淘股吧个股扩展采集
-python3 scripts/collect_taoguba_stock.py \
-  --full-code {FULL_CODE} \
-  --output ~/.ashare-assistant/data/{DATE}/dr_{CODE}_tgb.json \
-  --quotes-count 8
+PYTHONPATH=. python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks stock \
+  --stock-code {CODE} --stock-name {NAME}
 ```
 
-> 详细参数见 `references/commands.md` 的"Deep Research 预算参数"章节。
+子代理会自动执行数据采集并生成分析报告 `report/dr_{CODE}_brief.md`。
+详细参数见 `references/commands.md` 的"子代理分析"和"Deep Research"章节。
 
-**第二步：运行 compact 提取脚本**
+**方式二：批量并行采集 + 手动分析**
 
 ```bash
-python3 scripts/summarize_stock_brief.py \
+# 批量并行采集
+PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
+  --candidates-file ~/.ashare-assistant/data/{DATE}/candidates.json \
+  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
+  --max-workers 4
+
+# 规则提取 compact（不调用 LLM）
+PYTHONPATH=. python3 scripts/summarize_stock_brief.py \
   --code {CODE} \
-  --em-raw ~/.ashare-assistant/data/{DATE}/dr_{CODE}_em.json \
-  --tgb-raw ~/.ashare-assistant/data/{DATE}/dr_{CODE}_tgb.json \
-  --output ~/.ashare-assistant/data/{DATE}/dr_{CODE}_compact.json \
+  --em-raw ~/.ashare-assistant/data/{DATE}/raw/dr_{CODE}_em.json \
+  --tgb-raw ~/.ashare-assistant/data/{DATE}/raw/dr_{CODE}_tgb.json \
+  --output ~/.ashare-assistant/data/{DATE}/raw/dr_{CODE}_compact.json \
   --compact-only
 ```
 
-> 此脚本**不调用任何 LLM**，纯规则提取，输出约 600 tokens 的精简 JSON。
-> 原始 raw 文件（`_em.json` / `_tgb.json`）体积过大（~10k tokens），**不要**直接传给 LLM。
+读取子代理生成的 `report/dr_{CODE}_brief.md`。报告包含信号汇总、社区情绪、仓位校准建议等内容。
 
-**第三步：读取 compact，生成 brief**
+> 子代理分析的详细规则见 `scripts/prompts/stock_deep_research.md`，主代理无需重复执行。
 
-读取 `~/.ashare-assistant/data/{DATE}/dr_{CODE}_compact.json`，根据下方 schema 和分类规则，**由你直接生成 brief JSON**，然后用 bash 写入文件：
+### 读取子代理报告的要点
 
-```bash
-cat > ~/.ashare-assistant/data/{DATE}/dr_{CODE}_brief.json << 'EOF'
-{生成的 JSON 内容}
-EOF
-```
+每份 `report/dr_{CODE}_brief.md` 包含：
+- **信号汇总**：正面/负面/不确定信号（已按 A/B/C 分级、按时效排序）
+- **社区情绪**：热度、多空比、焦点话题
+- **仓位校准建议**：乘数（×1.2/1.0/0.8/0.5/0）、情绪标签、入场时机
 
-### brief 结构与生成规则
+### 证据分级约束（硬性规则）
 
-按以下 schema 生成（严格 JSON，不含注释）：
+| 级别 | 来源 | 影响范围 |
+|------|------|---------|
+| A | 公告/监管文件 | 可影响选股决策；严重负面可触发候选复核 |
+| B | 财经媒体资讯 | 影响仓位乘数，不单独触发候选复核 |
+| C | 社区帖子 | **仅**影响择时和仓位乘数，**不得**改变选股决策 |
 
-```json
-{
-  "code": "{CODE}",
-  "summarized_at": "{当前时间 YYYY-MM-DD HH:MM:SS}",
-  "positive_signals": [
-    {"summary": "简洁描述（20字内）", "source_url": "原始数据中的url字段", "source_type": "announcement|stock_info|eastmoney_guba|taoguba", "evidence_tier": "A|B|C", "hours_ago": 数字}
-  ],
-  "negative_signals": [...],
-  "uncertain_claims": [...],
-  "stock_tags": ["题材1", "题材2"],
-  "community_heat": "high|medium|low"
-}
-```
+- 若子代理报告中存在 A 级严重负面（监管处罚/立案调查），**必须**重新评估是否保留该候选股
+- 不确定信息仅供参考，不得作为决策依据
 
-**数据字段映射（compact JSON 字段）：**
+### 校准信息并入交易计划
 
-> compact 字段由 `summarize_stock_brief.py --compact-only` 从 raw 文件提取，与 raw 字段名不同。
-
-| compact 字段 | brief 中的 source_type | evidence_tier |
-|-------------|----------------------|---------------|
-| `announcements`（公告） | `announcement` | `A` |
-| `news_infos`（资讯列表） | `stock_info` | `B` |
-| `guba_posts`（东方财富帖子） | `eastmoney_guba` | `C` |
-| `taoguba_posts`（淘股吧讨论） | `taoguba` | `C` |
-
-**分类规则：**
-- `positive_signals`：有明确来源的利好（增持/回购/中标/业绩超预期/题材催化）
-- `negative_signals`：有明确来源的利空（减持/亏损/诉讼/解禁/监管处罚）
-- `uncertain_claims`：无一手来源的传言、推测、模糊情绪
-- 每类最多 5 条，优先 tier A/B，同级别优先 `hours_ago` 小的（越新越优先）
-- `hours_ago`：根据各条数据的时间字段与当前时间计算，单位小时（整数）
-- `community_heat`：根据帖子总量和互动量判断（≥10条=high，4-9条=medium，<4条=low）
-
-### 证据分级与约束规则
-
-| tier | 来源 | 可影响范围 |
-|------|------|-----------|
-| **A**（公告/监管） | `stock_notices_recent` | 仓位/择时校准；严重负面（处罚/立案）可触发候选复核 |
-| **B**（资讯媒体） | `stock_infos` | 仓位乘数和置信度评分 |
-| **C**（社区帖子） | 股吧/淘股吧 | **仅**影响择时（入场时机）和仓位乘数 |
-
-**硬性约束**（不可绕过）：
-
-- C 层证据**不得**单独改变选股决策（是否选入候选股）
-- B 层证据仅影响仓位乘数，不单独触发候选复核
-- 若 `negative_signals` 中存在 tier A 严重负面（监管处罚/立案调查/重大违规公告），**必须**重新评估是否保留该候选股
-- `uncertain_claims` 仅供参考，不得作为决策依据
-
-### 时效性判断
-
-- `hours_ago <= 6`：信号权重高，事件很可能尚未被市场充分定价
-- `hours_ago 6-24`：正常权重
-- `hours_ago 24-72`：权重降低，市场可能已反映
-- `hours_ago > 72`：低权重，仅作背景参考
-
-### 输出：仓位校准信息
-
-每只候选股完成 brief 分析后，生成该股的校准信息，并在第四步直接并入该股交易计划条目。  
-不要单独输出一节“DR校准结论”，避免同一股票重复出现两次。
+每只候选股的校准信息直接并入第四步该股的交易计划条目。
+不要单独输出“DR校准结论”节，避免同一股票重复出现。
 
 ---
 
