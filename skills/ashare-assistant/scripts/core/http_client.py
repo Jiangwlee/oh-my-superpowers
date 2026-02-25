@@ -125,11 +125,24 @@ def http_text(
             with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
                 return resp.read().decode("utf-8")
         except http.client.IncompleteRead as exc:
-            partial = exc.partial or b""
-            logger.warning(
-                "http_text incomplete read for %s, returning partial body", url
-            )
-            return partial.decode("utf-8", errors="replace")
+            last_exc = exc
+            if attempt < retries:
+                logger.warning(
+                    "http_text incomplete read %s/%s %s, will retry",
+                    attempt,
+                    retries,
+                    url,
+                )
+                time.sleep(wait)
+                wait *= 2
+            else:
+                partial = exc.partial or b""
+                logger.warning(
+                    "http_text incomplete read after %s retries for %s, returning partial body",
+                    retries,
+                    url,
+                )
+                return partial.decode("utf-8", errors="replace")
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             last_exc = exc
             if attempt < retries:
@@ -183,10 +196,23 @@ def http_bytes(
             with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
                 return resp.read()
         except http.client.IncompleteRead as exc:
-            logger.warning(
-                "http_bytes incomplete read for %s, returning partial body", url
-            )
-            return exc.partial or b""
+            last_exc = exc
+            if attempt < retries:
+                logger.warning(
+                    "http_bytes incomplete read %s/%s %s, will retry",
+                    attempt,
+                    retries,
+                    url,
+                )
+                time.sleep(wait)
+                wait *= 2
+            else:
+                logger.warning(
+                    "http_bytes incomplete read after %s retries for %s, returning partial body",
+                    retries,
+                    url,
+                )
+                return exc.partial or b""
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             last_exc = exc
             if attempt < retries:
