@@ -423,12 +423,13 @@ def convert_funding(raw_dir: str) -> tuple[str, str]:
     if top20:
         lines.append("## 主力净流入 TOP20（3日累计）")
         lines.append("")
-        lines.append("| 排名 | 股票 | 净流入(亿) |")
-        lines.append("|------|------|-----------|")
+        lines.append("| 排名 | 股票 | 代码 | 净流入(亿) |")
+        lines.append("|------|------|------|-----------|")
         for idx, item in enumerate(top20, 1):
             name = item.get("name", "")
+            code = item.get("code", "")
             net = item.get("net_inflow", 0)
-            lines.append(f"| {idx} | {name} | {net:.2f} |")
+            lines.append(f"| {idx} | {name} | {code} | {net:.2f} |")
         lines.append("")
 
     # 今日 Top10
@@ -436,12 +437,13 @@ def convert_funding(raw_dir: str) -> tuple[str, str]:
     if today:
         lines.append("## 今日主力净流入 TOP10")
         lines.append("")
-        lines.append("| 排名 | 股票 | 净流入(亿) |")
-        lines.append("|------|------|-----------|")
+        lines.append("| 排名 | 股票 | 代码 | 净流入(亿) |")
+        lines.append("|------|------|------|-----------|")
         for idx, item in enumerate(today, 1):
             name = item.get("name", "")
+            code = item.get("code", "")
             net = item.get("net_inflow", 0)
-            lines.append(f"| {idx} | {name} | {net:.2f} |")
+            lines.append(f"| {idx} | {name} | {code} | {net:.2f} |")
         lines.append("")
 
     # 趋势候选股资金
