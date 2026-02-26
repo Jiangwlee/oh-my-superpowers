@@ -581,7 +581,13 @@ def convert_run_id(raw_dir: str) -> tuple[str, str]:
 
 
 def convert_broker_account(raw_dir: str) -> tuple[str, str]:
-    """转换券商账户数据。"""
+    """转换券商账户数据。
+
+    字段对照（fetch_broker_account 实际输出）：
+      total / usable / day_earn / hold_earn
+      hold_list[].code, name, hold_vol, usable_vol, hold_earn, day_earn
+      order_list[].code, name, type, status, deal_price, deal_volume
+    """
     filepath = os.path.join(raw_dir, "broker_account.json")
     if not os.path.exists(filepath):
         return "", "broker_account.md"
@@ -596,56 +602,53 @@ def convert_broker_account(raw_dir: str) -> tuple[str, str]:
     lines.append("## 资金概况")
     lines.append("")
     fund_keys = [
-        ("total_assets", "总资产"),
-        ("market_value", "市值"),
+        ("total", "总资产"),
         ("usable", "可用资金"),
-        ("frozen", "冻结"),
+        ("day_earn", "当日盈亏"),
+        ("hold_earn", "持仓盈亏"),
     ]
     for key, label in fund_keys:
         val = data.get(key)
         if val is not None:
             lines.append(
-                f"- **{label}**: {val:,.2f}"
-                if isinstance(val, (int, float))
+                f"- **{label}**: {float(val):,.2f}"
+                if isinstance(val, (int, float, str)) and str(val).lstrip("-").replace(".", "", 1).isdigit()
                 else f"- **{label}**: {val}"
             )
     lines.append("")
 
     # 持仓
-    positions = data.get("positions", [])
-    if positions:
+    hold_list = data.get("hold_list", [])
+    if hold_list:
         lines.append("## 当前持仓")
         lines.append("")
-        lines.append("| 股票 | 代码 | 数量 | 可卖 | 成本价 | 现价 | 盈亏(%) |")
-        lines.append("|------|------|------|------|--------|------|---------|")
-        for p in positions:
+        lines.append("| 股票 | 代码 | 持仓量 | 可卖量 | 持仓盈亏 | 当日盈亏 |")
+        lines.append("|------|------|--------|--------|----------|----------|")
+        for p in hold_list:
             name = p.get("name", "")
             code = p.get("code", "")
-            qty = p.get("quantity", "")
-            sellable = p.get("sellable", "")
-            cost = p.get("cost_price", "")
-            price = p.get("current_price", "")
-            pnl = p.get("pnl_pct", "")
-            pnl_str = f"{pnl:+.2f}%" if isinstance(pnl, (int, float)) else str(pnl)
-            lines.append(
-                f"| {name} | {code} | {qty} | {sellable} | {cost} | {price} | {pnl_str} |"
-            )
+            hold_vol = p.get("hold_vol", "")
+            usable_vol = p.get("usable_vol", "")
+            hold_earn = p.get("hold_earn", "")
+            day_earn = p.get("day_earn", "")
+            lines.append(f"| {name} | {code} | {hold_vol} | {usable_vol} | {hold_earn} | {day_earn} |")
         lines.append("")
 
     # 当日委托
-    orders = data.get("orders", [])
-    if orders:
+    order_list = data.get("order_list", [])
+    if order_list:
         lines.append("## 当日委托")
         lines.append("")
-        lines.append("| 股票 | 方向 | 价格 | 数量 | 状态 |")
-        lines.append("|------|------|------|------|------|")
-        for o in orders:
+        lines.append("| 股票 | 代码 | 方向 | 成交价 | 成交量 | 状态 |")
+        lines.append("|------|------|------|--------|--------|------|")
+        for o in order_list:
             name = o.get("name", "")
-            direction = o.get("direction", "")
-            price = o.get("price", "")
-            qty = o.get("quantity", "")
+            code = o.get("code", "")
+            direction = o.get("type", "")
+            price = o.get("deal_price", o.get("order_price", ""))
+            qty = o.get("deal_volume", o.get("order_volume", ""))
             status = o.get("status", "")
-            lines.append(f"| {name} | {direction} | {price} | {qty} | {status} |")
+            lines.append(f"| {name} | {code} | {direction} | {price} | {qty} | {status} |")
         lines.append("")
 
     return "\n".join(lines), "broker_account.md"
