@@ -231,6 +231,99 @@ class LoadHistoryTest(unittest.TestCase):
             self.assertEqual(result["positions"]["2026-02-24"]["total"], "100002.00")
 
 
+class PostMarketCacheTest(unittest.TestCase):
+    """测试盘后缓存短路逻辑。"""
+
+    def _write_positions(self, pos_dir: str, date_str: str, fetched_at: str) -> None:
+        Path(pos_dir).mkdir(parents=True, exist_ok=True)
+        data = {
+            "date": date_str,
+            "fetched_at": fetched_at,
+            "total": "163912.25",
+            "usable": "26666.25",
+            "day_earn": "-3052.73",
+            "hold_earn": "1037.34",
+            "hold_list": [{"code": "002202", "name": "金风科技", "hold_vol": "1600"}],
+        }
+        (Path(pos_dir) / f"{date_str}.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def _write_orders(self, ord_dir: str, date_str: str, count: int) -> None:
+        Path(ord_dir).mkdir(parents=True, exist_ok=True)
+        data = {
+            "date": date_str,
+            "fetched_at": f"{date_str}T22:10:16+08:00",
+            "order_list": [
+                {"code": "002202", "name": "金风科技", "type": "证券买入", "deal_volume": str(100 * (i + 1))}
+                for i in range(count)
+            ],
+        }
+        (Path(ord_dir) / f"{date_str}.json").write_text(
+            json.dumps(data, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def test_post_market_cache_hit_returns_cached_data(self) -> None:
+        """盘后且持仓缓存存在时，应直接返回缓存，不调用 API。"""
+        from datetime import datetime, timezone, timedelta
+
+        cn_tz = timezone(timedelta(hours=8))
+        fake_now = datetime(2026, 2, 25, 23, 19, 0, tzinfo=cn_tz)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pos_dir = str(Path(tmp) / "positions")
+            ord_dir = str(Path(tmp) / "orders")
+            self._write_positions(pos_dir, "2026-02-25", "2026-02-25T22:10:00+08:00")
+            self._write_orders(ord_dir, "2026-02-25", 13)
+
+            with (
+                mock.patch.object(ba, "_POSITIONS_DIR", pos_dir),
+                mock.patch.object(ba, "_ORDERS_DIR", ord_dir),
+                mock.patch(
+                    "scripts.fetchers.broker_account.datetime",
+                    wraps=ba.datetime,
+                ) as mock_dt,
+            ):
+                mock_dt.now.return_value = fake_now
+                result = ba._load_post_market_cache("2026-02-25")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["total"], "163912.25")
+        self.assertEqual(len(result["order_list"]), 13)
+        self.assertTrue(result["ticket_reused"])
+
+    def test_post_market_cache_miss_when_no_positions_file(self) -> None:
+        """持仓缓存不存在时，应返回 None（触发 API 调用路径）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            pos_dir = str(Path(tmp) / "positions")
+            ord_dir = str(Path(tmp) / "orders")
+
+            with (
+                mock.patch.object(ba, "_POSITIONS_DIR", pos_dir),
+                mock.patch.object(ba, "_ORDERS_DIR", ord_dir),
+            ):
+                result = ba._load_post_market_cache("2026-02-25")
+
+        self.assertIsNone(result)
+
+    def test_post_market_cache_returns_empty_orders_when_no_orders_file(self) -> None:
+        """持仓缓存存在但 orders 文件不存在时，order_list 应为空列表。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            pos_dir = str(Path(tmp) / "positions")
+            ord_dir = str(Path(tmp) / "orders")
+            self._write_positions(pos_dir, "2026-02-25", "2026-02-25T22:10:00+08:00")
+            # 不写 orders 文件
+
+            with (
+                mock.patch.object(ba, "_POSITIONS_DIR", pos_dir),
+                mock.patch.object(ba, "_ORDERS_DIR", ord_dir),
+            ):
+                result = ba._load_post_market_cache("2026-02-25")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["order_list"], [])
+
+
 class CostTrackingTest(unittest.TestCase):
     """测试每日费用追踪和预算控制。"""
 

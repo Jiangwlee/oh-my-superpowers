@@ -517,8 +517,50 @@ def load_history(days: int = 30) -> dict:
 # ── 主入口 ───────────────────────────────────────────────────────
 
 
+def _load_post_market_cache(today_str: str) -> dict | None:
+    """盘后缓存读取：从本地持久化文件拼装账户数据，不调用任何 API。
+
+    Args:
+        today_str: 当日日期字符串，格式 YYYY-MM-DD。
+
+    Returns:
+        与 fetch_broker_account() 返回格式一致的字典；缓存不存在时返回 None。
+    """
+    positions_path = os.path.join(_POSITIONS_DIR, f"{today_str}.json")
+    if not os.path.exists(positions_path):
+        return None
+    try:
+        with open(positions_path, encoding="utf-8") as f:
+            cached_pos = json.load(f)
+        orders: list = []
+        orders_path = os.path.join(_ORDERS_DIR, f"{today_str}.json")
+        if os.path.exists(orders_path):
+            with open(orders_path, encoding="utf-8") as f:
+                orders = json.load(f).get("order_list", [])
+        logger.info(
+            "盘后缓存命中，跳过 API 调用（fetched_at: %s, orders: %d 条）",
+            cached_pos.get("fetched_at", ""),
+            len(orders),
+        )
+        return {
+            "total": cached_pos.get("total", ""),
+            "usable": cached_pos.get("usable", ""),
+            "day_earn": cached_pos.get("day_earn", ""),
+            "hold_earn": cached_pos.get("hold_earn", ""),
+            "hold_list": cached_pos.get("hold_list", []),
+            "order_list": orders,
+            "fetched_at": cached_pos.get("fetched_at", ""),
+            "ticket_reused": True,
+        }
+    except Exception:
+        logger.warning("盘后缓存读取失败，回退到 API 调用")
+        return None
+
+
 def fetch_broker_account() -> dict:
     """获取账户完整信息（资金 + 持仓 + 当日委托），自动持久化到本地。
+
+    盘后（≥15:00）且当日持仓缓存已存在时，直接从本地返回，不调用任何 API。
 
     调用前自动执行 guard 检查：
       1. 检查每日费用是否超出预算（5 元/天）
@@ -538,6 +580,14 @@ def fetch_broker_account() -> dict:
     Raises:
         RuntimeError: 配置缺失、网络失败、接口返回错误码或每日费用超出预算时抛出。
     """
+    # 盘后缓存短路：15:00 后账户数据不再变化，有缓存则直接返回，零 API 调用
+    now_cn = datetime.now(_CN_TZ)
+    market_close = now_cn.replace(hour=15, minute=0, second=0, microsecond=0)
+    if now_cn >= market_close:
+        cached = _load_post_market_cache(now_cn.strftime("%Y-%m-%d"))
+        if cached is not None:
+            return cached
+
     # Guard: 费用预算检查（在任何计费操作之前）
     _check_daily_budget()
 
