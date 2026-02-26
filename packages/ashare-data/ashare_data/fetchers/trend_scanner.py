@@ -174,6 +174,8 @@ class TrendResult:
     emotion_reason: str = ""
     trade_signal: str = "\u89c2\u5bdf"
     trade_signal_reason: str = ""
+    ma5_dist_pct: float = 0.0   # (last_close - ma5) / ma5 * 100
+    ma10_dist_pct: float = 0.0  # (last_close - ma10) / ma10 * 100
     is_uptrend: bool = False
     reason: str = ""
 
@@ -1212,6 +1214,8 @@ def analyze_trend(
         emotion_reason=emotion_reason,
         trade_signal=trade_signal,
         trade_signal_reason=trade_signal_reason,
+        ma5_dist_pct=(last_close - ma5_last) / ma5_last * 100 if ma5_last > 0 else 0.0,
+        ma10_dist_pct=(last_close - ma10_last) / ma10_last * 100 if ma10_last > 0 else 0.0,
         is_uptrend=pass_rule,
         reason="pass" if pass_rule else ";".join(reasons),
     )

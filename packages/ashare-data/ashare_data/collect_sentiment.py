@@ -58,6 +58,11 @@ from ashare_data.fetchers.broker_account import fetch_broker_account  # noqa: E4
 from ashare_data.fetchers.us_market import fetch_us_market  # noqa: E402
 from ashare_data.core.cache import cache_cleanup  # noqa: E402
 from ashare_data.core.config import ensure_dirs  # noqa: E402
+from ashare_data.core.watchlist import (  # noqa: E402
+    get_extra_candidates,
+    load as load_watchlist,
+    update_from_scan,
+)
 
 
 def _log(msg: str) -> None:
@@ -349,13 +354,35 @@ def collect(
                 f.write(ths_md)
             _log(f"  \u2713 ths_report.md \u5df2\u751f\u6210")
 
-            # 4) 并发 K 线扫描 + 评分
-            trend_results = scan_all(candidates, workers=10)
+            # 4) 合并 watchlist 额外候选（未在东方财富池中的股票）
+            watchlist_extras = get_extra_candidates(
+                exclude_codes={c["code"] for c in candidates}
+            )
+            if watchlist_extras:
+                _log(f"  watchlist 补充: {len(watchlist_extras)} 只")
+            all_candidates = candidates + watchlist_extras
+
+            # 5) 并发 K 线扫描 + 评分
+            trend_results = scan_all(all_candidates, workers=10)
             scan_elapsed = time.time() - scan_t0
             _log(
                 f"  \u2713 trend_scan: {len(trend_results)} \u53ea, "
                 f"\u8d8b\u52bf\u80a1 {sum(1 for r in trend_results if r.is_uptrend)} \u53ea ({scan_elapsed:.1f}s)"
             )
+
+            # 6) 自动维护 watchlist
+            update_from_scan(trend_results, as_of_date)
+
+            # 7) 写 watchlist_scan.json（watchlist 股完整指标，不走 _slim）
+            watchlist_codes = {s["code"] for s in load_watchlist()}
+            if watchlist_codes:
+                watchlist_scan_data = [
+                    r.to_dict() for r in trend_results if r.code in watchlist_codes
+                ]
+                watchlist_scan_path = os.path.join(output_dir, "watchlist_scan.json")
+                with open(watchlist_scan_path, "w", encoding="utf-8") as f:
+                    json.dump(watchlist_scan_data, f, ensure_ascii=False, indent=2)
+                _log(f"  \u2713 watchlist_scan.json: {len(watchlist_scan_data)} \u53ea")
 
             # 包装输出
             results["trend_scan"] = (

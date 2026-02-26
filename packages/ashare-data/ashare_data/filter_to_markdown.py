@@ -740,6 +740,76 @@ def generate_index(
     return "\n".join(lines)
 
 
+def convert_watchlist_signals(raw_dir: str) -> tuple[str, str]:
+    """转换 watchlist 扫描结果为买入信号 Markdown 表格。
+
+    读取 watchlist_scan.json，输出含 MA5/MA10 偏离和买入信号标记的 Markdown。
+    价格与 MA5 或 MA10 距离在 ±2% 以内时标记 ⚡。
+    """
+    filepath = os.path.join(raw_dir, "watchlist_scan.json")
+    if not os.path.exists(filepath):
+        return "", "watchlist_signals.md"
+
+    data = _load_json(filepath)
+    if not data or not isinstance(data, list):
+        return "", "watchlist_signals.md"
+
+    lines = [
+        "# 观察列表买入机会",
+        "",
+        "追踪已退出人气榜但趋势依然健康的优质股票，每日检测 MA5/MA10 ±2% 买入机会。",
+        "",
+        "| 股票 | 代码 | MA5偏离 | MA10偏离 | 趋势 | 星级 | 状态 | 交易信号 |",
+        "|------|------|---------|---------|------|------|------|---------|",
+    ]
+
+    has_rows = False
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name", "")
+        code = item.get("code", "")
+        ma5_dist = item.get("ma5_dist_pct", 0.0)
+        ma10_dist = item.get("ma10_dist_pct", 0.0)
+        is_uptrend = item.get("is_uptrend", False)
+        star_rating = item.get("star_rating", 1)
+        trade_signal = item.get("trade_signal", "观察")
+        source = item.get("source", "")
+
+        trend_icon = "✅" if is_uptrend else "❌"
+        stars = "★" * star_rating + "☆" * (5 - star_rating)
+
+        # 状态标注
+        if source == "watchlist":
+            status_label = "追踪中（退榜）"
+        else:
+            status_label = "追踪中"
+
+        # MA 距离格式化，±2% 内标记 ⚡
+        def _fmt_dist(dist: float) -> str:
+            signal = " ⚡" if abs(dist) <= 2.0 else ""
+            sign = "+" if dist >= 0 else ""
+            return f"**{sign}{dist:.1f}%{signal}**" if signal else f"{sign}{dist:.1f}%"
+
+        ma5_cell = _fmt_dist(ma5_dist)
+        ma10_cell = _fmt_dist(ma10_dist)
+
+        lines.append(
+            f"| {name} | {code} | {ma5_cell} | {ma10_cell} | {trend_icon} | {stars} | {status_label} | {trade_signal} |"
+        )
+        has_rows = True
+
+    if not has_rows:
+        return "", "watchlist_signals.md"
+
+    lines += [
+        "",
+        "⚡ = 价格在 MA5 或 MA10 ±2% 以内（潜在低风险买点）",
+        "",
+    ]
+    return "\n".join(lines), "watchlist_signals.md"
+
+
 # ── 主逻辑 ────────────────────────────────────────────
 
 # 转换器注册表：(转换函数, 类别名, 读取方式)
@@ -764,6 +834,8 @@ _CONVERTERS: list[tuple[Callable, str, str]] = [
     (convert_trade_date, "采集元数据", "direct"),
     (convert_run_id, "采集元数据", "direct"),
     (convert_broker_account, "账户数据", "direct"),
+    # 观察列表买入信号
+    (convert_watchlist_signals, "趋势分析", "direct"),
 ]
 
 # 已有的 Markdown 文件（直接复制到 filtered/）
