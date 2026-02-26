@@ -83,8 +83,7 @@ def _build_stock_commands(
         (
             "eastmoney",
             [
-                sys.executable,
-                str(scripts_dir / "collect_eastmoney_guba.py"),
+                "ashare-em-collect",
                 "--code",
                 code,
                 "--output",
@@ -100,8 +99,7 @@ def _build_stock_commands(
         (
             "taoguba",
             [
-                sys.executable,
-                str(scripts_dir / "collect_taoguba_stock.py"),
+                "ashare-tgb-collect",
                 "--full-code",
                 full_code,
                 "--output",
