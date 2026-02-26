@@ -73,13 +73,39 @@
 
 若存在 A 级严重负面（监管处罚/立案调查），必须重新评估是否保留该候选股。
 
-### 第三步：交易复盘
+### 第三步：交易复盘（自由分析模式）
+
+#### 3a. 合规检查（读取 trade_review.json）
 
 读取 `trade_review.json`（如存在），提取：
-- 总委托笔数、买入/卖出/撤单
-- 计划匹配率
-- 瑕疵分布（error/warning/info）
-- 严重问题逐条列出
+- 总委托笔数、买入/卖出/撤单、计划匹配率
+- 仓位合规、纪律瑕疵（error/warning 级别）
+
+> ⚠️ 忽略 trade_review.json 中的 timing_score（VWAP评分），该指标对本策略无参考价值。
+
+#### 3b. 日内行情深度分析（调用工具，自由判断）
+
+你有以下四个行情分析工具，**自主决定对哪些股票调用、调用哪些工具**：
+
+```bash
+# 工具1：全天行情摘要（30分钟聚合）
+python scripts/intraday_summary.py --code {CODE} --date {DATE}
+
+# 工具2：操作时刻现场还原（从 order_list.time / deal_price 取参数）
+python scripts/trade_context.py --code {CODE} --date {DATE} --time {HHMMSS} --price {PRICE}
+
+# 工具3：开盘背景（跳空/MA位置/前5日趋势）
+python scripts/opening_context.py --code {CODE} --date {DATE}
+
+# 工具4：个股 vs 大盘相对强弱（5个时间节点）
+python scripts/relative_strength.py --code {CODE} --date {DATE}
+```
+
+**分析要求**（不要套用固定框架，自由判断）：
+
+1. **反事实基线**：基于 opening_context，如果你在开盘前看到这些信号，你会做什么判断？
+2. **操作评价**：对 order_list 中每笔操作，调用 trade_context 还原现场，评价这笔操作是否合理。不要用"追高/低于VWAP"等机械标准，而是问：当时的趋势、成交量和市场环境，这个决策有没有道理？
+3. **相对强弱**：若个股今天明显弱于大盘，持有逻辑是否需要重新审视？
 
 ### 第四步：持仓洞察
 
