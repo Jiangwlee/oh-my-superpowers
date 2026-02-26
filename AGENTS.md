@@ -45,7 +45,7 @@ from html.parser import HTMLParser
 from typing import Any
 
 import requests
-from scripts import fetchers
+from ashare_data import fetchers
 ```
 
 ### 2. 类型注解
@@ -134,19 +134,37 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 ## 项目结构
 
 ```
+packages/
+└── ashare-data/               # A股数据采集基础设施包（pip install -e）
+    ├── ashare_data/
+    │   ├── core/              # config（路径）/ http_client / cache
+    │   ├── fetchers/          # 各数据源采集模块（broker/funding/news/taoguba…）
+    │   ├── collect.py         # 统一采集入口（ashare-collect CLI）
+    │   └── filter_to_markdown.py  # raw JSON → filtered Markdown
+    └── pyproject.toml
+
 skills/
-├── ashare-assistant/
-│   ├── scripts/
-│   │   ├── fetchers/   # 数据抓取
-│   │   └── utils/      # 工具
-│   ├── tests/         # 单元测试
-│   ├── references/    # 参考文档
-│   ├── evolution/     # 演进记录
-│   ├── strategy/      # 策略配置
+├── ashare-assistant/          # A股交易助手 Skill（LLM 工作流）
+│   ├── scripts/               # 交易分析脚本（依赖 ashare_data 包）
+│   │   ├── run_analysis.py    # 子代理流水线调度（5阶段）
+│   │   ├── trade_review.py    # 交易复盘（确定性）
+│   │   ├── holding_insight.py # 持仓洞察（确定性）
+│   │   ├── risk_check.py      # 风险检查
+│   │   ├── decision_logger.py # 决策日志写入
+│   │   ├── prompts/           # LLM prompt 模板
+│   │   └── core/shared.py     # Skill 内部共享工具
+│   ├── tests/                 # 单元测试
+│   ├── references/            # 参考文档
+│   ├── evolution/             # 演进记录
+│   ├── strategy/              # 策略配置
 │   └── SKILL.md
+├── agent-roundtable/
 ├── github-researcher/
+├── markdown-to-anything/
 └── openclaw-github-tracker/
 ```
+
+**层次关系**：`packages/ashare-data` 是纯基础设施（数据采集/格式转换），`skills/ashare-assistant` 是 LLM 工作流，二者通过 `ASHARE_ASSISTANT_HOME` 环境变量共享数据目录，不存在代码依赖倒置。
 
 ---
 
@@ -186,8 +204,16 @@ vim skills/<skill-name>/SKILL.md
 
 ## 测试检查清单
 
-- [ ] 测试通过: `python -m unittest discover -s skills`
-- [ ] 无语法错误: `python -m py_compile`
+```bash
+# 运行 ashare-assistant 全部测试（含 ashare_data 模块测试）
+python -m unittest discover -s skills/ashare-assistant/tests -p "test_*.py"
+
+# 语法检查
+python -m py_compile <file.py>
+```
+
+- [ ] 测试通过
+- [ ] 无语法错误
 - [ ] 类型注解完整
 - [ ] Docstring 完整
 - [ ] HTML 解析用 html.parser

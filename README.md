@@ -18,20 +18,43 @@ This repository contains a suite of **Agent Skills** developed for the Openclaw 
 
 All skills follow the [Agent Skills specification](https://github.com/agentskills/agentskills) and leverage Openclaw's built-in tools for browser automation, code execution, and data processing.
 
+## Repository Layout
+
+```
+packages/                          # Shared infrastructure packages
+└── ashare-data/                   # A-share data collection library (pip install -e)
+
+skills/                            # Agent Skills (each is autonomous)
+├── ashare-assistant/              # A-share trading assistant
+├── agent-roundtable/              # Multi-agent collaboration framework
+├── github-researcher/             # GitHub trending research
+├── markdown-to-anything/          # Markdown conversion utilities
+└── openclaw-github-tracker/       # GitHub project intelligence
+```
+
+`packages/` contains standalone Python packages used as infrastructure by skills. `skills/` contains the agent skills themselves—each skill is independent and autonomous.
+
+---
+
 ## Available Skills
 
-### 📈 A-Share Review Planner (`a-share-review-planner`)
+### 📈 A-Share Assistant (`ashare-assistant`)
 
 **Purpose**: Daily A-share market review and next-day trading plan generation.
 
 **Key Features**:
-- Multi-source data collection (news, sector flows, sentiment, trend scanning)
-- 5-stage structured analysis workflow
-- Automated PDF report generation and Telegram delivery
-- Risk checking and decision validation
+- Automated data collection via `ashare-data` package (news, funding flows, sentiment, trend scanning, broker account)
+- 5-stage LLM pipeline: sentiment → review → candidates → deep research → trading plan
+- Risk checking and decision logging
 - Strategy evolution tracking
 
-**Trigger Keywords**: "复盘", "今日回顾", "明日计划", "选股", "大盘分析", "板块", "涨停"
+**Trigger Keywords**: 复盘, 今日回顾, 明日计划, 选股, 大盘分析, 板块, 涨停
+
+**Architecture**:
+- `packages/ashare-data/` — data collection infrastructure (runs as a cron job)
+- `skills/ashare-assistant/` — LLM workflow (market review, stock picking, trading plan)
+
+Data flows from `ashare-data → $ASHARE_ASSISTANT_HOME/data/{DATE}/filtered/ → ashare-assistant`.
 
 ---
 
@@ -73,6 +96,8 @@ All skills follow the [Agent Skills specification](https://github.com/agentskill
 - Meaningful update tracking across followed repositories
 - Machine-friendly index for memory systems
 
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -80,27 +105,31 @@ All skills follow the [Agent Skills specification](https://github.com/agentskill
 - Python 3.10+
 - Openclaw platform or compatible agent runtime
 
-### Directory Structure
+### Install shared packages
 
-```
-skills/
-├── a-share-review-planner/    # A-share market analysis
-├── agent-roundtable/          # Multi-agent collaboration
-├── github-researcher/         # GitHub research workflow
-└── openclaw-github-tracker/   # GitHub project intelligence
+```bash
+pip install -e packages/ashare-data
 ```
 
 ### Using a Skill
 
-Each skill includes a `SKILL.md` file with detailed documentation:
+Each skill includes a `SKILL.md` with detailed documentation:
 
 ```bash
-# Read skill documentation
 cat skills/<skill-name>/SKILL.md
-
-# Run skill tests
-python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 ```
+
+### Running Tests
+
+```bash
+# All tests
+python -m unittest discover -s skills/ashare-assistant/tests -p "test_*.py"
+
+# Syntax check
+python -m py_compile <file.py>
+```
+
+---
 
 ## Development
 
@@ -118,19 +147,6 @@ python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 - Docstrings: Google style
 - Error handling: Return empty collections on failure, never raise
 
-### Testing
-
-```bash
-# Run all tests
-python -m unittest discover -s skills -p "test_*.py"
-
-# Run specific skill tests
-python -m unittest skills.a_share_review_planner.tests.test_taoguba_fetchers
-
-# Syntax check
-python -m py_compile <file.py>
-```
-
 ### Adding a New Skill
 
 1. Create a new directory under `skills/<skill-name>/`
@@ -138,52 +154,48 @@ python -m py_compile <file.py>
 3. Write comprehensive tests
 4. Update this README
 
+### Adding a New Package
+
+1. Create a new directory under `packages/<package-name>/`
+2. Add `pyproject.toml` with `[project.scripts]` if CLI is needed
+3. Install with `pip install -e packages/<package-name>`
+
+---
+
 ## GitHub Research
 
 When developing new skills, avoid reinventing the wheel. Research existing solutions:
 
 ```bash
-# Search for related projects
 gh search repos <topic> --sort stars
-
-# Cache projects for deep analysis
-# (See github-researcher skill for workflow)
 ```
 
 Research findings are stored in `github_cache/` with an `INDEX.md` for quick reference.
 
+---
+
 ## Deployment
 
-Skills are deployed to agent-specific directories:
+See [Deployment.md](Deployment.md) for full instructions.
 
 ```bash
-# Local deployment
+# Deploy a skill locally
 cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
-cp -r skills/<skill-name>/ .agents/skills/<skill-name>/
 
-# Remote deployment
-scp -r skills/<skill-name>/ user@host:/path/to/skills/
+# Deploy to remote server
+scp -r skills/<skill-name>/ root@tencent-vps:/path/to/skills/
 ```
 
-**Note**: Always modify source in `skills/` directory only. Deployment directories are read-only copies.
+**Note**: Always modify source in `skills/` or `packages/` directories only. Deployment directories are read-only copies.
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Follow the coding conventions in `AGENTS.md`
-4. Write tests for new functionality
-5. Submit a pull request
-
-## License
-
-[Add your license information here]
+---
 
 ## References
 
 - [Agent Skills Specification](https://github.com/agentskills/agentskills)
 - [Openclaw Tools Documentation](https://docs.openclaw.ai/tools/browser)
 - [Skills Development Guide](Skills-Dev-Guide.md)
+- [ashare-data Package](packages/ashare-data/README.md)
 
 ---
 

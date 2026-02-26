@@ -18,20 +18,46 @@
 
 所有技能遵循 [Agent Skills 规范](https://github.com/agentskills/agentskills)，并利用 Openclaw 的内置工具进行浏览器自动化、代码执行和数据处理。
 
+## 仓库结构
+
+```
+packages/                          # 共享基础设施包
+└── ashare-data/                   # A股数据采集库（pip install -e）
+
+skills/                            # 智能体技能（各自独立自治）
+├── ashare-assistant/              # A股交易助手
+├── agent-roundtable/              # 多智能体协作框架
+├── github-researcher/             # GitHub 趋势研究
+├── markdown-to-anything/          # Markdown 转换工具
+└── openclaw-github-tracker/       # GitHub 项目情报
+```
+
+`packages/` 存放 skill 共用的 Python 基础设施包；`skills/` 存放各 skill 本体，每个 skill 独立自治。
+
+---
+
 ## 可用技能
 
-### 📈 A股复盘与交易计划 (`a-share-review-planner`)
+### 📈 A股交易助手 (`ashare-assistant`)
 
 **用途**：每日 A 股收盘后的市场复盘与次日交易计划生成。
 
 **主要功能**：
-- 多源数据采集（新闻、板块资金流向、市场情绪、趋势扫描）
-- 五阶段结构化分析工作流
-- 自动生成 PDF 报告并通过 Telegram 推送
-- 风险检查与决策验证
+- 通过 `ashare-data` 包自动采集数据（新闻、资金流向、舆情、趋势扫描、券商账户）
+- 5 阶段 LLM 流水线：情绪分析 → 复盘报告 → 候选股 → 个股深研 → 交易计划
+- 风险检查与决策日志
 - 策略演进跟踪
 
-**触发关键词**："复盘"、"今日回顾"、"明日计划"、"选股"、"大盘分析"、"板块"、"涨停"
+**触发关键词**：复盘、今日回顾、明日计划、选股、大盘分析、板块、涨停
+
+**架构分层**：
+
+| 层次 | 目录 | 职责 |
+|------|------|------|
+| 数据层 | `packages/ashare-data/` | 定时采集，写入 `raw/` + `filtered/` |
+| 分析层 | `skills/ashare-assistant/` | LLM 驱动的复盘、选股、交易计划 |
+
+数据流向：`ashare-data → $ASHARE_ASSISTANT_HOME/data/{DATE}/filtered/ → ashare-assistant`
 
 ---
 
@@ -73,6 +99,8 @@
 - 关注仓库的重要更新跟踪
 - 面向内存系统的机器友好索引
 
+---
+
 ## 快速开始
 
 ### 环境要求
@@ -80,14 +108,10 @@
 - Python 3.10+
 - Openclaw 平台或兼容的智能体运行时
 
-### 目录结构
+### 安装共享包
 
-```
-skills/
-├── a-share-review-planner/    # A股 市场分析
-├── agent-roundtable/          # 多智能体协作
-├── github-researcher/         # GitHub 研究工作流
-└── openclaw-github-tracker/   # GitHub 项目情报
+```bash
+pip install -e packages/ashare-data
 ```
 
 ### 使用技能
@@ -95,12 +119,20 @@ skills/
 每个技能都包含详细的 `SKILL.md` 文档：
 
 ```bash
-# 阅读技能文档
 cat skills/<skill-name>/SKILL.md
-
-# 运行技能测试
-python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 ```
+
+### 运行测试
+
+```bash
+# 运行所有测试
+python -m unittest discover -s skills/ashare-assistant/tests -p "test_*.py"
+
+# 语法检查
+python -m py_compile <file.py>
+```
+
+---
 
 ## 开发指南
 
@@ -118,19 +150,6 @@ python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 - 文档字符串：Google 风格
 - 错误处理：失败时返回空集合，不抛出异常
 
-### 测试
-
-```bash
-# 运行所有测试
-python -m unittest discover -s skills -p "test_*.py"
-
-# 运行特定技能测试
-python -m unittest skills.a_share_review_planner.tests.test_taoguba_fetchers
-
-# 语法检查
-python -m py_compile <file.py>
-```
-
 ### 添加新技能
 
 1. 在 `skills/<skill-name>/` 下创建新目录
@@ -138,52 +157,48 @@ python -m py_compile <file.py>
 3. 编写全面的测试
 4. 更新本 README
 
+### 添加新包
+
+1. 在 `packages/<package-name>/` 下创建新目录
+2. 添加 `pyproject.toml`，若需要 CLI 则配置 `[project.scripts]`
+3. 通过 `pip install -e packages/<package-name>` 安装
+
+---
+
 ## GitHub 研究
 
 开发新技能时，避免重复造轮子。先研究现有解决方案：
 
 ```bash
-# 搜索相关项目
 gh search repos <topic> --sort stars
-
-# 缓存项目以供深度分析
-# （参见 github-researcher 技能的工作流）
 ```
 
 研究发现存储在 `github_cache/` 目录中，并通过 `INDEX.md` 建立索引以便快速查阅。
 
+---
+
 ## 部署
 
-技能部署到智能体特定的目录：
+详见 [Deployment.md](Deployment.md)。
 
 ```bash
 # 本地部署
 cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
-cp -r skills/<skill-name>/ .agents/skills/<skill-name>/
 
 # 远程部署
-scp -r skills/<skill-name>/ user@host:/path/to/skills/
+scp -r skills/<skill-name>/ root@tencent-vps:/path/to/skills/
 ```
 
-**注意**：始终只在 `skills/` 目录中修改源码。部署目录是只读副本。
+**注意**：始终只在 `skills/` 或 `packages/` 目录中修改源码，部署目录是只读副本。
 
-## 贡献指南
-
-1. Fork 本仓库
-2. 创建功能分支
-3. 遵循 `AGENTS.md` 中的编码规范
-4. 为新功能编写测试
-5. 提交 Pull Request
-
-## 许可证
-
-[在此添加许可证信息]
+---
 
 ## 参考资料
 
 - [Agent Skills 规范](https://github.com/agentskills/agentskills)
 - [Openclaw 工具文档](https://docs.openclaw.ai/tools/browser)
 - [技能开发指南](Skills-Dev-Guide.md)
+- [ashare-data 包文档](packages/ashare-data/README.md)
 
 ---
 
