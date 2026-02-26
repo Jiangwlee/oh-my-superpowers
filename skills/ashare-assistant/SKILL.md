@@ -82,6 +82,10 @@ digraph pipeline {
 
   // 第五轮（终态）
   plan   [label="plan\n交易计划", shape=doublecircle];
+  
+  // 第六轮（收尾校验）
+  risk   [label="risk_check\n风控检查", shape=component];
+  logger [label="decision_logger\n决策日志", shape=component];
 
   // 依赖边
   news   -> review;
@@ -92,6 +96,8 @@ digraph pipeline {
   stock  -> plan;
   trade  -> plan;
   hold   -> plan;
+  candidates -> risk;
+  candidates -> logger;
 }
 ```
 
@@ -123,7 +129,7 @@ PYTHONPATH=. python3 scripts/holding_insight.py
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks plan
 ```
 
-也可以一条命令跑完全部 5 轮（但 trade_review + holding_insight 需单独先跑）：
+也可以一条命令跑完全部 5 轮（当前 `run_analysis.py --tasks all` 会尝试自动执行 trade_review、holding_insight、risk_check、decision_logger；若其中某步失败需查看日志并补跑）：
 
 ```bash
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks all
@@ -155,7 +161,14 @@ PYTHONPATH=. python3 scripts/run_analysis.py --tasks all
 
 ### Step 3. 结果输出
 
-校验 `candidates.json`（由第三轮 candidates 任务生成），写入决策日志，确认最终产物完整。
+用短规则执行：
+
+- 使用 `PYTHONPATH=. python3 scripts/run_analysis.py --tasks all` 时：
+  - 脚本会自动尝试执行 `risk_check` 和 `decision_logger`
+  - 若日志显示失败，按下方命令手动补跑
+- 分步执行时：必须手动执行下方命令
+
+目标：校验 `candidates.json`（由第三轮 candidates 任务生成），并写入决策日志。
 
 ```bash
 DATE=$(date +%Y-%m-%d)

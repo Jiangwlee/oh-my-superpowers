@@ -552,6 +552,25 @@ def _load_most_recent_cache(days: int = 7) -> dict | None:
     return None
 
 
+def _is_post_close_snapshot(fetched_at: str, today_str: str) -> bool:
+    """判断缓存快照是否为当日盘后（>=15:00）生成。"""
+    if not fetched_at:
+        return False
+    try:
+        dt = datetime.fromisoformat(fetched_at)
+    except ValueError:
+        return False
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_CN_TZ)
+    else:
+        dt = dt.astimezone(_CN_TZ)
+
+    if dt.strftime("%Y-%m-%d") != today_str:
+        return False
+    return (dt.hour, dt.minute, dt.second) >= (15, 0, 0)
+
+
 def _load_post_market_cache(today_str: str) -> dict | None:
     """盘后缓存读取：从本地持久化文件拼装账户数据，不调用任何 API。
 
@@ -567,6 +586,13 @@ def _load_post_market_cache(today_str: str) -> dict | None:
     try:
         with open(positions_path, encoding="utf-8") as f:
             cached_pos = json.load(f)
+        fetched_at = str(cached_pos.get("fetched_at", "") or "")
+        if not _is_post_close_snapshot(fetched_at, today_str):
+            logger.info(
+                "当日缓存存在但非盘后快照，忽略缓存并回退 API（fetched_at: %s）",
+                fetched_at,
+            )
+            return None
         orders: list = []
         orders_path = os.path.join(_ORDERS_DIR, f"{today_str}.json")
         if os.path.exists(orders_path):
@@ -574,7 +600,7 @@ def _load_post_market_cache(today_str: str) -> dict | None:
                 orders = json.load(f).get("order_list", [])
         logger.info(
             "盘后缓存命中，跳过 API 调用（fetched_at: %s, orders: %d 条）",
-            cached_pos.get("fetched_at", ""),
+            fetched_at,
             len(orders),
         )
         return {
@@ -584,7 +610,7 @@ def _load_post_market_cache(today_str: str) -> dict | None:
             "hold_earn": cached_pos.get("hold_earn", ""),
             "hold_list": cached_pos.get("hold_list", []),
             "order_list": orders,
-            "fetched_at": cached_pos.get("fetched_at", ""),
+            "fetched_at": fetched_at,
             "ticket_reused": True,
         }
     except Exception:

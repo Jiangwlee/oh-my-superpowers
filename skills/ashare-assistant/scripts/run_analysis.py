@@ -823,7 +823,9 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
       2. review（复盘报告 → market_review.md）
       3. candidates（从复盘报告提取候选股 → candidates.json）
       4. 对 buy/watch 候选股采集数据并逐只运行深研子代理
+      4.5 执行前置脚本 trade_review.py 和 holding_insight.py
       5. plan（交易计划 → trading_plan.md，一次到位）
+      6. 执行风控检查 risk_check.py 与决策日志 decision_logger.py
 
     Returns:
         各任务的成功状态字典。
@@ -900,6 +902,71 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
     else:
         logger.info("无 buy/watch 候选股，跳过个股深研")
 
+    # ── 阶段 4.5: 账户与持仓分析 (plan 的增强输入) ───────────
+    trade_review_output = os.path.join(data_dir, "trade_review.json")
+    holding_insight_output = os.path.join(data_dir, "holding_insight.json")
+    strategy_path = os.path.join(_SKILL_DIR, "strategy", "active.yaml")
+
+    logger.info("执行前置脚本: trade_review.py 和 holding_insight.py")
+    try:
+        trade_proc = subprocess.run(
+            [
+                sys.executable,
+                os.path.join(_SCRIPT_DIR, "trade_review.py"),
+                "--output",
+                trade_review_output,
+                "--strategy",
+                strategy_path,
+            ],
+            cwd=_SKILL_DIR,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if trade_proc.returncode != 0:
+            logger.warning(
+                "trade_review.py 失败 (exit=%s): %s",
+                trade_proc.returncode,
+                (trade_proc.stderr or trade_proc.stdout or "").strip()[:300],
+            )
+            results["trade_review"] = False
+        else:
+            results["trade_review"] = True
+
+        hold_proc = subprocess.run(
+            [
+                sys.executable,
+                os.path.join(_SCRIPT_DIR, "holding_insight.py"),
+                "--output",
+                holding_insight_output,
+                "--strategy",
+                strategy_path,
+            ],
+            cwd=_SKILL_DIR,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if hold_proc.returncode != 0:
+            logger.warning(
+                "holding_insight.py 失败 (exit=%s): %s",
+                hold_proc.returncode,
+                (hold_proc.stderr or hold_proc.stdout or "").strip()[:300],
+            )
+            results["holding_insight"] = False
+        else:
+            results["holding_insight"] = True
+    except subprocess.TimeoutExpired as e:
+        logger.warning("执行 trade_review/holding_insight 超时: %s", e)
+        results["trade_review"] = False
+        results["holding_insight"] = False
+    except Exception as e:
+        logger.warning("执行 trade_review/holding_insight 异常: %s", e)
+        results["trade_review"] = False
+        results["holding_insight"] = False
+
     # ── 阶段 5: 交易计划 ──────────────────────────────
     plan_model = _get_model("plan", args.model)
     plan_timeout = _get_timeout("plan", args.timeout)
@@ -907,6 +974,72 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
     results["plan"] = run_trading_plan(
         data_dir, model=plan_model, timeout=plan_timeout, overwrite=args.overwrite
     )
+
+    # ── 阶段 6: 风控检查与决策日志记录（仅在 plan 成功后执行） ──
+    candidates_file = os.path.join(data_dir, "candidates.json")
+    if results.get("plan") and os.path.exists(candidates_file):
+        logger.info("执行校验脚本: risk_check.py 和 decision_logger.py")
+        try:
+            risk_proc = subprocess.run(
+                [
+                    sys.executable,
+                    os.path.join(_SCRIPT_DIR, "risk_check.py"),
+                    "--input",
+                    candidates_file,
+                ],
+                cwd=_SKILL_DIR,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            if risk_proc.returncode != 0:
+                logger.warning(
+                    "risk_check.py 失败 (exit=%s): %s",
+                    risk_proc.returncode,
+                    (risk_proc.stderr or risk_proc.stdout or "").strip()[:300],
+                )
+                results["risk_check"] = False
+                logger.info("risk_check 未通过，跳过 decision_logger.py")
+                results["decision_logger"] = False
+                return results
+            else:
+                results["risk_check"] = True
+
+            decision_proc = subprocess.run(
+                [
+                    sys.executable,
+                    os.path.join(_SCRIPT_DIR, "decision_logger.py"),
+                    "--input",
+                    candidates_file,
+                ],
+                cwd=_SKILL_DIR,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            if decision_proc.returncode != 0:
+                logger.warning(
+                    "decision_logger.py 失败 (exit=%s): %s",
+                    decision_proc.returncode,
+                    (decision_proc.stderr or decision_proc.stdout or "").strip()[:300],
+                )
+                results["decision_logger"] = False
+            else:
+                results["decision_logger"] = True
+        except subprocess.TimeoutExpired as e:
+            logger.warning("执行 risk_check/decision_logger 超时: %s", e)
+            results["risk_check"] = False
+            results["decision_logger"] = False
+        except Exception as e:
+            logger.warning("执行 risk_check/decision_logger 异常: %s", e)
+            results["risk_check"] = False
+            results["decision_logger"] = False
+    elif not results.get("plan"):
+        logger.info("plan 未成功，跳过 risk_check/decision_logger")
+    else:
+        logger.info("candidates.json 不存在，跳过 risk_check/decision_logger")
 
     return results
 
@@ -977,6 +1110,7 @@ def main() -> None:
         data_dir = os.path.expanduser(args.data_dir)
     else:
         from ashare_data.core.config import data_dir_for_date
+
         data_dir = str(data_dir_for_date())
         logger.info("--data-dir 未指定，使用今日目录: %s", data_dir)
 
