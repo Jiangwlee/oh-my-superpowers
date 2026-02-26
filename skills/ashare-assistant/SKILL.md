@@ -58,62 +58,23 @@ fi
 
 通过 `run_analysis.py` 调度子代理流水线，完成全部分析工作。主 agent 只需按顺序调用脚本，**不自行做任何分析或生成报告**。
 
-流水线分为 5 轮，依赖关系如下图：
+复盘工作流按顺序执行以下六个阶段：
 
-```dot
-digraph pipeline {
-  rankdir=LR;
-  node [shape=box, style=rounded];
+执行规则：**按阶段顺序执行，任一关键阶段失败即停止，不得跳过后续阶段。**
 
-  // 第一轮（并行）
-  news  [label="news\n新闻情绪"];
-  social [label="social\n社交情绪"];
-
-  // 第二轮
-  review [label="review\n复盘报告"];
-
-  // 第三轮
-  candidates [label="candidates\n候选股提取"];
-
-  // 第四轮 + 前置脚本（可并行）
-  stock  [label="stock ×N\n个股深研"];
-  trade  [label="trade_review.py\n交易复盘", shape=component];
-  hold   [label="holding_insight.py\n持仓洞察", shape=component];
-
-  // 第五轮（终态）
-  plan   [label="plan\n交易计划", shape=doublecircle];
-  
-  // 第六轮（收尾校验）
-  risk   [label="risk_check\n风控检查", shape=component];
-  logger [label="decision_logger\n决策日志", shape=component];
-
-  // 依赖边
-  news   -> review;
-  social -> review;
-  review -> candidates;
-  candidates -> stock;
-  candidates -> plan;
-  stock  -> plan;
-  trade  -> plan;
-  hold   -> plan;
-  candidates -> risk;
-  candidates -> logger;
-}
-```
-
-按依赖顺序执行（`--data-dir` 不填则自动使用今日目录）：
+分步执行命令（`--data-dir` 不填则自动使用今日目录）：
 
 ```bash
-# ── 第一轮：情绪分析（news + social 可并行） ──
+# ── 第一阶段：情绪分析 ──
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks news social
 
-# ── 第二轮：复盘报告 ──
+# ── 第二阶段：复盘报告 ──
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks review
 
-# ── 第三轮：候选股提取（从复盘报告提取 buy/watch 候选股 → candidates.json） ──
+# ── 第三阶段：候选股提取 ──
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks candidates
 
-# ── 第四轮：个股深研（可选，对 buy/watch 候选股逐只深研） ──
+# ── 第四阶段：个股深研（对 buy/watch 候选股逐只执行） ──
 # 4a. 批量采集个股原始数据
 PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
   --codes <CODE1> <CODE2> ...
@@ -121,54 +82,52 @@ PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
 PYTHONPATH=. python3 scripts/run_analysis.py \
   --tasks stock --stock-code <CODE> --stock-name <NAME>
 
-# ── 交易复盘 + 持仓洞察（确定性脚本，plan 的前置输入） ──
+# ── 第五阶段：交易复盘 + 持仓洞察 + 交易计划 ──
 PYTHONPATH=. python3 scripts/trade_review.py --pretty
 PYTHONPATH=. python3 scripts/holding_insight.py
-
-# ── 第五轮：交易计划 ──
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks plan
+
+# ── 第六阶段：风控检查 + 决策日志 ──
+DATE=$(date +%Y-%m-%d)
+PYTHONPATH=. python3 scripts/risk_check.py \
+  --input ${ASHARE_ASSISTANT_HOME:-~/.ashare-assistant}/data/${DATE}/candidates.json
+PYTHONPATH=. python3 scripts/decision_logger.py \
+  --input ${ASHARE_ASSISTANT_HOME:-~/.ashare-assistant}/data/${DATE}/candidates.json
 ```
 
-也可以一条命令跑完全部 5 轮（当前 `run_analysis.py --tasks all` 会尝试自动执行 trade_review、holding_insight、risk_check、decision_logger；若其中某步失败需查看日志并补跑）：
+也可以一条命令跑完整个流程（`run_analysis.py --tasks all` 会按顺序执行上述阶段并在失败时退出）：
 
 ```bash
 PYTHONPATH=. python3 scripts/run_analysis.py --tasks all
 ```
 
-**各轮产出：**
+**阶段产出：**
 
-| 轮次 | 任务 | 模型 | 产出 |
+| 阶段 | 任务 | 模型 | 产出 |
 |------|------|------|------|
-| 第一轮 | news + social | deepseek-reasoner | `report/news_sentiment.md` + `report/social_sentiment.md` |
-| 第二轮 | review | deepseek-reasoner | `market_review.md`（复盘报告） |
-| 第三轮 | candidates | gpt-5-mini | `candidates.json`（从复盘报告提取的候选股结构化数据） |
-| 第四轮 | stock ×N | gpt-5-mini | `report/dr_{CODE}_brief.md`（每只约 2 KB） |
-| 第五轮 | plan | deepseek-reasoner | `trading_plan.md` |
+| 第1阶段 | news + social | deepseek-reasoner | `report/news_sentiment.md` + `report/social_sentiment.md` |
+| 第2阶段 | review | deepseek-reasoner | `market_review.md`（复盘报告） |
+| 第3阶段 | candidates | gpt-5-mini | `candidates.json`（候选股结构化数据） |
+| 第4阶段 | stock ×N | gpt-5-mini | `report/dr_{CODE}_brief.md`（每只约 2 KB） |
+| 第5阶段 | trade_review + holding_insight + plan | 脚本 + deepseek-reasoner | `trade_review.json` + `holding_insight.json` + `trading_plan.md` |
+| 第6阶段 | risk_check + decision_logger | 脚本 | 风控校验结果 + `decision_log.jsonl` 追加记录 |
 
-**子代理失败处理规则：**
+**失败处理规则（统一）**
 
-| 失败轮次 | 处置 |
-|----------|------|
-| 第一轮（news / social）失败 | 警告但**继续**；review 子代理在对应数据文件缺失时自动降级（跳过该维度分析） |
-| 第二轮（review）失败 | **停止**，不得继续执行 candidates/plan；告知用户并保留已生成的 sentiment 文件 |
-| 第三轮（candidates）失败 | 警告但**继续**；跳过个股深研，plan 子代理从 `market_review.md` 文本自行提取候选股（降级模式） |
-| 第四轮（stock 深研）部分失败 | 警告但**继续**；plan 子代理对缺失深研报告的股票降级处理 |
-| 第五轮（plan）失败 | **停止**；告知用户，保留 `market_review.md` 和 `candidates.json` 作为中间产物 |
+- 任一关键阶段失败：立即停止，不得继续后续阶段
+- `run_analysis.py --tasks all` 非零退出码即视为流程失败
+- 失败时只报告已生成产物，不手工补写分析内容
 
-`run_analysis.py` 以非零退出码反映失败，主 agent 必须在每轮后检查返回值，不得盲目继续。
+`run_analysis.py` 以非零退出码反映失败，主 agent 必须在每阶段后检查返回值，不得盲目继续。
 
 > 模型映射硬编码在 `run_analysis.py` 中，详见 `references/commands.md` "子代理分析" 部分。
 
 ### Step 3. 结果输出
 
-用短规则执行：
+确认收尾阶段已完成：校验 `candidates.json` 并写入决策日志。
 
-- 使用 `PYTHONPATH=. python3 scripts/run_analysis.py --tasks all` 时：
-  - 脚本会自动尝试执行 `risk_check` 和 `decision_logger`
-  - 若日志显示失败，按下方命令手动补跑
-- 分步执行时：必须手动执行下方命令
-
-目标：校验 `candidates.json`（由第三轮 candidates 任务生成），并写入决策日志。
+- 使用 `PYTHONPATH=. python3 scripts/run_analysis.py --tasks all` 时：检查日志与退出码确认第六阶段成功
+- 分步执行时：必须执行下方命令
 
 ```bash
 DATE=$(date +%Y-%m-%d)

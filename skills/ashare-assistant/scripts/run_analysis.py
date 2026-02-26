@@ -874,7 +874,9 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         overwrite=args.overwrite,
     )
     if not results["candidates"]:
-        logger.warning("candidates 提取失败，跳过个股深研，继续生成交易计划")
+        logger.error("candidates 提取失败，中止流水线")
+        results["plan"] = False
+        return results
 
     # ── 阶段 4: 个股深研 ──────────────────────────────
     targets = _collect_deep_research_targets(data_dir)
@@ -901,6 +903,14 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
             )
     else:
         logger.info("无 buy/watch 候选股，跳过个股深研")
+
+    stock_failed = any(
+        (k.startswith("stock_") and not v) for k, v in results.items()
+    )
+    if stock_failed:
+        logger.error("个股深研存在失败任务，中止流水线")
+        results["plan"] = False
+        return results
 
     # ── 阶段 4.5: 账户与持仓分析 (plan 的增强输入) ───────────
     trade_review_output = os.path.join(data_dir, "trade_review.json")
@@ -967,6 +977,11 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         results["trade_review"] = False
         results["holding_insight"] = False
 
+    if not results.get("trade_review") or not results.get("holding_insight"):
+        logger.error("trade_review 或 holding_insight 失败，中止流水线")
+        results["plan"] = False
+        return results
+
     # ── 阶段 5: 交易计划 ──────────────────────────────
     plan_model = _get_model("plan", args.model)
     plan_timeout = _get_timeout("plan", args.timeout)
@@ -974,6 +989,9 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
     results["plan"] = run_trading_plan(
         data_dir, model=plan_model, timeout=plan_timeout, overwrite=args.overwrite
     )
+    if not results["plan"]:
+        logger.error("plan 失败，中止流水线")
+        return results
 
     # ── 阶段 6: 风控检查与决策日志记录（仅在 plan 成功后执行） ──
     candidates_file = os.path.join(data_dir, "candidates.json")
