@@ -6,6 +6,7 @@
 
 只有以下`skill`需要部署到当前项目：
 - agents-roundtable
+- explore-project
 
 ```bash
 cp -r skills/<skill-name>/ .agents/skills/
