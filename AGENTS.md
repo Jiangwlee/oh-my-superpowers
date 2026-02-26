@@ -197,7 +197,8 @@ vim skills/<skill-name>/SKILL.md
 
 ## 部署
 
-- 详见[Deployment.md](Deployment.md):
+- 通用部署规则：详见 [Deployment.md](Deployment.md)
+- ashare-assistant 完整部署指南：详见 [skills/ashare-assistant/DEPLOYMENT.md](skills/ashare-assistant/DEPLOYMENT.md)
 - 访问`tencent-vps`: `ssh root@tencent-vps`
 
 ---
