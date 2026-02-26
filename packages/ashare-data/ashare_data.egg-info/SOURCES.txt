@@ -1,3 +1,4 @@
+README.md
 pyproject.toml
 ashare_data/__init__.py
 ashare_data/collect.py
@@ -14,10 +15,12 @@ ashare_data/core/__init__.py
 ashare_data/core/cache.py
 ashare_data/core/config.py
 ashare_data/core/http_client.py
+ashare_data/core/watchlist.py
 ashare_data/fetchers/__init__.py
 ashare_data/fetchers/broker_account.py
 ashare_data/fetchers/eastmoney_guba.py
 ashare_data/fetchers/funding.py
+ashare_data/fetchers/intraday_analysis.py
 ashare_data/fetchers/market_overview.py
 ashare_data/fetchers/news.py
 ashare_data/fetchers/taoguba.py

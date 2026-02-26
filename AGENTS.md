@@ -199,6 +199,7 @@ vim skills/<skill-name>/SKILL.md
 
 - 通用部署规则：详见 [Deployment.md](Deployment.md)
 - ashare-assistant 完整部署指南：详见 [skills/ashare-assistant/DEPLOYMENT.md](skills/ashare-assistant/DEPLOYMENT.md)
+- unified-memory 部署指南：详见 [skills/unified-memory/DEPLOYMENT.md](skills/unified-memory/DEPLOYMENT.md)
 - 访问`tencent-vps`: `ssh root@tencent-vps`
 
 ---
@@ -218,3 +219,7 @@ python -m py_compile <file.py>
 - [ ] 类型注解完整
 - [ ] Docstring 完整
 - [ ] HTML 解析用 html.parser
+
+---
+
+立即使用`unified-memory`skill加载最近的20个topic
