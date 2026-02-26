@@ -192,7 +192,12 @@ skills/<skill-name>/          ← 源码（在此修改）
 vim skills/<skill-name>/SKILL.md
 ```
 
-**禁止直接修改 `.claude/skills/` 或 `.agents/skills/` 下的文件。**
+**NO DEPLOY WITHOUT reading the relevant DEPLOYMENT.md first.**
+部署目标因 skill 和平台不同而异，不得凭记忆套用任何硬编码命令。执行任何部署前，必须先读：
+- 通用规则：[Deployment.md](Deployment.md)
+- Skill 专属：`skills/<skill-name>/DEPLOYMENT.md`（如存在）
+
+**禁止直接修改任何部署目录下的文件。**
 
 ---
 
