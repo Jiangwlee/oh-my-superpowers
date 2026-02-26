@@ -30,22 +30,29 @@ description: >
 
 收到以上任意触发词后，宣布「开始复盘」，然后按以下 3 步顺序执行。
 
-### Step 1. 数据采集与预处理
+### Step 1. 数据就绪检查
 
-运行脚本采集市场数据，转换格式。全部是确定性脚本，不涉及 LLM。
+数据由 `ashare-data` cron 任务独立采集，skill 只负责检查数据是否已就绪。
 
 ```bash
 DATE=$(date +%Y-%m-%d)
+DATA_DIR=${ASHARE_ASSISTANT_HOME:-~/.ashare-assistant}/data/${DATE}
+FILTERED_DIR=${DATA_DIR}/filtered
 
-# 采集 + 格式转换一步完成（raw/ → filtered/）
-ashare-collect --date ${DATE} --verbose
+# 检查今日数据是否存在
+if [ -d "${FILTERED_DIR}" ] && [ "$(ls -A ${FILTERED_DIR})" ]; then
+  echo "数据已就绪: ${FILTERED_DIR}"
+else
+  echo "今日数据不存在，尝试采集..."
+  ashare-collect --date ${DATE} --verbose
+fi
 ```
 
-- 数据目录由 `ASHARE_ASSISTANT_HOME` 环境变量控制（默认 `~/.ashare-assistant`）。
-- 脚本自动检测 `~/.openclaw/jvquant.json`，若存在则自动采集券商账户数据。
+- 数据目录由 `ASHARE_ASSISTANT_HOME` 控制（默认 `~/.ashare-assistant`）。
+- **正常情况**：cron 已在盘后自动采集，`filtered/` 目录存在，直接进入 Step 2。
+- **数据缺失时**：fallback 运行 `ashare-collect`（手动触发或 cron 未配置时）。
 - 采集失败 → 脚本以非零退出码终止，**停止复盘并告知用户**。
 - 采集成功 → 读取 `filtered/index.md` 确认数据完整性。
-- 详见 `references/data-collect.md`。
 
 ### Step 2. LLM 分析
 
