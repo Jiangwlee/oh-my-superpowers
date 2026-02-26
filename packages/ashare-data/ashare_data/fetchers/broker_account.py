@@ -517,6 +517,41 @@ def load_history(days: int = 30) -> dict:
 # ── 主入口 ───────────────────────────────────────────────────────
 
 
+def _is_today_trading_day() -> bool:
+    """判断今天是否为交易日（通过金融界 tradedate 接口）。
+
+    Returns:
+        True  — 今天是交易日；
+        False — 今天是非交易日（周末/节假日）。
+        接口调用失败时保守返回 True（宁可调 API 也不漏数据）。
+    """
+    try:
+        from ashare_data.fetchers.trade_date import fetch_trade_date
+        today_ymd = datetime.now(_CN_TZ).strftime("%Y%m%d")
+        return fetch_trade_date() == today_ymd
+    except Exception:
+        logger.warning("无法判断是否为交易日，保守视为交易日")
+        return True
+
+
+def _load_most_recent_cache(days: int = 7) -> dict | None:
+    """查找最近 N 天内最新的持仓缓存（跨日期，用于非交易日回退）。
+
+    Args:
+        days: 向前查找的天数，默认7天。
+
+    Returns:
+        与 fetch_broker_account() 格式一致的字典；找不到时返回 None。
+    """
+    today = datetime.now(_CN_TZ).date()
+    for i in range(days):
+        date_str = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        cached = _load_post_market_cache(date_str)
+        if cached is not None:
+            return cached
+    return None
+
+
 def _load_post_market_cache(today_str: str) -> dict | None:
     """盘后缓存读取：从本地持久化文件拼装账户数据，不调用任何 API。
 
@@ -580,13 +615,30 @@ def fetch_broker_account() -> dict:
     Raises:
         RuntimeError: 配置缺失、网络失败、接口返回错误码或每日费用超出预算时抛出。
     """
-    # 盘后缓存短路：15:00 后账户数据不再变化，有缓存则直接返回，零 API 调用
+    # 防护：只有交易日 15:00 后才抓取，其他时间一律用最近缓存
     now_cn = datetime.now(_CN_TZ)
     market_close = now_cn.replace(hour=15, minute=0, second=0, microsecond=0)
-    if now_cn >= market_close:
+    is_trading_day = _is_today_trading_day()
+    is_post_close = now_cn >= market_close
+
+    if is_trading_day and is_post_close:
+        # 交易日收盘后：优先命中当日缓存，无缓存才走 API
         cached = _load_post_market_cache(now_cn.strftime("%Y-%m-%d"))
         if cached is not None:
             return cached
+        # 无当日缓存 → 继续往下走 API 流程
+    else:
+        # 非交易日 或 交易日盘中/盘前 → 只用缓存，不调 API
+        cached = _load_most_recent_cache()
+        if cached is not None:
+            reason = "非交易日" if not is_trading_day else f"盘中（{now_cn.strftime('%H:%M')}）"
+            logger.info("当前为%s，返回最近缓存（fetched_at: %s）", reason, cached.get("fetched_at", ""))
+            return cached
+        reason = "非交易日" if not is_trading_day else f"盘中（{now_cn.strftime('%H:%M')}，未到15:00收盘）"
+        raise RuntimeError(
+            f"当前为{reason}，无法获取券商账户数据，且无历史缓存可用。"
+            "请在交易日15:00后重新采集。"
+        )
 
     # Guard: 费用预算检查（在任何计费操作之前）
     _check_daily_budget()
