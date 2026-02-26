@@ -37,18 +37,11 @@ description: >
 ```bash
 DATE=$(date +%Y-%m-%d)
 
-# 1a. 数据采集 → raw/
-PYTHONPATH=. python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/${DATE}/raw \
-  --news-count 20 \
-  --taoguba-count 20
-
-# 1b. 格式转换 → filtered/
-PYTHONPATH=. python3 scripts/filter_to_markdown.py \
-  --input-dir ~/.ashare-assistant/data/${DATE}/raw \
-  --output-dir ~/.ashare-assistant/data/${DATE}/filtered
+# 采集 + 格式转换一步完成（raw/ → filtered/）
+ashare-collect --date ${DATE} --verbose
 ```
 
+- 数据目录由 `ASHARE_ASSISTANT_HOME` 环境变量控制（默认 `~/.ashare-assistant`）。
 - 脚本自动检测 `~/.openclaw/jvquant.json`，若存在则自动采集券商账户数据。
 - 采集失败 → 脚本以非零退出码终止，**停止复盘并告知用户**。
 - 采集成功 → 读取 `filtered/index.md` 确认数据完整性。
@@ -95,57 +88,38 @@ digraph pipeline {
 }
 ```
 
-按依赖顺序执行：
+按依赖顺序执行（`--data-dir` 不填则自动使用今日目录）：
 
 ```bash
 # ── 第一轮：情绪分析（news + social 可并行） ──
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks news social
+PYTHONPATH=. python3 scripts/run_analysis.py --tasks news social
 
 # ── 第二轮：复盘报告 ──
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks review
+PYTHONPATH=. python3 scripts/run_analysis.py --tasks review
 
 # ── 第三轮：候选股提取（从复盘报告提取 buy/watch 候选股 → candidates.json） ──
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks candidates
+PYTHONPATH=. python3 scripts/run_analysis.py --tasks candidates
 
 # ── 第四轮：个股深研（可选，对 buy/watch 候选股逐只深研） ──
 # 4a. 批量采集个股原始数据
 PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
-  --codes <CODE1> <CODE2> ... \
-  --output-dir ~/.ashare-assistant/data/${DATE}
+  --codes <CODE1> <CODE2> ...
 # 4b. 对每只候选股运行深研子代理（可并行分批调用）
 PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks stock \
-  --stock-code <CODE> --stock-name <NAME>
+  --tasks stock --stock-code <CODE> --stock-name <NAME>
 
 # ── 交易复盘 + 持仓洞察（确定性脚本，plan 的前置输入） ──
-PYTHONPATH=. python3 scripts/trade_review.py \
-  --decision-log ~/.ashare-assistant/memory/decision_log.jsonl \
-  --strategy strategy/active.yaml \
-  --output ~/.ashare-assistant/data/${DATE}/trade_review.json \
-  --pretty
-PYTHONPATH=. python3 scripts/holding_insight.py \
-  --strategy strategy/active.yaml \
-  --output ~/.ashare-assistant/data/${DATE}/holding_insight.json
+PYTHONPATH=. python3 scripts/trade_review.py --pretty
+PYTHONPATH=. python3 scripts/holding_insight.py
 
 # ── 第五轮：交易计划 ──
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks plan
+PYTHONPATH=. python3 scripts/run_analysis.py --tasks plan
 ```
 
 也可以一条命令跑完全部 5 轮（但 trade_review + holding_insight 需单独先跑）：
 
 ```bash
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks all
+PYTHONPATH=. python3 scripts/run_analysis.py --tasks all
 ```
 
 **各轮产出：**
@@ -177,11 +151,11 @@ PYTHONPATH=. python3 scripts/run_analysis.py \
 校验 `candidates.json`（由第三轮 candidates 任务生成），写入决策日志，确认最终产物完整。
 
 ```bash
+DATE=$(date +%Y-%m-%d)
 PYTHONPATH=. python3 scripts/risk_check.py \
-  --input ~/.ashare-assistant/data/${DATE}/candidates.json
+  --input ${ASHARE_ASSISTANT_HOME:-~/.ashare-assistant}/data/${DATE}/candidates.json
 PYTHONPATH=. python3 scripts/decision_logger.py \
-  --input ~/.ashare-assistant/data/${DATE}/candidates.json \
-  --output ~/.ashare-assistant/memory/decision_log.jsonl
+  --input ${ASHARE_ASSISTANT_HOME:-~/.ashare-assistant}/data/${DATE}/candidates.json
 ```
 
 **复盘终态**：确认以下三个文件均已生成：
@@ -226,14 +200,17 @@ PYTHONPATH=. python3 scripts/decision_logger.py \
 
 ## 目录约定
 
+> 根目录由环境变量 `ASHARE_ASSISTANT_HOME` 控制，默认 `~/.ashare-assistant`。
+> `ashare-collect` 和 skill 脚本均从同一环境变量读取，无需手动对齐路径。
+
 | 用途 | 路径 |
 |------|------|
-| 原始采集数据 | `~/.ashare-assistant/data/{DATE}/raw/` |
-| 格式转换数据 | `~/.ashare-assistant/data/{DATE}/filtered/` |
-| 子代理分析报告 | `~/.ashare-assistant/data/{DATE}/report/` |
-| 当日最终报告 | `~/.ashare-assistant/data/{DATE}/` |
-| 决策日志 | `~/.ashare-assistant/memory/decision_log.jsonl` |
-| 券商持仓历史 | `~/.ashare-assistant/broker_data/` |
+| 原始采集数据 | `$ASHARE_ASSISTANT_HOME/data/{DATE}/raw/` |
+| 格式转换数据 | `$ASHARE_ASSISTANT_HOME/data/{DATE}/filtered/` |
+| 子代理分析报告 | `$ASHARE_ASSISTANT_HOME/data/{DATE}/report/` |
+| 当日最终报告 | `$ASHARE_ASSISTANT_HOME/data/{DATE}/` |
+| 决策日志 | `$ASHARE_ASSISTANT_HOME/memory/decision_log.jsonl` |
+| 券商持仓历史 | `$ASHARE_ASSISTANT_HOME/broker_data/` |
 | jvQuant 配置 | `~/.openclaw/jvquant.json`（含 token/acc/pass） |
 | 策略文件 | `strategy/active.yaml` |
 | 知识沉淀 | `evolution/feedback.md`、`evolution/known_pitfalls.md`、`evolution/selection_rules.md` |

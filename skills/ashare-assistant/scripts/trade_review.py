@@ -1114,21 +1114,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="交易复盘模块")
     parser.add_argument("--decision-log", default=str(DECISION_LOG))
     parser.add_argument("--strategy", default="strategy/active.yaml")
-    parser.add_argument("--output", default="trade_review.json")
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="输出路径（默认：$ASHARE_ASSISTANT_HOME/data/今日/trade_review.json）",
+    )
     parser.add_argument("--pretty", action="store_true", help="打印格式化 JSON")
     args = parser.parse_args()
+
+    if args.output:
+        output_path = args.output
+    else:
+        from ashare_data.core.config import data_dir_for_date
+        output_path = str(data_dir_for_date() / "trade_review.json")
 
     result = run_trade_review(
         decision_log_path=args.decision_log,
         strategy_path=args.strategy,
-        output_path=args.output,
+        output_path=output_path,
     )
     if args.pretty:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(
             json.dumps(
-                {"ok": "error" not in result, "output": args.output}, ensure_ascii=False
+                {"ok": "error" not in result, "output": output_path}, ensure_ascii=False
             )
         )
 

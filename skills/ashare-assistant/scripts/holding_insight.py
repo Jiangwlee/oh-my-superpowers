@@ -842,17 +842,28 @@ def main() -> None:
         choices=["strong", "neutral", "weak"],
         help="市场状态",
     )
-    parser.add_argument("--output", default=None, help="输出JSON路径")
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="输出JSON路径（默认：$ASHARE_ASSISTANT_HOME/data/今日/holding_insight.json）",
+    )
     parser.add_argument("--text", action="store_true", help="输出可读文本")
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
+
+    if args.output:
+        output_path = args.output
+    else:
+        from ashare_data.core.config import data_dir_for_date
+        output_path = str(data_dir_for_date() / "holding_insight.json")
+
     result = analyze_holdings(
         strategy_path=args.strategy,
         market_regime=args.regime,
-        output_path=args.output,
+        output_path=output_path,
     )
     if args.text:
         print(_build_summary_text(result))

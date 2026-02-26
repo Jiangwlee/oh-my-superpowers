@@ -921,8 +921,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--data-dir",
-        required=True,
-        help="数据根目录（如 ~/.ashare-assistant/data/2026-02-24）",
+        default=None,
+        help=(
+            "数据根目录（如 ~/.ashare-assistant/data/2026-02-24）。"
+            "不指定则自动使用 $ASHARE_ASSISTANT_HOME/data/今日日期。"
+        ),
     )
     parser.add_argument(
         "--tasks",
@@ -970,7 +973,12 @@ def main() -> None:
         format="[analysis] %(message)s",
     )
 
-    data_dir = os.path.expanduser(args.data_dir)
+    if args.data_dir:
+        data_dir = os.path.expanduser(args.data_dir)
+    else:
+        from ashare_data.core.config import data_dir_for_date
+        data_dir = str(data_dir_for_date())
+        logger.info("--data-dir 未指定，使用今日目录: %s", data_dir)
 
     # 检查 filtered/ 目录
     filtered_dir = os.path.join(data_dir, "filtered")
