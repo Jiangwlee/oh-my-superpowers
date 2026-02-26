@@ -1117,7 +1117,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         default=None,
-        help="输出路径（默认：$ASHARE_ASSISTANT_HOME/data/今日/trade_review.json）",
+        help="输出路径（默认：~/.ashare-assistant/data/今日/analysis/trade_review.json）",
     )
     parser.add_argument("--pretty", action="store_true", help="打印格式化 JSON")
     args = parser.parse_args()
@@ -1126,7 +1126,7 @@ def main() -> None:
         output_path = args.output
     else:
         from ashare_data.core.config import data_dir_for_date
-        output_path = str(data_dir_for_date() / "trade_review.json")
+        output_path = str(data_dir_for_date() / "analysis" / "trade_review.json")
 
     result = run_trade_review(
         decision_log_path=args.decision_log,

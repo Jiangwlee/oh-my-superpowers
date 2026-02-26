@@ -28,18 +28,18 @@ ashare-collect --skip-collect
 
 ## 配置
 
-| 环境变量 | 说明 | 默认值 |
-|----------|------|--------|
-| `ASHARE_ASSISTANT_HOME` | 数据根目录 | `~/.ashare-assistant` |
+数据根目录固定为 `~/.ashare-assistant`（不使用环境变量覆盖）。
 
 数据目录结构：
 
 ```
-$ASHARE_ASSISTANT_HOME/
+~/.ashare-assistant/
 ├── data/
 │   └── {DATE}/
 │       ├── raw/        # 原始 JSON（ashare-collect 输出）
-│       └── filtered/   # Markdown 格式（ashare-assistant 读取）
+│       ├── filtered/   # Markdown 格式（ashare-assistant 读取）
+│       ├── analysis/   # ashare-assistant 生成的结构化 JSON 产物
+│       └── report/     # ashare-assistant 子代理中间报告
 ├── cache/              # HTTP 响应缓存
 ├── broker_data/        # 券商持仓历史
 │   ├── positions/
@@ -67,7 +67,7 @@ $ASHARE_ASSISTANT_HOME/
 ```
 ashare_data/
 ├── core/
-│   ├── config.py          # 路径配置（读 ASHARE_ASSISTANT_HOME）
+│   ├── config.py          # 路径配置（固定 ~/.ashare-assistant）
 │   ├── http_client.py     # HTTP 工具（重试、超时）
 │   └── cache.py           # 磁盘缓存
 ├── fetchers/              # 各数据源采集模块
@@ -88,6 +88,6 @@ python -m unittest skills.ashare-assistant.tests.test_broker_account
 ## 部署（定时任务）
 
 ```cron
-# 每个交易日 15:30 采集
-30 15 * * 1-5 ASHARE_ASSISTANT_HOME=/data/ashare ashare-collect --date $(date +\%Y-\%m-\%d)
+# 每个交易日 15:30 采集（默认写入 ~/.ashare-assistant）
+30 15 * * 1-5 ashare-collect --date $(date +\%Y-\%m-\%d)
 ```

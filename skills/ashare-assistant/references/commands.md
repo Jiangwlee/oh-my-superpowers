@@ -210,7 +210,7 @@ LLM 完成第3步个股筛选后，将候选股写成 candidates.json，然后�
 
 ```bash
 python3 scripts/risk_check.py \
-  --input ~/.ashare-assistant/data/{DATE}/candidates.json
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json
 ```
 
 candidates.json 格式：
@@ -245,11 +245,11 @@ candidates.json 格式：
 ```bash
 # 1) 校验 candidates.json 核心结构
 python3 scripts/validate_output.py \
-  --input ~/.ashare-assistant/data/{DATE}/candidates.json
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json
 
 # 2) 风控通过 + 结构通过后，写入 decision_log
 python3 scripts/decision_logger.py \
-  --input ~/.ashare-assistant/data/{DATE}/candidates.json \
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
   --log-file ~/.ashare-assistant/memory/decision_log.jsonl
 
 # 3) 独立诊断（T+1/T+5，当前实现 T+1）
@@ -436,7 +436,7 @@ python3 scripts/holding_insight.py \
 
 ```bash
 python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/{DATE}/candidates.json \
+  --candidates-file ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
   --output-dir ~/.ashare-assistant/data/{DATE} \
   --max-workers 4 \
   --per-stock-timeout-sec 180 \
@@ -458,7 +458,7 @@ python3 scripts/run_deep_research_batch.py \
 # 东方财富股吧采集（帖子 + 资讯 + 公告）
 python3 scripts/collect_eastmoney_guba.py \
   --code {CODE} \
-  --output ~/.ashare-assistant/data/{DATE}/dr_{CODE}_em.json \
+  --output ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_em.json \
   --post-limit 36 \
   --detail-limit 5 \
   --notice-days 3
@@ -466,7 +466,7 @@ python3 scripts/collect_eastmoney_guba.py \
 # 淘股吧个股扩展采集（题材标签 + 个股讨论）
 python3 scripts/collect_taoguba_stock.py \
   --full-code {FULL_CODE} \
-  --output ~/.ashare-assistant/data/{DATE}/dr_{CODE}_tgb.json \
+  --output ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_tgb.json \
   --quotes-count 8 \
   --zh-count 0
 ```
@@ -477,9 +477,9 @@ python3 scripts/collect_taoguba_stock.py \
 # compact 提取（规则抽取，不污染上下文）
 python3 scripts/summarize_stock_brief.py \
   --code {CODE} \
-  --em-raw ~/.ashare-assistant/data/{DATE}/dr_{CODE}_em.json \
-  --tgb-raw ~/.ashare-assistant/data/{DATE}/dr_{CODE}_tgb.json \
-  --output ~/.ashare-assistant/data/{DATE}/dr_{CODE}_compact.json \
+  --em-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_em.json \
+  --tgb-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_tgb.json \
+  --output ~/.ashare-assistant/data/{DATE}/analysis/deep_research/dr_{CODE}_compact.json \
   --compact-only
 ```
 
@@ -505,9 +505,9 @@ python3 scripts/summarize_stock_brief.py \
 
 | 文件 | 说明 |
 |------|------|
-| `dr_{CODE}_em.json` | 东方财富股吧原始数据（帖子/资讯/公告），追溯用，勿直接传给 LLM |
-| `dr_{CODE}_tgb.json` | 淘股吧原始数据（题材标签/个股讨论），追溯用，勿直接传给 LLM |
-| `dr_{CODE}_compact.json` | 规则提取的精简数据，约 600 tokens，主 LLM 读取此文件 |
+| `raw/deep_research/dr_{CODE}_em.json` | 东方财富股吧原始数据（帖子/资讯/公告），追溯用，勿直接传给 LLM |
+| `raw/deep_research/dr_{CODE}_tgb.json` | 淘股吧原始数据（题材标签/个股讨论），追溯用，勿直接传给 LLM |
+| `analysis/deep_research/dr_{CODE}_compact.json` | 规则提取的精简数据，约 600 tokens，主 LLM 读取此文件 |
 | `dr_{CODE}_brief.json` | 主 LLM 生成的结构化 brief，约 300 tokens，供分析使用 |
 
 ### Deep Research 结果追踪

@@ -6,6 +6,7 @@
 
 - NO SKILL DESIGN WITHOUT reading `Skills-Dev-Guides.md` and `Claude-Skill-Dev-Guide.md`.
 - Every skill in `skills/` is independent and autonomous
+- 不要兼容性：正确的设计 > 兼容性。不得为了兼容而增加代码，也不得在注释中添加“兼容”相关表述。
 
 ## 规范参考
 
@@ -164,7 +165,7 @@ skills/
 └── openclaw-github-tracker/
 ```
 
-**层次关系**：`packages/ashare-data` 是纯基础设施（数据采集/格式转换），`skills/ashare-assistant` 是 LLM 工作流，二者通过 `ASHARE_ASSISTANT_HOME` 环境变量共享数据目录，不存在代码依赖倒置。
+**层次关系**：`packages/ashare-data` 是纯基础设施（数据采集/格式转换），`skills/ashare-assistant` 是 LLM 工作流，二者通过固定默认目录 `~/.ashare-assistant` 共享数据目录，不存在代码依赖倒置。
 
 ---
 

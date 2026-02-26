@@ -57,7 +57,7 @@ skills/                            # 智能体技能（各自独立自治）
 | 数据层 | `packages/ashare-data/` | 定时采集，写入 `raw/` + `filtered/` |
 | 分析层 | `skills/ashare-assistant/` | LLM 驱动的复盘、选股、交易计划 |
 
-数据流向：`ashare-data → $ASHARE_ASSISTANT_HOME/data/{DATE}/filtered/ → ashare-assistant`
+数据流向：`ashare-data → ~/.ashare-assistant/data/{DATE}/filtered/ → ashare-assistant`
 
 ---
 

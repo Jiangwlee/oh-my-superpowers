@@ -116,9 +116,42 @@ _EVOLUTION_FILES = [
 
 # 脚本分析输出文件（相对于 data_dir）
 _SCRIPT_OUTPUT_FILES = [
-    "trade_review.json",
-    "holding_insight.json",
+    "analysis/trade_review.json",
+    "analysis/holding_insight.json",
 ]
+
+
+def _analysis_dir(data_dir: str) -> str:
+    return os.path.join(data_dir, "analysis")
+
+
+def _deep_research_raw_dir(data_dir: str) -> str:
+    return os.path.join(data_dir, "raw", "deep_research")
+
+
+def _deep_research_analysis_dir(data_dir: str) -> str:
+    return os.path.join(_analysis_dir(data_dir), "deep_research")
+
+
+def _candidates_output_path(data_dir: str) -> str:
+    return os.path.join(_analysis_dir(data_dir), "candidates.json")
+
+
+def _find_candidates_path(data_dir: str) -> str | None:
+    path = _candidates_output_path(data_dir)
+    if os.path.exists(path):
+        return path
+    return None
+
+
+def _find_script_output_paths(data_dir: str) -> list[str]:
+    """返回脚本分析 JSON 路径（仅新目录结构）。"""
+    resolved: list[str] = []
+    for name in ("trade_review.json", "holding_insight.json"):
+        path = os.path.join(_analysis_dir(data_dir), name)
+        if os.path.exists(path):
+            resolved.append(path)
+    return resolved
 
 
 def _get_model(task: str, cli_model: str | None = None) -> str:
@@ -445,16 +478,12 @@ def run_stock_deep_research(
 
     template = _load_prompt_template("stock_deep_research")
 
-    # 查找个股数据文件
+    # 查找个股数据文件（仅新目录结构）
     stock_files = []
     for pattern in [f"dr_{stock_code}_em.json", f"dr_{stock_code}_tgb.json"]:
-        fpath = os.path.join(data_dir, pattern)
+        fpath = os.path.join(_deep_research_raw_dir(data_dir), pattern)
         if os.path.exists(fpath):
             stock_files.append(fpath)
-        # 也检查 raw/ 子目录
-        fpath_raw = os.path.join(data_dir, "raw", pattern)
-        if os.path.exists(fpath_raw):
-            stock_files.append(fpath_raw)
 
     if not stock_files:
         logger.error(
@@ -562,7 +591,7 @@ def run_candidates(
     这是一个轻量级 LLM 调用，输入仅为复盘报告，输出为结构化 JSON。
 
     输入: market_review.md, strategy/
-    输出: {data_dir}/candidates.json
+    输出: {data_dir}/analysis/candidates.json
     """
     # 检查前置依赖
     review_path = os.path.join(data_dir, "market_review.md")
@@ -592,7 +621,8 @@ def run_candidates(
     )
 
     # 输出路径
-    candidates_output = os.path.join(data_dir, "candidates.json")
+    candidates_output = _candidates_output_path(data_dir)
+    os.makedirs(os.path.dirname(candidates_output), exist_ok=True)
 
     # 附加文件
     attached_files = [review_path]
@@ -651,8 +681,16 @@ def run_trading_plan(
     else:
         dr_files_section = "（无个股深研报告，仓位乘数默认 ×1.0）"
 
-    # 脚本分析输出文件
-    script_files_section = _build_files_section(data_dir, _SCRIPT_OUTPUT_FILES)
+    # 脚本分析输出文件（仅新目录结构）
+    script_output_paths = _find_script_output_paths(data_dir)
+    if script_output_paths:
+        script_section_lines = []
+        for fpath in script_output_paths:
+            size_kb = os.path.getsize(fpath) / 1024
+            script_section_lines.append(f"- `{fpath}` ({size_kb:.1f} KB)")
+        script_files_section = "\n".join(script_section_lines)
+    else:
+        script_files_section = "（无可用文件）"
 
     # 策略与演化文件
     strategy_files = []
@@ -682,7 +720,7 @@ def run_trading_plan(
     # 附加文件
     attached_files = [review_path]
     attached_files.extend(dr_files)
-    attached_files.extend(_collect_existing_files(data_dir, _SCRIPT_OUTPUT_FILES))
+    attached_files.extend(script_output_paths)
     attached_files.extend(strategy_files)
 
     return _run_opencode(
@@ -760,8 +798,8 @@ def _collect_deep_research_targets(data_dir: str) -> list[dict]:
     Returns:
         候选股列表，每项含 code/name/thesis_short，空列表表示无候选或读取失败。
     """
-    candidates_path = os.path.join(data_dir, "candidates.json")
-    if not os.path.exists(candidates_path):
+    candidates_path = _find_candidates_path(data_dir)
+    if not candidates_path or not os.path.exists(candidates_path):
         return []
     try:
         with open(candidates_path, "r", encoding="utf-8") as f:
@@ -777,13 +815,15 @@ def _collect_deep_research_targets(data_dir: str) -> list[dict]:
 def _collect_stock_data(codes: list[str], data_dir: str) -> None:
     """调用 run_deep_research_batch.py 批量采集个股原始数据。
 
-    已有 dr_{code}_em.json 或 dr_{code}_tgb.json 的股票自动跳过。
+    已有个股深研原始数据时自动跳过。
     """
     missing = [
         code
         for code in codes
         if not any(
-            os.path.exists(os.path.join(data_dir, f"dr_{code}_{src}.json"))
+            os.path.exists(
+                os.path.join(_deep_research_raw_dir(data_dir), f"dr_{code}_{src}.json")
+            )
             for src in ("em", "tgb")
         )
     ]
@@ -913,8 +953,8 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         return results
 
     # ── 阶段 4.5: 账户与持仓分析 (plan 的增强输入) ───────────
-    trade_review_output = os.path.join(data_dir, "trade_review.json")
-    holding_insight_output = os.path.join(data_dir, "holding_insight.json")
+    trade_review_output = os.path.join(_analysis_dir(data_dir), "trade_review.json")
+    holding_insight_output = os.path.join(_analysis_dir(data_dir), "holding_insight.json")
     strategy_path = os.path.join(_SKILL_DIR, "strategy", "active.yaml")
 
     logger.info("执行前置脚本: trade_review.py 和 holding_insight.py")
@@ -994,8 +1034,8 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         return results
 
     # ── 阶段 6: 风控检查与决策日志记录（仅在 plan 成功后执行） ──
-    candidates_file = os.path.join(data_dir, "candidates.json")
-    if results.get("plan") and os.path.exists(candidates_file):
+    candidates_file = _find_candidates_path(data_dir)
+    if results.get("plan") and candidates_file and os.path.exists(candidates_file):
         logger.info("执行校验脚本: risk_check.py 和 decision_logger.py")
         try:
             risk_proc = subprocess.run(
@@ -1057,7 +1097,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
     elif not results.get("plan"):
         logger.info("plan 未成功，跳过 risk_check/decision_logger")
     else:
-        logger.info("candidates.json 不存在，跳过 risk_check/decision_logger")
+        logger.info("analysis/candidates.json 不存在，跳过 risk_check/decision_logger")
 
     return results
 
@@ -1075,7 +1115,7 @@ def main() -> None:
         default=None,
         help=(
             "数据根目录（如 ~/.ashare-assistant/data/2026-02-24）。"
-            "不指定则自动使用 $ASHARE_ASSISTANT_HOME/data/今日日期。"
+            "不指定则自动使用 ~/.ashare-assistant/data/今日日期。"
         ),
     )
     parser.add_argument(

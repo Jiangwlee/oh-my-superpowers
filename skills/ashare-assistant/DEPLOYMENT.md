@@ -5,12 +5,12 @@
 ```
 本机 / VPS
 ├── ashare-data（定时任务，每日盘后自动采集）
-│   └── cron: ashare-collect → $ASHARE_ASSISTANT_HOME/data/{DATE}/filtered/
+│   └── cron: ashare-collect → ~/.ashare-assistant/data/{DATE}/filtered/
 └── ashare-assistant（OpenClaw Agent，按需触发）
     └── 读取 filtered/ 数据 → LLM 分析 → trading_plan.md
 ```
 
-两个组件通过 `ASHARE_ASSISTANT_HOME` 共享数据目录，**分别独立部署**。
+两个组件通过固定默认目录 `~/.ashare-assistant` 共享数据目录，**分别独立部署**。
 
 ---
 
@@ -39,7 +39,7 @@ bash skills/ashare-assistant/setup.sh
 ### 2.2 安装 ashare-data 包
 
 ```bash
-pip install -e packages/ashare-data --break-system-packages
+python3 -m pip install -e packages/ashare-data --break-system-packages
 ```
 
 验证：
@@ -69,7 +69,8 @@ ashare-collect --help
 ### 3.1 部署 Skill
 
 ```bash
-cp -r skills/ashare-assistant/ ~/clawd/skills/ashare-assistant/
+mkdir -p ~/clawd/skills/ashare-assistant
+cp -R skills/ashare-assistant/. ~/clawd/skills/ashare-assistant/
 openclaw gateway restart
 ```
 
@@ -122,26 +123,17 @@ ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
 ssh root@tencent-vps
 # 在 VPS 上执行：
 cd /path/to/OpenclawSkills
-pip install -e packages/ashare-data --break-system-packages
+python3 -m pip install -e packages/ashare-data --break-system-packages
 ```
 
 或直接复制包目录再安装：
 
 ```bash
 scp -r packages/ashare-data/ root@tencent-vps:/root/ashare-data/
-ssh root@tencent-vps "pip install -e /root/ashare-data --break-system-packages"
+ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system-packages"
 ```
 
-### 4.3 配置环境变量（可选）
-
-如需自定义数据目录，在 VPS 上设置：
-
-```bash
-echo 'export ASHARE_ASSISTANT_HOME=/data/ashare' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### 4.4 设置定时采集（VPS crontab）
+### 4.3 设置定时采集（VPS crontab）
 
 ```bash
 ssh root@tencent-vps "crontab -e"
@@ -171,7 +163,7 @@ ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
 
 ```bash
 scp -r packages/ashare-data/ root@tencent-vps:/root/ashare-data/
-ssh root@tencent-vps "pip install -e /root/ashare-data --break-system-packages"
+ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system-packages"
 ```
 
 ---
@@ -179,17 +171,20 @@ ssh root@tencent-vps "pip install -e /root/ashare-data --break-system-packages"
 ## 六、目录结构说明
 
 ```
-$ASHARE_ASSISTANT_HOME/          # 默认 ~/.ashare-assistant
+~/.ashare-assistant/
 ├── data/
 │   └── {DATE}/
 │       ├── raw/                 # ashare-collect 输出的原始 JSON
+│       │   └── deep_research/   # 个股深研原始数据（dr_*_em/tgb.json）
 │       ├── filtered/            # 格式转换后的 Markdown（ashare-assistant 读取）
+│       ├── analysis/            # 结构化分析产物（JSON）
+│       │   ├── candidates.json  # 候选股
+│       │   ├── trade_review.json # 交易复盘
+│       │   ├── holding_insight.json # 持仓洞察
+│       │   └── deep_research/   # 个股深研结构化中间产物（compact/timing）
 │       ├── report/              # 子代理中间报告
 │       ├── market_review.md     # 复盘报告
 │       ├── trading_plan.md      # 交易计划
-│       ├── candidates.json      # 候选股
-│       ├── trade_review.json    # 交易复盘
-│       └── holding_insight.json # 持仓洞察
 ├── cache/                       # HTTP 请求缓存
 ├── broker_data/
 │   ├── positions/{DATE}.json    # 盘后持仓快照
@@ -205,7 +200,7 @@ $ASHARE_ASSISTANT_HOME/          # 默认 ~/.ashare-assistant
 **Q: `ashare-collect` 命令找不到**
 
 ```bash
-pip install -e packages/ashare-data --break-system-packages
+python3 -m pip install -e packages/ashare-data --break-system-packages
 which ashare-collect  # 确认 PATH 中有 pip bin 目录
 ```
 
@@ -218,5 +213,5 @@ which ashare-collect  # 确认 PATH 中有 pip bin 目录
 检查 PATH：cron 环境没有 `~/.bashrc`，需在 crontab 中显式指定路径：
 
 ```cron
-35 15 * * 1-5 ASHARE_ASSISTANT_HOME=/root/.ashare-assistant /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/collect.log 2>&1
+35 15 * * 1-5 /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/collect.log 2>&1
 ```

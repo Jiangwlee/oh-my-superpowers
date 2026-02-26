@@ -30,15 +30,15 @@ PYTHONPATH=. python3 scripts/run_analysis.py \
   --stock-code {CODE} --stock-name {NAME}
 ```
 
-子代理自动读取 `raw/dr_{CODE}_em.json`、`raw/dr_{CODE}_tgb.json`，生成 `report/dr_{CODE}_brief.md`。
+子代理自动读取 `raw/deep_research/dr_{CODE}_em.json`、`raw/deep_research/dr_{CODE}_tgb.json`，生成 `report/dr_{CODE}_brief.md`。
 
 **方式二：批量数据采集 + 手动分析**
 
 ```bash
-# 批量并行采集原始数据
-PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/{DATE}/candidates.json \
-  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
+  # 批量并行采集原始数据
+  PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
+  --candidates-file ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
+  --output-dir ~/.ashare-assistant/data/{DATE} \
   --max-workers 4 \
   --per-stock-timeout-sec 180 \
   --total-timeout-sec 900
@@ -49,7 +49,7 @@ PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
 ### 校验
 
 ```bash
-python3 scripts/risk_check.py --input ~/.ashare-assistant/data/{DATE}/candidates.json
+python3 scripts/risk_check.py --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json
 ```
 
 如 `risk_check.py` 有 error 级别违规，必须调整候选计划并重试，直至通过。
@@ -57,7 +57,7 @@ warn 级别违规需在报告"风险提示"章节显式说明。
 
 ```bash
 python3 scripts/validate_output.py \
-  --input ~/.ashare-assistant/data/{DATE}/candidates.json
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json
 ```
 
 若结构校验失败：

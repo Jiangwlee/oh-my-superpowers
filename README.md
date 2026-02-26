@@ -54,7 +54,7 @@ skills/                            # Agent Skills (each is autonomous)
 - `packages/ashare-data/` — data collection infrastructure (runs as a cron job)
 - `skills/ashare-assistant/` — LLM workflow (market review, stock picking, trading plan)
 
-Data flows from `ashare-data → $ASHARE_ASSISTANT_HOME/data/{DATE}/filtered/ → ashare-assistant`.
+Data flows from `ashare-data → ~/.ashare-assistant/data/{DATE}/filtered/ → ashare-assistant`.
 
 ---
 

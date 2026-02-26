@@ -845,7 +845,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         default=None,
-        help="输出JSON路径（默认：$ASHARE_ASSISTANT_HOME/data/今日/holding_insight.json）",
+        help="输出JSON路径（默认：~/.ashare-assistant/data/今日/analysis/holding_insight.json）",
     )
     parser.add_argument("--text", action="store_true", help="输出可读文本")
     args = parser.parse_args()
@@ -858,7 +858,7 @@ def main() -> None:
         output_path = args.output
     else:
         from ashare_data.core.config import data_dir_for_date
-        output_path = str(data_dir_for_date() / "holding_insight.json")
+        output_path = str(data_dir_for_date() / "analysis" / "holding_insight.json")
 
     result = analyze_holdings(
         strategy_path=args.strategy,

@@ -315,16 +315,16 @@ PYTHONPATH=. python3 scripts/run_analysis.py \
 ```bash
 # 批量并行采集
 PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/{DATE}/candidates.json \
-  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
+  --candidates-file ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
+  --output-dir ~/.ashare-assistant/data/{DATE} \
   --max-workers 4
 
 # 规则提取 compact（不调用 LLM）
 PYTHONPATH=. python3 scripts/summarize_stock_brief.py \
   --code {CODE} \
-  --em-raw ~/.ashare-assistant/data/{DATE}/raw/dr_{CODE}_em.json \
-  --tgb-raw ~/.ashare-assistant/data/{DATE}/raw/dr_{CODE}_tgb.json \
-  --output ~/.ashare-assistant/data/{DATE}/raw/dr_{CODE}_compact.json \
+  --em-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_em.json \
+  --tgb-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_tgb.json \
+  --output ~/.ashare-assistant/data/{DATE}/analysis/deep_research/dr_{CODE}_compact.json \
   --compact-only
 ```
 

@@ -69,7 +69,7 @@ cp ~/.ashare-assistant/data/{DATE}/market_review.md ~/.ashare-assistant/data/{DA
 
 ```bash
 python3 scripts/decision_logger.py \
-  --input ~/.ashare-assistant/data/{DATE}/candidates.json \
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
   --log-file ~/.ashare-assistant/memory/decision_log.jsonl
 ```
 

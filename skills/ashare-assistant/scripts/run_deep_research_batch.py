@@ -63,7 +63,8 @@ def _default_command_runner(cmd: list[str], timeout_sec: float) -> CommandResult
 def _build_stock_commands(
     *,
     skill_root: Path,
-    output_dir: Path,
+    raw_output_dir: Path,
+    analysis_output_dir: Path,
     code: str,
     full_code: str,
     post_limit: int,
@@ -73,9 +74,9 @@ def _build_stock_commands(
     zh_page: int,
     zh_count: int,
 ) -> list[tuple[str, list[str]]]:
-    em_raw = output_dir / f"dr_{code}_em.json"
-    tgb_raw = output_dir / f"dr_{code}_tgb.json"
-    compact = output_dir / f"dr_{code}_compact.json"
+    em_raw = raw_output_dir / f"dr_{code}_em.json"
+    tgb_raw = raw_output_dir / f"dr_{code}_tgb.json"
+    compact = analysis_output_dir / f"dr_{code}_compact.json"
     scripts_dir = skill_root / "scripts"
 
     return [
@@ -151,10 +152,15 @@ def run_stock_deep_research(
     stock_start = time.monotonic()
     full_code = normalize_full_code(code)
     steps: list[dict[str, Any]] = []
+    raw_output_dir = output_dir / "raw" / "deep_research"
+    analysis_output_dir = output_dir / "analysis" / "deep_research"
+    raw_output_dir.mkdir(parents=True, exist_ok=True)
+    analysis_output_dir.mkdir(parents=True, exist_ok=True)
 
     commands = _build_stock_commands(
         skill_root=skill_root,
-        output_dir=output_dir,
+        raw_output_dir=raw_output_dir,
+        analysis_output_dir=analysis_output_dir,
         code=code,
         full_code=full_code,
         post_limit=post_limit,
@@ -229,8 +235,9 @@ def write_timing_report(*, output_dir: Path, rows: list[dict[str, Any]]) -> Path
         "summary": summary,
         "stocks": rows,
     }
-    output_dir.mkdir(parents=True, exist_ok=True)
-    report_path = output_dir / "dr_timing.json"
+    report_dir = output_dir / "analysis" / "deep_research"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / "dr_timing.json"
     report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return report_path
 
@@ -355,7 +362,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="批量执行第3.5步个股深度分析")
     parser.add_argument("--codes", default="", help="股票代码列表，逗号分隔，如 002413,600519")
     parser.add_argument("--candidates-file", default="", help="candidates.json 路径（自动读取其中 code）")
-    parser.add_argument("--output-dir", required=True, help="输出目录，如 ~/.ashare-assistant/data/{DATE}")
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help=(
+            "交易日目录，如 ~/.ashare-assistant/data/{DATE}；"
+            "脚本会写入 raw/deep_research/ 与 analysis/deep_research/"
+        ),
+    )
     parser.add_argument("--skill-root", default=str(_SKILL_ROOT), help="Skill 根目录")
     parser.add_argument("--max-workers", type=int, default=4, help="并发数上限")
     parser.add_argument("--per-stock-timeout-sec", type=float, default=180, help="单票总超时秒数")

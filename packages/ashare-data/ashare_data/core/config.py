@@ -1,12 +1,12 @@
-"""统一路径与目录配置。"""
+"""统一路径与目录配置（固定使用默认路径）。"""
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from pathlib import Path
 
-ASHARE_HOME = Path(os.environ.get("ASHARE_ASSISTANT_HOME", "~/.ashare-assistant")).expanduser()
+# 固定使用默认目录，避免环境变量导致路径歧义。
+ASHARE_HOME = Path("~/.ashare-assistant").expanduser()
 CACHE_DIR = ASHARE_HOME / "cache"
 DATA_DIR = ASHARE_HOME / "data"
 MEMORY_DIR = ASHARE_HOME / "memory"
@@ -44,4 +44,3 @@ def ensure_dirs() -> dict[str, str]:
         "broker": str(BROKER_DIR),
         "decision_log": str(DECISION_LOG),
     }
-
