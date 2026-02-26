@@ -47,16 +47,16 @@ fi
 ### Step 2. LLM 分析
 
 ```bash
-PYTHONPATH=. python3 scripts/run_analysis.py --tasks all
+python scripts/run_analysis.py --tasks all
 ```
 
 ### Step 3. 结果输出
 
 ```bash
 DATE=$(date +%Y-%m-%d)
-PYTHONPATH=. python3 scripts/risk_check.py \
+python scripts/risk_check.py \
   --input ~/.ashare-assistant/data/${DATE}/analysis/candidates.json
-PYTHONPATH=. python3 scripts/decision_logger.py \
+python scripts/decision_logger.py \
   --input ~/.ashare-assistant/data/${DATE}/analysis/candidates.json
 ```
 
