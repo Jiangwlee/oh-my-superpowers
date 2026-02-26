@@ -10,7 +10,11 @@
     └── 读取 filtered/ 数据 → LLM 分析 → trading_plan.md
 ```
 
-两个组件通过固定默认目录 `~/.ashare-assistant` 共享数据目录，**分别独立部署**。
+`ashare-assistant` **运行时依赖** `ashare-data`（`packages/ashare-data`）：
+- `ashare-data` 提供 `ashare-collect` CLI，负责采集并写入 `~/.ashare-assistant/data/{DATE}/`
+- `ashare-assistant` 读取上述目录中的 `raw/filtered/analysis/report` 数据并执行 LLM 工作流
+
+两个组件通过固定默认目录 `~/.ashare-assistant` 共享数据目录，**分别独立部署**，但部署顺序必须是：**先 `ashare-data`，后 `ashare-assistant`**。
 
 ---
 
@@ -26,6 +30,8 @@
 ---
 
 ## 二、首次部署
+
+> 部署顺序（必须）：先完成 `2.2 安装 ashare-data 包`，确认 `ashare-collect --help` 正常，再部署/触发 `ashare-assistant`。
 
 ### 2.1 安装环境依赖
 
@@ -88,12 +94,14 @@ openclaw gateway restart
 ### 3.3 手动验证
 
 ```bash
-# 手动触发一次采集
+# 1) 手动触发一次采集（ashare-data）
 ashare-collect --date $(date +%Y-%m-%d) --verbose
 
-# 检查输出
+# 2) 检查共享数据目录（ashare-assistant 依赖这些输入）
 ls ~/.ashare-assistant/data/$(date +%Y-%m-%d)/filtered/
 cat ~/.ashare-assistant/data/$(date +%Y-%m-%d)/filtered/index.md
+
+# 3) 再在 OpenClaw 中触发 ashare-assistant（复盘/交易计划）
 ```
 
 ---
@@ -166,6 +174,11 @@ scp -r packages/ashare-data/ root@tencent-vps:/root/ashare-data/
 ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system-packages"
 ```
 
+说明：`ashare-data` 的更新可能改变 `ashare-assistant` 的输入文件内容/结构。生产更新建议顺序为：
+1. 更新并安装 `packages/ashare-data`
+2. 手动运行一次 `ashare-collect` 验证数据产出
+3. 再更新 `skills/ashare-assistant`
+
 ---
 
 ## 六、目录结构说明
@@ -203,6 +216,8 @@ ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system
 python3 -m pip install -e packages/ashare-data --break-system-packages
 which ashare-collect  # 确认 PATH 中有 pip bin 目录
 ```
+
+`ashare-assistant` 依赖 `ashare-collect` 产出的共享数据目录；若未安装 `ashare-data` 或 cron 未产出数据，Skill 会因缺少 `~/.ashare-assistant/data/{DATE}/filtered/` 输入而无法正常完成复盘流程。
 
 **Q: 盘后采集到空的 broker_account（订单为 0）**
 

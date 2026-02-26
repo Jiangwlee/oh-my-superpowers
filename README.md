@@ -42,6 +42,11 @@ skills/                            # Agent Skills (each is autonomous)
 
 **Purpose**: Daily A-share market review and next-day trading plan generation.
 
+**Dependency (Required)**:
+- `ashare-assistant` depends on `packages/ashare-data` at runtime.
+- `ashare-data` provides the `ashare-collect` CLI and writes data into `~/.ashare-assistant/data/{DATE}/`.
+- `ashare-assistant` reads that shared data directory and does not replace data collection.
+
 **Key Features**:
 - Automated data collection via `ashare-data` package (news, funding flows, sentiment, trend scanning, broker account)
 - 5-stage LLM pipeline: sentiment → review → candidates → deep research → trading plan
@@ -55,6 +60,8 @@ skills/                            # Agent Skills (each is autonomous)
 - `skills/ashare-assistant/` — LLM workflow (market review, stock picking, trading plan)
 
 Data flows from `ashare-data → ~/.ashare-assistant/data/{DATE}/filtered/ → ashare-assistant`.
+
+Deployment order: install/deploy `ashare-data` first, then deploy `ashare-assistant`.
 
 ---
 
