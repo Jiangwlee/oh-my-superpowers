@@ -179,7 +179,8 @@ vim skills/<skill-name>/SKILL.md
 
 ## 部署
 
-详见[Deployment.md](Deployment.md):
+- 详见[Deployment.md](Deployment.md):
+- 访问`tencent-vps`: `ssh root@tencent-vps`
 
 ---
 
