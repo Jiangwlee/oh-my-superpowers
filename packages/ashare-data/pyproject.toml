@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ashare-data"
+version = "0.1.0"
+description = "A股数据采集与预处理基础设施（爬虫、券商接口、数据过滤）"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ashare_data*"]

@@ -14,7 +14,7 @@ _SKILL_ROOT = os.path.dirname(_SCRIPTS_DIR)
 if _SKILL_ROOT not in sys.path:
     sys.path.insert(0, _SKILL_ROOT)
 
-from scripts.fetchers.eastmoney_guba import (  # noqa: E402
+from ashare_data.fetchers.eastmoney_guba import (  # noqa: E402
     fetch_latest_posts,
     fetch_post_detail,
     fetch_stock_info_list,

@@ -29,9 +29,9 @@ try:
     import yaml  # type: ignore
 except Exception:
     yaml = None
-from scripts.fetchers.broker_account import fetch_broker_account, load_history
+from ashare_data.fetchers.broker_account import fetch_broker_account, load_history
 from scripts.core import shared as shared_core
-from scripts.fetchers.trend_scanner import (
+from ashare_data.fetchers.trend_scanner import (
     TrendResult,
     analyze_trend,
     apply_scoring,
@@ -223,7 +223,7 @@ def _analyze_holdings_trend(
 def _fetch_funding_info(codes: list[str]) -> dict[str, float]:
     """尝试获取持仓股的主力净流入，返回 {code: net_inflow_亿}。失败返回空。"""
     try:
-        from scripts.fetchers.funding import fetch_funding_for_codes
+        from ashare_data.fetchers.funding import fetch_funding_for_codes
 
         results = fetch_funding_for_codes(codes)
         return {r["code"]: r.get("net_inflow", 0.0) for r in results}

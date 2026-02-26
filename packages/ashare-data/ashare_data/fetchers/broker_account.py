@@ -29,10 +29,10 @@
        {"token": "...", "acc": "...", "pass": "..."}
 
 用法：
-    from scripts.fetchers.broker_account import fetch_broker_account
+    from ashare_data.fetchers.broker_account import fetch_broker_account
     data = fetch_broker_account()       # 采集当日数据（自动持久化）
 
-    from scripts.fetchers.broker_account import load_history
+    from ashare_data.fetchers.broker_account import load_history
     history = load_history(days=30)     # 查询最近30天历史
 """
 
@@ -44,8 +44,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from scripts.core.config import BROKER_DIR
-from scripts.core.http_client import http_json as core_http_json
+from ashare_data.core.config import BROKER_DIR
+from ashare_data.core.http_client import http_json as core_http_json
 
 # ── 常量 ────────────────────────────────────────────────────────
 

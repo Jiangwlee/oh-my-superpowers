@@ -29,24 +29,24 @@ _SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SKILL_ROOT not in sys.path:
     sys.path.insert(0, _SKILL_ROOT)
 
-from scripts.fetchers.trade_date import fetch_trade_date  # noqa: E402
-from scripts.fetchers.news import (  # noqa: E402
+from ashare_data.fetchers.trade_date import fetch_trade_date  # noqa: E402
+from ashare_data.fetchers.news import (  # noqa: E402
     fetch_headline,
     fetch_realtime,
     fetch_opportunity,
     fetch_daily_finance,
     fetch_news_flash,
 )
-from scripts.fetchers.market_overview import (  # noqa: E402
+from ashare_data.fetchers.market_overview import (  # noqa: E402
     fetch_market_sectors_top_n,
 )
-from scripts.fetchers.funding import fetch_funding, fetch_funding_for_codes  # noqa: E402
-from scripts.fetchers.taoguba import (  # noqa: E402
+from ashare_data.fetchers.funding import fetch_funding, fetch_funding_for_codes  # noqa: E402
+from ashare_data.fetchers.taoguba import (  # noqa: E402
     fetch_taoguba_hot,
     fetch_taoguba_hot_discussion,
     fetch_taoguba_now_recommend,
 )
-from scripts.fetchers.trend_scanner import (  # noqa: E402
+from ashare_data.fetchers.trend_scanner import (  # noqa: E402
     fetch_eastmoney_top200,
     fetch_ths_snapshot,
     fetch_ths_history,
@@ -54,10 +54,10 @@ from scripts.fetchers.trend_scanner import (  # noqa: E402
     format_report_md,
     format_ths_md,
 )
-from scripts.fetchers.broker_account import fetch_broker_account  # noqa: E402
-from scripts.fetchers.us_market import fetch_us_market  # noqa: E402
-from scripts.core.cache import cache_cleanup  # noqa: E402
-from scripts.core.config import ensure_dirs  # noqa: E402
+from ashare_data.fetchers.broker_account import fetch_broker_account  # noqa: E402
+from ashare_data.fetchers.us_market import fetch_us_market  # noqa: E402
+from ashare_data.core.cache import cache_cleanup  # noqa: E402
+from ashare_data.core.config import ensure_dirs  # noqa: E402
 
 
 def _log(msg: str) -> None:

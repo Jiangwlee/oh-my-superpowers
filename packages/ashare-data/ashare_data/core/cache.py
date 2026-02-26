@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from scripts.core.config import CACHE_DIR
+from ashare_data.core.config import CACHE_DIR
 
 _PERSIST_BY_DATE_CATEGORIES = {"ths", "funding", "broker", "market"}
 

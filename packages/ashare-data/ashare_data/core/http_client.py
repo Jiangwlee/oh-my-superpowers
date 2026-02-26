@@ -53,7 +53,7 @@ def no_proxy_env():
 
     用法::
 
-        from scripts.core.http_client import no_proxy_env
+        from ashare_data.core.http_client import no_proxy_env
 
         with no_proxy_env():
             resp = requests.get("https://example.com")

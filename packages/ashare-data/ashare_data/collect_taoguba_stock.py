@@ -14,7 +14,7 @@ _SKILL_ROOT = os.path.dirname(_SCRIPTS_DIR)
 if _SKILL_ROOT not in sys.path:
     sys.path.insert(0, _SKILL_ROOT)
 
-from scripts.fetchers.taoguba import (  # noqa: E402
+from ashare_data.fetchers.taoguba import (  # noqa: E402
     fetch_taoguba_quotes_posts,
     fetch_taoguba_stock_tags,
     fetch_taoguba_zh_recommend,

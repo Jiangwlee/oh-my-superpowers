@@ -7,7 +7,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-import scripts.core.http_client as http_client
+import ashare_data.core.http_client as http_client
 
 
 class HttpClientTest(unittest.TestCase):
@@ -15,7 +15,7 @@ class HttpClientTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             http_client.http_text("https://example.com", method="GET", payload={"a": 1})
 
-    @mock.patch("scripts.core.http_client._NO_PROXY_OPENER")
+    @mock.patch("ashare_data.core.http_client._NO_PROXY_OPENER")
     def test_http_json_parses_dict(self, mock_opener: mock.Mock) -> None:
         resp = mock.Mock()
         resp.read.return_value = b'{"ok": true}'
@@ -26,8 +26,8 @@ class HttpClientTest(unittest.TestCase):
 
         self.assertEqual(result["ok"], True)
 
-    @mock.patch("scripts.core.http_client.time.sleep")
-    @mock.patch("scripts.core.http_client._NO_PROXY_OPENER")
+    @mock.patch("ashare_data.core.http_client.time.sleep")
+    @mock.patch("ashare_data.core.http_client._NO_PROXY_OPENER")
     def test_http_text_retries_then_succeeds(
         self, mock_opener: mock.Mock, mock_sleep: mock.Mock
     ) -> None:
@@ -44,7 +44,7 @@ class HttpClientTest(unittest.TestCase):
         self.assertEqual(out, "ok")
         mock_sleep.assert_called_once()
 
-    @mock.patch("scripts.core.http_client._NO_PROXY_OPENER")
+    @mock.patch("ashare_data.core.http_client._NO_PROXY_OPENER")
     def test_http_bytes_returns_raw_bytes(self, mock_opener: mock.Mock) -> None:
         resp = mock.Mock()
         resp.read.return_value = b"\x1f\x8braw"

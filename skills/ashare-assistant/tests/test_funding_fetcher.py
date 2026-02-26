@@ -8,7 +8,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-import scripts.fetchers.funding as funding
+import ashare_data.fetchers.funding as funding
 
 
 class FundingFetcherTest(unittest.TestCase):
@@ -181,7 +181,7 @@ class FundingHttpPathTest(unittest.TestCase):
     def test_fetch_northbound_net_normal(self) -> None:
         """正常响应时应正确换算 NET_DEAL_AMT ÷ 100 = 亿元。"""
         with patch(
-            "scripts.fetchers.funding.http_text",
+            "ashare_data.fetchers.funding.http_text",
             return_value=self._northbound_response(3130.79),
         ):
             result = funding._fetch_northbound_net()
@@ -191,14 +191,14 @@ class FundingHttpPathTest(unittest.TestCase):
     def test_fetch_northbound_net_empty_rows(self) -> None:
         """接口返回空数据时应返回 0.0。"""
         body = json.dumps({"result": {"data": [], "pages": 0}, "success": True})
-        with patch("scripts.fetchers.funding.http_text", return_value=body):
+        with patch("ashare_data.fetchers.funding.http_text", return_value=body):
             result = funding._fetch_northbound_net()
         self.assertEqual(result, 0.0)
 
     def test_fetch_northbound_net_null_value(self) -> None:
         """NET_DEAL_AMT 为 None 时应返回 0.0。"""
         with patch(
-            "scripts.fetchers.funding.http_text",
+            "ashare_data.fetchers.funding.http_text",
             return_value=self._northbound_response(None),
         ):
             result = funding._fetch_northbound_net()
@@ -207,7 +207,7 @@ class FundingHttpPathTest(unittest.TestCase):
     def test_fetch_northbound_net_http_error(self) -> None:
         """HTTP 异常时应安全降级返回 0.0。"""
         with patch(
-            "scripts.fetchers.funding.http_text", side_effect=OSError("timeout")
+            "ashare_data.fetchers.funding.http_text", side_effect=OSError("timeout")
         ):
             result = funding._fetch_northbound_net()
         self.assertEqual(result, 0.0)
@@ -215,7 +215,7 @@ class FundingHttpPathTest(unittest.TestCase):
     def test_fetch_fund_flow_rank_normal(self) -> None:
         """正常响应时应正确解析排名数据并换算净流入（÷1e8=亿）。"""
         with patch(
-            "scripts.fetchers.funding.http_text", return_value=self._fundflow_response()
+            "ashare_data.fetchers.funding.http_text", return_value=self._fundflow_response()
         ):
             rows = funding._fetch_fund_flow_rank(indicator="3日")
         self.assertEqual(len(rows), 2)
@@ -228,7 +228,7 @@ class FundingHttpPathTest(unittest.TestCase):
     def test_fetch_fund_flow_rank_empty(self) -> None:
         """接口返回空数据时应返回空列表。"""
         body = json.dumps({"data": {"diff": [], "total": 0}, "rc": 0})
-        with patch("scripts.fetchers.funding.http_text", return_value=body):
+        with patch("ashare_data.fetchers.funding.http_text", return_value=body):
             rows = funding._fetch_fund_flow_rank(indicator="3日")
         self.assertEqual(rows, [])
 
@@ -240,7 +240,7 @@ class FundingHttpPathTest(unittest.TestCase):
     def test_fetch_fund_flow_rank_http_error(self) -> None:
         """HTTP 异常时应安全降级返回空列表。"""
         with patch(
-            "scripts.fetchers.funding.http_text", side_effect=OSError("timeout")
+            "ashare_data.fetchers.funding.http_text", side_effect=OSError("timeout")
         ):
             rows = funding._fetch_fund_flow_rank(indicator="今日")
         self.assertEqual(rows, [])

@@ -21,9 +21,9 @@ try:
 except Exception:  # pragma: no cover - 环境未安装时降级
     yaml = None
 
-from scripts.fetchers.broker_account import fetch_broker_account, load_history
-from scripts.fetchers.trend_scanner import fetch_jrj_daily_kline, fetch_jrj_minute_kline
-from scripts.core.config import DECISION_LOG
+from ashare_data.fetchers.broker_account import fetch_broker_account, load_history
+from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline, fetch_jrj_minute_kline
+from ashare_data.core.config import DECISION_LOG
 from scripts.core import shared as shared_core
 
 logger = logging.getLogger(__name__)

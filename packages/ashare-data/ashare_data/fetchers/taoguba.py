@@ -11,8 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from html.parser import HTMLParser
 
-from scripts.core.cache import cache_get, cache_set
-from scripts.core.http_client import http_bytes, http_text
+from ashare_data.core.cache import cache_get, cache_set
+from ashare_data.core.http_client import http_bytes, http_text
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from scripts.fetchers import taoguba
+from ashare_data.fetchers import taoguba
 
 
 class TaogubaFetchersTest(unittest.TestCase):
@@ -32,9 +32,9 @@ class TaogubaFetchersTest(unittest.TestCase):
         }
         raw = json.dumps(payload).encode("utf-8")
 
-        with mock.patch("scripts.fetchers.taoguba.http_bytes", return_value=raw):
+        with mock.patch("ashare_data.fetchers.taoguba.http_bytes", return_value=raw):
             with mock.patch(
-                "scripts.fetchers.taoguba._fetch_detail", return_value="正文A"
+                "ashare_data.fetchers.taoguba._fetch_detail", return_value="正文A"
             ) as detail_mock:
                 rows = taoguba.fetch_taoguba_now_recommend(count=1)
 
@@ -64,7 +64,7 @@ class TaogubaFetchersTest(unittest.TestCase):
         }
 
         with mock.patch(
-            "scripts.fetchers.taoguba._fetch_json_get", return_value=payload
+            "ashare_data.fetchers.taoguba._fetch_json_get", return_value=payload
         ):
             rows = taoguba.fetch_taoguba_hot_discussion(page_no=1, count=1)
 

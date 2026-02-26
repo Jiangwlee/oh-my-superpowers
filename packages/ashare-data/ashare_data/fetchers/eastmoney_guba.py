@@ -19,8 +19,8 @@ from html import unescape
 from html.parser import HTMLParser
 from typing import Any
 
-from scripts.core.cache import cache_get, cache_set
-from scripts.core.http_client import http_text
+from ashare_data.core.cache import cache_get, cache_set
+from ashare_data.core.http_client import http_text
 
 _GBAPI_LIST_URL = (
     "https://gbapi.eastmoney.com/webarticlelist/api/Article/Articlelist"

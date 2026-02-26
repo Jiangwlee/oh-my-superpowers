@@ -5,9 +5,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from html.parser import HTMLParser
 
-from scripts.core.cache import cache_get, cache_set
-from scripts.core.http_client import http_json as core_http_json
-from scripts.core.http_client import http_text
+from ashare_data.core.cache import cache_get, cache_set
+from ashare_data.core.http_client import http_json as core_http_json
+from ashare_data.core.http_client import http_text
 
 
 def _today_ymd() -> str:

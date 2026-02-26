@@ -10,7 +10,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-import scripts.core.cache as cache
+import ashare_data.core.cache as cache
 
 
 class CacheTest(unittest.TestCase):

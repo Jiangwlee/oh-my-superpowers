@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from scripts.core.config import DECISION_LOG
+from ashare_data.core.config import DECISION_LOG
 
 
 def _build_record(payload: dict[str, Any]) -> dict[str, Any]:

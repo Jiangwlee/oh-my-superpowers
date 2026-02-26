@@ -8,7 +8,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from scripts.filter_to_markdown import _filter_recent_24h
+from ashare_data.filter_to_markdown import _filter_recent_24h
 
 
 class FilterRecent24hTest(unittest.TestCase):

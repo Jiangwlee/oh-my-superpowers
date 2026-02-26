@@ -15,7 +15,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-import scripts.fetchers.broker_account as ba
+import ashare_data.fetchers.broker_account as ba
 
 
 def _make_account_data(
@@ -169,7 +169,7 @@ class LoadHistoryTest(unittest.TestCase):
                 mock.patch.object(ba, "_POSITIONS_DIR", pos_dir),
                 mock.patch.object(ba, "_ORDERS_DIR", ord_dir),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
             ):
@@ -213,7 +213,7 @@ class LoadHistoryTest(unittest.TestCase):
                 mock.patch.object(ba, "_POSITIONS_DIR", pos_dir),
                 mock.patch.object(ba, "_ORDERS_DIR", ord_dir),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
             ):
@@ -280,7 +280,7 @@ class PostMarketCacheTest(unittest.TestCase):
                 mock.patch.object(ba, "_POSITIONS_DIR", pos_dir),
                 mock.patch.object(ba, "_ORDERS_DIR", ord_dir),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
             ):
@@ -335,7 +335,7 @@ class CostTrackingTest(unittest.TestCase):
                 mock.patch.object(ba, "_COSTS_DIR", costs_dir),
                 mock.patch.object(ba, "_today_str", return_value="2026-02-24"),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
             ):
@@ -367,7 +367,7 @@ class CostTrackingTest(unittest.TestCase):
                 mock.patch.object(ba, "_COSTS_DIR", costs_dir),
                 mock.patch.object(ba, "_today_str", return_value="2026-02-24"),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
             ):
@@ -471,7 +471,7 @@ class CostTrackingTest(unittest.TestCase):
                 mock.patch.object(ba, "_CACHE_DIR", tmp),
                 mock.patch.object(ba, "_TICKET_CACHE_PATH", ticket_cache_path),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
                 mock.patch.object(ba._NO_PROXY_OPENER, "open") as mock_open,
@@ -559,7 +559,7 @@ class TicketBufferTest(unittest.TestCase):
                 mock.patch.object(ba, "_CACHE_DIR", tmp),
                 mock.patch.object(ba, "_TICKET_CACHE_PATH", ticket_cache_path),
                 mock.patch(
-                    "scripts.fetchers.broker_account.datetime",
+                    "ashare_data.fetchers.broker_account.datetime",
                     wraps=ba.datetime,
                 ) as mock_dt,
                 mock.patch.object(ba._NO_PROXY_OPENER, "open") as mock_open,

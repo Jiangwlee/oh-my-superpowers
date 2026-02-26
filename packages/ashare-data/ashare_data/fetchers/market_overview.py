@@ -1,7 +1,7 @@
 """大盘云图与资金流向数据抓取模块。"""
 
-from scripts.core.cache import cache_get, cache_set
-from scripts.core.http_client import http_json as core_http_json
+from ashare_data.core.cache import cache_get, cache_set
+from ashare_data.core.http_client import http_json as core_http_json
 
 
 def _http_json(

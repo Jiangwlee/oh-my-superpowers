@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from scripts.core.config import DECISION_LOG
-from scripts.fetchers.trend_scanner import fetch_jrj_daily_kline
-from scripts.core.http_client import http_json
+from ashare_data.core.config import DECISION_LOG
+from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
+from ashare_data.core.http_client import http_json
 
 
 # ---------------------------------------------------------------------------

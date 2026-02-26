@@ -19,8 +19,8 @@ from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
-from scripts.core.cache import cache_get, cache_set
-from scripts.core.http_client import http_json
+from ashare_data.core.cache import cache_get, cache_set
+from ashare_data.core.http_client import http_json
 
 # ---------------------------------------------------------------------------
 # 工具函数
