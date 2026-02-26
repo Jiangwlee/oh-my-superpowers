@@ -1,5 +1,6 @@
 pyproject.toml
 ashare_data/__init__.py
+ashare_data/collect.py
 ashare_data/collect_eastmoney_guba.py
 ashare_data/collect_sentiment.py
 ashare_data/collect_taoguba_stock.py
@@ -7,6 +8,7 @@ ashare_data/filter_to_markdown.py
 ashare_data.egg-info/PKG-INFO
 ashare_data.egg-info/SOURCES.txt
 ashare_data.egg-info/dependency_links.txt
+ashare_data.egg-info/entry_points.txt
 ashare_data.egg-info/top_level.txt
 ashare_data/core/__init__.py
 ashare_data/core/cache.py

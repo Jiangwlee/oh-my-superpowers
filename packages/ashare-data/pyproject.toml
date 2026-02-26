@@ -9,6 +9,9 @@ description = "A股数据采集与预处理基础设施（爬虫、券商接口�
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+ashare-collect = "ashare_data.collect:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ashare_data*"]
