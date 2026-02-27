@@ -4,6 +4,7 @@
 流程：
   1. collect   — 并发拉取所有数据源，写入 {data_dir}/raw/
   2. filter    — 将 raw/ JSON 过滤转换为 {data_dir}/filtered/ Markdown
+  3. sentiment — 生成 report/news_sentiment.md 与 report/social_sentiment.md
 
 用法：
     # 采集今日数据（最常用）
@@ -33,6 +34,7 @@ from pathlib import Path
 from ashare_data.core.config import DATA_DIR, ensure_dirs
 from ashare_data.collect_sentiment import collect
 from ashare_data.filter_to_markdown import filter_all
+from ashare_data.sentiment_preprocess import run_sentiment_preprocess
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,9 @@ def run(
     run_deep_research: bool = True,
     deep_research_min_star: int = 4,
     deep_research_max_workers: int = 6,
+    run_sentiment: bool = True,
+    sentiment_model: str = "deepseek/deepseek-chat",
+    sentiment_timeout: int = 300,
 ) -> bool:
     """执行完整采集流水线。
 
@@ -68,6 +73,9 @@ def run(
         run_deep_research: 是否执行个股深研预处理。
         deep_research_min_star: 趋势股纳入深研的最低星级。
         deep_research_max_workers: 个股深研并行 worker 数。
+        run_sentiment: 是否执行 news/social 情绪预处理。
+        sentiment_model: 情绪预处理使用模型。
+        sentiment_timeout: 单个情绪任务超时（秒）。
 
     Returns:
         True 表示全部成功，False 表示至少一个阶段失败。
@@ -135,6 +143,30 @@ def run(
     else:
         logger.info("[filter] 已跳过（--skip-filter）")
 
+    # ── 阶段 3: 情绪预处理（news/social） ────────────────────────
+    if run_sentiment:
+        if not filtered_dir.exists():
+            logger.error("[sentiment] filtered/ 目录不存在: %s", filtered_dir)
+            return False
+        logger.info("[sentiment] 开始预处理 -> %s/report", data_dir)
+        result = run_sentiment_preprocess(
+            data_dir=data_dir,
+            model=sentiment_model,
+            timeout_sec=sentiment_timeout,
+            overwrite=False,
+        )
+        logger.info(
+            "[sentiment] 完成: ok=%s, %.1fs, news=%s, social=%s",
+            result.get("ok"),
+            float(result.get("elapsed_sec", 0.0)),
+            result.get("news", {}).get("message"),
+            result.get("social", {}).get("message"),
+        )
+        if not bool(result.get("ok")):
+            success = False
+    else:
+        logger.info("[sentiment] 已跳过（--no-sentiment-preprocess）")
+
     return success
 
 
@@ -170,6 +202,22 @@ def main() -> None:
         default=6,
         help="个股深研并行 worker 数",
     )
+    parser.add_argument(
+        "--no-sentiment-preprocess",
+        action="store_true",
+        help="跳过 news/social 情绪预处理",
+    )
+    parser.add_argument(
+        "--sentiment-model",
+        default="deepseek/deepseek-chat",
+        help="情绪预处理模型（默认 deepseek/deepseek-chat）",
+    )
+    parser.add_argument(
+        "--sentiment-timeout",
+        type=int,
+        default=300,
+        help="单个情绪任务超时（秒）",
+    )
     parser.add_argument("--verbose", action="store_true", help="详细日志")
     args = parser.parse_args()
 
@@ -190,6 +238,9 @@ def main() -> None:
         run_deep_research=not args.no_deep_research,
         deep_research_min_star=args.deep_research_min_star,
         deep_research_max_workers=args.deep_research_max_workers,
+        run_sentiment=not args.no_sentiment_preprocess,
+        sentiment_model=args.sentiment_model,
+        sentiment_timeout=args.sentiment_timeout,
     )
     sys.exit(0 if ok else 1)
 

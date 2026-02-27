@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""运行子代理分析，将 filtered/ 中的大文件交给子代理生成 report/。
+"""运行子代理分析，生成复盘/选股/交易计划三阶段产物。
 
 子代理使用 OpenCode CLI (`opencode run`) 实现，每个子代理独立运行一个会话。
-支持完整流水线：
-
-  第一轮（并行）: news + social → 情绪分析报告
-  第二轮: review → 复盘报告 (market_review.md)
-  第三轮: candidates → 候选股提取 (candidates.json)
-  第四轮: 使用预处理深研报告 (report/dr_*_brief.md)
-  第五轮: plan → 交易计划 (trading_plan.md)
+支持完整流水线：review → candidates → plan
+其中 news/social 由 ashare-data 预处理生成 report/*.md，本脚本只消费结果。
 
 用法:
-    # 运行完整流水线（news → social → review → candidates → plan）
+    # 运行完整流水线（review → candidates → plan）
     python3 scripts/run_analysis.py \
         --data-dir ~/.ashare-assistant/data/2026-02-24 \
         --tasks all
@@ -42,8 +37,6 @@ _SKILL_DIR = os.path.dirname(_SCRIPT_DIR)  # skills/ashare-assistant/
 _DEFAULT_MODEL = "github-copilot/gpt-5-mini"
 
 _MODEL_OVERRIDES: dict[str, str] = {
-    "news": "deepseek/deepseek-reasoner",
-    "social": "deepseek/deepseek-reasoner",
     "review": "deepseek/deepseek-reasoner",
     "candidates": "github-copilot/gpt-5-mini",
     "plan": "deepseek/deepseek-reasoner",
@@ -60,23 +53,6 @@ _TIMEOUT_OVERRIDES: dict[str, int] = {
 _DEFAULT_TIMEOUT = 300
 
 # ── 子代理任务定义 ────────────────────────────────────
-
-# 新闻情绪分析的输入文件
-_NEWS_FILES = [
-    "news_headline.md",
-    "news_daily.md",
-    "news_opportunity.md",
-    "news_realtime.md",
-    "news_flash.md",
-]
-
-# 社交情绪分析的输入文件
-_SOCIAL_FILES = [
-    "taoguba_hot.md",
-    "taoguba_recommend.md",
-    "taoguba_hot_discussion.md",
-]
-
 # 复盘报告需要的 filtered/ 直读文件（非 news/social 的小文件）
 _REVIEW_DIRECT_FILES = [
     "us_market.md",
@@ -372,71 +348,6 @@ def _extract_json_from_stdout(stdout: str) -> str:
 
 
 # ── 任务实现 ──────────────────────────────────────────
-
-
-def run_news_sentiment(
-    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
-) -> bool:
-    """运行新闻情绪分析子代理。"""
-    filtered_dir = os.path.join(data_dir, "filtered")
-    report_dir = os.path.join(data_dir, "report")
-    os.makedirs(report_dir, exist_ok=True)
-
-    # 加载模板并替换占位符
-    template = _load_prompt_template("news_sentiment")
-    files_section = _build_files_section(filtered_dir, _NEWS_FILES)
-    prompt = template.replace("{FILES_SECTION}", files_section)
-
-    # 输出路径
-    output_path = os.path.join(report_dir, "news_sentiment.md")
-
-    # 附加文件列表（存在的文件）
-    attached_files = [
-        os.path.join(filtered_dir, f)
-        for f in _NEWS_FILES
-        if os.path.exists(os.path.join(filtered_dir, f))
-    ]
-
-    return _run_opencode(
-        prompt=prompt,
-        output_path=output_path,
-        title="新闻情绪分析",
-        attached_files=attached_files,
-        model=model,
-        timeout=timeout,
-        overwrite=overwrite,
-    )
-
-
-def run_social_sentiment(
-    data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
-) -> bool:
-    """运行社交情绪分析子代理。"""
-    filtered_dir = os.path.join(data_dir, "filtered")
-    report_dir = os.path.join(data_dir, "report")
-    os.makedirs(report_dir, exist_ok=True)
-
-    template = _load_prompt_template("social_sentiment")
-    files_section = _build_files_section(filtered_dir, _SOCIAL_FILES)
-    prompt = template.replace("{FILES_SECTION}", files_section)
-
-    output_path = os.path.join(report_dir, "social_sentiment.md")
-
-    attached_files = [
-        os.path.join(filtered_dir, f)
-        for f in _SOCIAL_FILES
-        if os.path.exists(os.path.join(filtered_dir, f))
-    ]
-
-    return _run_opencode(
-        prompt=prompt,
-        output_path=output_path,
-        title="社交情绪分析",
-        attached_files=attached_files,
-        model=model,
-        timeout=timeout,
-        overwrite=overwrite,
-    )
 
 
 def run_market_review(
@@ -739,34 +650,19 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
     """执行完整的 all 流水线。
 
     流程:
-      1. news + social（情绪分析）
-      2. review（复盘报告 → market_review.md）
-      3. candidates（从复盘报告提取候选股 → candidates.json）
-      4. 使用 ashare-data 预处理好的个股深研报告（dr_*_brief.md）
-      4.5 执行前置脚本 trade_review.py 和 holding_insight.py
-      5. plan（交易计划 → trading_plan.md，一次到位）
-      6. 执行风控检查 risk_check.py 与决策日志 decision_logger.py
+      1. review（复盘报告 → market_review.md）
+      2. candidates（从复盘报告提取候选股 → candidates.json）
+      3. 使用 ashare-data 预处理好的个股深研报告（dr_*_brief.md）
+      3.5 执行前置脚本 trade_review.py 和 holding_insight.py
+      4. plan（交易计划 → trading_plan.md，一次到位）
+      5. 执行风控检查 risk_check.py 与决策日志 decision_logger.py
 
     Returns:
         各任务的成功状态字典。
     """
     results: dict[str, bool] = {}
 
-    # ── 阶段 1: 情绪分析 ──────────────────────────────
-    for task in ["news", "social"]:
-        m = _get_model(task, args.model)
-        t = _get_timeout(task, args.timeout)
-        logger.info("任务 [%s] 使用模型: %s, 超时: %ds", task, m, t)
-        if task == "news":
-            results["news"] = run_news_sentiment(
-                data_dir, model=m, timeout=t, overwrite=args.overwrite
-            )
-        else:
-            results["social"] = run_social_sentiment(
-                data_dir, model=m, timeout=t, overwrite=args.overwrite
-            )
-
-    # ── 阶段 2: 复盘报告 ──────────────────────────────
+    # ── 阶段 1: 复盘报告 ──────────────────────────────
     m = _get_model("review", args.model)
     t = _get_timeout("review", args.timeout)
     logger.info("任务 [review] 使用模型: %s, 超时: %ds", m, t)
@@ -779,7 +675,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         results["plan"] = False
         return results
 
-    # ── 阶段 3: 候选股提取 ────────────────────────────
+    # ── 阶段 2: 候选股提取 ────────────────────────────
     candidates_model = _get_model("candidates", args.model)
     candidates_timeout = _get_timeout("candidates", args.timeout)
     logger.info(
@@ -798,7 +694,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         results["plan"] = False
         return results
 
-    # ── 阶段 4: 读取预处理个股深研报告 ─────────────────────
+    # ── 阶段 3: 读取预处理个股深研报告 ─────────────────────
     targets = _collect_deep_research_targets(data_dir)
     if targets:
         missing_codes: list[str] = []
@@ -820,7 +716,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
     else:
         logger.info("无 buy/watch 候选股，跳过深研报告检查")
 
-    # ── 阶段 4.5: 账户与持仓分析 (plan 的增强输入) ───────────
+    # ── 阶段 3.5: 账户与持仓分析 (plan 的增强输入) ───────────
     trade_review_output = os.path.join(_analysis_dir(data_dir), "trade_review.json")
     holding_insight_output = os.path.join(_analysis_dir(data_dir), "holding_insight.json")
     strategy_path = os.path.join(_SKILL_DIR, "strategy", "active.yaml")
@@ -890,7 +786,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         results["plan"] = False
         return results
 
-    # ── 阶段 5: 交易计划 ──────────────────────────────
+    # ── 阶段 4: 交易计划 ──────────────────────────────
     plan_model = _get_model("plan", args.model)
     plan_timeout = _get_timeout("plan", args.timeout)
     logger.info("任务 [plan] 使用模型: %s, 超时: %ds", plan_model, plan_timeout)
@@ -901,7 +797,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         logger.error("plan 失败，中止流水线")
         return results
 
-    # ── 阶段 6: 风控检查与决策日志记录（仅在 plan 成功后执行） ──
+    # ── 阶段 5: 风控检查与决策日志记录（仅在 plan 成功后执行） ──
     candidates_file = _find_candidates_path(data_dir)
     if results.get("plan") and candidates_file and os.path.exists(candidates_file):
         logger.info("执行校验脚本: risk_check.py 和 decision_logger.py")
@@ -976,7 +872,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
 def main() -> None:
     """CLI 入口。"""
     parser = argparse.ArgumentParser(
-        description="运行子代理分析（新闻情绪、社交情绪、复盘报告、交易计划）"
+        description="运行子代理分析（复盘报告、候选股提取、交易计划）"
     )
     parser.add_argument(
         "--data-dir",
@@ -989,9 +885,9 @@ def main() -> None:
     parser.add_argument(
         "--tasks",
         nargs="+",
-        choices=["news", "social", "review", "candidates", "plan", "all"],
+        choices=["review", "candidates", "plan", "all"],
         default=["all"],
-        help="要运行的任务（默认 all = 情绪→复盘→候选股→交易计划）",
+        help="要运行的任务（默认 all = 复盘→候选股→交易计划）",
     )
     parser.add_argument(
         "--model",
@@ -1038,7 +934,7 @@ def main() -> None:
     tasks = args.tasks
     start_time = time.time()
 
-    # all 模式：走完整流水线（情绪→复盘→候选股→交易计划）
+    # all 模式：走完整流水线（复盘→候选股→交易计划）
     if "all" in tasks:
         results = _run_all_pipeline(args, data_dir)
         generate_report_index(data_dir)
@@ -1065,21 +961,7 @@ def main() -> None:
 
         logger.info("任务 [%s] 使用模型: %s, 超时: %ds", task, task_model, task_timeout)
 
-        if task == "news":
-            results["news"] = run_news_sentiment(
-                data_dir,
-                model=task_model,
-                timeout=task_timeout,
-                overwrite=args.overwrite,
-            )
-        elif task == "social":
-            results["social"] = run_social_sentiment(
-                data_dir,
-                model=task_model,
-                timeout=task_timeout,
-                overwrite=args.overwrite,
-            )
-        elif task == "review":
+        if task == "review":
             results["review"] = run_market_review(
                 data_dir,
                 model=task_model,

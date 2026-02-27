@@ -62,7 +62,7 @@ fi
 python scripts/run_analysis.py --tasks all
 ```
 
-说明：`all` 流程执行 `news/social/review/candidates/plan`，并读取预处理深研报告。
+说明：`all` 流程仅执行 `review/candidates/plan`，并读取预处理的 `news/social` 与深研报告。
 
 ### Step 3. 结果输出
 

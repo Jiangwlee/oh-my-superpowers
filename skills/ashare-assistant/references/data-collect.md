@@ -9,15 +9,12 @@ cd <skill_root>   # SKILL.md 所在目录，即 skills/ashare-assistant/
 
 > 所有脚本必须从 `<skill_root>` 执行，否则报 `ModuleNotFoundError`。
 
-## 步骤 1：数据采集（raw/）
+## 步骤 1：数据采集 + 预处理（raw/ + filtered/ + report/）
 
-运行数据采集脚本，输出到 `raw/` 子目录：
+运行 `ashare-collect` 一次完成采集、格式转换和预处理：
 
 ```bash
-python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/${DATE}/raw \
-  --news-count 20 \
-  --taoguba-count 20
+ashare-collect --date ${DATE} --verbose
 ```
 
 **券商账户数据（jvQuant）自动检测逻辑**：
@@ -27,37 +24,19 @@ python3 scripts/collect_sentiment.py \
   - **采集失败** → 脚本以非零退出码终止，stderr 输出明确错误；此时**不能继续生成交易计划**，须告知用户修复 jvquant.json 配置
   - **文件不存在** → 打印跳过提示，不报错，但后续将无法生成持仓相关内容
 
-## 步骤 2：格式转换（raw/ → filtered/）
+其中预处理阶段会生成：
+1. `report/news_sentiment.md`
+2. `report/social_sentiment.md`
+3. `report/dr_{CODE}_brief.md`
 
-将 JSON 数据转换为 Markdown 格式：
-
-```bash
-python3 scripts/filter_to_markdown.py \
-  --input-dir ~/.ashare-assistant/data/${DATE}/raw \
-  --output-dir ~/.ashare-assistant/data/${DATE}/filtered
-```
-
-> 纯规则转换，不调用 LLM。生成 `filtered/index.md` 索引文件。
-
-## 步骤 3：子代理分析（filtered/ → report/）
-
-对大文件运行子代理语义压缩：
-
-```bash
-python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/${DATE} \
-  --tasks all
-```
-
-> 使用 OpenCode CLI 作为子代理，分别运行新闻情绪分析和社交情绪分析。
-> 生成 `report/index.md` 索引文件。
+> `run_analysis.py` 不再负责 news/social 压缩，只负责 `review/candidates/plan`。
 
 ## 验证
 
 采集和预处理完成后，读取索引文件确认数据完整性：
 
 1. `~/.ashare-assistant/data/${DATE}/filtered/index.md` — 确认 filtered 层文件齐全
-2. `~/.ashare-assistant/data/${DATE}/report/index.md` — 确认子代理报告已生成
+2. `~/.ashare-assistant/data/${DATE}/report/news_sentiment.md` + `social_sentiment.md` — 确认情绪预处理完成
 3. `~/.ashare-assistant/data/${DATE}/raw/run_id.json` — 获取 `run_id`
 
 要求：
@@ -69,18 +48,18 @@ python3 scripts/run_analysis.py \
 
 ```
 ~/.ashare-assistant/data/{DATE}/
-├── raw/                    ← 步骤1: 采集脚本输出的原始 JSON
+├── raw/                    ← 采集脚本输出的原始 JSON
 │   ├── news_headline.json
 │   ├── taoguba_hot.json
 │   ├── trend_scan.json
 │   ├── run_id.json
 │   └── ...
-├── filtered/               ← 步骤2: 格式转换后的 Markdown
+├── filtered/               ← 格式转换后的 Markdown
 │   ├── index.md            ← 索引（标注 direct/subagent）
 │   ├── market_sectors.md   ← direct: 主 agent 直读
 │   ├── news_headline.md    ← subagent: 交给子代理
 │   └── ...
-├── report/                 ← 步骤3: 子代理分析报告
+├── report/                 ← 采集预处理生成的情绪/深研报告
 │   ├── index.md
 │   ├── news_sentiment.md   ← 新闻情绪压缩摘要
 │   ├── social_sentiment.md ← 社交情绪压缩摘要

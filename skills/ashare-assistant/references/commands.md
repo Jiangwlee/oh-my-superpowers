@@ -20,32 +20,14 @@
 ## 采集脚本
 
 ```bash
-# 完整采集（推荐，含趋势扫描，约 2-3 分钟）
-python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
-  --news-count 20 \
-  --taoguba-count 20
+# 完整采集 + 预处理（推荐）
+ashare-collect --date {DATE} --verbose
 
-# 含账户持仓数据（需已配置 jvQuant，见下方章节）
-python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
-  --news-count 20 \
-  --taoguba-count 20 \
-  --broker
+# 跳过深研（调试用）
+ashare-collect --date {DATE} --no-deep-research
 
-# 精简采集（测试用，跳过趋势扫描，约 30 秒）
-python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
-  --news-count 5 \
-  --taoguba-count 5 \
-  --no-scan-trends
-
-# 限制扫描范围（仅前50名，约 40 秒）
-python3 scripts/collect_sentiment.py \
-  --output-dir ~/.ashare-assistant/data/{DATE}/raw \
-  --news-count 20 \
-  --taoguba-count 20 \
-  --popularity-max 50
+# 跳过情绪预处理（调试用）
+ashare-collect --date {DATE} --no-sentiment-preprocess
 ```
 
 `{DATE}` 替换为当天日期，如 `2026-02-18`（`$(date +%Y-%m-%d)`）。
@@ -53,28 +35,17 @@ python3 scripts/collect_sentiment.py \
 
 ## 格式转换
 
-将 raw/ JSON 数据转换为 filtered/ Markdown 文件（纯规则转换，不调用 LLM）：
-
-```bash
-python3 scripts/filter_to_markdown.py \
-  --input-dir ~/.ashare-assistant/data/{DATE}/raw \
-  --output-dir ~/.ashare-assistant/data/{DATE}/filtered
-```
-
-生成 `filtered/index.md` 索引文件，标注每个文件的读取方式（direct/subagent）。
+`ashare-collect` 已内置 raw → filtered 转换，通常无需手动执行。
 
 ## 子代理分析
 
-对 filtered/ 中的大文件运行子代理语义压缩，以及生成复盘报告和交易计划。
-
-完整流水线：news → social → review → candidates → plan。
+`ashare-assistant` 只负责三核心：`review → candidates → plan`。
+`news/social` 与 `dr_{CODE}_brief.md` 由 `ashare-collect` 预处理阶段生成。
 
 ### 内置模型映射
 
 | 任务 | 模型 | 说明 |
 |------|------|------|
-| news | `deepseek/deepseek-reasoner` | 新闻情绪分析 |
-| social | `deepseek/deepseek-reasoner` | 社交情绪分析 |
 | review | `deepseek/deepseek-reasoner` | 复盘报告生成 |
 | candidates | `github-copilot/gpt-5-mini` | 候选股提取（结构化 JSON） |
 | plan | `deepseek/deepseek-reasoner` | 交易计划生成 |
@@ -84,17 +55,12 @@ python3 scripts/filter_to_markdown.py \
 ### 常用命令
 
 ```bash
-# 运行完整流水线（news + social + review + candidates + plan）
+# 运行完整流水线（review + candidates + plan）
 python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/{DATE} \
   --tasks all
 
-# 仅运行情绪分析（第一轮）
-python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/{DATE} \
-  --tasks news social
-
-# 仅运行复盘报告（需 news/social 已完成）
+# 仅运行复盘报告（依赖预处理好的 news/social）
 python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/{DATE} \
   --tasks review
@@ -112,17 +78,16 @@ python3 scripts/run_analysis.py \
 # 覆盖模型（调试用）
 python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/{DATE} \
-  --tasks social \
+  --tasks review \
   --model anthropic/claude-sonnet-4-20250514
 ```
 
 ### 任务依赖关系
 
 ```
-news ──┐
-       ├──→ review ──→ candidates ──→ plan
-social ┘                      ↑
-                       读取 report/dr_*_brief.md（由采集预处理生成）
+ashare-collect 预处理: news/social/dr
+                     ↓
+review ──→ candidates ──→ plan
 ```
 
 - `review` 依赖 `report/news_sentiment.md` + `report/social_sentiment.md`
@@ -133,8 +98,6 @@ social ┘                      ↑
 
 | 任务 | 输出路径 | 说明 |
 |------|---------|------|
-| news | `report/news_sentiment.md` | 新闻情绪分析摘要 |
-| social | `report/social_sentiment.md` | 社交情绪分析摘要 |
 | review | `market_review.md` | 复盘报告（根目录） |
 | candidates | `analysis/candidates.json` | 候选股结构化结果 |
 | plan | `trading_plan.md` | 交易计划 |
@@ -185,7 +148,7 @@ social ┘                      ↑
 | `taoguba_recommend.md` | subagent | 今日推荐 Markdown（大文件） |
 | `taoguba_hot_discussion.md` | subagent | 热门讨论 Markdown |
 
-### report/ — 子代理分析输出
+### report/ — 预处理输出
 
 | 文件 | 说明 |
 |------|------|
