@@ -15,7 +15,7 @@ Sections: Required Inputs | Mapping Rules | Output Schema | Validation | Hard Ru
 
 1. Extract `market.regime` from the market review.
 2. Build candidate rows with fields:
-   - `code`, `name`, `sector`, `thesis_short`, `risk_note`
+   - `code`, `name`, `sector`, `thesis_short`, `risk_note`, `trigger_condition`
 3. Normalize action values:
    - 买入/建仓 -> `buy`
    - 持有 -> `hold`
@@ -23,6 +23,11 @@ Sections: Required Inputs | Mapping Rules | Output Schema | Validation | Hard Ru
    - 其他 -> `watch`
 4. Keep `position` as `0` for all candidates.
 5. Keep `thesis_short` and `risk_note` within 30 Chinese characters each.
+6. `trigger_condition` is required (≤40 chars). Describe what condition must be met to execute the action:
+   - `buy`: entry trigger (e.g. "pull back to MA10 with shrinking volume")
+   - `sell`: exit trigger (e.g. "break below yesterday's low or surge to resistance")
+   - `watch`: condition to upgrade to buy (e.g. "breakout above prior high on volume")
+   - `hold`: condition to keep holding (e.g. "MA5 support holds")
 
 ## Output Schema
 
@@ -41,7 +46,8 @@ Sections: Required Inputs | Mapping Rules | Output Schema | Validation | Hard Ru
       "sector": "示例板块",
       "position": 0,
       "thesis_short": "30字以内",
-      "risk_note": "30字以内"
+      "risk_note": "30字以内",
+      "trigger_condition": "放量突破前高且大盘不破3200"
     }
   ],
   "risk_flags": {
@@ -65,3 +71,4 @@ python3 -m scripts.validate_output \
 2. `action` must be one of `buy/hold/sell/watch`.
 3. `position` must stay `0`.
 4. All facts must be traceable to input files.
+5. `trigger_condition` must not be empty or vague (e.g. "depends on situation" is forbidden).

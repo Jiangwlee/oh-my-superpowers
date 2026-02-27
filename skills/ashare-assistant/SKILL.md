@@ -45,6 +45,8 @@ Required files before Step 2:
 
 1. `${DATA_DIR}/filtered/index.md`
 2. `strategy/active.yaml`
+3. Optional: `~/.ashare-assistant/signals/watchlist_signals.json` (if present)
+   Used in Step 3 for signal-vs-execution comparison in the trading plan.
 
 ## Workflow
 
