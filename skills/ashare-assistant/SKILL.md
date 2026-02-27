@@ -1,95 +1,103 @@
 ---
 name: ashare-assistant
-description: >
-  A-share trading workflow for market review, stock picking, and trading plan.
+description: >-
+  Run the A-share daily workflow for market review, stock picking, and trading planning.
   Use when user asks for "复盘", "选股", "交易计划", "明天买什么", or "review".
+metadata:
+  author: mindora
+  version: 0.2.0
 ---
 
-# A股交易助手
+# A-Share Assistant
 
-## 目标产物
+Purpose: Generate a daily A-share market review, candidate list, and trading plan.
+Input:   `~/.ashare-assistant/data/{DATE}/filtered/` data and strategy config.
+Output:  `market_review.md`, `analysis/candidates.json`, `trading_plan.md`.
+Sections: Prerequisite Check | Workflow | Failure Handling | Done Criteria | Guardrails
 
-1. `~/.ashare-assistant/data/{DATE}/market_review.md`
-2. `~/.ashare-assistant/data/{DATE}/analysis/candidates.json`
-3. `~/.ashare-assistant/data/{DATE}/trading_plan.md`
+## Prerequisite Check
 
-## Iron Laws
-
-<HARD-GATE>
-1. NO step N+1 WITHOUT finishing step N.
-2. NO fabrication. 只允许使用输入文件中的事实和数字。
-3. A股交易规则：T+1，最小交易单位 100 股，涨跌停规则必须遵守。
-4. 风控失败时必须修订计划，不能直接结束流程。
-</HARD-GATE>
-
-## 执行环境
-
-脚本位于 skill 安装目录下的 `scripts/` 子目录。**必须在 skill 安装目录下**以 `-m scripts.<module>` 方式调用，否则相对导入会失败：
+Run all commands from the skill install directory. Scripts use relative imports
+and must be invoked with `-m scripts.<module>`; running them directly as
+`python3 scripts/foo.py` will raise `ModuleNotFoundError`.
 
 ```bash
-# 正确
+# Correct — run from skill install directory
 cd <skill_install_dir>
-python -m scripts.trade_review --output ...
+python3 -m scripts.trade_review --output ...
 
-# 错误（会报 ModuleNotFoundError）
-python scripts/trade_review.py --output ...
+# Wrong — will fail with ModuleNotFoundError
+python3 scripts/trade_review.py --output ...
 ```
 
-**python 命令降级策略**：部分系统只有 `python3`，没有 `python`。若 `python -m scripts.xxx` 报 `command not found`，改用 `python3 -m scripts.xxx`。
-
-## Workflow
-
-### Step 1. 准备数据
+If `python3` is unavailable, try `python` instead (or vice versa).
 
 ```bash
 DATE=$(date +%Y-%m-%d)
-DATA_DIR=~/.ashare-assistant/data/${DATE}
+DATA_DIR="$HOME/.ashare-assistant/data/${DATE}"
 
-if [ -d "${DATA_DIR}/filtered" ] && [ "$(ls -A "${DATA_DIR}/filtered")" ]; then
-  echo "数据已就绪: ${DATA_DIR}"
-else
-  ashare-collect --date ${DATE} --verbose
+if [ ! -d "${DATA_DIR}/filtered" ] || [ -z "$(ls -A "${DATA_DIR}/filtered" 2>/dev/null)" ]; then
+  ashare-collect --date "${DATE}" --verbose
 fi
 ```
 
-### Step 2. 复盘
+Required files before Step 2:
 
-读取并执行复盘说明：`references/market-review.md`  
-产出：`{DATA_DIR}/market_review.md`
+1. `${DATA_DIR}/filtered/index.md`
+2. `strategy/active.yaml`
 
-### Step 3. 选股
+## Workflow
 
-读取并执行选股说明：`references/stock-pick.md`  
-产出：`{DATA_DIR}/analysis/candidates.json`
+1. Generate market review.
+Read and follow `references/market-review.md`.
+Output must be `${DATA_DIR}/market_review.md`.
 
-### Step 4. 交易计划
+2. Generate stock candidates.
+Read and follow `references/stock-pick.md`.
+Output must be `${DATA_DIR}/analysis/candidates.json`.
 
-读取并执行交易计划说明：`references/trading-plan.md`  
-产出：`{DATA_DIR}/trading_plan.md`
+3. Generate trading plan.
+Read and follow `references/trading-plan.md`.
+Output must be `${DATA_DIR}/trading_plan.md`.
 
-### Step 5. 风控与日志
+4. Run risk checks and decision logging.
 
 ```bash
-python -m scripts.risk_check \
-  --input ${DATA_DIR}/analysis/candidates.json
-
-python -m scripts.validate_output \
-  --input ${DATA_DIR}/analysis/candidates.json || true
-
-python -m scripts.decision_logger \
-  --input ${DATA_DIR}/analysis/candidates.json
+python3 -m scripts.risk_check --input "${DATA_DIR}/analysis/candidates.json"
+python3 -m scripts.validate_output --input "${DATA_DIR}/analysis/candidates.json" || true
+python3 -m scripts.decision_logger --input "${DATA_DIR}/analysis/candidates.json"
 ```
 
-## Done 判定
+## Failure Handling
 
-以下三项全部满足才算完成：
+1. If data collection fails, stop and report missing source files.
+2. If `risk_check` fails, revise `trading_plan.md` and rerun checks.
+3. If logging fails, do not mark workflow complete.
 
-1. 三个目标产物文件都存在且非空。
-2. `risk_check.py` 通过。
-3. `decision_logger.py` 成功写入日志。
+## Done Criteria
+
+All items must pass:
+
+1. `${DATA_DIR}/market_review.md` exists and is non-empty.
+2. `${DATA_DIR}/analysis/candidates.json` exists and is valid JSON.
+3. `${DATA_DIR}/trading_plan.md` exists and is non-empty.
+4. `risk_check` exits with code 0.
+5. `decision_logger` exits with code 0.
+
+## Guardrails
+
+<HARD-GATE>
+1. NO step N+1 WITHOUT finishing step N.
+2. NO fabrication. Use only facts present in input files.
+3. Follow A-share constraints: T+1, 100-share lot size, limit-up/limit-down rules.
+4. If risk checks fail, revise outputs and rerun; do not end early.
+</HARD-GATE>
 
 ## References
 
 1. `references/market-review.md`
 2. `references/stock-pick.md`
 3. `references/trading-plan.md`
+4. `evolution/feedback.md`
+5. `evolution/known_pitfalls.md`
+6. `evolution/selection_rules.md`
