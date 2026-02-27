@@ -1,6 +1,7 @@
 ---
 name: explore-project
-description: 项目代码知识库，积累跨会话的结构化研究笔记（.memory/research/）。Use whenever about to read or explore project code — check existing notes before exploring. Also use when: (1) 用户要求分析、理解项目代码或某个功能；(2) 用户说"看看代码"、"研究一下"、"这是怎么实现的"；(3) 编码任务需要先理解相关代码背景。Do NOT trigger for direct code modification tasks.
+description: >
+  项目代码知识库，积累跨会话的结构化研究笔记（.memory/research/）。Use whenever about to read or explore project code — check existing notes before exploring. Also use when: (1) 用户要求分析、理解项目代码或某个功能；(2) 用户说"看看代码"、"研究一下"、"这是怎么实现的"；(3) 编码任务需要先理解相关代码背景。Do NOT trigger for direct code modification tasks.
 ---
 
 # explore-project

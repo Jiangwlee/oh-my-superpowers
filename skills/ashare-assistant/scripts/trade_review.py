@@ -323,24 +323,6 @@ def _check_missed_execution(
     return flaws
 
 
-def _calc_vwap(minute_bars: list[dict[str, Any]]) -> float:
-    amount_sum = 0.0
-    volume_sum = 0.0
-    avg_values: list[float] = []
-    for bar in minute_bars:
-        amount_sum += _safe_float(bar.get("amount"))
-        volume_sum += _safe_float(bar.get("volume"))
-        avg = _safe_float(bar.get("avg"))
-        if avg > 0:
-            avg_values.append(avg)
-    if amount_sum > 0 and volume_sum > 0:
-        raw = amount_sum / volume_sum
-        # JRJ llValue 常见口径为金额放大 10000 倍，做量级自适应避免 VWAP 偏大。
-        return raw / 10000.0 if raw > 1000 else raw
-    if avg_values:
-        return sum(avg_values) / len(avg_values)
-    return 0.0
-
 
 def _timing_grade(direction: str, pos_pct: float) -> str:
     if direction == "buy":
@@ -411,8 +393,6 @@ def _analyze_timing(
         else:
             pos_pct = (price - day_low) / (day_high - day_low)
         pos_pct = max(0.0, min(1.0, pos_pct))
-        vwap = _calc_vwap(minute_bars)
-        vs_vwap_pct = ((price - vwap) / vwap * 100.0) if vwap > 0 else 0.0
         grade = _timing_grade(direction, pos_pct)
 
         scores.append(
@@ -421,11 +401,9 @@ def _analyze_timing(
                 "name": name,
                 "direction": direction,
                 "price": round(price, 4),
-                "vwap": round(vwap, 4),
                 "day_high": round(day_high, 4),
                 "day_low": round(day_low, 4),
                 "position_pct": round(pos_pct, 4),
-                "vs_vwap_pct": round(vs_vwap_pct, 2),
                 "grade": grade,
             }
         )
@@ -451,17 +429,6 @@ def _analyze_timing(
                         message="追高买入",
                     )
                 )
-            if vwap > 0 and price > vwap * 1.02:
-                flaws.append(
-                    _flaw(
-                        category="timing_flaw",
-                        severity="info",
-                        code=code,
-                        name=name,
-                        message="买入价高于VWAP 2%+",
-                        detail={"vs_vwap_pct": round(vs_vwap_pct, 2)},
-                    )
-                )
         else:
             if pos_pct < 0.20:
                 flaws.append(
@@ -481,17 +448,6 @@ def _analyze_timing(
                         code=code,
                         name=name,
                         message="恐慌卖出",
-                    )
-                )
-            if vwap > 0 and price < vwap * 0.98:
-                flaws.append(
-                    _flaw(
-                        category="timing_flaw",
-                        severity="info",
-                        code=code,
-                        name=name,
-                        message="卖出价低于VWAP 2%+",
-                        detail={"vs_vwap_pct": round(vs_vwap_pct, 2)},
                     )
                 )
     return flaws, scores
@@ -907,7 +863,7 @@ def _generate_suggestions(
     low_grades = [s for s in timing_scores if s.get("grade") in {"C", "D"}]
     if low_grades:
         suggestions.append(
-            f"择时评分较弱交易 {len(low_grades)} 笔，建议复盘分时位置与 VWAP 偏离"
+            f"择时评分较弱交易 {len(low_grades)} 笔，建议复盘分时位置"
         )
     if not suggestions:
         suggestions.append("当日执行整体较为合规，继续保持并跟踪下一交易日反馈")

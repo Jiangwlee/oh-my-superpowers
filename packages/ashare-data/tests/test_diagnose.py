@@ -1,15 +1,10 @@
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-_SKILL_ROOT = Path(__file__).resolve().parents[1]
-if str(_SKILL_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SKILL_ROOT))
-
-import scripts.diagnose as diagnose
+from ashare_data import diagnose
 
 
 class DiagnoseTest(unittest.TestCase):
@@ -39,8 +34,8 @@ class DiagnoseTest(unittest.TestCase):
             feedback_path = Path(tmp) / "feedback.md"
             log_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
 
-            with mock.patch("scripts.diagnose.fetch_candidate_tn_return", return_value=2.5):
-                with mock.patch("scripts.diagnose.fetch_benchmark_tn_return", return_value=1.0):
+            with mock.patch("ashare_data.diagnose.fetch_candidate_tn_return", return_value=2.5):
+                with mock.patch("ashare_data.diagnose.fetch_benchmark_tn_return", return_value=1.0):
                     result = diagnose.process_diagnose(
                         log_file=log_path,
                         feedback_file=feedback_path,
@@ -58,7 +53,6 @@ class DiagnoseTest(unittest.TestCase):
 
     def test_t5_fills_after_7_days(self) -> None:
         """T+5 回填：日期满足 ≥7 天条件时应写入 t5 结果。"""
-        # t1 已填，t5 待填
         record = self._make_record("2026-02-10", t1=1.5)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -66,8 +60,8 @@ class DiagnoseTest(unittest.TestCase):
             feedback_path = Path(tmp) / "feedback.md"
             log_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
 
-            with mock.patch("scripts.diagnose.fetch_candidate_tn_return", return_value=3.8):
-                with mock.patch("scripts.diagnose.fetch_benchmark_tn_return", return_value=1.2):
+            with mock.patch("ashare_data.diagnose.fetch_candidate_tn_return", return_value=3.8):
+                with mock.patch("ashare_data.diagnose.fetch_benchmark_tn_return", return_value=1.2):
                     result = diagnose.process_diagnose(
                         log_file=log_path,
                         feedback_file=feedback_path,
@@ -91,8 +85,8 @@ class DiagnoseTest(unittest.TestCase):
             feedback_path = Path(tmp) / "feedback.md"
             log_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
 
-            with mock.patch("scripts.diagnose.fetch_candidate_tn_return", return_value=2.0):
-                with mock.patch("scripts.diagnose.fetch_benchmark_tn_return", return_value=1.0):
+            with mock.patch("ashare_data.diagnose.fetch_candidate_tn_return", return_value=2.0):
+                with mock.patch("ashare_data.diagnose.fetch_benchmark_tn_return", return_value=1.0):
                     result = diagnose.process_diagnose(
                         log_file=log_path,
                         feedback_file=feedback_path,
@@ -113,8 +107,8 @@ class DiagnoseTest(unittest.TestCase):
             original = json.dumps(record, ensure_ascii=False) + "\n"
             log_path.write_text(original, encoding="utf-8")
 
-            with mock.patch("scripts.diagnose.fetch_candidate_tn_return", return_value=2.0):
-                with mock.patch("scripts.diagnose.fetch_benchmark_tn_return", return_value=1.0):
+            with mock.patch("ashare_data.diagnose.fetch_candidate_tn_return", return_value=2.0):
+                with mock.patch("ashare_data.diagnose.fetch_benchmark_tn_return", return_value=1.0):
                     result = diagnose.process_diagnose(
                         log_file=log_path,
                         feedback_file=feedback_path,
