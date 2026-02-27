@@ -51,11 +51,12 @@ class UnplannedTradeTest(unittest.TestCase):
         flaws = tr._check_unplanned_trades(orders, candidates)
 
         self.assertEqual(len(flaws), 1)
-        self.assertIn("观察股误买", flaws[0]["message"])
+        self.assertIn("观察股买入", flaws[0]["message"])
+        self.assertEqual(flaws[0]["severity"], "info")
 
 
 class MissedExecutionTest(unittest.TestCase):
-    def test_missed_high_score_buy_is_warning(self) -> None:
+    def test_missed_buy_is_info(self) -> None:
         orders: list[dict] = []
         positions = {"hold_list": []}
         candidates = [
@@ -65,7 +66,7 @@ class MissedExecutionTest(unittest.TestCase):
         flaws = tr._check_missed_execution(orders, candidates, positions)
 
         self.assertEqual(len(flaws), 1)
-        self.assertEqual(flaws[0]["severity"], "warning")
+        self.assertEqual(flaws[0]["severity"], "info")
         self.assertIn("未执行", flaws[0]["message"])
 
     def test_already_held_not_flagged(self) -> None:
@@ -76,59 +77,6 @@ class MissedExecutionTest(unittest.TestCase):
         flaws = tr._check_missed_execution(orders, candidates, positions)
 
         self.assertEqual(flaws, [])
-
-
-class TimingAnalysisTest(unittest.TestCase):
-    def test_calc_vwap_jrj_amount_scaled(self) -> None:
-        bars = [
-            {"amount": 1_161_700_000.0, "volume": 10000, "avg": 0.0},
-            {"amount": 2_323_400_000.0, "volume": 20000, "avg": 0.0},
-        ]
-
-        vwap = tr._calc_vwap(bars)
-
-        self.assertAlmostEqual(vwap, 11.617, places=3)
-
-    @mock.patch("scripts.trade_review.fetch_jrj_minute_kline")
-    def test_chasing_high_buy_detected(self, mock_minute: mock.Mock) -> None:
-        mock_minute.return_value = [
-            {"time": 1, "low": 10.0, "high": 10.2, "amount": 10000.0, "volume": 1000},
-            {"time": 2, "low": 10.2, "high": 12.0, "amount": 24000.0, "volume": 2000},
-        ]
-        orders = [_base_order(price=11.7, direction="buy", status="已成")]
-
-        flaws, scores = tr._analyze_timing(orders)
-
-        self.assertTrue(any("追高" in x["message"] for x in flaws))
-        self.assertEqual(len(scores), 1)
-        self.assertEqual(scores[0]["direction"], "buy")
-
-    @mock.patch("scripts.trade_review.fetch_jrj_minute_kline")
-    def test_panic_sell_detected(self, mock_minute: mock.Mock) -> None:
-        mock_minute.return_value = [
-            {"time": 1, "low": 9.0, "high": 10.0, "amount": 9000.0, "volume": 1000},
-            {"time": 2, "low": 9.0, "high": 12.0, "amount": 24000.0, "volume": 2000},
-        ]
-        orders = [_base_order(price=9.2, direction="sell", status="已成")]
-
-        flaws, scores = tr._analyze_timing(orders)
-
-        self.assertTrue(any("恐慌卖出" in x["message"] for x in flaws))
-        self.assertEqual(scores[0]["direction"], "sell")
-
-    @mock.patch("scripts.trade_review.fetch_jrj_minute_kline")
-    def test_same_code_orders_fetch_minute_kline_once(self, mock_minute: mock.Mock) -> None:
-        mock_minute.return_value = [
-            {"time": 1, "low": 10.0, "high": 11.0, "amount": 10000.0, "volume": 1000}
-        ]
-        orders = [
-            _base_order(code="000001", direction="buy", price=10.2, status="已成"),
-            _base_order(code="000001", direction="sell", price=10.8, status="已成"),
-        ]
-
-        tr._analyze_timing(orders)
-
-        self.assertEqual(mock_minute.call_count, 1)
 
 
 class PositionCheckTest(unittest.TestCase):
@@ -189,63 +137,17 @@ class PositionCheckTest(unittest.TestCase):
 
 
 class DisciplineTest(unittest.TestCase):
-    def test_flip_trading_detected_within_3_days(self) -> None:
-        history = {
-            "orders": {
-                "2026-02-24": {"order_list": [_base_order(code="000001", direction="buy")]},
-                "2026-02-23": {"order_list": []},
-                "2026-02-22": {"order_list": [_base_order(code="000001", direction="sell")]},
-                "2026-02-21": {"order_list": [_base_order(code="000002", direction="sell")]},
-            }
-        }
-
-        flaws = tr._check_discipline([], "normal", history)
-
-        self.assertTrue(any(f.get("code") == "000001" and "频繁翻转交易" in f["message"] for f in flaws))
-
-    def test_flip_trading_not_detected_outside_3_days(self) -> None:
-        history = {
-            "orders": {
-                "2026-02-24": {"order_list": [_base_order(code="000001", direction="buy")]},
-                "2026-02-23": {"order_list": []},
-                "2026-02-22": {"order_list": []},
-                "2026-02-21": {"order_list": [_base_order(code="000001", direction="sell")]},
-            }
-        }
-
-        flaws = tr._check_discipline([], "normal", history)
-
-        self.assertFalse(any(f.get("code") == "000001" and "频繁翻转交易" in f["message"] for f in flaws))
-
     def test_defensive_mode_new_buy(self) -> None:
-        flaws = tr._check_discipline([_base_order(direction="buy")], "defensive", {"orders": {}})
+        flaws = tr._check_discipline([_base_order(direction="buy")], "defensive")
         self.assertTrue(any("防御模式下加仓" in f["message"] for f in flaws))
 
+    def test_normal_mode_no_flaw(self) -> None:
+        flaws = tr._check_discipline([_base_order(direction="buy")], "normal")
+        self.assertEqual(flaws, [])
 
-class HoldingManagementTest(unittest.TestCase):
-    @mock.patch("scripts.trade_review.fetch_jrj_daily_kline")
-    def test_ma20_stop_loss_missed(self, mock_daily: mock.Mock) -> None:
-        mock_daily.return_value = [{"close": 10.0} for _ in range(30)]
-        hold_list = [{"code": "000001", "name": "平安银行", "current_price": 9.0}]
-        history = {
-            "positions": {
-                "2026-02-23": {"hold_list": [{"code": "000001", "price": 9.1}]},
-                "2026-02-22": {"hold_list": [{"code": "000001", "price": 9.2}]},
-            }
-        }
-
-        flaws = tr._check_holding_management(hold_list, history)
-
-        self.assertTrue(any("未执行MA20止损" in f["message"] for f in flaws))
-
-    @mock.patch("scripts.trade_review.fetch_jrj_daily_kline")
-    def test_ma5_deviation_take_profit(self, mock_daily: mock.Mock) -> None:
-        mock_daily.return_value = [{"close": 10.0} for _ in range(30)]
-        hold_list = [{"code": "000001", "name": "平安银行", "current_price": 12.2}]
-
-        flaws = tr._check_holding_management(hold_list, {"positions": {}})
-
-        self.assertTrue(any("偏离MA5超20%" in f["message"] for f in flaws))
+    def test_critical_mode_buy_is_error(self) -> None:
+        flaws = tr._check_discipline([_base_order(direction="buy")], "critical")
+        self.assertTrue(any(f["severity"] == "error" for f in flaws))
 
 
 class RunTradeReviewTest(unittest.TestCase):
@@ -276,10 +178,7 @@ class RunTradeReviewTest(unittest.TestCase):
             with (
                 mock.patch("scripts.trade_review._load_latest_decision", return_value=decision),
                 mock.patch("scripts.trade_review._load_strategy", return_value=strategy),
-                mock.patch("scripts.trade_review._analyze_timing", return_value=([], [])),
-                mock.patch("scripts.trade_review._check_holding_management", return_value=[]),
-                mock.patch("scripts.trade_review._check_discipline", return_value=[]),
-                mock.patch("scripts.trade_review.load_history", return_value={"positions": {}, "orders": {}}),
+                mock.patch("scripts.trade_review._enrich_hold_list_prices"),
             ):
                 result = tr.run_trade_review(
                     broker_data=broker_data,
@@ -309,12 +208,12 @@ class RunTradeReviewTest(unittest.TestCase):
             with (
                 mock.patch("scripts.trade_review._load_latest_decision", return_value=None),
                 mock.patch("scripts.trade_review._load_strategy", return_value={"strategy_version": "v1.0"}),
-                mock.patch("scripts.trade_review.load_history", return_value={"positions": {}, "orders": {}}),
+                mock.patch("scripts.trade_review._enrich_hold_list_prices"),
             ):
                 result = tr.run_trade_review(broker_data=broker_data, output_path=str(out_path))
 
         self.assertEqual(result["execution_summary"]["total_orders"], 0)
-        self.assertEqual(result["timing_scores"], [])
+        self.assertEqual(result["execution_summary"]["buy_orders"], 0)
 
     def test_no_decision_log(self) -> None:
         broker_data = {
@@ -331,10 +230,7 @@ class RunTradeReviewTest(unittest.TestCase):
             with (
                 mock.patch("scripts.trade_review._load_latest_decision", return_value=None),
                 mock.patch("scripts.trade_review._load_strategy", return_value={"strategy_version": "v1.0"}),
-                mock.patch("scripts.trade_review._analyze_timing", return_value=([], [])),
-                mock.patch("scripts.trade_review._check_holding_management", return_value=[]),
-                mock.patch("scripts.trade_review._check_discipline", return_value=[]),
-                mock.patch("scripts.trade_review.load_history", return_value={"positions": {}, "orders": {}}),
+                mock.patch("scripts.trade_review._enrich_hold_list_prices"),
             ):
                 result = tr.run_trade_review(broker_data=broker_data, output_path=str(out_path))
 

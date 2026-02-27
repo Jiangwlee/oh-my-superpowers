@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """交易复盘模块（trade_review）。
 
-对比交易计划（decision_log）和实际执行（broker_account），识别交易瑕疵并生成结构化复盘结果。
-首版实现优先保证稳定输出与可测试性；部分高级逻辑（如滞后判定）后续迭代。
+对比交易计划（decision_log）和实际执行（broker_account），
+输出账户快照、执行统计与仓位合规检查，供 LLM 自由分析使用。
 """
 
 from __future__ import annotations
@@ -10,8 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -21,8 +19,8 @@ try:
 except Exception:  # pragma: no cover - 环境未安装时降级
     yaml = None
 
-from ashare_data.fetchers.broker_account import fetch_broker_account, load_history
-from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline, fetch_jrj_minute_kline
+from ashare_data.fetchers.broker_account import fetch_broker_account
+from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
 from ashare_data.core.config import DECISION_LOG
 from scripts.core import shared as shared_core
 
@@ -166,7 +164,7 @@ def _load_strategy(yaml_path: str) -> dict[str, Any]:
 
 
 def _extract_pct_limit(text: str, fallback: float) -> float:
-    """从类似“单只不超过总仓位20%”或“15%”的文本中提取比例。"""
+    """从类似"单只不超过总仓位20%"或"15%"的文本中提取比例。"""
     return shared_core.extract_pct_limit(text, fallback)
 
 
@@ -229,7 +227,7 @@ def _filled_orders(orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _check_unplanned_trades(
     orders: list[dict[str, Any]], candidates: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """检测计划外买入和观察股误买。"""
+    """记录计划外买入和观察股买入（仅事实记录，不作优劣评判）。"""
     flaws: list[dict[str, Any]] = []
     cand_map = _candidate_map(candidates)
     no_plan = len(cand_map) == 0
@@ -262,7 +260,7 @@ def _check_unplanned_trades(
             flaws.append(
                 _flaw(
                     category="unplanned_trade",
-                    severity="warning",
+                    severity="info",
                     code=code,
                     name=name,
                     message="计划外买入: 该股不在当日推荐列表中",
@@ -274,10 +272,10 @@ def _check_unplanned_trades(
             flaws.append(
                 _flaw(
                     category="unplanned_trade",
-                    severity="warning",
+                    severity="info",
                     code=code,
                     name=name or str(cand.get("name") or ""),
-                    message="观察股误买: 推荐为 watch 但实际执行买入",
+                    message="观察股买入: 推荐为 watch 但实际执行买入",
                     detail={"buy_price": price, "buy_amount": qty},
                 )
             )
@@ -289,7 +287,7 @@ def _check_missed_execution(
     candidates: list[dict[str, Any]],
     positions: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """检测推荐买入未执行。"""
+    """记录推荐买入未执行（仅事实记录，不作优劣评判）。"""
     flaws: list[dict[str, Any]] = []
     filled_buys = {
         _norm_code(o.get("code"))
@@ -308,149 +306,17 @@ def _check_missed_execution(
         code = _norm_code(cand.get("code"))
         if not code or code in filled_buys or code in held_codes:
             continue
-        score = _safe_float(cand.get("score"))
-        severity = "warning" if score >= 80 else "info"
         flaws.append(
             _flaw(
                 category="missed_execution",
-                severity=severity,
+                severity="info",
                 code=code,
                 name=str(cand.get("name") or ""),
                 message="推荐买入未执行",
-                detail={"score": score},
+                detail={"score": _safe_float(cand.get("score"))},
             )
         )
     return flaws
-
-
-
-def _timing_grade(direction: str, pos_pct: float) -> str:
-    if direction == "buy":
-        if pos_pct > 0.80:
-            return "D"
-        if pos_pct > 0.67:
-            return "C"
-        if pos_pct > 0.33:
-            return "B"
-        return "A"
-    if pos_pct < 0.20:
-        return "D"
-    if pos_pct < 0.33:
-        return "C"
-    if pos_pct < 0.67:
-        return "B"
-    return "A"
-
-
-def _analyze_timing(
-    orders: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """分析成交委托的日内择时质量，输出 flaw 和 timing_score。"""
-    flaws: list[dict[str, Any]] = []
-    scores: list[dict[str, Any]] = []
-    filled = _filled_orders(orders)
-
-    # 先按 code 去重并并发拉取分钟K线，避免同股多笔委托重复请求。
-    minute_map: dict[str, list[dict[str, Any]]] = {}
-    codes = sorted(
-        {_norm_code(o.get("code")) for o in filled if _norm_code(o.get("code"))}
-    )
-    if codes:
-        with ThreadPoolExecutor(max_workers=min(8, len(codes))) as pool:
-            futs = {pool.submit(fetch_jrj_minute_kline, code): code for code in codes}
-            for fut in as_completed(futs):
-                code = futs[fut]
-                try:
-                    minute_map[code] = fut.result() or []
-                except Exception:
-                    logger.exception("获取分钟K失败: %s", code)
-                    minute_map[code] = []
-
-    for order in filled:
-        direction = _order_direction(order)
-        if direction not in {"buy", "sell"}:
-            continue
-        code = _norm_code(order.get("code"))
-        name = str(order.get("name") or "")
-        price = _order_price(order)
-        minute_bars = minute_map.get(code, [])
-        if not minute_bars:
-            flaws.append(
-                _flaw(
-                    category="timing_flaw",
-                    severity="info",
-                    code=code,
-                    name=name,
-                    message="K线数据缺失: 跳过择时分析",
-                )
-            )
-            continue
-
-        day_low = min(_safe_float(x.get("low"), price) for x in minute_bars)
-        day_high = max(_safe_float(x.get("high"), price) for x in minute_bars)
-        if day_high <= day_low:
-            pos_pct = 0.5
-        else:
-            pos_pct = (price - day_low) / (day_high - day_low)
-        pos_pct = max(0.0, min(1.0, pos_pct))
-        grade = _timing_grade(direction, pos_pct)
-
-        scores.append(
-            {
-                "code": code,
-                "name": name,
-                "direction": direction,
-                "price": round(price, 4),
-                "day_high": round(day_high, 4),
-                "day_low": round(day_low, 4),
-                "position_pct": round(pos_pct, 4),
-                "grade": grade,
-            }
-        )
-
-        if direction == "buy":
-            if pos_pct > 0.80:
-                flaws.append(
-                    _flaw(
-                        category="timing_flaw",
-                        severity="error",
-                        code=code,
-                        name=name,
-                        message="严重追高",
-                    )
-                )
-            elif pos_pct > 0.67:
-                flaws.append(
-                    _flaw(
-                        category="timing_flaw",
-                        severity="warning",
-                        code=code,
-                        name=name,
-                        message="追高买入",
-                    )
-                )
-        else:
-            if pos_pct < 0.20:
-                flaws.append(
-                    _flaw(
-                        category="timing_flaw",
-                        severity="error",
-                        code=code,
-                        name=name,
-                        message="严重恐慌卖出",
-                    )
-                )
-            elif pos_pct < 0.33:
-                flaws.append(
-                    _flaw(
-                        category="timing_flaw",
-                        severity="warning",
-                        code=code,
-                        name=name,
-                        message="恐慌卖出",
-                    )
-                )
-    return flaws, scores
 
 
 def _position_market_value(pos: dict[str, Any]) -> float:
@@ -599,154 +465,10 @@ def _check_position_compliance(
     return flaws, check
 
 
-def _holding_days_from_history(code: str, history: dict[str, Any]) -> int:
-    return shared_core.holding_days_from_history(code, history)
-
-
-def _below_ma20_streak_from_history(
-    code: str, current_price: float, history: dict[str, Any], ma20: float
-) -> int:
-    if ma20 <= 0:
-        return 0
-    streak = 1 if current_price < ma20 else 0
-    positions_map = history.get("positions") if isinstance(history, dict) else {}
-    if not isinstance(positions_map, dict):
-        return streak
-    for date in sorted(positions_map.keys(), reverse=True):
-        snap = positions_map.get(date)
-        hold_list = snap.get("hold_list") if isinstance(snap, dict) else []
-        for pos in hold_list if isinstance(hold_list, list) else []:
-            if not isinstance(pos, dict) or _norm_code(pos.get("code")) != code:
-                continue
-            px = _safe_float(
-                pos.get("price") or pos.get("last_price") or pos.get("current_price")
-            )
-            if px <= 0:
-                return streak
-            if px < ma20:
-                streak += 1
-            else:
-                return streak
-            break
-    return streak
-
-
-def _check_holding_management(
-    hold_list: list[dict[str, Any]], history: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """检测持仓管理瑕疵（MA20 止损 / MA5 乖离 / 持续亏损持仓）。"""
-    flaws: list[dict[str, Any]] = []
-    if not hold_list:
-        return flaws
-
-    codes = [_norm_code(h.get("code")) for h in hold_list if isinstance(h, dict)]
-    daily_map: dict[str, list[dict[str, Any]]] = {}
-    with ThreadPoolExecutor(max_workers=min(8, max(1, len(codes)))) as pool:
-        futs = {
-            pool.submit(fetch_jrj_daily_kline, code, 30): code for code in codes if code
-        }
-        for fut in as_completed(futs):
-            code = futs[fut]
-            try:
-                daily_map[code] = fut.result() or []
-            except Exception:
-                logger.exception("获取日K失败: %s", code)
-                daily_map[code] = []
-
-    for pos in hold_list:
-        if not isinstance(pos, dict):
-            continue
-        code = _norm_code(pos.get("code"))
-        name = str(pos.get("name") or "")
-        bars = daily_map.get(code, [])
-        closes = [
-            _safe_float(x.get("close")) for x in bars if _safe_float(x.get("close")) > 0
-        ]
-        current_price = _safe_float(
-            pos.get("price") or pos.get("last_price") or pos.get("current_price")
-        )
-        if current_price <= 0 and closes:
-            current_price = closes[-1]
-        if len(closes) < 20 or current_price <= 0:
-            continue
-
-        ma20 = sum(closes[-20:]) / 20.0
-        ma5 = sum(closes[-5:]) / 5.0 if len(closes) >= 5 else 0.0
-        below_streak = _below_ma20_streak_from_history(
-            code, current_price, history, ma20
-        )
-        if below_streak >= 3:
-            flaws.append(
-                _flaw(
-                    category="holding_flaw",
-                    severity="error",
-                    code=code,
-                    name=name,
-                    message="未执行MA20止损",
-                    detail={"below_ma20_days": below_streak},
-                )
-            )
-        elif below_streak >= 1:
-            flaws.append(
-                _flaw(
-                    category="holding_flaw",
-                    severity="info",
-                    code=code,
-                    name=name,
-                    message="逼近MA20止损线",
-                    detail={"below_ma20_days": below_streak},
-                )
-            )
-
-        if ma5 > 0:
-            deviation = (current_price - ma5) / ma5
-            if deviation > 0.20:
-                flaws.append(
-                    _flaw(
-                        category="holding_flaw",
-                        severity="error",
-                        code=code,
-                        name=name,
-                        message="偏离MA5超20%未减仓",
-                        detail={"deviation_pct": round(deviation * 100, 2)},
-                    )
-                )
-            elif deviation > 0.15:
-                flaws.append(
-                    _flaw(
-                        category="holding_flaw",
-                        severity="warning",
-                        code=code,
-                        name=name,
-                        message="偏离MA5超15%未减仓",
-                        detail={"deviation_pct": round(deviation * 100, 2)},
-                    )
-                )
-
-        hold_earn_pct = _safe_float(pos.get("hold_earn_pct"))
-        if hold_earn_pct == 0:
-            cost = _safe_float(pos.get("cost_price"))
-            if cost > 0:
-                hold_earn_pct = (current_price - cost) / cost * 100.0
-        if hold_earn_pct < -10 and _holding_days_from_history(code, history) > 5:
-            flaws.append(
-                _flaw(
-                    category="holding_flaw",
-                    severity="warning",
-                    code=code,
-                    name=name,
-                    message="持续亏损持仓未处理",
-                    detail={"hold_earn_pct": round(hold_earn_pct, 2)},
-                )
-            )
-
-    return flaws
-
-
 def _check_discipline(
-    orders: list[dict[str, Any]], account_mode: str, history: dict[str, Any]
+    orders: list[dict[str, Any]], account_mode: str
 ) -> list[dict[str, Any]]:
-    """检测纪律执行瑕疵。"""
+    """检测防御/危急模式下的加仓行为（硬规则）。"""
     flaws: list[dict[str, Any]] = []
     if account_mode in {"defensive", "critical"}:
         has_buy = any(
@@ -765,52 +487,6 @@ def _check_discipline(
                     detail={"account_mode": account_mode},
                 )
             )
-
-    # 最近 3 天翻转交易检测（历史窗口），随后会合并当日 orders。
-    # 即实际判断语义为“含当日 + 最近若干历史记录”的组合窗口。
-    history_orders = history.get("orders") if isinstance(history, dict) else {}
-    recent_codes: dict[str, set[str]] = {}
-    if isinstance(history_orders, dict):
-        for _, snapshot in sorted(history_orders.items(), reverse=True)[:3]:
-            order_list = (
-                snapshot.get("order_list") if isinstance(snapshot, dict) else []
-            )
-            for o in order_list if isinstance(order_list, list) else []:
-                if not isinstance(o, dict) or _is_cancelled(o):
-                    continue
-                code = _norm_code(o.get("code"))
-                if not code:
-                    continue
-                recent_codes.setdefault(code, set()).add(_order_direction(o))
-    for o in orders:
-        if not isinstance(o, dict) or _is_cancelled(o):
-            continue
-        code = _norm_code(o.get("code"))
-        if code:
-            recent_codes.setdefault(code, set()).add(_order_direction(o))
-    for code, dirs in recent_codes.items():
-        if "buy" in dirs and "sell" in dirs:
-            flaws.append(
-                _flaw(
-                    category="discipline_flaw",
-                    severity="warning",
-                    code=code,
-                    message="频繁翻转交易",
-                )
-            )
-
-    current_hold_list = (
-        history.get("current_hold_list") if isinstance(history, dict) else None
-    )
-    if isinstance(current_hold_list, list) and len(current_hold_list) > 8:
-        flaws.append(
-            _flaw(
-                category="discipline_flaw",
-                severity="info",
-                message="持仓过于分散",
-                detail={"position_count": len(current_hold_list)},
-            )
-        )
     return flaws
 
 
@@ -823,9 +499,7 @@ def _count_flaws(flaws: list[dict[str, Any]]) -> dict[str, Any]:
         "by_category": {
             "unplanned_trade": 0,
             "missed_execution": 0,
-            "timing_flaw": 0,
             "position_flaw": 0,
-            "holding_flaw": 0,
             "discipline_flaw": 0,
         },
     }
@@ -840,33 +514,24 @@ def _count_flaws(flaws: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def _generate_suggestions(
-    flaws: list[dict[str, Any]], timing_scores: list[dict[str, Any]]
-) -> list[str]:
+def _generate_suggestions(flaws: list[dict[str, Any]]) -> list[str]:
     suggestions: list[str] = []
     unplanned = [f for f in flaws if f.get("category") == "unplanned_trade"]
     if unplanned:
         suggestions.append(
-            f"当日存在{len(unplanned)}笔计划偏离买入，建议严格按推荐列表执行"
+            f"当日存在 {len(unplanned)} 笔计划外买入，已记录供 LLM 参考"
         )
-    holding = [
-        f
-        for f in flaws
-        if f.get("category") == "holding_flaw" and "MA20" in str(f.get("message"))
+    position_errors = [
+        f for f in flaws
+        if f.get("category") == "position_flaw" and f.get("severity") in {"warning", "error"}
     ]
-    if holding:
-        target = holding[0]
-        if target.get("name"):
-            suggestions.append(
-                f"持仓「{target['name']}」触发 MA20 风险提示，明日优先检查止损纪律"
-            )
-    low_grades = [s for s in timing_scores if s.get("grade") in {"C", "D"}]
-    if low_grades:
-        suggestions.append(
-            f"择时评分较弱交易 {len(low_grades)} 笔，建议复盘分时位置"
-        )
+    if position_errors:
+        suggestions.append(f"仓位合规存在 {len(position_errors)} 项违规，建议优先处理")
+    discipline_errors = [f for f in flaws if f.get("category") == "discipline_flaw"]
+    if discipline_errors:
+        suggestions.append("防御/危急模式下存在加仓行为，需立即检查账户风险")
     if not suggestions:
-        suggestions.append("当日执行整体较为合规，继续保持并跟踪下一交易日反馈")
+        suggestions.append("当日执行无硬规则违规")
     return suggestions[:5]
 
 
@@ -877,24 +542,10 @@ def _append_evolution_feedback(result: dict[str, Any], base_dir: Path) -> None:
         evo_dir.mkdir(parents=True, exist_ok=True)
         feedback = evo_dir / "feedback.md"
         flaws = result.get("flaw_counts", {})
-        timing_scores = result.get("timing_scores", [])
-        buy_grades = [
-            s.get("grade")
-            for s in timing_scores
-            if s.get("direction") == "buy" and s.get("grade")
-        ]
-        sell_grades = [
-            s.get("grade")
-            for s in timing_scores
-            if s.get("direction") == "sell" and s.get("grade")
-        ]
-        buy_avg = Counter(buy_grades).most_common(1)[0][0] if buy_grades else "-"
-        sell_avg = Counter(sell_grades).most_common(1)[0][0] if sell_grades else "-"
         lines = [
             "",
             f"{result.get('review_date')} 交易复盘",
             f"- 瑕疵: {flaws.get('error', 0)} error / {flaws.get('warning', 0)} warning / {flaws.get('info', 0)} info",
-            f"- 择时评分: 买入均分 {buy_avg}, 卖出均分 {sell_avg}",
             f"- 仓位合规: {'通过' if result.get('position_check', {}).get('compliant') else '未通过'}",
         ]
         major = next(
@@ -937,8 +588,6 @@ def run_trade_review(
     )
     strategy = _load_strategy(strategy_path)
     decision = _load_latest_decision(decision_log_path, review_date)
-    history = load_history(days=5)
-    history["current_hold_list"] = broker_data.get("hold_list", [])
 
     orders = (
         broker_data.get("order_list")
@@ -963,7 +612,6 @@ def run_trade_review(
     missed_flaws = (
         _check_missed_execution(orders, candidates, positions) if candidates else []
     )
-    timing_flaws, timing_scores = _analyze_timing(orders) if orders else ([], [])
 
     # 补充现价/市值（JVQuant hold_list 不含此信息）
     _enrich_hold_list_prices(positions.get("hold_list", []))
@@ -971,21 +619,12 @@ def run_trade_review(
     position_flaws, position_check = _check_position_compliance(
         positions, strategy, regime
     )
-    holding_flaws = _check_holding_management(positions.get("hold_list", []), history)
     account_mode = position_check.get("account_mode", "normal")
-    discipline_flaws = _check_discipline(orders, str(account_mode), history)
+    discipline_flaws = _check_discipline(orders, str(account_mode))
 
-    flaws = (
-        unplanned_flaws
-        + missed_flaws
-        + timing_flaws
-        + position_flaws
-        + holding_flaws
-        + discipline_flaws
-    )
+    flaws = unplanned_flaws + missed_flaws + position_flaws + discipline_flaws
     flaw_counts = _count_flaws(flaws)
 
-    filled_orders = _filled_orders(orders)
     buy_orders = [
         o for o in orders if _order_direction(o) == "buy" and not _is_cancelled(o)
     ]
@@ -994,7 +633,7 @@ def run_trade_review(
     ]
     cancelled_orders = [o for o in orders if _is_cancelled(o)]
     unplanned_buys = [
-        f for f in unplanned_flaws if f.get("severity") in {"info", "warning", "error"}
+        f for f in unplanned_flaws if f.get("category") == "unplanned_trade"
     ]
     planned_buys = max(0, len(buy_orders) - len(unplanned_buys))
     missed_buys = len(
@@ -1005,10 +644,6 @@ def run_trade_review(
     total_assets = _safe_float(positions.get("total"))
     usable_cash = _safe_float(positions.get("usable"))
     hold_earn = _safe_float(positions.get("hold_earn"))
-    expected_timing_orders = sum(
-        1 for o in filled_orders if _order_direction(o) in {"buy", "sell"}
-    )
-    minute_kline_ok = len(timing_scores) >= expected_timing_orders
 
     result = {
         "review_date": review_date,
@@ -1035,10 +670,9 @@ def run_trade_review(
             "plan_match_rate": round(plan_match_rate, 1),
         },
         "flaws": flaws,
-        "timing_scores": timing_scores,
         "position_check": position_check,
         "flaw_counts": flaw_counts,
-        "improvement_suggestions": _generate_suggestions(flaws, timing_scores),
+        "improvement_suggestions": _generate_suggestions(flaws),
         "metadata": {
             "strategy_version": strategy.get("strategy_version", "unknown"),
             "decision_log_date": decision.get("as_of_date")
@@ -1050,7 +684,6 @@ def run_trade_review(
             "data_completeness": {
                 "broker_data": True,
                 "decision_log": bool(decision),
-                "minute_kline": minute_kline_ok,
                 "daily_kline": True,
             },
         },
