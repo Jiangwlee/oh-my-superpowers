@@ -4,7 +4,7 @@ Purpose: Deploy and update `ashare-assistant` with deterministic runtime depende
 Audience: AI agents and developers operating local or VPS environments.
 Input:   Source files under `skills/ashare-assistant/` and `packages/ashare-data/`.
 Output:  A running skill plus scheduled data collection to `~/.ashare-assistant/`.
-Sections: Prerequisites | First Deployment | Local Deployment | VPS Deployment | Update Flow
+Sections: Prerequisites | First Deployment | Local Deployment | VPS Deployment | Update Flow | Guardrails
 
 ## Prerequisites
 
@@ -73,7 +73,26 @@ ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system
 > 必须重新执行上述两条命令，否则新命令在 VPS 上不存在。**
 > 验证：`ssh root@tencent-vps "ashare-em-collect --help"`
 
-3. Restart gateway.
+3. Expose `opencode` to system PATH.
+
+`opencode` 安装在 nvm 环境下，cron 和非交互式 SSH 会话不 source `~/.nvm/nvm.sh`，
+导致 `deep_research` 和 `sentiment` 步骤报 `No such file or directory: 'opencode'`。
+必须创建软链接使其对所有进程可见：
+
+```bash
+# 查找实际路径
+ssh root@tencent-vps "ls ~/.nvm/versions/node/*/bin/opencode"
+
+# 创建软链接（路径按上一步输出填写）
+ssh root@tencent-vps "ln -sf /root/.nvm/versions/node/v22.22.0/bin/opencode /usr/local/bin/opencode"
+
+# 验证（不 source nvm 也能找到）
+ssh root@tencent-vps "which opencode"
+```
+
+> **升级 Node 版本后，软链接指向的旧路径会失效，需重新执行上述命令。**
+
+4. Restart gateway.
 
 ```bash
 ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
