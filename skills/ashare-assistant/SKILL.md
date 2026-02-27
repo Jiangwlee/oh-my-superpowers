@@ -35,6 +35,8 @@ python -m scripts.trade_review --output ...
 python scripts/trade_review.py --output ...
 ```
 
+**python 命令降级策略**：部分系统只有 `python3`，没有 `python`。若 `python -m scripts.xxx` 报 `command not found`，改用 `python3 -m scripts.xxx`。
+
 ## Workflow
 
 ### Step 1. 准备数据
