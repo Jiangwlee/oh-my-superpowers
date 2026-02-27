@@ -9,6 +9,7 @@ ashare_data/deep_research_batch.py
 ashare_data/diagnose.py
 ashare_data/filter_to_markdown.py
 ashare_data/sentiment_preprocess.py
+ashare_data/watchlist_monitor.py
 ashare_data.egg-info/PKG-INFO
 ashare_data.egg-info/SOURCES.txt
 ashare_data.egg-info/dependency_links.txt
@@ -25,9 +26,17 @@ ashare_data/fetchers/eastmoney_guba.py
 ashare_data/fetchers/funding.py
 ashare_data/fetchers/intraday_analysis.py
 ashare_data/fetchers/market_overview.py
+ashare_data/fetchers/market_sentiment.py
 ashare_data/fetchers/news.py
 ashare_data/fetchers/taoguba.py
 ashare_data/fetchers/trade_date.py
 ashare_data/fetchers/trend_scanner.py
 ashare_data/fetchers/us_market.py
+tests/test_broker_account.py
+tests/test_cache.py
 tests/test_diagnose.py
+tests/test_filter_to_markdown.py
+tests/test_funding_fetcher.py
+tests/test_http_client.py
+tests/test_taoguba_fetchers.py
+tests/test_us_market.py

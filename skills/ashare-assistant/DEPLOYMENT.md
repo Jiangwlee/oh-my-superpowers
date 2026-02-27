@@ -42,6 +42,7 @@ Configure crontab (`crontab -e`):
 ```cron
 */30 * * * * /opt/homebrew/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> $HOME/.ashare-assistant/logs/collect.log 2>&1
 0 16 * * * /opt/homebrew/bin/ashare-diagnose >> $HOME/.ashare-assistant/logs/diagnose.log 2>&1
+*/10 9-15 * * 1-5 /opt/homebrew/bin/ashare-wl-monitor >> $HOME/.ashare-assistant/logs/wl-monitor.log 2>&1
 ```
 
 Manual validation:
@@ -103,7 +104,11 @@ ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
 ```cron
 */30 * * * * /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/logs/collect.log 2>&1
 0 16 * * * /usr/local/bin/ashare-diagnose >> /root/.ashare-assistant/logs/diagnose.log 2>&1
+*/10 9-15 * * 1-5 /usr/local/bin/ashare-wl-monitor >> /root/.ashare-assistant/logs/wl-monitor.log 2>&1
 ```
+
+> `ashare-wl-monitor` 自动判断交易时段（9:30–15:00）和节假日（同花顺 `trade_status`），
+> 非交易日即使 cron 触发也会直接退出，无需另行维护节假日日历。
 
 ## Update Flow
 
