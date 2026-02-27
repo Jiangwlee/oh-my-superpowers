@@ -1,32 +1,30 @@
-# 选股执行说明
+# Stock Pick Execution
 
-## 目标
+Purpose: Convert market review conclusions into a schema-valid candidate list.
+Input:   `market_review.md` and `filtered/run_id.md` for the same trading date.
+Output:  `~/.ashare-assistant/data/{DATE}/analysis/candidates.json`.
+Sections: Required Inputs | Mapping Rules | Output Schema | Validation | Hard Rules
 
-生成：`~/.ashare-assistant/data/{DATE}/analysis/candidates.json`
-
-## 必要输入
+## Required Inputs
 
 1. `~/.ashare-assistant/data/{DATE}/market_review.md`
 2. `~/.ashare-assistant/data/{DATE}/filtered/run_id.md`
+3. `skills/ashare-assistant/evolution/selection_rules.md` (optional but recommended)
 
-## 步骤
+## Mapping Rules
 
-1. 从复盘报告提取 `market.regime`。
-2. 提取候选股清单：代码、名称、行业/题材、核心逻辑、风险点。
-3. 为每只股票给 `action`：
+1. Extract `market.regime` from the market review.
+2. Build candidate rows with fields:
+   - `code`, `name`, `sector`, `thesis_short`, `risk_note`
+3. Normalize action values:
    - 买入/建仓 -> `buy`
    - 持有 -> `hold`
    - 卖出/清仓 -> `sell`
    - 其他 -> `watch`
-4. 输出固定 JSON 结构。
-5. 运行结构校验（仅告警）：
+4. Keep `position` as `0` for all candidates.
+5. Keep `thesis_short` and `risk_note` within 30 Chinese characters each.
 
-```bash
-python -m scripts.validate_output \
-  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json || true
-```
-
-## 输出结构
+## Output Schema
 
 ```json
 {
@@ -54,9 +52,16 @@ python -m scripts.validate_output \
 }
 ```
 
-## 约束
+## Validation
 
-1. 顶层字段不增不减。
-2. `action` 只允许 `buy/hold/sell/watch`。
-3. `position` 固定为 `0`。
-4. `thesis_short` 和 `risk_note` 各不超过 30 字。
+```bash
+python3 -m scripts.validate_output \
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json || true
+```
+
+## Hard Rules
+
+1. Do not add or remove top-level schema fields.
+2. `action` must be one of `buy/hold/sell/watch`.
+3. `position` must stay `0`.
+4. All facts must be traceable to input files.

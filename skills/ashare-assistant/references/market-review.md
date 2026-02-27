@@ -1,10 +1,11 @@
-# 复盘执行说明
+# Market Review Execution
 
-## 目标
+Purpose: Generate the daily market review report with evidence-based regime assessment.
+Input:   Daily sentiment, sector, funding, trend, and strategy files under data directory.
+Output:  `~/.ashare-assistant/data/{DATE}/market_review.md`.
+Sections: Required Inputs | Execution Steps | Output Template | Hard Rules
 
-生成：`~/.ashare-assistant/data/{DATE}/market_review.md`
-
-## 必要输入
+## Required Inputs
 
 1. `~/.ashare-assistant/data/{DATE}/report/news_sentiment.md`
 2. `~/.ashare-assistant/data/{DATE}/report/social_sentiment.md`
@@ -13,19 +14,25 @@
 5. `~/.ashare-assistant/data/{DATE}/filtered/ths_report.md`
 6. `~/.ashare-assistant/data/{DATE}/filtered/trend_report.md`
 7. `~/.ashare-assistant/data/{DATE}/filtered/news_flash.md`
-8. `~/.ashare-assistant/data/{DATE}/filtered/us_market.md`（缺失时标注“美股数据不可用”）
+8. `~/.ashare-assistant/data/{DATE}/filtered/us_market.md` (optional)
 9. `skills/ashare-assistant/strategy/active.yaml`
+10. `skills/ashare-assistant/evolution/feedback.md` (optional but recommended)
 
-## 步骤
+## Execution Steps
 
-1. 判断市场强弱：`strong/neutral/weak`，并给出仓位建议。
-2. 总结美股前夜影响（可缺省，但必须说明缺省原因）。
-3. 提炼主线题材、新兴题材、衰退题材。
-4. 给出情绪证据：至少 2 条社区观点 + 1 条新闻标题。
-5. 产出候选股分析：每只包含逻辑与风险。
-6. 输出趋势候选股汇总：覆盖 `trend_report.md` 中全部 4 星/5 星个股。
+1. Determine market regime: `strong`, `neutral`, or `weak`.
+2. Derive position guidance aligned with the regime.
+3. Summarize US overnight impact; if missing, state unavailable reason.
+4. Extract themes: leading, emerging, and fading sectors.
+5. Provide sentiment evidence with at least:
+   - 2 social/community观点
+   - 1 news headline
+6. Build candidate analysis for each mentioned stock:
+   - thesis
+   - risk
+7. Include all 4-star and 5-star names from `trend_report.md` in a dedicated summary section.
 
-## 输出骨架
+## Output Template
 
 ```markdown
 # A股市场复盘报告 - {DATE}
@@ -39,8 +46,8 @@
 ## 七、趋势候选股汇总
 ```
 
-## 约束
+## Hard Rules
 
-1. 不得补造数字或事件。
-2. 不得跳过“趋势候选股汇总”。
-3. 不确定信息标注“待确认”。
+1. Do not fabricate numbers, events, or quotes.
+2. Do not skip "趋势候选股汇总".
+3. Mark uncertain items as `待确认`.

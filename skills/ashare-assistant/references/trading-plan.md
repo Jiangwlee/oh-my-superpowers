@@ -1,81 +1,55 @@
-# 交易计划执行说明
+# Trading Plan Execution
 
-## 目标
+Purpose: Produce a next-day trading plan using candidates, execution review, and position constraints.
+Input:   Market review, candidates JSON, trade review, holding insight, and optional deep-research briefs.
+Output:  `~/.ashare-assistant/data/{DATE}/trading_plan.md`.
+Sections: Required Inputs | Pre-Run Scripts | Intraday Tools | Execution Steps | Post-Run Checks | Hard Rules
 
-生成：`~/.ashare-assistant/data/{DATE}/trading_plan.md`
-
-## 必要输入
+## Required Inputs
 
 1. `~/.ashare-assistant/data/{DATE}/market_review.md`
 2. `~/.ashare-assistant/data/{DATE}/analysis/candidates.json`
 3. `~/.ashare-assistant/data/{DATE}/analysis/trade_review.json`
 4. `~/.ashare-assistant/data/{DATE}/analysis/holding_insight.json`
-5. `~/.ashare-assistant/data/{DATE}/report/dr_*_brief.md`（可为空）
+5. `~/.ashare-assistant/data/{DATE}/report/dr_*_brief.md` (optional)
 6. `skills/ashare-assistant/strategy/active.yaml`
+7. `skills/ashare-assistant/evolution/known_pitfalls.md` (optional but recommended)
 
-## 前置脚本
+## Pre-Run Scripts
 
 ```bash
 DATE=$(date +%Y-%m-%d)
 
-python -m scripts.trade_review \
+python3 -m scripts.trade_review \
   --output ~/.ashare-assistant/data/${DATE}/analysis/trade_review.json \
   --strategy strategy/active.yaml
 
-python -m scripts.holding_insight \
+python3 -m scripts.holding_insight \
   --output ~/.ashare-assistant/data/${DATE}/analysis/holding_insight.json \
   --strategy strategy/active.yaml
 ```
 
-## 日内行情工具
+## Intraday Tools
 
-以下工具输出 JSON 到 stdout，**按需调用**，不需要全部运行。
-
-### 1. 日内行情摘要
 ```bash
-python -m scripts.intraday_summary --code {CODE} --date {YYYYMMDD}
+python3 -m scripts.intraday_summary --code {CODE} --date {YYYYMMDD}
+python3 -m scripts.trade_context --code {CODE} --date {YYYYMMDD} --time {HHMMSS} --price {PRICE} --window 30
+python3 -m scripts.opening_context --code {CODE} --date {YYYYMMDD}
+python3 -m scripts.relative_strength --code {CODE} --date {YYYYMMDD} --benchmark 000001
 ```
-输出：30分钟聚合 K 线、开盘跳空幅度、全天统计。用于了解某只股票当天整体走势。
 
-### 2. 操作时刻现场还原
-```bash
-python -m scripts.trade_context --code {CODE} --date {YYYYMMDD} \
-  --time {HHMMSS} --price {PRICE} --window 30
-```
-`--time` 和 `--price` 来自 `broker_account.json` 的 `order_list` 字段。
-输出：操作前后各 30 分钟的分钟级行情。用于判断买入/卖出时刻的市场背景。
+## Execution Steps
 
-### 3. 开盘背景（反事实基线）
-```bash
-python -m scripts.opening_context --code {CODE} --date {YYYYMMDD}
-```
-输出：前收盘价、MA5/MA10/MA20、跳空幅度、开盘30分钟表现。
-用于判断：**如果在开盘前看到这些信息，你会怎么做？** 与实际操作对比。
+1. Read `trade_review.json` for account facts and compliance context.
+2. Evaluate each executed order quality using intraday tools.
+3. Merge market regime and candidates into per-stock action plans.
+4. If deep-research briefs exist, apply conviction multiplier; else use `x1.0`.
+5. Apply account constraints from `holding_insight.json`.
+6. Define per-stock entry condition, take-profit, stop-loss, holding period, and target shares.
+7. Round all share counts down to 100-share lots.
+8. Ensure total planned exposure aligns with regime guidance.
 
-### 4. 相对强弱
-```bash
-python -m scripts.relative_strength --code {CODE} --date {YYYYMMDD} \
-  --benchmark 000001
-```
-输出：5 个时间节点（10:00/11:00/13:30/14:30/15:00）个股 vs 大盘对比。
-用于判断个股是否在强于/弱于大盘的情况下被操作。
-
-## 步骤
-
-1. 读取 `trade_review.json`，了解账户快照与合规情况（仅事实，不含质量评分）。
-2. 针对每笔当日成交（来自 `broker_account` `order_list`），**自主判断操作质量**：
-   - 调用工具 2（操作时刻还原）看清入场/离场背景
-   - 调用工具 3（开盘背景）建立反事实基线
-   - 调用工具 4（相对强弱）判断操作时个股是强是弱
-   - 自行决定这笔交易是否有价值，不受预设规则约束
-3. 结合复盘与候选股，形成每只股票的交易动作。
-4. 若存在深研文件，用于校准仓位乘数；不存在则乘数视为 `x1.0`。
-5. 结合 `holding_insight.json` 完成账户层约束。
-6. 逐股给出：入场条件、止盈、止损、持有周期、目标股数。
-7. 所有股数向下取整到 100 股整数倍。
-8. 汇总总仓位并与市场强弱建议对齐。
-
-## 输出骨架
+## Output Template
 
 ```markdown
 # 交易计划 - {DATE}
@@ -90,21 +64,21 @@ python -m scripts.relative_strength --code {CODE} --date {YYYYMMDD} \
 ## 八、知识库积累
 ```
 
-## 后置脚本
+## Post-Run Checks
 
 ```bash
 DATE=$(date +%Y-%m-%d)
 
-python -m scripts.risk_check \
+python3 -m scripts.risk_check \
   --input ~/.ashare-assistant/data/${DATE}/analysis/candidates.json
 
-python -m scripts.decision_logger \
+python3 -m scripts.decision_logger \
   --input ~/.ashare-assistant/data/${DATE}/analysis/candidates.json
 ```
 
-## 约束
+## Hard Rules
 
-1. 不能新增输入之外的股票与价格。
-2. 股数必须是 100 的整数倍。
-3. `risk_check.py` 失败必须回滚修订计划后重试。
-4. `trade_review.json` 中只有 `position_flaw`/`discipline_flaw` 是硬约束，其余 `info` 级别仅供参考。
+1. Do not introduce stocks or prices not present in inputs.
+2. Share counts must be multiples of 100.
+3. If `risk_check` fails, revise and rerun until pass.
+4. Treat `position_flaw` and `discipline_flaw` as hard constraints.

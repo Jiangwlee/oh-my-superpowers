@@ -1,13 +1,34 @@
-# 交易诊断反馈
+# Trading Diagnosis Feedback
 
-> 本文件由交易诊断 Skill 生成，记录最近一次诊断的改进建议。
-> 复盘 Skill 在分析前会读取此文件，将建议纳入决策。
-> 格式：按日期分段，包含选股/择时/执行三个维度的问题和建议。
+Purpose: Record dated diagnosis findings that must influence next trading-plan generation.
+Input:   Structured diagnosis summary from daily/periodic review.
+Output:  Append-only bullet entries grouped by trading date.
+Sections: Entry Format | Active Feedback | Update Rules
 
-<!-- 暂无诊断反馈，待交易数据积累后由诊断 Skill 填写 -->
+## Entry Format
+
+For each date, keep one compact block:
+
+```markdown
+YYYY-MM-DD 交易复盘
+- defects: <error_count> error / <warning_count> warning / <info_count> info
+- timing_score: buy <grade>, sell <grade>
+- position_compliance: pass|fail
+- key_issues: <issue_1>; <issue_2>
+- actions: <next-day action_1>; <next-day action_2>
+```
+
+## Active Feedback
 
 2026-02-24 交易复盘
-- 瑕疵: 4 error / 4 warning / 10 info
-- 择时评分: 买入均分 D, 卖出均分 -
-- 仓位合规: 未通过
-- 关键问题: 严重追高
+- defects: 4 error / 4 warning / 10 info
+- timing_score: buy D, sell -
+- position_compliance: fail
+- key_issues: 严重追高
+- actions: 明确禁止高开追涨首笔建仓; 首笔买入前必须核验开盘30分钟强弱
+
+## Update Rules
+
+1. Keep newest entry at the bottom for append-only traceability.
+2. Use facts from diagnosis outputs; do not add unverified explanations.
+3. Remove stale placeholders once real entries exist.
