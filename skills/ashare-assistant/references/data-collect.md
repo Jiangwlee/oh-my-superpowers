@@ -84,7 +84,7 @@ python3 scripts/run_analysis.py \
 │   ├── index.md
 │   ├── news_sentiment.md   ← 新闻情绪压缩摘要
 │   ├── social_sentiment.md ← 社交情绪压缩摘要
-│   └── dr_{CODE}_brief.md  ← 个股深研（第3.5步生成）
+│   └── dr_{CODE}_brief.md  ← 个股深研（采集预处理生成，供 plan 读取）
 ├── market_review.md        ← 最终复盘报告
 └── trading_plan.md         ← 最终交易计划
 ```

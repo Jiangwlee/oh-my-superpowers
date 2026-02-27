@@ -10,7 +10,7 @@
 1. 市场环境判断（强弱评级、风格、账户健康度、仓位建议）
 2. 题材线索识别（潜在/新题材与已发酵热点分层）
 3. 个股筛选（四因子评分，输出候选股列表）
-4. **个股深度分析（第3.5步）**：使用子代理分析 `run_analysis.py --tasks stock`，生成 `report/dr_{CODE}_brief.md`，完成仓位校准 ← **此步骤必须执行，不得跳过**
+4. **个股深度分析（第3.5步）**：读取预处理阶段生成的 `report/dr_{CODE}_brief.md`，完成仓位校准
 5. 交易计划制定（校准信息并入个股条目，不得单独重复一节）
 6. 风险检查（LLM 定性）
 7. 策略回顾与微调（ProposalJudge）
@@ -21,30 +21,17 @@
 
 ### 第3.5步推荐执行方式
 
-**方式一（推荐）：子代理分析**
+深研由采集预处理自动完成，建议在盘后先执行：
 
 ```bash
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/{DATE} \
-  --tasks stock \
-  --stock-code {CODE} --stock-name {NAME}
+python3 -m ashare_data.collect --date {DATE}
 ```
 
-子代理自动读取 `raw/deep_research/dr_{CODE}_em.json`、`raw/deep_research/dr_{CODE}_tgb.json`，生成 `report/dr_{CODE}_brief.md`。
-
-**方式二：批量数据采集 + 手动分析**
+校验深研结果是否可用：
 
 ```bash
-  # 批量并行采集原始数据
-  PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
-  --max-workers 4 \
-  --per-stock-timeout-sec 180 \
-  --total-timeout-sec 900
+ls ~/.ashare-assistant/data/{DATE}/report/dr_*_brief.md
 ```
-
-执行后会写入 `~/.ashare-assistant/data/{DATE}/dr_timing.json`，用于定位慢点与超时股票。
 
 ### 校验
 

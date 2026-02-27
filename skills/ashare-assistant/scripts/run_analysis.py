@@ -2,16 +2,16 @@
 """运行子代理分析，将 filtered/ 中的大文件交给子代理生成 report/。
 
 子代理使用 OpenCode CLI (`opencode run`) 实现，每个子代理独立运行一个会话。
-支持完整的 5 阶段流水线：
+支持完整流水线：
 
   第一轮（并行）: news + social → 情绪分析报告
   第二轮: review → 复盘报告 (market_review.md)
   第三轮: candidates → 候选股提取 (candidates.json)
-  第四轮（并行）: stock ×N → 个股深研
+  第四轮: 使用预处理深研报告 (report/dr_*_brief.md)
   第五轮: plan → 交易计划 (trading_plan.md)
 
 用法:
-    # 运行完整流水线（news → social → review → candidates → stock×N → plan）
+    # 运行完整流水线（news → social → review → candidates → plan）
     python3 scripts/run_analysis.py \
         --data-dir ~/.ashare-assistant/data/2026-02-24 \
         --tasks all
@@ -20,12 +20,6 @@
     python3 scripts/run_analysis.py \
         --data-dir ~/.ashare-assistant/data/2026-02-24 \
         --tasks review
-
-    # 运行个股深研（需指定股票代码和名称）
-    python3 scripts/run_analysis.py \
-        --data-dir ~/.ashare-assistant/data/2026-02-24 \
-        --tasks stock \
-        --stock-code 002050 --stock-name 三花智控
 """
 
 import argparse
@@ -53,7 +47,6 @@ _MODEL_OVERRIDES: dict[str, str] = {
     "review": "deepseek/deepseek-reasoner",
     "candidates": "github-copilot/gpt-5-mini",
     "plan": "deepseek/deepseek-reasoner",
-    "stock": "github-copilot/gpt-5-mini",
 }
 
 # ── 超时配置 ──────────────────────────────────────────
@@ -123,14 +116,6 @@ _SCRIPT_OUTPUT_FILES = [
 
 def _analysis_dir(data_dir: str) -> str:
     return os.path.join(data_dir, "analysis")
-
-
-def _deep_research_raw_dir(data_dir: str) -> str:
-    return os.path.join(data_dir, "raw", "deep_research")
-
-
-def _deep_research_analysis_dir(data_dir: str) -> str:
-    return os.path.join(_analysis_dir(data_dir), "deep_research")
 
 
 def _candidates_output_path(data_dir: str) -> str:
@@ -454,68 +439,6 @@ def run_social_sentiment(
     )
 
 
-def run_stock_deep_research(
-    data_dir: str,
-    stock_code: str,
-    stock_name: str,
-    context: str = "",
-    model: str | None = None,
-    timeout: int = 300,
-    overwrite: bool = False,
-) -> bool:
-    """运行个股深度研究子代理。
-
-    Args:
-        data_dir: 数据根目录。
-        stock_code: 6位股票代码。
-        stock_name: 股票名称。
-        context: 选股上下文（为什么选这只股，来自第三步的信息）。
-        model: 模型名称。
-        timeout: 超时时间。
-    """
-    report_dir = os.path.join(data_dir, "report")
-    os.makedirs(report_dir, exist_ok=True)
-
-    template = _load_prompt_template("stock_deep_research")
-
-    # 查找个股数据文件（仅新目录结构）
-    stock_files = []
-    for pattern in [f"dr_{stock_code}_em.json", f"dr_{stock_code}_tgb.json"]:
-        fpath = os.path.join(_deep_research_raw_dir(data_dir), pattern)
-        if os.path.exists(fpath):
-            stock_files.append(fpath)
-
-    if not stock_files:
-        logger.error(
-            "未找到 %s (%s) 的数据文件，请先运行采集脚本", stock_code, stock_name
-        )
-        return False
-
-    files_section = "\n".join(f"- `{f}`" for f in stock_files)
-    context_section = (
-        context or f"该股票（{stock_code} {stock_name}）是第三步筛选出的候选股。"
-    )
-
-    prompt = (
-        template.replace("{CODE}", stock_code)
-        .replace("{NAME}", stock_name)
-        .replace("{FILES_SECTION}", files_section)
-        .replace("{CONTEXT_SECTION}", context_section)
-    )
-
-    output_path = os.path.join(report_dir, f"dr_{stock_code}_brief.md")
-
-    return _run_opencode(
-        prompt=prompt,
-        output_path=output_path,
-        title=f"个股深研-{stock_code}",
-        attached_files=stock_files,
-        model=model,
-        timeout=timeout,
-        overwrite=overwrite,
-    )
-
-
 def run_market_review(
     data_dir: str, model: str | None = None, timeout: int = 300, overwrite: bool = False
 ) -> bool:
@@ -812,49 +735,6 @@ def _collect_deep_research_targets(data_dir: str) -> list[dict]:
         return []
 
 
-def _collect_stock_data(codes: list[str], data_dir: str) -> None:
-    """调用 run_deep_research_batch.py 批量采集个股原始数据。
-
-    已有个股深研原始数据时自动跳过。
-    """
-    missing = [
-        code
-        for code in codes
-        if not any(
-            os.path.exists(
-                os.path.join(_deep_research_raw_dir(data_dir), f"dr_{code}_{src}.json")
-            )
-            for src in ("em", "tgb")
-        )
-    ]
-    if not missing:
-        logger.info("个股原始数据已存在，跳过批量采集")
-        return
-
-    batch_script = os.path.join(_SCRIPT_DIR, "run_deep_research_batch.py")
-    cmd = [
-        sys.executable,
-        batch_script,
-        "--codes",
-        ",".join(missing),
-        "--output-dir",
-        data_dir,
-        "--skill-root",
-        _SKILL_DIR,
-    ]
-    logger.info("批量采集个股数据: %s", missing)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if result.returncode != 0:
-            logger.warning("批量采集失败: %s", result.stderr[:300])
-        else:
-            logger.info("批量采集完成")
-    except subprocess.TimeoutExpired:
-        logger.warning("批量采集超时")
-    except Exception as e:
-        logger.warning("批量采集异常: %s", e)
-
-
 def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool]:
     """执行完整的 all 流水线。
 
@@ -862,7 +742,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
       1. news + social（情绪分析）
       2. review（复盘报告 → market_review.md）
       3. candidates（从复盘报告提取候选股 → candidates.json）
-      4. 对 buy/watch 候选股采集数据并逐只运行深研子代理
+      4. 使用 ashare-data 预处理好的个股深研报告（dr_*_brief.md）
       4.5 执行前置脚本 trade_review.py 和 holding_insight.py
       5. plan（交易计划 → trading_plan.md，一次到位）
       6. 执行风控检查 risk_check.py 与决策日志 decision_logger.py
@@ -918,39 +798,27 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
         results["plan"] = False
         return results
 
-    # ── 阶段 4: 个股深研 ──────────────────────────────
+    # ── 阶段 4: 读取预处理个股深研报告 ─────────────────────
     targets = _collect_deep_research_targets(data_dir)
     if targets:
-        codes = [c["code"] for c in targets]
-        logger.info("发现 %d 只 buy/watch 候选股，启动深研: %s", len(codes), codes)
-        _collect_stock_data(codes, data_dir)
-
-        stock_model = _get_model("stock", args.model)
-        stock_timeout = _get_timeout("stock", args.timeout)
+        missing_codes: list[str] = []
         for c in targets:
-            key = f"stock_{c['code']}"
-            logger.info(
-                "任务 [%s] 使用模型: %s, 超时: %ds", key, stock_model, stock_timeout
+            code = c["code"]
+            brief_path = os.path.join(data_dir, "report", f"dr_{code}_brief.md")
+            if not os.path.exists(brief_path):
+                missing_codes.append(code)
+        if missing_codes:
+            logger.warning(
+                "以下候选股缺少预处理深研报告（继续执行 plan）：%s",
+                missing_codes,
             )
-            results[key] = run_stock_deep_research(
-                data_dir,
-                stock_code=c["code"],
-                stock_name=c["name"],
-                context=c.get("thesis_short", ""),
-                model=stock_model,
-                timeout=stock_timeout,
-                overwrite=args.overwrite,
+        else:
+            logger.info(
+                "候选股深研报告已就绪: %d 只",
+                len(targets),
             )
     else:
-        logger.info("无 buy/watch 候选股，跳过个股深研")
-
-    stock_failed = any(
-        (k.startswith("stock_") and not v) for k, v in results.items()
-    )
-    if stock_failed:
-        logger.error("个股深研存在失败任务，中止流水线")
-        results["plan"] = False
-        return results
+        logger.info("无 buy/watch 候选股，跳过深研报告检查")
 
     # ── 阶段 4.5: 账户与持仓分析 (plan 的增强输入) ───────────
     trade_review_output = os.path.join(_analysis_dir(data_dir), "trade_review.json")
@@ -1108,7 +976,7 @@ def _run_all_pipeline(args: argparse.Namespace, data_dir: str) -> dict[str, bool
 def main() -> None:
     """CLI 入口。"""
     parser = argparse.ArgumentParser(
-        description="运行子代理分析（新闻情绪、社交情绪、复盘报告、交易计划、个股深研）"
+        description="运行子代理分析（新闻情绪、社交情绪、复盘报告、交易计划）"
     )
     parser.add_argument(
         "--data-dir",
@@ -1121,22 +989,9 @@ def main() -> None:
     parser.add_argument(
         "--tasks",
         nargs="+",
-        choices=["news", "social", "review", "candidates", "plan", "stock", "all"],
+        choices=["news", "social", "review", "candidates", "plan", "all"],
         default=["all"],
-        help="要运行的任务（默认 all = 完整5阶段流水线：情绪→复盘→候选股→深研→交易计划）",
-    )
-    parser.add_argument(
-        "--stock-code",
-        help="股票代码（stock 任务必需）",
-    )
-    parser.add_argument(
-        "--stock-name",
-        help="股票名称（stock 任务必需）",
-    )
-    parser.add_argument(
-        "--stock-context",
-        default="",
-        help="选股上下文信息",
+        help="要运行的任务（默认 all = 情绪→复盘→候选股→交易计划）",
     )
     parser.add_argument(
         "--model",
@@ -1183,7 +1038,7 @@ def main() -> None:
     tasks = args.tasks
     start_time = time.time()
 
-    # all 模式：走完整5阶段流水线（情绪→复盘→候选股→深研→交易计划）
+    # all 模式：走完整流水线（情绪→复盘→候选股→交易计划）
     if "all" in tasks:
         results = _run_all_pipeline(args, data_dir)
         generate_report_index(data_dir)
@@ -1255,20 +1110,6 @@ def main() -> None:
                     timeout=task_timeout,
                     overwrite=args.overwrite,
                 )
-        elif task == "stock":
-            if not args.stock_code or not args.stock_name:
-                logger.error("stock 任务需要 --stock-code 和 --stock-name 参数")
-                sys.exit(1)
-            results[f"stock_{args.stock_code}"] = run_stock_deep_research(
-                data_dir,
-                stock_code=args.stock_code,
-                stock_name=args.stock_name,
-                context=args.stock_context,
-                model=task_model,
-                timeout=task_timeout,
-                overwrite=args.overwrite,
-            )
-
     # 生成报告索引
     generate_report_index(data_dir)
 

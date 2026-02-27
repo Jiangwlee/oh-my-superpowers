@@ -28,12 +28,17 @@ description: >
 
 宣布「开始复盘」，然后按以下 3 步顺序执行。
 
+**职责边界**：
+- 个股深研（`report/dr_*_brief.md`）由 `ashare-collect` 预处理阶段产出。
+- `run_analysis.py --tasks all` 只消费深研结果，不再在 `all` 流程中执行 `stock_*`。
+
 ### Step 1. 数据就绪检查
 
 ```bash
 DATE=$(date +%Y-%m-%d)
 DATA_DIR=~/.ashare-assistant/data/${DATE}
 FILTERED_DIR=${DATA_DIR}/filtered
+REPORT_DIR=${DATA_DIR}/report
 
 # 检查今日数据是否存在
 if [ -d "${FILTERED_DIR}" ] && [ "$(ls -A ${FILTERED_DIR})" ]; then
@@ -42,6 +47,13 @@ else
   echo "今日数据不存在，尝试采集..."
   ashare-collect --date ${DATE} --verbose
 fi
+
+# 深研报告由 ashare-collect 预处理生成（允许为空）
+if ls ${REPORT_DIR}/dr_*_brief.md >/dev/null 2>&1; then
+  echo "深研预处理已就绪: ${REPORT_DIR}/dr_*_brief.md"
+else
+  echo "未发现 dr_*_brief.md（将继续执行，plan 可能降级）"
+fi
 ```
 
 ### Step 2. LLM 分析
@@ -49,6 +61,8 @@ fi
 ```bash
 python scripts/run_analysis.py --tasks all
 ```
+
+说明：`all` 流程执行 `news/social/review/candidates/plan`，并读取预处理深研报告。
 
 ### Step 3. 结果输出
 
@@ -80,4 +94,3 @@ python scripts/decision_logger.py \
 | 需要了解交易计划约束时 | `references/trading-plan.md` |
 | 执行场景二（策略进化）时 | `references/evolution.md` |
 | 需要了解数据采集脚本细节时 | `references/data-collect.md` |
-

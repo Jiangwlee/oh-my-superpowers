@@ -287,7 +287,7 @@
 
 ---
 
-> ⚠️ **第三步完成后，必须立即执行第3.5步个股深度分析，不得跳过，不得直接进入第四步。**
+> ⚠️ **第三步完成后，必须立即读取第3.5步个股深度分析结果，不得跳过，不得直接进入第四步。**
 
 ## 第3.5步：个股深度分析（情绪与事件校准）
 
@@ -296,41 +296,14 @@
 
 ### 执行流程
 
-**方式一：子代理分析（推荐）**
-
-对每只候选股运行子代理：
+个股深研由采集预处理自动生成（`ashare_data.collect_sentiment`），主流程只读取结果：
 
 ```bash
-PYTHONPATH=. python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/{DATE} \
-  --tasks stock \
-  --stock-code {CODE} --stock-name {NAME}
+python3 -m ashare_data.collect --date {DATE}
+ls ~/.ashare-assistant/data/{DATE}/report/dr_*_brief.md
 ```
 
-子代理会自动执行数据采集并生成分析报告 `report/dr_{CODE}_brief.md`。
-详细参数见 `references/commands.md` 的"子代理分析"和"Deep Research"章节。
-
-**方式二：批量并行采集 + 手动分析**
-
-```bash
-# 批量并行采集
-PYTHONPATH=. python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
-  --max-workers 4
-
-# 规则提取 compact（不调用 LLM）
-PYTHONPATH=. python3 scripts/summarize_stock_brief.py \
-  --code {CODE} \
-  --em-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_em.json \
-  --tgb-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_tgb.json \
-  --output ~/.ashare-assistant/data/{DATE}/analysis/deep_research/dr_{CODE}_compact.json \
-  --compact-only
-```
-
-读取子代理生成的 `report/dr_{CODE}_brief.md`。报告包含信号汇总、社区情绪、仓位校准建议等内容。
-
-> 子代理分析的详细规则见 `scripts/prompts/stock_deep_research.md`，主代理无需重复执行。
+读取 `report/dr_{CODE}_brief.md`。报告包含信号汇总、社区情绪、仓位校准建议等内容。
 
 ### 读取子代理报告的要点
 

@@ -51,6 +51,9 @@ def run(
     taoguba_count: int = 20,
     scan_trends: bool = True,
     popularity_max: int = 200,
+    run_deep_research: bool = True,
+    deep_research_min_star: int = 4,
+    deep_research_max_workers: int = 6,
 ) -> bool:
     """执行完整采集流水线。
 
@@ -62,6 +65,9 @@ def run(
         taoguba_count:  淘股吧帖子数。
         scan_trends:    是否执行趋势扫描。
         popularity_max: 人气榜扫描上限。
+        run_deep_research: 是否执行个股深研预处理。
+        deep_research_min_star: 趋势股纳入深研的最低星级。
+        deep_research_max_workers: 个股深研并行 worker 数。
 
     Returns:
         True 表示全部成功，False 表示至少一个阶段失败。
@@ -86,6 +92,9 @@ def run(
                 taoguba_count=taoguba_count,
                 scan_trends=scan_trends,
                 popularity_max=popularity_max,
+                run_deep_research=run_deep_research,
+                deep_research_min_star=deep_research_min_star,
+                deep_research_max_workers=deep_research_max_workers,
             )
             ok = summary["ok_count"]
             err = summary["error_count"]
@@ -146,6 +155,21 @@ def main() -> None:
     parser.add_argument(
         "--popularity-max", type=int, default=200, help="人气榜扫描上限"
     )
+    parser.add_argument(
+        "--no-deep-research", action="store_true", help="跳过个股深研预处理"
+    )
+    parser.add_argument(
+        "--deep-research-min-star",
+        type=int,
+        default=4,
+        help="趋势股纳入深研的最低星级",
+    )
+    parser.add_argument(
+        "--deep-research-max-workers",
+        type=int,
+        default=6,
+        help="个股深研并行 worker 数",
+    )
     parser.add_argument("--verbose", action="store_true", help="详细日志")
     args = parser.parse_args()
 
@@ -163,6 +187,9 @@ def main() -> None:
         taoguba_count=args.taoguba_count,
         scan_trends=not args.no_scan_trends,
         popularity_max=args.popularity_max,
+        run_deep_research=not args.no_deep_research,
+        deep_research_min_star=args.deep_research_min_star,
+        deep_research_max_workers=args.deep_research_max_workers,
     )
     sys.exit(0 if ok else 1)
 

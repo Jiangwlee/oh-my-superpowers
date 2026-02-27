@@ -67,24 +67,24 @@ python3 scripts/filter_to_markdown.py \
 
 对 filtered/ 中的大文件运行子代理语义压缩，以及生成复盘报告和交易计划。
 
-完整流水线：news → social → review → plan（4 + N 轮子代理）。
+完整流水线：news → social → review → candidates → plan。
 
 ### 内置模型映射
 
 | 任务 | 模型 | 说明 |
 |------|------|------|
-| news | `github-copilot/claude-opus-4.6` | 新闻情绪分析（高质量） |
-| social | `github-copilot/claude-opus-4.6` | 社交情绪分析（高质量） |
-| review | `github-copilot/claude-opus-4.6` | 复盘报告生成（高质量） |
-| plan | `github-copilot/claude-opus-4.6` | 交易计划生成（高质量） |
-| stock | `github-copilot/gpt-5-mini` | 个股深研（快速、低成本） |
+| news | `deepseek/deepseek-reasoner` | 新闻情绪分析 |
+| social | `deepseek/deepseek-reasoner` | 社交情绪分析 |
+| review | `deepseek/deepseek-reasoner` | 复盘报告生成 |
+| candidates | `github-copilot/gpt-5-mini` | 候选股提取（结构化 JSON） |
+| plan | `deepseek/deepseek-reasoner` | 交易计划生成 |
 
 `--model` 参数可覆盖所有任务的模型，但不建议用于生产环境。
 
 ### 常用命令
 
 ```bash
-# 运行完整流水线（news + social + review + plan）
+# 运行完整流水线（news + social + review + candidates + plan）
 python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/{DATE} \
   --tasks all
@@ -99,16 +99,15 @@ python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/{DATE} \
   --tasks review
 
-# 仅运行交易计划（需 review 已完成）
+# 仅运行候选股提取（需 review 已完成）
+python3 scripts/run_analysis.py \
+  --data-dir ~/.ashare-assistant/data/{DATE} \
+  --tasks candidates
+
+# 仅运行交易计划（需 review/candidates 已完成）
 python3 scripts/run_analysis.py \
   --data-dir ~/.ashare-assistant/data/{DATE} \
   --tasks plan
-
-# 运行个股深研子代理（使用 gpt-5-mini）
-python3 scripts/run_analysis.py \
-  --data-dir ~/.ashare-assistant/data/{DATE} \
-  --tasks stock \
-  --stock-code 002050 --stock-name 三花智控
 
 # 覆盖模型（调试用）
 python3 scripts/run_analysis.py \
@@ -121,14 +120,14 @@ python3 scripts/run_analysis.py \
 
 ```
 news ──┐
-       ├──→ review ──→ plan
-social ┘        ↑
-              stock ×N（并行，输出 dr_*_brief.md 供 plan 读取）
+       ├──→ review ──→ candidates ──→ plan
+social ┘                      ↑
+                       读取 report/dr_*_brief.md（由采集预处理生成）
 ```
 
 - `review` 依赖 `report/news_sentiment.md` + `report/social_sentiment.md`
-- `plan` 依赖 `market_review.md`（+ 可选的 `report/dr_*_brief.md`）
-- `stock` 独立运行，但输出供 `plan` 使用
+- `candidates` 依赖 `market_review.md`
+- `plan` 依赖 `market_review.md` + `analysis/candidates.json`（并读取 `report/dr_*_brief.md`）
 
 ### 输出文件
 
@@ -137,8 +136,8 @@ social ┘        ↑
 | news | `report/news_sentiment.md` | 新闻情绪分析摘要 |
 | social | `report/social_sentiment.md` | 社交情绪分析摘要 |
 | review | `market_review.md` | 复盘报告（根目录） |
-| plan | `trading_plan.md` + `candidates.json` | 交易计划 + 候选股 JSON |
-| stock | `report/dr_{CODE}_brief.md` | 个股深研报告 |
+| candidates | `analysis/candidates.json` | 候选股结构化结果 |
+| plan | `trading_plan.md` | 交易计划 |
 
 ## 输出文件一览
 
@@ -193,7 +192,7 @@ social ┘        ↑
 | `index.md` | 报告索引 |
 | `news_sentiment.md` | 新闻情绪分析摘要（~3-5 KB） |
 | `social_sentiment.md` | 社交情绪分析摘要（~3-5 KB） |
-| `dr_{CODE}_brief.md` | 个股深研报告（第3.5步生成，~2 KB/只） |
+| `dr_{CODE}_brief.md` | 个股深研报告（由采集预处理生成，供 plan 读取） |
 
 ### 根目录 — 最终产物
 
@@ -430,63 +429,22 @@ python3 scripts/holding_insight.py \
 
 ---
 
-## Deep Research 个股采集
+## Deep Research 个股预处理
 
-推荐先使用批量并行命令（Phase A 性能优化）：
+深研已并入 `ashare-collect`（`ashare_data.collect_sentiment`）预处理流程，不再由 `run_analysis --tasks all` 触发。
 
-```bash
-python3 scripts/run_deep_research_batch.py \
-  --candidates-file ~/.ashare-assistant/data/{DATE}/analysis/candidates.json \
-  --output-dir ~/.ashare-assistant/data/{DATE} \
-  --max-workers 4 \
-  --per-stock-timeout-sec 180 \
-  --total-timeout-sec 900
-```
+- 目标集合：`watchlist` + `trend_scan.json` 中四星及以上个股（去重）
+- 处理步骤：东方财富采集 + 淘股吧采集 + LLM 生成 `dr_*_brief.md`
+- 默认模型：`github-copilot/gpt-5-mini`
 
-批量脚本会自动执行：
-1. `collect_eastmoney_guba.py`
-2. `collect_taoguba_stock.py`
-3. `summarize_stock_brief.py --compact-only`
-
-并在 `~/.ashare-assistant/data/{DATE}/dr_timing.json` 输出单票耗时与状态（ok/error/timeout）。
-
----
-
-在完成第三步个股初筛后，对每只候选股执行以下命令：
+可通过采集命令控制：
 
 ```bash
-# 东方财富股吧采集（帖子 + 资讯 + 公告）
-python3 scripts/collect_eastmoney_guba.py \
-  --code {CODE} \
-  --output ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_em.json \
-  --post-limit 36 \
-  --detail-limit 5 \
-  --notice-days 3
-
-# 淘股吧个股扩展采集（题材标签 + 个股讨论）
-python3 scripts/collect_taoguba_stock.py \
-  --full-code {FULL_CODE} \
-  --output ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_tgb.json \
-  --quotes-count 8 \
-  --zh-count 0
+python3 -m ashare_data.collect \
+  --date {DATE} \
+  --deep-research-min-star 4 \
+  --deep-research-max-workers 6
 ```
-
-采集完成后，执行 compact 提取脚本（**不调用 LLM**，约 600 tokens），再由主 LLM 读取 compact 文件生成 brief：
-
-```bash
-# compact 提取（规则抽取，不污染上下文）
-python3 scripts/summarize_stock_brief.py \
-  --code {CODE} \
-  --em-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_em.json \
-  --tgb-raw ~/.ashare-assistant/data/{DATE}/raw/deep_research/dr_{CODE}_tgb.json \
-  --output ~/.ashare-assistant/data/{DATE}/analysis/deep_research/dr_{CODE}_compact.json \
-  --compact-only
-```
-
-主 LLM 读取 `dr_{CODE}_compact.json` 后，按 `references/analysis-framework.md` 第3.5步生成 brief，并将 brief JSON 写入 `dr_{CODE}_brief.json`。
-
-`{CODE}` = 6位股票代码（如 `002050`）
-`{FULL_CODE}` = 带市场前缀的代码（如 `sz002050`，深市用 `sz`，沪市用 `sh`）
 
 ### Deep Research 预算参数
 
@@ -507,8 +465,8 @@ python3 scripts/summarize_stock_brief.py \
 |------|------|
 | `raw/deep_research/dr_{CODE}_em.json` | 东方财富股吧原始数据（帖子/资讯/公告），追溯用，勿直接传给 LLM |
 | `raw/deep_research/dr_{CODE}_tgb.json` | 淘股吧原始数据（题材标签/个股讨论），追溯用，勿直接传给 LLM |
-| `analysis/deep_research/dr_{CODE}_compact.json` | 规则提取的精简数据，约 600 tokens，主 LLM 读取此文件 |
-| `dr_{CODE}_brief.json` | 主 LLM 生成的结构化 brief，约 300 tokens，供分析使用 |
+| `report/dr_{CODE}_brief.md` | 预处理阶段 LLM 生成的个股深研报告，供 `plan` 读取 |
+| `analysis/deep_research/dr_timing.json` | 深研批处理耗时与状态 |
 
 ### Deep Research 结果追踪
 

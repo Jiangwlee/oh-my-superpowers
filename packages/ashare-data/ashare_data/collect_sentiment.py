@@ -23,6 +23,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from pathlib import Path
 
 # ── 把 scripts 所在目录加入 sys.path，以便按包导入 ──
 _SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -62,6 +63,11 @@ from ashare_data.core.watchlist import (  # noqa: E402
     get_extra_candidates,
     load as load_watchlist,
     update_from_scan,
+)
+from ashare_data.deep_research_batch import (  # noqa: E402
+    DeepResearchTarget,
+    run_batch_deep_research,
+    write_timing_report,
 )
 
 
@@ -106,6 +112,67 @@ def _build_run_id(as_of_date: str, strategy_version: str) -> str:
     date_part = as_of_date.replace("-", "")
     time_part = datetime.now().strftime("%H%M%S")
     return f"{date_part}-{strategy_version}-{time_part}"
+
+
+def _resolve_data_dir(output_dir: str) -> str:
+    """从 raw 目录推断数据根目录。"""
+    base = os.path.basename(output_dir.rstrip("/"))
+    if base == "raw":
+        return os.path.dirname(output_dir.rstrip("/"))
+    return output_dir
+
+
+def _get_result_attr(obj: object, attr: str, default: object = None) -> object:
+    if hasattr(obj, attr):
+        return getattr(obj, attr)
+    if isinstance(obj, dict):
+        return obj.get(attr, default)
+    return default
+
+
+def _build_deep_research_targets(
+    trend_results: list[object],
+    watchlist_stocks: list[dict[str, object]],
+    min_star: int,
+) -> list[DeepResearchTarget]:
+    """构建深研目标：watchlist + 四星及以上趋势股（去重）。"""
+    ordered: list[DeepResearchTarget] = []
+    seen: set[str] = set()
+
+    for stock in sorted(watchlist_stocks, key=lambda item: str(item.get("code", ""))):
+        code = str(stock.get("code", "") or "")
+        name = str(stock.get("name", "") or "")
+        if not code:
+            continue
+        if code not in seen:
+            seen.add(code)
+            ordered.append(
+                DeepResearchTarget(
+                    code=code,
+                    name=name,
+                    context="watchlist 跟踪标的，需持续监控情绪与风险。",
+                )
+            )
+
+    for item in trend_results:
+        code = str(_get_result_attr(item, "code", "") or "")
+        if not code:
+            continue
+        star_rating = int(_get_result_attr(item, "star_rating", 0) or 0)
+        if star_rating < min_star:
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        name = str(_get_result_attr(item, "name", "") or "")
+        reason = str(_get_result_attr(item, "reason", "") or "")
+        context = (
+            f"趋势扫描命中：star_rating={star_rating}。{reason}"
+            if reason
+            else f"趋势扫描命中：star_rating={star_rating}。"
+        )
+        ordered.append(DeepResearchTarget(code=code, name=name, context=context))
+    return ordered
 
 
 # ── 数据精简函数 ──────────────────────────────────────
@@ -232,6 +299,9 @@ def collect(
     *,
     scan_trends: bool = True,
     popularity_max: int = 200,
+    run_deep_research: bool = True,
+    deep_research_min_star: int = 4,
+    deep_research_max_workers: int = 6,
 ) -> dict:
     """执行全量数据采集，返回 summary dict。
 
@@ -246,6 +316,12 @@ def collect(
         是否执行趋势扫描（默认 True）。扫描200只股约2-3分钟。
     popularity_max : int
         东方财富人气榜扫描上限（默认200，最大200）。
+    run_deep_research : bool
+        是否执行个股深研预处理（默认 True）。
+    deep_research_min_star : int
+        趋势股纳入深研的最低星级（默认 4）。
+    deep_research_max_workers : int
+        个股深研并行 worker 数（默认 6）。
     """
     ensure_dirs()
     try:
@@ -374,7 +450,8 @@ def collect(
             update_from_scan(trend_results, as_of_date)
 
             # 7) 写 watchlist_scan.json（watchlist 股完整指标，不走 _slim）
-            watchlist_codes = {s["code"] for s in load_watchlist()}
+            watchlist_stocks = load_watchlist()
+            watchlist_codes = {str(s.get("code", "")) for s in watchlist_stocks if s.get("code")}
             if watchlist_codes:
                 watchlist_scan_data = [
                     r.to_dict() for r in trend_results if r.code in watchlist_codes
@@ -383,6 +460,67 @@ def collect(
                 with open(watchlist_scan_path, "w", encoding="utf-8") as f:
                     json.dump(watchlist_scan_data, f, ensure_ascii=False, indent=2)
                 _log(f"  \u2713 watchlist_scan.json: {len(watchlist_scan_data)} \u53ea")
+
+            # 8) 个股深研预处理：watchlist + 四星以上趋势股（去重）
+            if run_deep_research:
+                data_dir = _resolve_data_dir(output_dir)
+                dr_targets = _build_deep_research_targets(
+                    trend_results,
+                    watchlist_stocks=watchlist_stocks,
+                    min_star=deep_research_min_star,
+                )
+                if dr_targets:
+                    _log(
+                        f"  深研预处理目标: {len(dr_targets)} 只 "
+                        f"(watchlist + 星级>={deep_research_min_star})"
+                    )
+                    dr_result = run_batch_deep_research(
+                        targets=dr_targets,
+                        data_dir=Path(data_dir),
+                        llm_model="github-copilot/gpt-5-mini",
+                        max_workers=deep_research_max_workers,
+                        per_stock_timeout_sec=300,
+                        total_timeout_sec=1800,
+                        post_limit=36,
+                        detail_limit=5,
+                        notice_days=3,
+                        quotes_count=8,
+                        zh_page=1,
+                        zh_count=20,
+                    )
+                    if dr_result.get("ok"):
+                        dr_rows = dr_result.get("rows", [])
+                        report_path = write_timing_report(
+                            data_dir=Path(data_dir), rows=dr_rows
+                        )
+                        ok_count = sum(
+                            1 for row in dr_rows if row.get("status") == "ok"
+                        )
+                        _log(
+                            f"  \u2713 deep_research: {ok_count}/{len(dr_rows)} 只，"
+                            f"耗时 {dr_result.get('elapsed_sec', 0):.1f}s，"
+                            f"报告 {report_path}"
+                        )
+                        results["deep_research"] = (
+                            "ok",
+                            {
+                                "target_count": len(dr_targets),
+                                "ok_count": ok_count,
+                                "elapsed_sec": dr_result.get("elapsed_sec", 0.0),
+                            },
+                            float(dr_result.get("elapsed_sec", 0.0)),
+                        )
+                    else:
+                        err = str(dr_result.get("error", "unknown_error"))
+                        _log(f"  \u2717 deep_research: {err}")
+                        results["deep_research"] = ("error", err, 0.0)
+                else:
+                    _log("  深研预处理目标为空，跳过")
+                    results["deep_research"] = (
+                        "ok",
+                        {"target_count": 0, "ok_count": 0, "elapsed_sec": 0.0},
+                        0.0,
+                    )
 
             # 包装输出
             results["trend_scan"] = (
@@ -526,6 +664,21 @@ def main() -> None:
     parser.add_argument(
         "--popularity-max", type=int, default=200, help="人气榜扫描上限(<=200)"
     )
+    parser.add_argument(
+        "--no-deep-research", action="store_true", help="跳过个股深研预处理"
+    )
+    parser.add_argument(
+        "--deep-research-min-star",
+        type=int,
+        default=4,
+        help="趋势股纳入深研的最低星级",
+    )
+    parser.add_argument(
+        "--deep-research-max-workers",
+        type=int,
+        default=6,
+        help="个股深研并行 worker 数",
+    )
     args = parser.parse_args()
 
     _log(f"开始采集 -> {args.output_dir}")
@@ -536,6 +689,9 @@ def main() -> None:
             args.taoguba_count,
             scan_trends=not args.no_scan_trends,
             popularity_max=args.popularity_max,
+            run_deep_research=not args.no_deep_research,
+            deep_research_min_star=args.deep_research_min_star,
+            deep_research_max_workers=args.deep_research_max_workers,
         )
     except RuntimeError as exc:
         _log(f"[ERROR] 采集中止：{exc}")
