@@ -64,9 +64,14 @@ scp -r skills/ashare-assistant/ \
 2. Install or update `ashare-data` on VPS.
 
 ```bash
-scp -r packages/ashare-data/ root@tencent-vps:/root/ashare-data/
+# 注意：scp 传目录时以父目录为目标，避免嵌套
+scp -r packages/ashare-data root@tencent-vps:/root/
 ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system-packages"
 ```
+
+> **每次在 `pyproject.toml` 中新增 CLI entry point（如 `ashare-em-collect`）后，
+> 必须重新执行上述两条命令，否则新命令在 VPS 上不存在。**
+> 验证：`ssh root@tencent-vps "ashare-em-collect --help"`
 
 3. Restart gateway.
 
@@ -84,6 +89,7 @@ ssh root@tencent-vps "source ~/.nvm/nvm.sh && openclaw gateway restart"
 ## Update Flow
 
 1. Update `packages/ashare-data` and reinstall on target host.
+   - **新增 CLI entry point 时必须触发此步骤**，否则新命令在目标机器上找不到。
 2. Run one manual `ashare-collect` to validate output files.
 3. Copy updated `skills/ashare-assistant/` files.
 4. Restart `openclaw` gateway.
