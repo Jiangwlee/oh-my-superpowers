@@ -14,6 +14,7 @@
 - [Tools](https://docs.openclaw.ai/tools/browser): Openclaw 内置工具
 - [Skills Development Guide](Skills-Dev-Guide.md)：Skills开发经验，当发现一种有效的Skill编写模式时，可追加到此文件中。
 - [Claude Skill Development Guide](Claude-Skill-Dev-Guide.md)：Claude官方Skill开发手册。
+- [File Header Spec](File-Header-Spec.md)：文件头规范，要求前 20 行让 AI 理解文件全貌。所有 Markdown 和 Python 文件必须遵循。
 - [JVQuant 平台参考](docs/jvquant-reference.md)：JVQuant 券商交易接口文档，含 API 规格、计费标准、费用优化策略。
 
 ## 技术栈
