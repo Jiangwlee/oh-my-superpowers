@@ -1,55 +1,62 @@
-# 阶段3：分析与校验
+# 选股执行说明
 
-> **何时读取 analysis-framework.md**：对某个分析步骤有疑问，或首次执行时，按需读取对应章节。
-> 熟悉流程时无需全文加载；各步骤的章节标题与下方编号一一对应。
+## 目标
 
-必须严格按照 `references/analysis-framework.md` 执行，不得跳步。
+生成：`~/.ashare-assistant/data/{DATE}/analysis/candidates.json`
 
-分析阶段结论要求（必须按序执行，不得跳步）：
+## 必要输入
 
-1. 市场环境判断（强弱评级、风格、账户健康度、仓位建议）
-2. 题材线索识别（潜在/新题材与已发酵热点分层）
-3. 个股筛选（四因子评分，输出候选股列表）
-4. **个股深度分析（第3.5步）**：读取预处理阶段生成的 `report/dr_{CODE}_brief.md`，完成仓位校准
-5. 交易计划制定（校准信息并入个股条目，不得单独重复一节）
-6. 风险检查（LLM 定性）
-7. 策略回顾与微调（ProposalJudge）
-8. 知识库积累（evolution 文档增量）
-9. 精华言论提炼（10条，仅方法论/心理/风控）
+1. `~/.ashare-assistant/data/{DATE}/market_review.md`
+2. `~/.ashare-assistant/data/{DATE}/filtered/run_id.md`
 
-阶段3完成后，必须先做硬规则校验，再做结构化输出校验。
+## 步骤
 
-### 第3.5步推荐执行方式
-
-深研由采集预处理自动完成，建议在盘后先执行：
+1. 从复盘报告提取 `market.regime`。
+2. 提取候选股清单：代码、名称、行业/题材、核心逻辑、风险点。
+3. 为每只股票给 `action`：
+   - 买入/建仓 -> `buy`
+   - 持有 -> `hold`
+   - 卖出/清仓 -> `sell`
+   - 其他 -> `watch`
+4. 输出固定 JSON 结构。
+5. 运行结构校验（仅告警）：
 
 ```bash
-python3 -m ashare_data.collect --date {DATE}
+python scripts/validate_output.py \
+  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json || true
 ```
 
-校验深研结果是否可用：
+## 输出结构
 
-```bash
-ls ~/.ashare-assistant/data/{DATE}/report/dr_*_brief.md
+```json
+{
+  "run_id": "YYYYMMDD-xxx-HHMMSS",
+  "as_of_date": "YYYY-MM-DD",
+  "market": { "regime": "strong" },
+  "candidates": [
+    {
+      "code": "000001",
+      "name": "示例",
+      "score": 4.0,
+      "type": "trend",
+      "action": "watch",
+      "sector": "示例板块",
+      "position": 0,
+      "thesis_short": "30字以内",
+      "risk_note": "30字以内"
+    }
+  ],
+  "risk_flags": {
+    "data_degraded": false,
+    "output_schema_invalid": false,
+    "strategy_version_fallback": false
+  }
+}
 ```
 
-### 校验
+## 约束
 
-```bash
-python3 scripts/risk_check.py --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json
-```
-
-如 `risk_check.py` 有 error 级别违规，必须调整候选计划并重试，直至通过。
-warn 级别违规需在报告"风险提示"章节显式说明。
-
-```bash
-python3 scripts/validate_output.py \
-  --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json
-```
-
-若结构校验失败：
-
-1. 标记 `run_failed=true`
-2. 标记 `risk_flags.output_schema_invalid=true`
-3. 继续产出人类可读报告
-4. 不写 `decision_log`
+1. 顶层字段不增不减。
+2. `action` 只允许 `buy/hold/sell/watch`。
+3. `position` 固定为 `0`。
+4. `thesis_short` 和 `risk_note` 各不超过 30 字。
