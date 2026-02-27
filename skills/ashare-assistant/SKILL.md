@@ -22,6 +22,19 @@ description: >
 4. 风控失败时必须修订计划，不能直接结束流程。
 </HARD-GATE>
 
+## 执行环境
+
+脚本位于 skill 安装目录下的 `scripts/` 子目录。**必须在 skill 安装目录下**以 `-m scripts.<module>` 方式调用，否则相对导入会失败：
+
+```bash
+# 正确
+cd <skill_install_dir>
+python -m scripts.trade_review --output ...
+
+# 错误（会报 ModuleNotFoundError）
+python scripts/trade_review.py --output ...
+```
+
 ## Workflow
 
 ### Step 1. 准备数据
@@ -55,13 +68,13 @@ fi
 ### Step 5. 风控与日志
 
 ```bash
-python scripts/risk_check.py \
+python -m scripts.risk_check \
   --input ${DATA_DIR}/analysis/candidates.json
 
-python scripts/validate_output.py \
+python -m scripts.validate_output \
   --input ${DATA_DIR}/analysis/candidates.json || true
 
-python scripts/decision_logger.py \
+python -m scripts.decision_logger \
   --input ${DATA_DIR}/analysis/candidates.json
 ```
 

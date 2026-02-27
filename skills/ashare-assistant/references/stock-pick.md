@@ -22,7 +22,7 @@
 5. 运行结构校验（仅告警）：
 
 ```bash
-python scripts/validate_output.py \
+python -m scripts.validate_output \
   --input ~/.ashare-assistant/data/{DATE}/analysis/candidates.json || true
 ```
 

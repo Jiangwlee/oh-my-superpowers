@@ -18,11 +18,11 @@
 ```bash
 DATE=$(date +%Y-%m-%d)
 
-python scripts/trade_review.py \
+python -m scripts.trade_review \
   --output ~/.ashare-assistant/data/${DATE}/analysis/trade_review.json \
   --strategy strategy/active.yaml
 
-python scripts/holding_insight.py \
+python -m scripts.holding_insight \
   --output ~/.ashare-assistant/data/${DATE}/analysis/holding_insight.json \
   --strategy strategy/active.yaml
 ```
@@ -33,13 +33,13 @@ python scripts/holding_insight.py \
 
 ### 1. 日内行情摘要
 ```bash
-python scripts/intraday_summary.py --code {CODE} --date {YYYYMMDD}
+python -m scripts.intraday_summary --code {CODE} --date {YYYYMMDD}
 ```
 输出：30分钟聚合 K 线、开盘跳空幅度、全天统计。用于了解某只股票当天整体走势。
 
 ### 2. 操作时刻现场还原
 ```bash
-python scripts/trade_context.py --code {CODE} --date {YYYYMMDD} \
+python -m scripts.trade_context --code {CODE} --date {YYYYMMDD} \
   --time {HHMMSS} --price {PRICE} --window 30
 ```
 `--time` 和 `--price` 来自 `broker_account.json` 的 `order_list` 字段。
@@ -47,14 +47,14 @@ python scripts/trade_context.py --code {CODE} --date {YYYYMMDD} \
 
 ### 3. 开盘背景（反事实基线）
 ```bash
-python scripts/opening_context.py --code {CODE} --date {YYYYMMDD}
+python -m scripts.opening_context --code {CODE} --date {YYYYMMDD}
 ```
 输出：前收盘价、MA5/MA10/MA20、跳空幅度、开盘30分钟表现。
 用于判断：**如果在开盘前看到这些信息，你会怎么做？** 与实际操作对比。
 
 ### 4. 相对强弱
 ```bash
-python scripts/relative_strength.py --code {CODE} --date {YYYYMMDD} \
+python -m scripts.relative_strength --code {CODE} --date {YYYYMMDD} \
   --benchmark 000001
 ```
 输出：5 个时间节点（10:00/11:00/13:30/14:30/15:00）个股 vs 大盘对比。
@@ -95,10 +95,10 @@ python scripts/relative_strength.py --code {CODE} --date {YYYYMMDD} \
 ```bash
 DATE=$(date +%Y-%m-%d)
 
-python scripts/risk_check.py \
+python -m scripts.risk_check \
   --input ~/.ashare-assistant/data/${DATE}/analysis/candidates.json
 
-python scripts/decision_logger.py \
+python -m scripts.decision_logger \
   --input ~/.ashare-assistant/data/${DATE}/analysis/candidates.json
 ```
 
