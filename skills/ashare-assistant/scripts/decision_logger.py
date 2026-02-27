@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from ashare_data.core.config import DECISION_LOG
+
+logger = logging.getLogger(__name__)
 
 
 def _build_record(payload: dict[str, Any]) -> dict[str, Any]:
@@ -88,7 +91,11 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "缺少 --input"}, ensure_ascii=False))
         raise SystemExit(1)
 
-    result = append_decision_log(Path(args.input), Path(args.log_file))
+    try:
+        result = append_decision_log(Path(args.input), Path(args.log_file))
+    except Exception as exc:
+        logger.exception("decision_logger 失败: %s", exc)
+        result = {"ok": False, "error": str(exc)}
     print(json.dumps(result, ensure_ascii=False, indent=2))
     raise SystemExit(0 if result.get("ok") else 1)
 

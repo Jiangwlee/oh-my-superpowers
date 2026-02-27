@@ -21,14 +21,10 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, asdict, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-try:
-    import yaml  # type: ignore
-except Exception:
-    yaml = None
 from ashare_data.fetchers.broker_account import fetch_broker_account, load_history
 from scripts.core import shared as shared_core
 from ashare_data.fetchers.trend_scanner import (
@@ -36,11 +32,9 @@ from ashare_data.fetchers.trend_scanner import (
     analyze_trend,
     apply_scoring,
     fetch_jrj_daily_kline,
-    _trade_signal_from_ma,
 )
 
 logger = logging.getLogger(__name__)
-_CN_TZ = timezone(timedelta(hours=8))
 
 
 # ---------------------------------------------------------------------------
@@ -858,6 +852,7 @@ def main() -> None:
         output_path = args.output
     else:
         from ashare_data.core.config import data_dir_for_date
+
         output_path = str(data_dir_for_date() / "analysis" / "holding_insight.json")
 
     result = analyze_holdings(

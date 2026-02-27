@@ -10,14 +10,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-try:
-    import yaml  # type: ignore
-except Exception:  # pragma: no cover - 环境未安装时降级
-    yaml = None
 
 from ashare_data.fetchers.broker_account import fetch_broker_account
 from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
@@ -25,28 +20,6 @@ from ashare_data.core.config import DECISION_LOG
 from scripts.core import shared as shared_core
 
 logger = logging.getLogger(__name__)
-
-_CN_TZ = timezone(timedelta(hours=8))
-
-
-def _now_cn_iso() -> str:
-    return shared_core.now_cn_iso()
-
-
-def _today_cn() -> str:
-    return shared_core.today_cn()
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    return shared_core.safe_float(value, default)
-
-
-def _safe_int(value: Any, default: int = 0) -> int:
-    return shared_core.safe_int(value, default)
-
-
-def _norm_code(value: Any) -> str:
-    return shared_core.norm_code(value)
 
 
 def _order_direction(order: dict[str, Any]) -> str:
@@ -91,13 +64,13 @@ def _is_filled(order: dict[str, Any]) -> bool:
 
 
 def _order_price(order: dict[str, Any]) -> float:
-    return _safe_float(
+    return shared_core.safe_float(
         order.get("price") or order.get("deal_price") or order.get("match_price")
     )
 
 
 def _order_qty(order: dict[str, Any]) -> int:
-    return _safe_int(
+    return shared_core.safe_int(
         order.get("deal_volume")
         or order.get("deal_amount")
         or order.get("amount")
@@ -210,7 +183,7 @@ def _candidate_map(candidates: list[dict[str, Any]]) -> dict[str, dict[str, Any]
     for c in candidates:
         if not isinstance(c, dict):
             continue
-        code = _norm_code(c.get("code"))
+        code = shared_core.norm_code(c.get("code"))
         if code:
             out[code] = c
     return out
@@ -237,7 +210,7 @@ def _check_unplanned_trades(
             continue
         if _order_direction(order) != "buy":
             continue
-        code = _norm_code(order.get("code"))
+        code = shared_core.norm_code(order.get("code"))
         name = str(order.get("name") or "")
         qty = _order_qty(order)
         price = _order_price(order)
@@ -290,20 +263,20 @@ def _check_missed_execution(
     """记录推荐买入未执行（仅事实记录，不作优劣评判）。"""
     flaws: list[dict[str, Any]] = []
     filled_buys = {
-        _norm_code(o.get("code"))
+        shared_core.norm_code(o.get("code"))
         for o in orders
         if isinstance(o, dict) and _order_direction(o) == "buy" and not _is_cancelled(o)
     }
     hold_list = positions.get("hold_list") if isinstance(positions, dict) else []
     held_codes = {
-        _norm_code(p.get("code"))
+        shared_core.norm_code(p.get("code"))
         for p in (hold_list if isinstance(hold_list, list) else [])
         if isinstance(p, dict)
     }
     for cand in candidates:
         if not isinstance(cand, dict) or str(cand.get("action") or "") != "buy":
             continue
-        code = _norm_code(cand.get("code"))
+        code = shared_core.norm_code(cand.get("code"))
         if not code or code in filled_buys or code in held_codes:
             continue
         flaws.append(
@@ -313,7 +286,7 @@ def _check_missed_execution(
                 code=code,
                 name=str(cand.get("name") or ""),
                 message="推荐买入未执行",
-                detail={"score": _safe_float(cand.get("score"))},
+                detail={"score": shared_core.safe_float(cand.get("score"))},
             )
         )
     return flaws
@@ -344,9 +317,9 @@ def _check_position_compliance(
     flaws: list[dict[str, Any]] = []
     limits = _parse_position_limits(strategy)
 
-    total_assets = _safe_float(positions.get("total"))
-    usable_cash = _safe_float(positions.get("usable"))
-    hold_earn = _safe_float(positions.get("hold_earn"))
+    total_assets = shared_core.safe_float(positions.get("total"))
+    usable_cash = shared_core.safe_float(positions.get("usable"))
+    hold_earn = shared_core.safe_float(positions.get("hold_earn"))
     hold_list = (
         positions.get("hold_list")
         if isinstance(positions.get("hold_list"), list)
@@ -377,7 +350,7 @@ def _check_position_compliance(
                 _flaw(
                     category="position_flaw",
                     severity="error",
-                    code=_norm_code(pos.get("code")),
+                    code=shared_core.norm_code(pos.get("code")),
                     name=str(pos.get("name") or ""),
                     message="单股仓位超限",
                     detail={"single_pct": round(single_pct * 100, 2)},
@@ -388,7 +361,7 @@ def _check_position_compliance(
                 _flaw(
                     category="position_flaw",
                     severity="warning",
-                    code=_norm_code(pos.get("code")),
+                    code=shared_core.norm_code(pos.get("code")),
                     name=str(pos.get("name") or ""),
                     message="单股仓位超限",
                     detail={"single_pct": round(single_pct * 100, 2)},
@@ -584,7 +557,7 @@ def run_trade_review(
     review_date = (
         str(broker_data.get("date") or "")
         or str(broker_data.get("fetched_at") or "")[:10]
-        or _today_cn()
+        or shared_core.today_cn()
     )
     strategy = _load_strategy(strategy_path)
     decision = _load_latest_decision(decision_log_path, review_date)
@@ -641,17 +614,17 @@ def run_trade_review(
     )
     plan_match_rate = (planned_buys / len(buy_orders) * 100.0) if buy_orders else 100.0
 
-    total_assets = _safe_float(positions.get("total"))
-    usable_cash = _safe_float(positions.get("usable"))
-    hold_earn = _safe_float(positions.get("hold_earn"))
+    total_assets = shared_core.safe_float(positions.get("total"))
+    usable_cash = shared_core.safe_float(positions.get("usable"))
+    hold_earn = shared_core.safe_float(positions.get("hold_earn"))
 
     result = {
         "review_date": review_date,
-        "generated_at": _now_cn_iso(),
+        "generated_at": shared_core.now_cn_iso(),
         "account_snapshot": {
             "total_assets": round(total_assets, 2),
             "usable_cash": round(usable_cash, 2),
-            "day_earn": round(_safe_float(positions.get("day_earn")), 2),
+            "day_earn": round(shared_core.safe_float(positions.get("day_earn")), 2),
             "hold_earn": round(hold_earn, 2),
             "position_count": len(positions.get("hold_list", [])),
             "account_mode": account_mode,

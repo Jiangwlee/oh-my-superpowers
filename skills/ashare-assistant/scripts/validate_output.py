@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_MARKET_REGIME = {"strong", "neutral", "weak"}
 _ALLOWED_ACTION = {"buy", "hold", "sell", "watch"}
@@ -129,7 +132,14 @@ def main() -> None:
         print(json.dumps({"ok": False, "errors": ["缺少 --input"], "warnings": []}, ensure_ascii=False))
         raise SystemExit(1)
 
-    payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.exception("读取输入失败: %s", exc)
+        print(json.dumps({"ok": False, "errors": [f"读取失败: {exc}"], "warnings": []},
+                         ensure_ascii=False))
+        raise SystemExit(1)
+
     if not isinstance(payload, dict):
         print(json.dumps({"ok": False, "errors": ["顶层必须是 JSON 对象"], "warnings": []}, ensure_ascii=False))
         raise SystemExit(1)

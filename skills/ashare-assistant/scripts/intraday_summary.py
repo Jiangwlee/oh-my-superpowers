@@ -2,24 +2,18 @@
 """日内行情摘要工具（30分钟聚合）。
 
 用法:
-    python scripts/intraday_summary.py --code 000338 --date 20260226
-    python scripts/intraday_summary.py --code 000338  # 默认今天
+    python -m scripts.intraday_summary --code 000338 --date 20260226
+    python -m scripts.intraday_summary --code 000338  # 默认今天
 
 输出: JSON 到 stdout
 """
 
 import argparse
 import json
-import os
+import logging
 import sys
 
-_SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_PKG_ROOT = os.path.join(
-    os.path.dirname(os.path.dirname(_SKILL_ROOT)), "packages", "ashare-data"
-)
-for _p in (_SKILL_ROOT, _PKG_ROOT):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -28,10 +22,14 @@ def main() -> None:
     parser.add_argument("--date", default=None, help="日期 YYYYMMDD 或 YYYY-MM-DD，默认今天")
     args = parser.parse_args()
 
-    from ashare_data.fetchers.intraday_analysis import get_intraday_summary
-
-    result = get_intraday_summary(args.code, args.date)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    try:
+        from ashare_data.fetchers.intraday_analysis import get_intraday_summary
+        result = get_intraday_summary(args.code, args.date)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    except Exception as exc:
+        logger.exception("intraday_summary 失败: %s", exc)
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

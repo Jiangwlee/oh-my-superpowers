@@ -1,5 +1,6 @@
 # 默认策略模板 - 基线参考，不可修改
 # 活动策略见 active.yaml，LLM 可根据复盘结论调整
+strategy_version: "v1.0"
 
 trend_stock:
   description: "趋势股交易策略"
@@ -36,3 +37,12 @@ account_mode:
     condition: "账户回撤 > 30%（hold_earn / total ≤ -0.30）"
     action: "清仓观望，待连续 3 个交易日净值回升后解除，不接受任何新仓建议"
   hysteresis_days: 3
+
+risk_limits:
+  trend_single_limit: 0.20
+  theme_single_limit: 0.15
+  sector_count_limit: 3
+  sector_capital_limit: 0.50
+  theme_total_limit: 0.80
+  candidate_count_max: 10
+  candidate_count_min: 3

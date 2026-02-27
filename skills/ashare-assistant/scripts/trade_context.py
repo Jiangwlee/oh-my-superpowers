@@ -2,8 +2,8 @@
 """操作时刻行情现场还原工具。
 
 用法:
-    python scripts/trade_context.py --code 603163 --date 20260226 --time 093047 --price 128.73
-    python scripts/trade_context.py --code 603163 --time 093047  # 默认今天，不传价格
+    python -m scripts.trade_context --code 603163 --date 20260226 --time 093047 --price 128.73
+    python -m scripts.trade_context --code 603163 --time 093047  # 默认今天，不传价格
 
 参数:
     --code:   6位股票代码
@@ -17,16 +17,10 @@
 
 import argparse
 import json
-import os
+import logging
 import sys
 
-_SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_PKG_ROOT = os.path.join(
-    os.path.dirname(os.path.dirname(_SKILL_ROOT)), "packages", "ashare-data"
-)
-for _p in (_SKILL_ROOT, _PKG_ROOT):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -38,16 +32,20 @@ def main() -> None:
     parser.add_argument("--window", type=int, default=30, help="前后各取分钟数，默认30")
     args = parser.parse_args()
 
-    from ashare_data.fetchers.intraday_analysis import get_trade_context
-
-    result = get_trade_context(
-        code=args.code,
-        date=args.date,
-        trade_time=args.time,
-        trade_price=args.price,
-        window_minutes=args.window,
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    try:
+        from ashare_data.fetchers.intraday_analysis import get_trade_context
+        result = get_trade_context(
+            code=args.code,
+            date=args.date,
+            trade_time=args.time,
+            trade_price=args.price,
+            window_minutes=args.window,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    except Exception as exc:
+        logger.exception("trade_context 失败: %s", exc)
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
