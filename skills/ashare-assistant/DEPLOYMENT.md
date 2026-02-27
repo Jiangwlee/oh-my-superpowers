@@ -80,16 +80,21 @@ cp -R skills/ashare-assistant/. ~/clawd/skills/ashare-assistant/
 openclaw gateway restart
 ```
 
-### 3.2 设置定时采集
+### 3.2 设置定时任务
 
 编辑 crontab（`crontab -e`）：
 
 ```cron
-# 每个交易日 15:35 采集
-35 15 * * 1-5 /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> ~/.ashare-assistant/collect.log 2>&1
+# ashare-collect：每 30 分钟采集一次（全天候，含盘中数据）
+*/30 * * * * /opt/homebrew/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> $HOME/.ashare-assistant/logs/collect.log 2>&1
+
+# ashare-diagnose：每日 16:00 回填 T+1/T+5 绩效（盘后执行）
+0 16 * * * /opt/homebrew/bin/ashare-diagnose >> $HOME/.ashare-assistant/logs/diagnose.log 2>&1
 ```
 
-> 时间选择 15:35 而非 15:00，避免盘后数据还未更新完毕。
+说明：
+- `ashare-collect`：每 30 分钟运行一次，内部会判断盘后缓存短路（15:00 后若当日持仓缓存存在则复用），不会重复拉取。
+- `ashare-diagnose`：盘后定期回填历史决策 T+1/T+5 收益与基准对比，写入 `~/.ashare-assistant/memory/decision_log.jsonl`，用于策略归因。日志路径均位于 `~/.ashare-assistant/logs/`（目录如不存在会自动创建）。
 
 ### 3.3 手动验证
 
@@ -117,8 +122,8 @@ Agent 绑定关系：`ashare-assistant` 绑定 `smartrader`，工作目录 `work
 scp -r skills/ashare-assistant/ \
     root@tencent-vps:/root/.openclaw/workspace-smartrader/skills/
 
-# 仅更新单个脚本（增量更新）
-scp skills/ashare-assistant/scripts/run_analysis.py \
+# 仅更新单个脚本（增量更新，示例）
+scp skills/ashare-assistant/scripts/trade_review.py \
     root@tencent-vps:/root/.openclaw/workspace-smartrader/skills/ashare-assistant/scripts/
 
 # 重启 Gateway
@@ -141,16 +146,21 @@ scp -r packages/ashare-data/ root@tencent-vps:/root/ashare-data/
 ssh root@tencent-vps "python3 -m pip install -e /root/ashare-data --break-system-packages"
 ```
 
-### 4.3 设置定时采集（VPS crontab）
+### 4.3 设置定时任务（VPS crontab）
 
 ```bash
 ssh root@tencent-vps "crontab -e"
 ```
 
 ```cron
-# 每个交易日 15:35 采集
-35 15 * * 1-5 /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/collect.log 2>&1
+# ashare-collect：每 30 分钟采集一次
+*/30 * * * * /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/logs/collect.log 2>&1
+
+# ashare-diagnose：每日 16:00 回填 T+1/T+5 绩效
+0 16 * * * /usr/local/bin/ashare-diagnose >> /root/.ashare-assistant/logs/diagnose.log 2>&1
 ```
+
+> VPS 上 Python CLI 通常安装在 `/usr/local/bin/`；若路径不同，用 `which ashare-collect` 确认。
 
 ---
 
@@ -225,8 +235,8 @@ which ashare-collect  # 确认 PATH 中有 pip bin 目录
 
 **Q: VPS 上 cron 不执行**
 
-检查 PATH：cron 环境没有 `~/.bashrc`，需在 crontab 中显式指定路径：
+检查 PATH：cron 环境没有 `~/.bashrc`，需在 crontab 中显式指定完整路径（`which ashare-collect` 确认），日志路径也要用绝对路径：
 
 ```cron
-35 15 * * 1-5 /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/collect.log 2>&1
+*/30 * * * * /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/logs/collect.log 2>&1
 ```
