@@ -121,7 +121,7 @@ python -m unittest skills.ashare-assistant.tests.test_broker_account
 ### `ashare-wl-monitor` 工作原理
 
 1. **时间门控**：北京时间 9:30–15:00 外自动跳过
-2. **节假日检测**：调用同花顺接口，`trade_status.id != "trading"` 时跳过（避免节假日基于昨日收盘价产生虚假信号）
+2. **节假日检测**：调用同花顺接口，若 `trade_status` 不属于交易中状态（如 `trading`/`morning_trade`/`afternoon_trade`）则跳过（避免节假日基于昨日收盘价产生虚假信号）
 3. **市场危险等级**：跌停 ≥ 80 时写空信号文件并退出；30–79 时评分门槛 +15
 4. **个股评分**：价格与 MA10/MA20 位置、缩量、K 线形态综合评分
 5. **输出**：覆盖写 `~/.ashare-assistant/signals/watchlist_signals.json`

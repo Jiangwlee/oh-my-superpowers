@@ -32,6 +32,7 @@ _THS_HEADERS = {
     "Referer": "http://data.10jqka.com.cn/",
 }
 _THS_FIELDS = "199112,10,9001,330323,330324,330325,9002,330329,133971,133970,1968584,3475914,9003"
+_OPEN_TRADE_STATUS_IDS = {"trading", "morning_trade", "afternoon_trade"}
 
 
 @dataclass
@@ -44,7 +45,7 @@ class MarketSentiment:
         "red"     -- 市场高压（跌停 >= 80），中止扫描
         "unknown" -- 接口不可用，降级处理（不调整门槛）
 
-    market_open: THS trade_status.id == "trading"，节假日/盘后为 False。
+    market_open: THS trade_status 表示当前在交易时段时为 True，节假日/盘后为 False。
         False 时调用方应跳过扫描，避免基于昨日收盘价产生虚假信号。
     """
 
@@ -90,10 +91,16 @@ def fetch_market_sentiment(cookie: str | None = None) -> MarketSentiment:
         logger.warning("fetch_market_sentiment: 响应格式异常")
         return MarketSentiment(danger_level="unknown")
 
-    # 交易状态：trade_status.id == "trading" 表示当前在交易时段
-    # 节假日和盘后均为 "closed"，用于过滤非交易日的虚假信号
-    trade_status_id = (pool_data.get("trade_status") or {}).get("id", "")
-    market_open = trade_status_id == "trading"
+    # THS 交易状态字段在不同时段可能返回：
+    # - trading / morning_trade / afternoon_trade: 交易中
+    # - closed / holiday 等: 非交易中
+    trade_status = pool_data.get("trade_status") or {}
+    trade_status_id = str(trade_status.get("id", ""))
+    trade_status_name = str(trade_status.get("name", ""))
+    market_open = (
+        trade_status_id in _OPEN_TRADE_STATUS_IDS
+        or ("交易中" in trade_status_name)
+    )
 
     # 涨停总数：data.page.total
     limit_up = int((pool_data.get("page") or {}).get("total", 0))

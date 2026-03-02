@@ -151,3 +151,24 @@ python3 -m scripts.decision_logger --input "${DATA_DIR}/analysis/candidates.json
 - 数据采集依赖 `ashare-data` 包（需单独安装）
 - VPS 上 `opencode` 需创建软链接至 `/usr/local/bin/`，否则 cron 任务找不到命令
 - 新增 CLI entry point 后必须重新部署 `ashare-data` 包并 `pip install -e`
+
+### Cron 环境 PATH 与 opencode（故障记录）
+
+在 Tencent VPS 上出现过如下错误（2026-03-02）：
+
+- `FileNotFoundError: [Errno 2] No such file or directory: 'opencode'`
+
+根因：
+
+- `opencode` 已安装，但 `cron` 运行 `ashare-collect` 时使用的 PATH 不含 `opencode` 所在目录。
+- 系统 cron 默认 PATH 常见为 `/sbin:/bin:/usr/sbin:/usr/bin`，不包含 `/usr/local/bin` 与 NVM 路径。
+
+建议：
+
+- 在 `ashare-collect` 的 crontab 条目中显式设置 PATH。
+
+示例（已在 `tencent-vps` 生效）：
+
+```cron
+*/30 * * * * PATH=/root/.nvm/versions/node/v22.22.0/bin:/usr/local/bin:/usr/bin:/bin /usr/local/bin/ashare-collect --date $(date +\%Y-\%m-\%d) >> /root/.ashare-assistant/logs/collect.log 2>&1
+```

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import time
+from shutil import which
 from pathlib import Path
 
 _NEWS_FILES = [
@@ -83,6 +84,8 @@ def _run_opencode_markdown(
             check=False,
             cwd=str(Path.home()),
         )
+    except FileNotFoundError:
+        return False, "opencode_not_found"
     except subprocess.TimeoutExpired:
         return False, "timeout"
 
@@ -111,6 +114,16 @@ def run_sentiment_preprocess(
     report_dir.mkdir(parents=True, exist_ok=True)
 
     started = time.time()
+    if which("opencode") is None:
+        elapsed = round(time.time() - started, 3)
+        return {
+            "ok": True,
+            "skipped": True,
+            "elapsed_sec": elapsed,
+            "news": {"ok": False, "message": "skipped_opencode_not_found"},
+            "social": {"ok": False, "message": "skipped_opencode_not_found"},
+            "model": model,
+        }
 
     news_files_section, news_attached = _build_files_section(filtered_dir, _NEWS_FILES)
     news_prompt = _NEWS_TEMPLATE.replace("{FILES_SECTION}", news_files_section)
