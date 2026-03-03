@@ -461,26 +461,27 @@ def _analyze_signal(
     score = 0
     reasons: list[str] = []
 
-    # ──────────────── 周线评分（核心，占主要权重） ────────────────
+    # ──────────────── 周线评分（核心，只认回调买点） ────────────────
+    # 关键：只有回调到5周均线附近才是买点！
+    # 价格在5周均线之上是"持有"信号，不是"买入"信号
     if ma5_week > 0:
         week_deviation = (current - ma5_week) / ma5_week * 100
         if abs(week_deviation) <= 3.0:
             # 回调到5周均线附近（±3%），这是周线级别的最佳买点
-            score += 40
+            score += 50
             reasons.append(f"回调至5周均线({week_deviation:+.1f}%)")
         elif current > ma5_week:
-            # 价格在5周均线之上，周线趋势完好
-            score += 20
-            reasons.append("周线趋势完好")
+            # 价格在5周均线之上，这是"持有"信号，不给买入加分
+            reasons.append("周线趋势完好（持有）")
     else:
-        # 没有周K时，用日线MA10作为后备
+        # 没有周K时，用日线MA10作为后备（同样只认回调）
         if ma10 > 0 and ma20 > 0:
             if ma20 <= current < ma10:
-                score += 20
+                score += 30
                 reasons.append("回调至MA10附近")
             elif current >= ma10:
-                score += 10
-                reasons.append("价格在MA10之上")
+                # 价格在MA10之上，不给买入加分
+                reasons.append("价格在MA10之上（持有）")
 
     # ──────────────── 日线辅助评分 ────────────────
     # 成交量对比
@@ -507,7 +508,7 @@ def _analyze_signal(
 
     # ──────────────── 门槛设置 ────────────────
     threshold_bonus = 15 if sentiment.danger_level == "yellow" else 0
-    threshold_buy = 40 + threshold_bonus  # 提高买入门槛
+    threshold_buy = 45 + threshold_bonus  # 只有回调到5周均线附近才能触发
     threshold_watch = 25 + threshold_bonus
 
     reason_str = "，".join(reasons) if reasons else "观察中"
