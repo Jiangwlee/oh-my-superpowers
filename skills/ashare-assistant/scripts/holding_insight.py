@@ -38,52 +38,8 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# 工具函数（部分与 trade_review.py 共用逻辑，为保持模块独立性此处复制）
+# 本模块特有工具函数（shared.py 中没有的）
 # ---------------------------------------------------------------------------
-def _now_cn_iso() -> str:
-    return shared_core.now_cn_iso()
-
-
-def _today_cn() -> str:
-    return shared_core.today_cn()
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    return shared_core.safe_float(value, default)
-
-
-def _safe_int(value: Any, default: int = 0) -> int:
-    return shared_core.safe_int(value, default)
-
-
-def _norm_code(value: Any) -> str:
-    return shared_core.norm_code(value)
-
-
-def _extract_pct_limit(text: str, fallback: float) -> float:
-    return shared_core.extract_pct_limit(text, fallback)
-
-
-def _parse_range_to_pct(text: str) -> tuple[float, float] | None:
-    return shared_core.parse_range_to_pct(text)
-
-
-def _load_strategy(yaml_path: str) -> dict[str, Any]:
-    return shared_core.load_strategy(yaml_path, logger=logger)
-
-
-def _determine_account_mode(total: float, hold_earn: float) -> str:
-    return shared_core.determine_account_mode(total, hold_earn)
-
-
-def _position_market_value(pos: dict[str, Any]) -> float:
-    return shared_core.position_market_value(pos)
-
-
-def _holding_days_from_history(code: str, history: dict[str, Any]) -> int:
-    return shared_core.holding_days_from_history(code, history)
-
-
 def _below_ma20_streak(closes: list[float]) -> int:
     """从K线收盘价序列计算连续低于MA20的天数（从最新一天往回数）。"""
     if len(closes) < 20:
@@ -176,7 +132,7 @@ def _analyze_holdings_trend(
     for pos in hold_list:
         if not isinstance(pos, dict):
             continue
-        code = _norm_code(pos.get("code"))
+        code = shared_core.norm_code(pos.get("code"))
         name = str(pos.get("name") or "")
         if not code:
             continue
@@ -327,19 +283,19 @@ def _decide_single(
     funding_map: dict[str, float],
 ) -> HoldingDecision:
     """对单只持仓执行瀑布式规则链决策。"""
-    code = _norm_code(pos.get("code"))
+    code = shared_core.norm_code(pos.get("code"))
     name = str(pos.get("name") or "")
-    hold_vol = _safe_int(pos.get("hold_vol") or pos.get("volume") or pos.get("qty"))
-    usable_vol = _safe_int(pos.get("usable_vol") or hold_vol)
-    last_price = _safe_float(
+    hold_vol = shared_core.safe_int(pos.get("hold_vol") or pos.get("volume") or pos.get("qty"))
+    usable_vol = shared_core.safe_int(pos.get("usable_vol") or hold_vol)
+    last_price = shared_core.safe_float(
         pos.get("last_price") or pos.get("current_price") or pos.get("price")
     )
-    market_value = _position_market_value(pos)
+    market_value = shared_core.position_market_value(pos)
     position_pct = (market_value / total_assets * 100.0) if total_assets > 0 else 0.0
-    holding_days = _holding_days_from_history(code, history)
+    holding_days = shared_core.holding_days_from_history(code, history)
     # 盈亏计算
-    hold_earn = _safe_float(pos.get("hold_earn"))
-    cost_price = _safe_float(pos.get("cost_price"))
+    hold_earn = shared_core.safe_float(pos.get("hold_earn"))
+    cost_price = shared_core.safe_float(pos.get("cost_price"))
     if cost_price > 0 and last_price > 0:
         pnl_pct = (last_price - cost_price) / cost_price * 100.0
     elif market_value > 0 and hold_earn != 0:
@@ -349,7 +305,7 @@ def _decide_single(
         pnl_pct = 0.0
     # K线计算 MA
     closes = [
-        _safe_float(b.get("close")) for b in kline if _safe_float(b.get("close")) > 0
+        shared_core.safe_float(b.get("close")) for b in kline if shared_core.safe_float(b.get("close")) > 0
     ]
     ma5 = sum(closes[-5:]) / 5.0 if len(closes) >= 5 else 0.0
     ma10 = sum(closes[-10:]) / 10.0 if len(closes) >= 10 else 0.0
@@ -631,9 +587,9 @@ def analyze_holdings(
         except Exception:
             logger.exception("获取券商数据失败")
             return {"error": "获取券商数据失败", "decisions": []}
-    total_assets = _safe_float(broker_data.get("total"))
-    usable_cash = _safe_float(broker_data.get("usable"))
-    hold_earn = _safe_float(broker_data.get("hold_earn"))
+    total_assets = shared_core.safe_float(broker_data.get("total"))
+    usable_cash = shared_core.safe_float(broker_data.get("usable"))
+    hold_earn = shared_core.safe_float(broker_data.get("hold_earn"))
     hold_list = broker_data.get("hold_list", [])
     if not isinstance(hold_list, list):
         hold_list = []
@@ -642,13 +598,13 @@ def analyze_holdings(
         p
         for p in hold_list
         if isinstance(p, dict)
-        and _safe_int(p.get("hold_vol") or p.get("volume") or p.get("qty")) > 0
+        and shared_core.safe_int(p.get("hold_vol") or p.get("volume") or p.get("qty")) > 0
     ]
     if not hold_list:
         logger.info("无持仓，跳过分析")
         return {
-            "review_date": _today_cn(),
-            "generated_at": _now_cn_iso(),
+            "review_date": shared_core.today_cn(),
+            "generated_at": shared_core.now_cn_iso(),
             "account_snapshot": {
                 "total_assets": total_assets,
                 "usable_cash": usable_cash,
@@ -661,10 +617,10 @@ def analyze_holdings(
     # 2. 补充持仓价格
     _enrich_hold_list_prices(hold_list)
     # 3. 加载策略 & 历史
-    strategy = _load_strategy(strategy_path)
+    strategy = shared_core.load_strategy(strategy_path)
     history = load_history(days=30)
     # 4. 计算账户模式和仓位
-    account_mode = _determine_account_mode(total_assets, hold_earn)
+    account_mode = shared_core.determine_account_mode(total_assets, hold_earn)
     total_position_pct = (
         ((total_assets - usable_cash) / total_assets * 100.0)
         if total_assets > 0
@@ -673,7 +629,7 @@ def analyze_holdings(
     # 解析策略限制
     trend_cfg = strategy.get("trend_stock", {})
     single_limit_pct = (
-        _extract_pct_limit(
+        shared_core.extract_pct_limit(
             str(trend_cfg.get("position", "") if isinstance(trend_cfg, dict) else ""),
             0.20,
         )
@@ -685,7 +641,7 @@ def analyze_holdings(
         if isinstance(market_pos, dict)
         else "30-50%"
     )
-    regime_range = _parse_range_to_pct(regime_str)
+    regime_range = shared_core.parse_range_to_pct(regime_str)
     regime_upper_pct = regime_range[1] if regime_range else 50.0
     logger.info(
         "账户模式=%s, 总仓位=%.1f%%, 单股上限=%.0f%%, 市场上限=%.0f%%",
@@ -697,18 +653,18 @@ def analyze_holdings(
     # 5. 批量趋势分析
     trend_map = _analyze_holdings_trend(hold_list)
     # 6. 资金面查询
-    codes = [_norm_code(p.get("code")) for p in hold_list if _norm_code(p.get("code"))]
+    codes = [shared_core.norm_code(p.get("code")) for p in hold_list if shared_core.norm_code(p.get("code"))]
     funding_map = _fetch_funding_info(codes)
     # 7. 逐股决策
     decisions: list[HoldingDecision] = []
     for pos in hold_list:
         if not isinstance(pos, dict):
             continue
-        code = _norm_code(pos.get("code"))
+        code = shared_core.norm_code(pos.get("code"))
         if not code:
             continue
         # 过滤已清仓记录 (当日卖出后 hold_vol=0 但 JVQuant 仍返回)
-        if _safe_int(pos.get("hold_vol") or pos.get("volume") or pos.get("qty")) <= 0:
+        if shared_core.safe_int(pos.get("hold_vol") or pos.get("volume") or pos.get("qty")) <= 0:
             continue
         trend_data = trend_map.get(code)
         trend_result = trend_data[0] if trend_data else None
@@ -740,8 +696,8 @@ def analyze_holdings(
         )
     )
     result = {
-        "review_date": _today_cn(),
-        "generated_at": _now_cn_iso(),
+        "review_date": shared_core.today_cn(),
+        "generated_at": shared_core.now_cn_iso(),
         "account_snapshot": {
             "total_assets": round(total_assets, 2),
             "usable_cash": round(usable_cash, 2),
