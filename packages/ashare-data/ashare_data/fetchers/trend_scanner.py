@@ -697,7 +697,16 @@ def fetch_jrj_daily_kline(
         cp = _norm_price(item.get("close") if "close" in item else item.get("nLastPx"))
         hp = _norm_price(item.get("high") if "high" in item else item.get("nHighPx"))
         lp = _norm_price(item.get("low") if "low" in item else item.get("nLowPx"))
-        out.append({"time": int(t), "open": op, "close": cp, "high": hp, "low": lp})
+        # 成交量: llVolume 是股数，转为手(100股)
+        vol = item.get("volume") or item.get("llVolume", 0)
+        if vol:
+            try:
+                vol = float(vol) / 100.0
+            except (TypeError, ValueError):
+                vol = 0.0
+        else:
+            vol = 0.0
+        out.append({"time": int(t), "open": op, "close": cp, "high": hp, "low": lp, "volume": vol})
     out.sort(key=lambda x: x["time"])
     cache_set("kline", cache_key, out, ttl_seconds=None)
     return out

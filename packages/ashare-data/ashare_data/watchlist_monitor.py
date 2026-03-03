@@ -26,7 +26,8 @@ from ashare_data.core.config import ASHARE_HOME
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_bytes, http_text
 from ashare_data.core.watchlist import load as load_watchlist
-from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline, _norm_price
+from ashare_data.core.utils import norm_price as _norm_price
+from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
 from ashare_data.fetchers.market_sentiment import MarketSentiment, fetch_market_sentiment
 
 logger = logging.getLogger(__name__)
@@ -98,34 +99,47 @@ _WEEKLY_CACHE_TTL = 7 * 24 * 3600
 def _parse_jrj_kline(kline: list[dict], is_weekly: bool = False) -> list[_KlineBar]:
     """解析 JRJ K线数据为 _KlineBar 列表。
 
+    JRJ 日线和周线返回的数据结构相同，都使用 nTime/nOpenPx 等字段。
+
     Args:
         kline: JRJ API 返回的 K线列表。
-        is_weekly: 是否为周K（周K使用 nTime/nOpenPx 等字段，日K使用 time/open 等）。
+        is_weekly: 是否为周K（字段名相同，无需区分）。
 
     Returns:
         _KlineBar 列表。
     """
     bars: list[_KlineBar] = []
     for item in kline:
-        # 根据数据类型选择字段名
-        if is_weekly:
-            t = item.get("nTime")
-            open_px = _norm_price(item.get("nOpenPx"))
-            close_px = _norm_price(item.get("nLastPx"))
-            high_px = _norm_price(item.get("nHighPx"))
-            low_px = _norm_price(item.get("nLowPx"))
-            vol = float(item.get("llVolume", 0) or 0) / 10000.0
-        else:
-            t = item.get("time")
-            open_px = item.get("open", 0.0)
-            close_px = item.get("close", 0.0)
-            high_px = item.get("high", 0.0)
-            low_px = item.get("low", 0.0)
-            vol = item.get("volume", 0.0) or 0.0
-
+        # JRJ 日线/周线都使用 nTime, nOpenPx, nLastPx, nHighPx, nLowPx, llVolume
+        t = item.get("nTime")
         if not t:
             continue
         ts = str(int(t))
+        if len(ts) != 8:
+            continue
+
+        open_px = _norm_price(item.get("nOpenPx"))
+        close_px = _norm_price(item.get("nLastPx"))
+        high_px = _norm_price(item.get("nHighPx"))
+        low_px = _norm_price(item.get("nLowPx"))
+        # llVolume 是股数，转为手(100股)
+        vol_raw = item.get("llVolume", 0) or 0
+        try:
+            vol = float(vol_raw) / 100.0
+        except (TypeError, ValueError):
+            vol = 0.0
+
+        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+        bars.append(
+            _KlineBar(
+                date=date_str,
+                open=open_px,
+                close=close_px,
+                high=high_px,
+                low=low_px,
+                volume=vol,
+            )
+        )
         if len(ts) != 8:
             continue
         date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
