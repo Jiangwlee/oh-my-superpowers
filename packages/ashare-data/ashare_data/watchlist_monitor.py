@@ -26,7 +26,7 @@ from ashare_data.core.config import ASHARE_HOME
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_bytes, http_text
 from ashare_data.core.watchlist import load as load_watchlist
-from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
+from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline, _norm_price
 from ashare_data.fetchers.market_sentiment import MarketSentiment, fetch_market_sentiment
 
 logger = logging.getLogger(__name__)
@@ -86,65 +86,84 @@ def _em_secid(code: str) -> str:
     return f"1.{code}" if code.startswith("6") else f"0.{code}"
 
 
-# 周K缓存 TTL：7天（604800秒），因为周线变化很慢
+def _to_jrj_security_id(code: str) -> str:
+    """6位代码 → JRJ securityId（1=沪，2=深）。"""
+    return f"1{code}" if code.startswith("6") else f"2{code}"
+
+
+# 周K缓存 TTL：7天
 _WEEKLY_CACHE_TTL = 7 * 24 * 3600
 
 
-def _try_em_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
-    """从东方财富获取周K线（klt=102），带缓存。
-
-    周线数据变化很慢，使用7天缓存避免频繁请求。
+def _fetch_jrj_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
+    """从金融界获取周K线，带缓存。
 
     Args:
         code: 6位股票代码。
         weeks: 获取周数。
 
     Returns:
-        周K列表，按日期升序。失败返回空列表。
+        周K列表，按日期升序。
     """
     # 先尝试从缓存获取
-    cache_key = f"weekly_{code}_{weeks}"
+    cache_key = f"jrj_weekly_{code}_{weeks}"
     cached = cache_get("kline", cache_key)
     if cached and isinstance(cached, list):
-        logger.debug("周K缓存命中: %s", code)
+        logger.debug("JRJ周K缓存命中: %s", code)
         return [_KlineBar(**b) if isinstance(b, dict) else b for b in cached]
 
-    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?" + urlencode(
+    import requests
+
+    secid = _to_jrj_security_id(code)
+    url = "https://gateway.jrj.com/quot-kline?" + urlencode(
         {
-            "secid": _em_secid(code),
-            "fields1": "f1,f2,f3,f4,f5,f6",
-            "fields2": "f51,f52,f53,f54,f55,f56",
-            "klt": "102",  # 周K
-            "fqt": "0",
-            "lmt": str(weeks),
-            "end": "20500101",
+            "format": "json",
+            "securityId": secid,
+            "type": "week",
+            "direction": "left",
+            "range.num": str(weeks),
         }
     )
     try:
-        raw = http_text(url, timeout=10, retries=1)
-        data = json.loads(raw)
-    except Exception:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+    except Exception as e:
+        logger.debug("JRJ周K请求失败: %s - %s", code, e)
         return []
 
-    klines_raw = (data.get("data") or {}).get("klines") or []
-    bars: list[_KlineBar] = []
-    for k in klines_raw:
-        parts = k.split(",")
-        if len(parts) < 6:
-            continue
+    if isinstance(data, dict) and isinstance(data.get("value"), str):
         try:
-            bars.append(
-                _KlineBar(
-                    date=parts[0],
-                    open=float(parts[1]),
-                    close=float(parts[2]),
-                    high=float(parts[3]),
-                    low=float(parts[4]),
-                    volume=float(parts[5]),
-                )
-            )
-        except (ValueError, IndexError):
+            data = json.loads(data["value"])
+        except json.JSONDecodeError:
+            pass
+
+    kline = []
+    if isinstance(data, dict):
+        if isinstance(data.get("data"), dict):
+            kline = data["data"].get("kline", []) or []
+        elif isinstance(data.get("kline"), list):
+            kline = data["kline"]
+
+    bars: list[_KlineBar] = []
+    for item in kline:
+        t = item.get("nTime")
+        if not t:
             continue
+        ts = str(int(t))
+        if len(ts) != 8:
+            continue
+        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+        # 使用 _norm_price 处理价格（与 fetch_jrj_daily_kline 保持一致）
+        bars.append(
+            _KlineBar(
+                date=date_str,
+                open=_norm_price(item.get("nOpenPx")),
+                close=_norm_price(item.get("nLastPx")),
+                high=_norm_price(item.get("nHighPx")),
+                low=_norm_price(item.get("nLowPx")),
+                volume=float(item.get("llVolume", 0) or 0) / 10000.0,  # 手
+            )
+        )
 
     # 写入缓存
     if bars:
@@ -155,6 +174,48 @@ def _try_em_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
     return bars
 
 
+def _fetch_jrj_daily_kline(code: str, days: int = 150) -> list[_KlineBar]:
+    """从金融界获取日K线（主要数据源）。
+
+    JRJ 在 VPS 上可用，作为主要数据源。
+    使用 150 天数据可以计算 60 日均线（约 3 个月）。
+
+    Args:
+        code: 6位股票代码。
+        days: 获取天数。
+
+    Returns:
+        日K列表，按日期升序。
+    """
+    from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
+
+    jrj_bars = fetch_jrj_daily_kline(code, range_num=days)
+    if not jrj_bars:
+        return []
+
+    bars: list[_KlineBar] = []
+    for b in jrj_bars:
+        t = b.get("time", 0)
+        if not t:
+            continue
+        ts = str(int(t))
+        if len(ts) != 8:
+            continue
+        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+        bars.append(
+            _KlineBar(
+                date=date_str,
+                open=b.get("open", 0.0),
+                close=b.get("close", 0.0),
+                high=b.get("high", 0.0),
+                low=b.get("low", 0.0),
+                volume=b.get("volume", 0.0) or 0.0,
+            )
+        )
+    return bars
+
+
+# 保留东方财富作为后备（如果有网络问题可以尝试）
 def _fetch_em_kline(code: str, days: int = 26) -> list[_KlineBar]:
     """从东方财富日 K 接口获取历史 OHLCV（含成交量，单位：手）。
 
@@ -168,9 +229,9 @@ def _fetch_em_kline(code: str, days: int = 26) -> list[_KlineBar]:
     Returns:
         日 K 列表，按日期升序。出错返回空列表。
     """
-    em_bars = _try_em_kline(code, days)
-    if em_bars:
-        return em_bars
+    daily_bars = _try_em_kline(code, days)
+    if daily_bars:
+        return daily_bars
     return _fallback_jrj_kline(code, days)
 
 
@@ -378,7 +439,7 @@ def _compute_star(closes: list[float]) -> int:
 def _analyze_signal(
     code: str,
     name: str,
-    em_bars: list[_KlineBar],
+    daily_bars: list[_KlineBar],
     weekly_bars: list[_KlineBar],
     rt: _RealtimeQuote,
     sentiment: MarketSentiment,
@@ -387,27 +448,27 @@ def _analyze_signal(
 
     核心逻辑：趋势股的真正买点在于回调到5周均线附近。
     周线买点比日线更稳定，能过滤掉大部分噪音。
+    使用 JRJ 数据源（VPS 可访问）。
 
     评分规则:
         周线分析:
           当前价 < MA5(周)              → 直接排除（周线趋势破坏）
-          当前价在 MA5(周)附近(±3%)     → +40（周线级别回调到位）
-          当前价 > MA5(周) > MA10(周)   → +20（周线趋势完好）
+          当前价在 MA5(周)附近(±3%)     → +50（周线级别回调到位）
+          当前价 > MA5(周)              → 持有信号，不加分
         日线辅助:
-          当前价 < MA20(日)              → 直接排除（日线趋势破坏）
-          适度下跌 -3% ~ -6%             → +15（日内低吸）
-          缩量回调                      → +10
-          放量下跌                      → -20
+          当前价 < MA20(日)              → 直接排除
+          适度下跌 -3% ~ -6%            → +15
+          缩量回调                     → +10
+          放量下跌                     → -20
         市场环境:
-          黄色市场                      → 门槛提高 15 分
-          红色市场（跌停>=80）           → 禁止买入
+          黄色市场                     → 门槛提高 15 分
 
     Returns:
         StockSignal 或 None（不满足最低门槛时）。
     """
     today_str = datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d")
     # 只用已完成交易日的历史 K 线，排除今日可能的半日数据
-    hist = [b for b in em_bars if b.date < today_str]
+    hist = [b for b in daily_bars if b.date < today_str]
     if len(hist) < 20:
         logger.debug("历史数据不足: %s (%d 条历史 K 线)", code, len(hist))
         return None
@@ -632,8 +693,9 @@ def main() -> None:
     ) -> tuple[str, str, list[_KlineBar], list[_KlineBar]]:
         code = stock["code"]
         name = stock.get("name", code)
-        bars = _fetch_em_kline(code, days=26)
-        weekly_bars = _try_em_weekly_kline(code, weeks=30)
+        # 使用 JRJ 数据源（VPS 可访问）
+        bars = _fetch_jrj_daily_kline(code, days=150)
+        weekly_bars = _fetch_jrj_weekly_kline(code, weeks=30)
         return code, name, bars, weekly_bars
 
     kline_map: dict[str, tuple[str, list[_KlineBar], list[_KlineBar]]] = {}
