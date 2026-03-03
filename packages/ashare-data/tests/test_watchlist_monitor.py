@@ -1,6 +1,6 @@
 """测试 watchlist_monitor 的信号逻辑。"""
 import unittest
-from ashare_data.watchlist_monitor import _analyze_signal, _KlineBar, _RealtimeQuote
+from ashare_data.watchlist_monitor import _analyze_signal, _check_exit_signals, _KlineBar, _RealtimeQuote
 from ashare_data.fetchers.market_sentiment import MarketSentiment
 
 
@@ -84,6 +84,68 @@ class TestAnalyzeSignalMA5WDirection(unittest.TestCase):
         # 5周均线向上，不应被方向检查拦截，必须产生合法信号
         self.assertIsNotNone(result, "5周均线方向向上时不应被方向检查拦截")
         self.assertIn(result.signal, ("buy_dip", "watch"))
+
+
+class TestCheckExitSignals(unittest.TestCase):
+    """持仓出场信号检测。"""
+
+    def _make_kline_map(self, code: str, current_close: float, ma5w: float) -> dict:
+        """构造 kline_map，令 mean(weekly[-5:]) ≈ ma5w，且均线方向向上。
+
+        Args:
+            code: 股票代码。
+            current_close: 最近收盘价（写入日K最后一根的 close）。
+            ma5w: 目标5周均线值，构造8根周K令 mean(last5)=ma5w。
+        """
+        # 8根周K，后5根均值=ma5w，且整体向上（前3根小于后5根）
+        weekly_closes = [
+            ma5w * 0.96, ma5w * 0.97, ma5w * 0.98,  # 前3根（较小）
+            ma5w * 0.99, ma5w, ma5w * 1.0, ma5w * 1.0, ma5w * 1.0,  # 后5根，均值=ma5w
+        ]
+        # 注意：mean([0.99,1,1,1,1]*ma5w) = ma5w * 1.0 = ma5w ✓
+        daily_closes = [current_close] * 25
+        daily = _make_daily_bars(daily_closes)
+        weekly = _make_weekly_bars(weekly_closes)
+        return {code: ("测试股", daily, weekly)}
+
+    def test_stop_loss_when_below_ma5w(self):
+        """当前收盘 < 5周均线 → 触发 stop_loss。"""
+        holdings = [{"code": "000001", "name": "测试股", "hold_vol": "100"}]
+        kline_map = self._make_kline_map("000001", current_close=85.0, ma5w=100.0)
+
+        exits = _check_exit_signals(holdings, kline_map)
+
+        self.assertEqual(len(exits), 1)
+        self.assertEqual(exits[0].signal, "stop_loss")
+        self.assertEqual(exits[0].code, "000001")
+
+    def test_take_profit_when_above_125pct_ma5w(self):
+        """当前收盘 > 5周均线×1.25 → 触发 take_profit_partial。"""
+        holdings = [{"code": "000002", "name": "测试股B", "hold_vol": "200"}]
+        kline_map = self._make_kline_map("000002", current_close=130.0, ma5w=100.0)
+
+        exits = _check_exit_signals(holdings, kline_map)
+
+        self.assertEqual(len(exits), 1)
+        self.assertEqual(exits[0].signal, "take_profit_partial")
+
+    def test_no_signal_when_healthy(self):
+        """价格在MA5W之上但未超涨25% → 无出场信号。"""
+        holdings = [{"code": "000003", "name": "测试股C", "hold_vol": "300"}]
+        kline_map = self._make_kline_map("000003", current_close=108.0, ma5w=100.0)
+
+        exits = _check_exit_signals(holdings, kline_map)
+
+        self.assertEqual(exits, [])
+
+    def test_zero_vol_holding_skipped(self):
+        """hold_vol=0（已清仓）的持仓应跳过。"""
+        holdings = [{"code": "000004", "name": "测试股D", "hold_vol": "0"}]
+        kline_map = self._make_kline_map("000004", current_close=80.0, ma5w=100.0)
+
+        exits = _check_exit_signals(holdings, kline_map)
+
+        self.assertEqual(exits, [])
 
 
 if __name__ == "__main__":

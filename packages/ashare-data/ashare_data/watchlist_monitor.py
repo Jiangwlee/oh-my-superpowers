@@ -627,6 +627,82 @@ def _analyze_signal(
     )
 
 
+def _check_exit_signals(
+    holdings: list[dict[str, Any]],
+    kline_map: dict[str, tuple[str, list[_KlineBar], list[_KlineBar]]],
+) -> list[StockSignal]:
+    """检查持仓股是否触发出场信号。
+
+    Args:
+        holdings: broker_account hold_list，每项含 code / name / hold_vol。
+        kline_map: 已拉取的 K 线数据映射（可能不含全部持仓）。
+
+    Returns:
+        触发出场条件的 StockSignal 列表。signal 值为
+        "stop_loss" 或 "take_profit_partial"。
+    """
+    today_str = datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d")
+    exits: list[StockSignal] = []
+
+    for h in holdings:
+        code = str(h.get("code", "")).strip()
+        hold_vol = int(h.get("hold_vol", 0) or 0)
+        if hold_vol <= 0 or not code:
+            continue
+        entry = kline_map.get(code)
+        if entry is None:
+            continue
+        name, daily_bars, weekly_bars = entry
+        if len(weekly_bars) < 5:
+            continue
+
+        weekly_closes = [b.close for b in weekly_bars]
+        ma5_week = sum(weekly_closes[-5:]) / 5
+        if ma5_week <= 0:
+            continue
+
+        hist = [b for b in daily_bars if b.date < today_str]
+        if not hist:
+            continue
+        current = hist[-1].close
+
+        if current < ma5_week:
+            exits.append(
+                StockSignal(
+                    code=code,
+                    name=name,
+                    signal="stop_loss",
+                    reason="收盘跌破5周均线",
+                    price=round(current, 3),
+                    change=0.0,
+                    ma5_week=round(ma5_week, 3),
+                    ma10=0.0,
+                    ma20=0.0,
+                    star=0,
+                    score=0,
+                )
+            )
+        elif current > ma5_week * 1.25:
+            pct = (current / ma5_week - 1) * 100
+            exits.append(
+                StockSignal(
+                    code=code,
+                    name=name,
+                    signal="take_profit_partial",
+                    reason=f"超涨{pct:.0f}%，建议减仓50%",
+                    price=round(current, 3),
+                    change=0.0,
+                    ma5_week=round(ma5_week, 3),
+                    ma10=0.0,
+                    ma20=0.0,
+                    star=0,
+                    score=0,
+                )
+            )
+
+    return exits
+
+
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
@@ -636,6 +712,8 @@ def _write_signals(
     signals: list[StockSignal],
     watched: list[StockSignal],
     sentiment: MarketSentiment,
+    *,
+    exits: list[StockSignal] | None = None,
 ) -> None:
     """将信号结果覆盖写入 signals/watchlist_signals.json。"""
     _SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
@@ -649,14 +727,16 @@ def _write_signals(
         },
         "signals": [asdict(s) for s in signals],
         "watched": [asdict(s) for s in watched],
+        "exits": [asdict(s) for s in (exits or [])],
     }
     with open(_SIGNALS_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     logger.info(
-        "信号文件已写入: %s（buy_dip=%d, watch=%d）",
+        "信号文件已写入: %s（buy_dip=%d, watch=%d, exits=%d）",
         _SIGNALS_FILE,
         len(signals),
         len(watched),
+        len(exits or []),
     )
 
 
@@ -718,6 +798,17 @@ def main() -> None:
 
     logger.info("扫描 watchlist: %d 只 active 股", len(active))
 
+    # ── 2b. 加载当前持仓（用于出场信号） ───────────────────────────��────────────────
+    try:
+        from ashare_data.fetchers.broker_account import fetch_broker_account
+        broker_data = fetch_broker_account()
+        holdings: list[dict[str, Any]] = broker_data.get("hold_list", [])
+        active_holdings = [h for h in holdings if int(h.get("hold_vol", 0) or 0) > 0]
+        logger.info("持仓股数量: %d", len(active_holdings))
+    except Exception as exc:
+        logger.warning("持仓数据获取失败（出场信号将跳过）: %s", exc)
+        holdings = []
+
     # ── 3. 并发拉取东方财富日 K ────────────────────────────────────────────
     def _fetch_kline_job(
         stock: dict[str, Any],
@@ -738,6 +829,26 @@ def main() -> None:
                 kline_map[code] = (name, bars, weekly_bars)
             except Exception as exc:
                 logger.warning("K 线获取异常: %s", exc)
+
+    # ── 3b. 为持仓中不在 watchlist 的股票补充 K 线 ─────────────────────────
+    holding_codes_extra = [
+        h for h in holdings
+        if str(h.get("code", "")) not in kline_map
+        and int(h.get("hold_vol", 0) or 0) > 0
+    ]
+    if holding_codes_extra:
+        extra_stocks = [
+            {"code": h["code"], "name": h.get("name", h["code"])}
+            for h in holding_codes_extra
+        ]
+        with ThreadPoolExecutor(max_workers=min(8, len(extra_stocks))) as pool:
+            extra_futures = [pool.submit(_fetch_kline_job, s) for s in extra_stocks]
+            for fut in extra_futures:
+                try:
+                    code, name, bars, weekly_bars = fut.result()
+                    kline_map[code] = (name, bars, weekly_bars)
+                except Exception as exc:
+                    logger.warning("持仓 K 线获取异常: %s", exc)
 
     # ── 4. 批量获取腾讯实时行情 ───────────────────────────────────────────
     codes = list(kline_map.keys())
@@ -764,9 +875,14 @@ def main() -> None:
     buy_signals.sort(key=lambda s: -s.score)
     watch_signals.sort(key=lambda s: -s.score)
 
+    # ── 5b. 计算出场信号 ───────────────────────────────────────────────────
+    exit_signals = _check_exit_signals(holdings, kline_map)
+    if exit_signals:
+        logger.info("出场信号: %s", [(s.name, s.signal) for s in exit_signals])
+
     # ── 6. 写文件 ──────────────────────────────────────────────────────────
-    _write_signals(buy_signals, watch_signals, sentiment)
-    logger.info("扫描完成: buy_dip=%d, watch=%d", len(buy_signals), len(watch_signals))
+    _write_signals(buy_signals, watch_signals, sentiment, exits=exit_signals)
+    logger.info("扫描完成: buy_dip=%d, watch=%d, exits=%d", len(buy_signals), len(watch_signals), len(exit_signals))
 
 
 if __name__ == "__main__":
