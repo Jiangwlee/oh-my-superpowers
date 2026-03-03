@@ -91,44 +91,96 @@ def _to_jrj_security_id(code: str) -> str:
     return f"1{code}" if code.startswith("6") else f"2{code}"
 
 
-# 周K缓存 TTL：7天
+# 缓存 TTL
 _WEEKLY_CACHE_TTL = 7 * 24 * 3600
 
 
-def _fetch_jrj_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
-    """从金融界获取周K线，带缓存。
+def _parse_jrj_kline(kline: list[dict], is_weekly: bool = False) -> list[_KlineBar]:
+    """解析 JRJ K线数据为 _KlineBar 列表。
+
+    Args:
+        kline: JRJ API 返回的 K线列表。
+        is_weekly: 是否为周K（周K使用 nTime/nOpenPx 等字段，日K使用 time/open 等）。
+
+    Returns:
+        _KlineBar 列表。
+    """
+    bars: list[_KlineBar] = []
+    for item in kline:
+        # 根据数据类型选择字段名
+        if is_weekly:
+            t = item.get("nTime")
+            open_px = _norm_price(item.get("nOpenPx"))
+            close_px = _norm_price(item.get("nLastPx"))
+            high_px = _norm_price(item.get("nHighPx"))
+            low_px = _norm_price(item.get("nLowPx"))
+            vol = float(item.get("llVolume", 0) or 0) / 10000.0
+        else:
+            t = item.get("time")
+            open_px = item.get("open", 0.0)
+            close_px = item.get("close", 0.0)
+            high_px = item.get("high", 0.0)
+            low_px = item.get("low", 0.0)
+            vol = item.get("volume", 0.0) or 0.0
+
+        if not t:
+            continue
+        ts = str(int(t))
+        if len(ts) != 8:
+            continue
+        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
+
+        bars.append(
+            _KlineBar(
+                date=date_str,
+                open=open_px,
+                close=close_px,
+                high=high_px,
+                low=low_px,
+                volume=vol,
+            )
+        )
+    return bars
+
+
+def _fetch_jrj_kline(code: str, ktype: str = "day", days: int = 150) -> list[_KlineBar]:
+    """从金融界获取K线数据。
 
     Args:
         code: 6位股票代码。
-        weeks: 获取周数。
+        ktype: K线类型，"day" 或 "week"。
+        days: 获取数量（天数或周数）。
 
     Returns:
-        周K列表，按日期升序。
+        K线列表，按日期升序。
     """
-    # 先尝试从缓存获取
-    cache_key = f"jrj_weekly_{code}_{weeks}"
-    cached = cache_get("kline", cache_key)
-    if cached and isinstance(cached, list):
-        logger.debug("JRJ周K缓存命中: %s", code)
-        return [_KlineBar(**b) if isinstance(b, dict) else b for b in cached]
-
     import requests
 
     secid = _to_jrj_security_id(code)
+    is_weekly = ktype == "week"
+    cache_key = f"jrj_{ktype}_{code}_{days}"
+
+    # 周K使用缓存
+    if is_weekly:
+        cached = cache_get("kline", cache_key)
+        if cached and isinstance(cached, list):
+            logger.debug("JRJ周K缓存命中: %s", code)
+            return [_KlineBar(**b) if isinstance(b, dict) else b for b in cached]
+
     url = "https://gateway.jrj.com/quot-kline?" + urlencode(
         {
             "format": "json",
             "securityId": secid,
-            "type": "week",
+            "type": ktype,
             "direction": "left",
-            "range.num": str(weeks),
+            "range.num": str(days),
         }
     )
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
     except Exception as e:
-        logger.debug("JRJ周K请求失败: %s - %s", code, e)
+        logger.debug("JRJ %s请求失败: %s - %s", ktype, code, e)
         return []
 
     if isinstance(data, dict) and isinstance(data.get("value"), str):
@@ -144,29 +196,10 @@ def _fetch_jrj_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
         elif isinstance(data.get("kline"), list):
             kline = data["kline"]
 
-    bars: list[_KlineBar] = []
-    for item in kline:
-        t = item.get("nTime")
-        if not t:
-            continue
-        ts = str(int(t))
-        if len(ts) != 8:
-            continue
-        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
-        # 使用 _norm_price 处理价格（与 fetch_jrj_daily_kline 保持一致）
-        bars.append(
-            _KlineBar(
-                date=date_str,
-                open=_norm_price(item.get("nOpenPx")),
-                close=_norm_price(item.get("nLastPx")),
-                high=_norm_price(item.get("nHighPx")),
-                low=_norm_price(item.get("nLowPx")),
-                volume=float(item.get("llVolume", 0) or 0) / 10000.0,  # 手
-            )
-        )
+    bars = _parse_jrj_kline(kline, is_weekly=is_weekly)
 
-    # 写入缓存
-    if bars:
+    # 周K写入缓存
+    if is_weekly and bars:
         cache_data = [{"date": b.date, "open": b.open, "close": b.close,
                        "high": b.high, "low": b.low, "volume": b.volume} for b in bars]
         cache_set("kline", cache_key, cache_data, ttl_seconds=_WEEKLY_CACHE_TTL)
@@ -187,32 +220,7 @@ def _fetch_jrj_daily_kline(code: str, days: int = 150) -> list[_KlineBar]:
     Returns:
         日K列表，按日期升序。
     """
-    from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
-
-    jrj_bars = fetch_jrj_daily_kline(code, range_num=days)
-    if not jrj_bars:
-        return []
-
-    bars: list[_KlineBar] = []
-    for b in jrj_bars:
-        t = b.get("time", 0)
-        if not t:
-            continue
-        ts = str(int(t))
-        if len(ts) != 8:
-            continue
-        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
-        bars.append(
-            _KlineBar(
-                date=date_str,
-                open=b.get("open", 0.0),
-                close=b.get("close", 0.0),
-                high=b.get("high", 0.0),
-                low=b.get("low", 0.0),
-                volume=b.get("volume", 0.0) or 0.0,
-            )
-        )
-    return bars
+    return _fetch_jrj_kline(code, ktype="day", days=days)
 
 
 # 保留东方财富作为后备（如果有网络问题可以尝试）
