@@ -23,6 +23,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from ashare_data.core.config import ASHARE_HOME
+from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_bytes, http_text
 from ashare_data.core.watchlist import load as load_watchlist
 from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
@@ -85,8 +86,14 @@ def _em_secid(code: str) -> str:
     return f"1.{code}" if code.startswith("6") else f"0.{code}"
 
 
+# 周K缓存 TTL：7天（604800秒），因为周线变化很慢
+_WEEKLY_CACHE_TTL = 7 * 24 * 3600
+
+
 def _try_em_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
-    """从东方财富获取周K线（klt=102）。
+    """从东方财富获取周K线（klt=102），带缓存。
+
+    周线数据变化很慢，使用7天缓存避免频繁请求。
 
     Args:
         code: 6位股票代码。
@@ -95,6 +102,13 @@ def _try_em_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
     Returns:
         周K列表，按日期升序。失败返回空列表。
     """
+    # 先尝试从缓存获取
+    cache_key = f"weekly_{code}_{weeks}"
+    cached = cache_get("kline", cache_key)
+    if cached and isinstance(cached, list):
+        logger.debug("周K缓存命中: %s", code)
+        return [_KlineBar(**b) if isinstance(b, dict) else b for b in cached]
+
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?" + urlencode(
         {
             "secid": _em_secid(code),
@@ -131,6 +145,13 @@ def _try_em_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
             )
         except (ValueError, IndexError):
             continue
+
+    # 写入缓存
+    if bars:
+        cache_data = [{"date": b.date, "open": b.open, "close": b.close,
+                       "high": b.high, "low": b.low, "volume": b.volume} for b in bars]
+        cache_set("kline", cache_key, cache_data, ttl_seconds=_WEEKLY_CACHE_TTL)
+
     return bars
 
 
