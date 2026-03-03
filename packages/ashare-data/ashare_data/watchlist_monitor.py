@@ -85,6 +85,55 @@ def _em_secid(code: str) -> str:
     return f"1.{code}" if code.startswith("6") else f"0.{code}"
 
 
+def _try_em_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
+    """从东方财富获取周K线（klt=102）。
+
+    Args:
+        code: 6位股票代码。
+        weeks: 获取周数。
+
+    Returns:
+        周K列表，按日期升序。失败返回空列表。
+    """
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?" + urlencode(
+        {
+            "secid": _em_secid(code),
+            "fields1": "f1,f2,f3,f4,f5,f6",
+            "fields2": "f51,f52,f53,f54,f55,f56",
+            "klt": "102",  # 周K
+            "fqt": "0",
+            "lmt": str(weeks),
+            "end": "20500101",
+        }
+    )
+    try:
+        raw = http_text(url, timeout=10, retries=1)
+        data = json.loads(raw)
+    except Exception:
+        return []
+
+    klines_raw = (data.get("data") or {}).get("klines") or []
+    bars: list[_KlineBar] = []
+    for k in klines_raw:
+        parts = k.split(",")
+        if len(parts) < 6:
+            continue
+        try:
+            bars.append(
+                _KlineBar(
+                    date=parts[0],
+                    open=float(parts[1]),
+                    close=float(parts[2]),
+                    high=float(parts[3]),
+                    low=float(parts[4]),
+                    volume=float(parts[5]),
+                )
+            )
+        except (ValueError, IndexError):
+            continue
+    return bars
+
+
 def _fetch_em_kline(code: str, days: int = 26) -> list[_KlineBar]:
     """从东方财富日 K 接口获取历史 OHLCV（含成交量，单位：手）。
 
@@ -277,6 +326,7 @@ class StockSignal:
     reason: str
     price: float
     change: float   # change_pct %
+    ma5_week: float  # 5周均线
     ma10: float
     ma20: float
     star: int
@@ -308,22 +358,28 @@ def _analyze_signal(
     code: str,
     name: str,
     em_bars: list[_KlineBar],
+    weekly_bars: list[_KlineBar],
     rt: _RealtimeQuote,
     sentiment: MarketSentiment,
 ) -> StockSignal | None:
-    """综合 MA 位置、量价形态、市场情绪，计算买入信号得分。
+    """基于5周均线的买入信号分析。
+
+    核心逻辑：趋势股的真正买点在于回调到5周均线附近。
+    周线买点比日线更稳定，能过滤掉大部分噪音。
 
     评分规则:
-        当前价 < MA20                   → 直接排除（趋势破坏）
-        当前价在 MA20–MA10 之间          → +20（回调到支撑区）
-        当前价 >= MA10                   → +10（趋势完好）
-        今日量 < 0.7×20日均量           → +20（缩量，抛压减轻）
-        跌幅 -2% ~ -5%                  → +15（适度下跌）
-        下影线 / 实体 > 0.5             → +15（有抵抗，买盘在撑）
-        跌幅 < -2% 且量 > 1.5×均量     → -20（放量下跌，出货信号）
-        跌幅 < -8%                      → -15（恐慌未止）
-        星级 >= 4                       → +10（趋势评分强）
-        黄色市场                        → 门槛提高 15 分
+        周线分析:
+          当前价 < MA5(周)              → 直接排除（周线趋势破坏）
+          当前价在 MA5(周)附近(±3%)     → +40（周线级别回调到位）
+          当前价 > MA5(周) > MA10(周)   → +20（周线趋势完好）
+        日线辅助:
+          当前价 < MA20(日)              → 直接排除（日线趋势破坏）
+          适度下跌 -3% ~ -6%             → +15（日内低吸）
+          缩量回调                      → +10
+          放量下跌                      → -20
+        市场环境:
+          黄色市场                      → 门槛提高 15 分
+          红色市场（跌停>=80）           → 禁止买入
 
     Returns:
         StockSignal 或 None（不满足最低门槛时）。
@@ -335,74 +391,103 @@ def _analyze_signal(
         logger.debug("历史数据不足: %s (%d 条历史 K 线)", code, len(hist))
         return None
 
-    closes = [b.close for b in hist]
-    volumes = [b.volume for b in hist]
-
-    ma10 = sum(closes[-10:]) / 10
-    ma20 = sum(closes[-20:]) / 20
-    avg_vol_20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else (
-        sum(volumes) / len(volumes) if volumes else 0.0
-    )
-    star = _compute_star(closes)
+    # ──────────────── 周线分析（核心） ────────────────
+    if len(weekly_bars) < 5:
+        logger.debug("周K数据不足: %s (%d 周)", code, len(weekly_bars))
+        # 周K不足时降级为日线判断
+        weekly_closes: list[float] = []
+        ma5_week = 0.0
+    else:
+        weekly_closes = [b.close for b in weekly_bars]
+        ma5_week = sum(weekly_closes[-5:]) / 5
 
     current = rt.current
     change_pct = rt.change_pct
     today_vol = rt.volume_lot
 
-    if current <= 0 or ma10 <= 0 or ma20 <= 0:
+    if current <= 0:
         return None
 
-    # 硬排除：价格跌破 MA20（趋势破坏）
+    # ──────────────── 周线核心过滤 ────────────────
+    if ma5_week > 0:
+        # 周线趋势破坏：跌破5周均线
+        if current < ma5_week:
+            logger.debug("%s 跌破5周均线(%.2f<%.2f)，周线趋势破坏", code, current, ma5_week)
+            return None
+    else:
+        # 没有周K数据时，用日线MA20作为后备
+        if len(hist) < 20:
+            return None
+
+    # ──────────────── 日线分析（辅助） ────────────────
+    closes = [b.close for b in hist]
+    volumes = [b.volume for b in hist]
+
+    ma10 = sum(closes[-10:]) / 10 if len(closes) >= 10 else 0.0
+    ma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else 0.0
+    avg_vol_20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else (
+        sum(volumes) / len(volumes) if volumes else 0.0
+    )
+    star = _compute_star(closes)
+
+    if ma20 <= 0:
+        return None
+
+    # 硬排除：价格跌破日线 MA20（趋势破坏）
     if current < ma20:
         return None
 
     score = 0
     reasons: list[str] = []
 
-    # ─ 价格位置
-    if ma20 <= current < ma10:
-        score += 20
-        reasons.append("回调至MA10附近")
+    # ──────────────── 周线评分（核心，占主要权重） ────────────────
+    if ma5_week > 0:
+        week_deviation = (current - ma5_week) / ma5_week * 100
+        if abs(week_deviation) <= 3.0:
+            # 回调到5周均线附近（±3%），这是周线级别的最佳买点
+            score += 40
+            reasons.append(f"回调至5周均线({week_deviation:+.1f}%)")
+        elif current > ma5_week:
+            # 价格在5周均线之上，周线趋势完好
+            score += 20
+            reasons.append("周线趋势完好")
     else:
-        # current >= ma10
-        score += 10
-        reasons.append("价格在MA10之上")
+        # 没有周K时，用日线MA10作为后备
+        if ma10 > 0 and ma20 > 0:
+            if ma20 <= current < ma10:
+                score += 20
+                reasons.append("回调至MA10附近")
+            elif current >= ma10:
+                score += 10
+                reasons.append("价格在MA10之上")
 
-    # ─ 成交量对比
+    # ──────────────── 日线辅助评分 ────────────────
+    # 成交量对比
     if avg_vol_20 > 0:
         vol_ratio = today_vol / avg_vol_20
         if vol_ratio < 0.7:
-            score += 20
-            reasons.append("缩量")
+            score += 10
+            reasons.append("缩量回调")
         elif vol_ratio > 1.5 and change_pct < -2.0:
             score -= 20
             reasons.append("放量下跌")
 
-    # ─ 涨跌幅
-    if -5.0 <= change_pct <= -2.0:
+    # 涨跌幅：适度下跌是低吸机会
+    if -6.0 <= change_pct <= -3.0:
         score += 15
         reasons.append(f"适度下跌({change_pct:.1f}%)")
     elif change_pct < -8.0:
         score -= 15
         reasons.append("跌幅过大")
 
-    # ─ 下影线（买盘有抵抗）
-    open_p, high, low = rt.open, rt.high, rt.low
-    if open_p > 0 and low > 0 and high > 0:
-        body = abs(current - open_p)
-        lower_shadow = min(open_p, current) - low
-        if body > 0 and lower_shadow / body > 0.5:
-            score += 15
-            reasons.append("下影线有支撑")
-
-    # ─ 趋势星级加分
+    # 趋势星级
     if star >= 4:
         score += 10
 
-    # ─ 黄色市场提高门槛
+    # ──────────────── 门槛设置 ────────────────
     threshold_bonus = 15 if sentiment.danger_level == "yellow" else 0
-    threshold_buy = 35 + threshold_bonus
-    threshold_watch = 15 + threshold_bonus
+    threshold_buy = 40 + threshold_bonus  # 提高买入门槛
+    threshold_watch = 25 + threshold_bonus
 
     reason_str = "，".join(reasons) if reasons else "观察中"
 
@@ -420,6 +505,7 @@ def _analyze_signal(
         reason=reason_str,
         price=round(current, 3),
         change=round(change_pct, 2),
+        ma5_week=round(ma5_week, 3) if ma5_week > 0 else 0.0,
         ma10=round(ma10, 3),
         ma20=round(ma20, 3),
         star=star,
@@ -521,19 +607,20 @@ def main() -> None:
     # ── 3. 并发拉取东方财富日 K ────────────────────────────────────────────
     def _fetch_kline_job(
         stock: dict[str, Any],
-    ) -> tuple[str, str, list[_KlineBar]]:
+    ) -> tuple[str, str, list[_KlineBar], list[_KlineBar]]:
         code = stock["code"]
         name = stock.get("name", code)
         bars = _fetch_em_kline(code, days=26)
-        return code, name, bars
+        weekly_bars = _try_em_weekly_kline(code, weeks=30)
+        return code, name, bars, weekly_bars
 
-    kline_map: dict[str, tuple[str, list[_KlineBar]]] = {}
+    kline_map: dict[str, tuple[str, list[_KlineBar], list[_KlineBar]]] = {}
     with ThreadPoolExecutor(max_workers=min(8, len(active))) as pool:
         futures = [pool.submit(_fetch_kline_job, s) for s in active]
         for fut in futures:
             try:
-                code, name, bars = fut.result()
-                kline_map[code] = (name, bars)
+                code, name, bars, weekly_bars = fut.result()
+                kline_map[code] = (name, bars, weekly_bars)
             except Exception as exc:
                 logger.warning("K 线获取异常: %s", exc)
 
@@ -546,12 +633,12 @@ def main() -> None:
     buy_signals: list[StockSignal] = []
     watch_signals: list[StockSignal] = []
 
-    for code, (name, bars) in kline_map.items():
+    for code, (name, bars, weekly_bars) in kline_map.items():
         rt = realtime_map.get(code)
         if rt is None:
             logger.debug("实时行情缺失: %s", code)
             continue
-        sig = _analyze_signal(code, name, bars, rt, sentiment)
+        sig = _analyze_signal(code, name, bars, weekly_bars, rt, sentiment)
         if sig is None:
             continue
         if sig.signal == "buy_dip":
