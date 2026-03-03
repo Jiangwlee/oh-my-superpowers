@@ -237,6 +237,21 @@ def _fetch_jrj_daily_kline(code: str, days: int = 150) -> list[_KlineBar]:
     return _fetch_jrj_kline(code, ktype="day", days=days)
 
 
+def _fetch_jrj_weekly_kline(code: str, weeks: int = 30) -> list[_KlineBar]:
+    """从金融界获取周K线。
+
+    用于计算5周均线方向。
+
+    Args:
+        code: 6位股票代码。
+        weeks: 获取周数。
+
+    Returns:
+        周K列表，按日期升序。
+    """
+    return _fetch_jrj_kline(code, ktype="week", days=weeks)
+
+
 # 保留东方财富作为后备（如果有网络问题可以尝试）
 def _fetch_em_kline(code: str, days: int = 26) -> list[_KlineBar]:
     """从东方财富日 K 接口获取历史 OHLCV（含成交量，单位：手）。
