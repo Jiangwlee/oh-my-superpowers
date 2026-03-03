@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Watchlist intraday signal scanner.
+"""Live monitor for sentiment, sectors, and buy targets.
 
-Purpose: Scan watchlist active stocks every 10 minutes during trading hours,
-         identify buy-dip opportunities using MA position and volume signals.
-Input:   ~/.ashare-assistant/memory/watchlist.json, Tencent/East-Money APIs
-Output:  ~/.ashare-assistant/signals/watchlist_signals.json (overwrite)
+Purpose: Continuously monitor market sentiment, sector flow, and post-close buy
+         targets in a terminal dashboard.
+Input:   post_close_decisions.json and Tencent/JRJ/THS APIs.
+Output:  TUI in terminal + ~/.ashare-assistant/signals/watchlist_signals.json.
 
 Public API:
-    main()  -- CLI entry point (ashare-wl-monitor)
+    main()       -- CLI entry (default: continuous watch loop)
+    _scan_once() -- execute one scan and return render snapshot
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import time
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -22,11 +24,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
 
-from ashare_data.core.config import ASHARE_HOME
+from rich.columns import Columns
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+from ashare_data.core.config import ASHARE_HOME, BROKER_DIR
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_bytes, http_text
-from ashare_data.core.watchlist import load as load_watchlist
 from ashare_data.core.utils import norm_price as _norm_price
+from ashare_data.fetchers.market_overview import fetch_market_sectors_top_n
 from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
 from ashare_data.fetchers.market_sentiment import MarketSentiment, fetch_market_sentiment
 
@@ -35,8 +43,11 @@ logger = logging.getLogger(__name__)
 _CN_TZ = timezone(timedelta(hours=8))
 _SIGNALS_DIR = ASHARE_HOME / "signals"
 _SIGNALS_FILE = _SIGNALS_DIR / "watchlist_signals.json"
+_POST_CLOSE_FILE = _SIGNALS_DIR / "post_close_decisions.json"
 _CONFIG_FILE = ASHARE_HOME / "config.json"
 _PULLBACK_STATE_FILE = ASHARE_HOME / "memory" / "pullback_state.json"
+_POSITIONS_DIR = BROKER_DIR / "positions"
+_CONSOLE = Console()
 
 _DEFAULT_SIGNAL_PARAMS: dict[str, float] = {
     "dev5w_band": 0.03,
@@ -52,7 +63,6 @@ _DEFAULT_SIGNAL_PARAMS: dict[str, float] = {
     "position_yellow": 0.15,
     "drawdown20_max": 0.12,
 }
-
 
 # ---------------------------------------------------------------------------
 # Trading hours
@@ -123,6 +133,66 @@ def _save_pullback_state(state_map: dict[str, dict[str, Any]]) -> None:
     _PULLBACK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(_PULLBACK_STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state_map, f, ensure_ascii=False, indent=2)
+
+
+def _is_buy_action(value: Any) -> bool:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return False
+    if raw in {"open", "add", "buy", "entry", "buy_open_t1"}:
+        return True
+    return raw.startswith("buy")
+
+
+def _load_post_close_buy_targets() -> list[dict[str, str]]:
+    """读取 post_close_decisions.json 中触发买入动作的个股。"""
+    if not _POST_CLOSE_FILE.exists():
+        return []
+    try:
+        payload = json.loads(_POST_CLOSE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("读取 post_close_decisions.json 失败")
+        return []
+    rows = payload.get("decisions", []) if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        return []
+
+    targets: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if not _is_buy_action(row.get("action")):
+            continue
+        code = str(row.get("code", "")).strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        targets.append({"code": code, "name": str(row.get("name", code))})
+    return targets
+
+
+def _load_latest_holdings_snapshot() -> tuple[str, list[dict[str, Any]]]:
+    """读取最新可用收盘持仓快照。"""
+    if not _POSITIONS_DIR.exists():
+        return "", []
+    files = sorted(
+        [p for p in _POSITIONS_DIR.glob("*.json") if p.is_file()],
+        key=lambda p: p.stem,
+    )
+    if not files:
+        return "", []
+    target = files[-1]
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("读取持仓快照失败: %s", target)
+        return "", []
+    rows = payload.get("hold_list", []) if isinstance(payload, dict) else []
+    if not isinstance(rows, list):
+        return target.stem, []
+    active = [r for r in rows if isinstance(r, dict) and int(r.get("hold_vol", 0) or 0) > 0]
+    return target.stem, active
 
 
 # ---------------------------------------------------------------------------
@@ -935,6 +1005,10 @@ def _write_signals(
     *,
     exits: list[StockSignal] | None = None,
     pullback_states: dict[str, dict[str, Any]] | None = None,
+    sectors: dict[str, Any] | None = None,
+    monitored: dict[str, int] | None = None,
+    holdings_live: list[dict[str, Any]] | None = None,
+    holdings_source_date: str = "",
 ) -> None:
     """将信号结果覆盖写入 signals/watchlist_signals.json。"""
     _SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
@@ -946,6 +1020,10 @@ def _write_signals(
             "limit_down": sentiment.limit_down,
             "danger_level": sentiment.danger_level,
         },
+        "market_sectors": sectors or {},
+        "monitored": monitored or {},
+        "holdings_source_date": holdings_source_date,
+        "holdings_live": holdings_live or [],
         "signals": [asdict(s) for s in signals],
         "exits": [asdict(s) for s in (exits or [])],
         "pullback_state_count": len(pullback_states or {}),
@@ -960,80 +1038,297 @@ def _write_signals(
     )
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def _danger_emoji(level: str) -> str:
+    if level == "red":
+        return "🔴"
+    if level == "yellow":
+        return "🟡"
+    if level == "green":
+        return "🟢"
+    return "⚪"
 
 
-def main() -> None:
-    """CLI 入口：扫描 watchlist 盘中信号。"""
-    parser = argparse.ArgumentParser(description="Watchlist 盘中信号扫描")
-    parser.add_argument("--verbose", action="store_true", help="详细日志输出")
-    parser.add_argument(
-        "--force", action="store_true", help="忽略交易时间限制（调试用）"
+def _danger_style(level: str) -> str:
+    if level == "red":
+        return "bold red"
+    if level == "yellow":
+        return "bold yellow"
+    if level == "green":
+        return "bold green"
+    return "bold cyan"
+
+
+def _fmt_pct(value: float) -> str:
+    return f"{value * 100:.1f}%"
+
+
+def _fmt_yi(value: float) -> str:
+    return f"{value / 100000000:.2f}亿"
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _build_holdings_live(
+    holdings: list[dict[str, Any]],
+    realtime_map: dict[str, _RealtimeQuote],
+    kline_map: dict[str, tuple[str, list[_KlineBar], list[_KlineBar]]],
+) -> list[dict[str, Any]]:
+    """基于持仓快照 + 实时行情构建持仓实时视图。"""
+    rows: list[dict[str, Any]] = []
+    for item in holdings:
+        code = str(item.get("code", "")).strip()
+        if not code:
+            continue
+        rt = realtime_map.get(code)
+        entry = kline_map.get(code)
+        name = str(item.get("name", "")) or (entry[0] if entry else code)
+        hold_vol = int(_safe_float(item.get("hold_vol", 0)))
+        if hold_vol <= 0:
+            continue
+
+        cost_price = _safe_float(item.get("cost_price") or item.get("buy_price") or item.get("price"))
+        current = rt.current if rt is not None else (entry[1][-1].close if entry and entry[1] else 0.0)
+        prev_close = rt.prev_close if rt is not None else (entry[1][-1].close if entry and entry[1] else current)
+        change_pct = (
+            rt.change_pct if rt is not None else ((current - prev_close) / prev_close * 100 if prev_close > 0 else 0.0)
+        )
+
+        market_value = current * hold_vol
+        cost_value = cost_price * hold_vol if cost_price > 0 else 0.0
+        pnl = market_value - cost_value if cost_value > 0 else 0.0
+        pnl_pct = (pnl / cost_value * 100.0) if cost_value > 0 else 0.0
+
+        rows.append(
+            {
+                "code": code,
+                "name": name,
+                "hold_vol": hold_vol,
+                "cost_price": round(cost_price, 3),
+                "price": round(current, 3),
+                "change_pct": round(change_pct, 2),
+                "market_value": round(market_value, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round(pnl_pct, 2),
+            }
+        )
+    rows.sort(key=lambda x: x["pnl_pct"], reverse=True)
+    return rows
+
+
+def _render_signal_table(signals: list[dict[str, Any]]) -> Table:
+    table = Table(title="🔥 买入候选(Top10)", expand=True)
+    table.add_column("Code", style="cyan", no_wrap=True)
+    table.add_column("Name", style="white")
+    table.add_column("State", style="magenta", no_wrap=True)
+    table.add_column("Price", justify="right", style="green", no_wrap=True)
+    table.add_column("DEV20W", justify="right", style="yellow", no_wrap=True)
+    if not signals:
+        table.add_row("-", "无", "-", "-", "-")
+        return table
+    for item in signals[:10]:
+        table.add_row(
+            str(item.get("code", "")),
+            str(item.get("name", "")),
+            str(item.get("state", "")),
+            f"{float(item.get('price', 0.0)):.2f}",
+            _fmt_pct(float(item.get("dev20w", 0.0))),
+        )
+    return table
+
+
+def _render_holdings_table(holdings_live: list[dict[str, Any]]) -> Table:
+    table = Table(title="💼 持仓实时(收盘持仓 + 实时行情)", expand=True)
+    table.add_column("Code", style="cyan", no_wrap=True)
+    table.add_column("Name", style="white")
+    table.add_column("Qty", justify="right", style="magenta", no_wrap=True)
+    table.add_column("Cost", justify="right", style="dim", no_wrap=True)
+    table.add_column("Price", justify="right", style="green", no_wrap=True)
+    table.add_column("Chg%", justify="right", style="yellow", no_wrap=True)
+    table.add_column("PnL%", justify="right", style="bold", no_wrap=True)
+    table.add_column("MktValue", justify="right", style="blue", no_wrap=True)
+    if not holdings_live:
+        table.add_row("-", "无", "-", "-", "-", "-", "-", "-")
+        return table
+    for row in holdings_live[:12]:
+        pnl_pct = float(row.get("pnl_pct", 0.0))
+        pnl_style = "bold green" if pnl_pct >= 0 else "bold red"
+        table.add_row(
+            str(row.get("code", "")),
+            str(row.get("name", "")),
+            str(row.get("hold_vol", 0)),
+            f"{float(row.get('cost_price', 0.0)):.2f}",
+            f"{float(row.get('price', 0.0)):.2f}",
+            f"{float(row.get('change_pct', 0.0)):.2f}%",
+            Text(f"{pnl_pct:.2f}%", style=pnl_style),
+            _fmt_yi(float(row.get("market_value", 0.0))),
+        )
+    return table
+
+
+def _render_exit_table(exits: list[dict[str, Any]]) -> Table:
+    table = Table(title="🛡 出场信号(Top10)", expand=True)
+    table.add_column("Code", style="cyan", no_wrap=True)
+    table.add_column("Name", style="white")
+    table.add_column("State", style="red", no_wrap=True)
+    table.add_column("Next Action", style="yellow", no_wrap=True)
+    if not exits:
+        table.add_row("-", "无", "-", "-")
+        return table
+    for item in exits[:10]:
+        table.add_row(
+            str(item.get("code", "")),
+            str(item.get("name", "")),
+            str(item.get("state", "")),
+            str(item.get("action_next_day", "")),
+        )
+    return table
+
+
+def _render_sector_table(snapshot: dict[str, Any]) -> Table:
+    table = Table(title="🏭 板块资金流 Top5（单位：亿）", expand=True)
+    table.add_column("Rank", justify="right", style="dim", no_wrap=True)
+    table.add_column("Inflow Sector", style="green")
+    table.add_column("Inflow", justify="right", style="green", no_wrap=True)
+    table.add_column("Outflow Sector", style="red")
+    table.add_column("Outflow", justify="right", style="red", no_wrap=True)
+    sectors = snapshot.get("market_sectors", {})
+    inflow = sectors.get("top_inflow", []) if isinstance(sectors, dict) else []
+    outflow = sectors.get("top_outflow", []) if isinstance(sectors, dict) else []
+    max_len = max(min(5, len(inflow)), min(5, len(outflow)))
+    if max_len == 0:
+        table.add_row("-", "-", "-", "-", "-")
+        return table
+    for idx in range(max_len):
+        in_sec = inflow[idx] if idx < len(inflow) and isinstance(inflow[idx], dict) else {}
+        out_sec = outflow[idx] if idx < len(outflow) and isinstance(outflow[idx], dict) else {}
+        table.add_row(
+            str(idx + 1),
+            str(in_sec.get("name", "-")),
+            _fmt_yi(float(in_sec.get("total_netin", 0.0))) if in_sec else "-",
+            str(out_sec.get("name", "-")),
+            _fmt_yi(float(out_sec.get("total_netin", 0.0))) if out_sec else "-",
+        )
+    return table
+
+
+def _render_tui(snapshot: dict[str, Any], *, clear_screen: bool = True) -> None:
+    if clear_screen:
+        _CONSOLE.clear()
+    now_str = datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    title = Text("AShare Live Monitor", style="bold cyan")
+    title.append(f"  {now_str}", style="dim")
+
+    market = snapshot.get("market", {})
+    level = str(market.get("danger_level", "unknown"))
+    summary = Text()
+    summary.append(f"涨停 {market.get('limit_up', 0)} | 跌停 {market.get('limit_down', 0)} | 情绪 ", style="white")
+    summary.append(f"{_danger_emoji(level)} {level}", style=_danger_style(level))
+
+    monitored = snapshot.get("monitored", {})
+    monitor_text = Text(
+        f"监控池: 买入信号 {monitored.get('buy_targets', 0)} | "
+        f"合计 {monitored.get('universe', 0)}",
+        style="white",
     )
-    args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        stream=sys.stderr,
+    status = str(snapshot.get("status", "ok"))
+    message = str(snapshot.get("message", ""))
+    if status == "skipped":
+        status_line = Text(f"⏸ 跳过扫描: {message}", style="bold yellow")
+    elif status == "error":
+        status_line = Text(f"❌ 扫描异常: {message}", style="bold red")
+    else:
+        status_line = Text("✅ 监控运行中", style="bold green")
+
+    signals = snapshot.get("signals", [])
+    header = Panel(
+        Text.assemble(title, "\n", status_line, "\n", summary, "\n", monitor_text),
+        border_style="cyan",
     )
+    content = Columns([_render_signal_table(signals), _render_sector_table(snapshot)], equal=True, expand=True)
+    footer = Text("Ctrl+C 退出监控", style="dim")
+    _CONSOLE.print(header)
+    _CONSOLE.print(content)
+    _CONSOLE.print(footer)
 
-    if not args.force and not _is_trading_time():
+
+def _scan_once(*, force: bool = False) -> dict[str, Any]:
+    """执行一次扫描并返回可渲染快照。"""
+    snapshot: dict[str, Any] = {
+        "status": "ok",
+        "message": "",
+        "market": {},
+        "market_sectors": {},
+        "monitored": {"buy_targets": 0, "universe": 0},
+        "signals": [],
+    }
+    if not force and not _is_trading_time():
         now_str = datetime.now(tz=_CN_TZ).strftime("%H:%M")
-        logger.info("非交易时段（%s），跳过扫描", now_str)
-        return
+        snapshot["status"] = "skipped"
+        snapshot["message"] = f"非交易时段（{now_str}）"
+        return snapshot
 
     config = _load_app_config()
     params = _load_signal_params(config)
     ths_cookie: str | None = config.get("ths_cookie") or None
 
     # ── 1. 市场情绪 ────────────────────────────────────────────────────────
-    logger.info("获取市场情绪...")
     sentiment = fetch_market_sentiment(ths_cookie)
-    logger.info(
-        "市场情绪: 涨停=%d, 跌停=%d, 等级=%s",
-        sentiment.limit_up,
-        sentiment.limit_down,
-        sentiment.danger_level,
-    )
+    snapshot["market"] = {
+        "limit_up": sentiment.limit_up,
+        "limit_down": sentiment.limit_down,
+        "danger_level": sentiment.danger_level,
+    }
 
     # THS 明确报告市场未开盘（节假日 / 盘后）→ 跳过，避免基于昨日收盘价产生虚假信号
-    if not args.force and not sentiment.market_open and sentiment.danger_level != "unknown":
-        logger.info("THS 报告市场未开盘（%s），跳过扫描", sentiment.danger_level)
-        return
+    if not force and not sentiment.market_open and sentiment.danger_level != "unknown":
+        snapshot["status"] = "skipped"
+        snapshot["message"] = f"THS 报告市场未开盘（{sentiment.danger_level}）"
+        return snapshot
 
     if sentiment.danger_level == "red":
-        logger.warning("市场高压线（跌停 >= 80），中止扫描，写空信号文件")
-        _write_signals([], sentiment)
-        return
+        _write_signals([], sentiment, sectors={}, monitored={"buy_targets": 0, "universe": 0})
+        snapshot["status"] = "skipped"
+        snapshot["message"] = "市场高压线（跌停 >= 80）"
+        return snapshot
 
-    # ── 2. 加载 watchlist ──────────────────────────────────────────────────
-    stocks = load_watchlist()
-    active = [s for s in stocks if s.get("status") == "active"]
-    if not active:
-        logger.info("watchlist 中无 active 股票，退出")
-        _write_signals([], sentiment)
-        return
+    # ── 2. 读取盘后买入信号 + 板块概览 ────────────────────────────────────────
+    buy_targets = _load_post_close_buy_targets()
+    try:
+        sectors = fetch_market_sectors_top_n(5)
+    except Exception:
+        logger.exception("板块概览获取失败，降级为空")
+        sectors = {}
+    snapshot["market_sectors"] = sectors
 
-    logger.info("扫描 watchlist: %d 只 active 股", len(active))
-    active_codes = {str(s.get("code", "")).strip() for s in active if s.get("code")}
+    buy_codes = {str(s.get("code", "")).strip() for s in buy_targets if s.get("code")}
     pullback_state_map = _load_pullback_state()
     for stale_code in list(pullback_state_map):
-        if stale_code not in active_codes:
+        if stale_code not in buy_codes:
             pullback_state_map.pop(stale_code, None)
 
-    # ── 2b. 加载当前持仓（用于出场信号） ───────────────────────────��────────────────
-    try:
-        from ashare_data.fetchers.broker_account import fetch_broker_account
-        broker_data = fetch_broker_account()
-        holdings: list[dict[str, Any]] = broker_data.get("hold_list", [])
-        active_holdings = [h for h in holdings if int(h.get("hold_vol", 0) or 0) > 0]
-        logger.info("持仓股数量: %d", len(active_holdings))
-    except Exception as exc:
-        logger.warning("持仓数据获取失败（出场信号将跳过）: %s", exc)
-        holdings = []
+    # 监控池：仅盘后买入信号股
+    universe = [
+        {"code": str(item.get("code", "")).strip(), "name": item.get("name", str(item.get("code", "")))}
+        for item in buy_targets
+        if str(item.get("code", "")).strip()
+    ]
+    if not universe:
+        _save_pullback_state({})
+        _write_signals(
+            [],
+            sentiment,
+            sectors=sectors,
+            monitored={"buy_targets": 0, "universe": 0},
+        )
+        snapshot["status"] = "ok"
+        snapshot["message"] = "买入信号为空"
+        return snapshot
 
     # ── 3. 并发拉取东方财富日 K ────────────────────────────────────────────
     def _fetch_kline_job(
@@ -1047,8 +1342,8 @@ def main() -> None:
         return code, name, bars, weekly_bars
 
     kline_map: dict[str, tuple[str, list[_KlineBar], list[_KlineBar]]] = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(active))) as pool:
-        futures = [pool.submit(_fetch_kline_job, s) for s in active]
+    with ThreadPoolExecutor(max_workers=min(8, len(universe))) as pool:
+        futures = [pool.submit(_fetch_kline_job, s) for s in universe]
         for fut in futures:
             try:
                 code, name, bars, weekly_bars = fut.result()
@@ -1056,34 +1351,13 @@ def main() -> None:
             except Exception as exc:
                 logger.warning("K 线获取异常: %s", exc)
 
-    # ── 3b. 为持仓中不在 watchlist 的股票补充 K 线 ─────────────────────────
-    holding_codes_extra = [
-        h for h in holdings
-        if str(h.get("code", "")) not in kline_map
-        and int(h.get("hold_vol", 0) or 0) > 0
-    ]
-    if holding_codes_extra:
-        extra_stocks = [
-            {"code": h["code"], "name": h.get("name", h["code"])}
-            for h in holding_codes_extra
-        ]
-        with ThreadPoolExecutor(max_workers=min(8, len(extra_stocks))) as pool:
-            extra_futures = [pool.submit(_fetch_kline_job, s) for s in extra_stocks]
-            for fut in extra_futures:
-                try:
-                    code, name, bars, weekly_bars = fut.result()
-                    kline_map[code] = (name, bars, weekly_bars)
-                except Exception as exc:
-                    logger.warning("持仓 K 线获取异常: %s", exc)
-
     # ── 4. 批量获取腾讯实时行情 ───────────────────────────────────────────
     codes = list(kline_map.keys())
     realtime_map = _fetch_realtime(codes)
-    logger.info("实时行情获取: %d/%d 只", len(realtime_map), len(codes))
 
     # ── 5. 计算信号 ────────────────────────────────────────────────────────
     signals: list[StockSignal] = []
-    for stock in active:
+    for stock in buy_targets:
         code = str(stock.get("code", "")).strip()
         if not code:
             continue
@@ -1108,23 +1382,54 @@ def main() -> None:
 
     signals.sort(key=lambda s: -s.score)
 
-    # ── 5b. 计算出场信号 ───────────────────────────────────────────────────
-    exit_signals = _check_exit_signals(holdings, kline_map, params)
-    if exit_signals:
-        logger.info("出场信号: %s", [(s.name, s.state) for s in exit_signals])
-
     # ── 6. 写文件 ──────────────────────────────────────────────────────────
     _save_pullback_state(pullback_state_map)
     _write_signals(
         signals,
         sentiment,
-        exits=exit_signals,
         pullback_states=pullback_state_map,
+        sectors=sectors,
+        monitored={
+            "buy_targets": len(buy_targets),
+            "universe": len(universe),
+        },
     )
-    state_count: dict[str, int] = {}
-    for s in signals:
-        state_count[s.state] = state_count.get(s.state, 0) + 1
-    logger.info("扫描完成: states=%s, exits=%d", state_count, len(exit_signals))
+    snapshot["signals"] = [asdict(s) for s in signals]
+    snapshot["monitored"] = {
+        "buy_targets": len(buy_targets),
+        "universe": len(universe),
+    }
+    return snapshot
+
+
+def main() -> None:
+    """CLI 入口：手动启动持续监控，默认循环扫描并渲染终端面板。"""
+    parser = argparse.ArgumentParser(description="A股监控终端（实时渲染）")
+    parser.add_argument("--verbose", action="store_true", help="详细日志输出")
+    parser.add_argument("--force", action="store_true", help="忽略交易时间限制（调试用）")
+    parser.add_argument("--once", action="store_true", help="仅执行一次扫描后退出")
+    parser.add_argument("--interval", type=int, default=20, help="循环模式下扫描间隔（秒）")
+    parser.add_argument("--no-clear", action="store_true", help="不清屏，连续追加输出")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.WARNING,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+
+    if args.once:
+        snapshot = _scan_once(force=args.force)
+        _render_tui(snapshot, clear_screen=not args.no_clear)
+        return
+
+    try:
+        while True:
+            snapshot = _scan_once(force=args.force)
+            _render_tui(snapshot, clear_screen=not args.no_clear)
+            time.sleep(max(3, args.interval))
+    except KeyboardInterrupt:
+        sys.stdout.write("\n已退出监控。\n")
 
 
 if __name__ == "__main__":
