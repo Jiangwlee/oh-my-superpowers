@@ -18,7 +18,9 @@ ashare_data.egg-info/top_level.txt
 ashare_data/core/__init__.py
 ashare_data/core/cache.py
 ashare_data/core/config.py
+ashare_data/core/html_parser.py
 ashare_data/core/http_client.py
+ashare_data/core/utils.py
 ashare_data/core/watchlist.py
 ashare_data/fetchers/__init__.py
 ashare_data/fetchers/broker_account.py
@@ -38,5 +40,8 @@ tests/test_diagnose.py
 tests/test_filter_to_markdown.py
 tests/test_funding_fetcher.py
 tests/test_http_client.py
+tests/test_market_sentiment.py
+tests/test_sentiment_preprocess.py
 tests/test_taoguba_fetchers.py
 tests/test_us_market.py
+tests/test_watchlist_monitor.py

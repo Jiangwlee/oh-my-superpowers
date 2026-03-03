@@ -211,6 +211,10 @@ vim skills/<skill-name>/SKILL.md
 
 ---
 
+## 测试环境
+
+使用当前项目根目录下的uv虚拟环境`.venv`作为测试环境。
+
 ## 测试检查清单
 
 ```bash

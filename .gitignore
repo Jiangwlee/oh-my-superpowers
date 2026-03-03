@@ -2,6 +2,7 @@ github_cache
 .skills/
 .agents/
 .memory/
+.memsearch/
 
 # Python cache
 __pycache__/
