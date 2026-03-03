@@ -76,10 +76,15 @@ If `watchlist_signals.json` exists, cross-reference it against today's buys (sid
 ```
 Signal match rate = buys that appear in signal list / total buys today
 
-| Stock | Bought today | In signal list | Signal type | Assessment |
-|-------|-------------|---------------|-------------|------------|
+Notes:
+- `watchlist_signals.json` now uses state-machine fields.
+- Valid state values: `SETUP`, `ENTRY`, `HOLD`, `REDUCE`, `EXIT`.
+- For buy-order alignment, treat only `ENTRY` as direct signal match.
+
+| Stock | Bought today | In signal list | Signal state | Assessment |
+|-------|-------------|---------------|--------------|------------|
 | StockA | ✓ | ✗ | — | Unplanned (impulsive?) |
-| StockB | ✓ | ✓ | buy_dip | Matches signal |
+| StockB | ✓ | ✓ | ENTRY | Matches signal |
 ```
 
 Interpretation rules:

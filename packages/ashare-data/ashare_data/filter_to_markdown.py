@@ -741,72 +741,83 @@ def generate_index(
 
 
 def convert_watchlist_signals(raw_dir: str) -> tuple[str, str]:
-    """转换 watchlist 扫描结果为买入信号 Markdown 表格。
-
-    读取 watchlist_scan.json，输出含 MA5/MA10 偏离和买入信号标记的 Markdown。
-    价格与 MA5 或 MA10 距离在 ±2% 以内时标记 ⚡。
-    """
-    filepath = os.path.join(raw_dir, "watchlist_scan.json")
+    """转换 watchlist 状态机信号为 Markdown。"""
+    filepath = os.path.expanduser("~/.ashare-assistant/signals/watchlist_signals.json")
     if not os.path.exists(filepath):
         return "", "watchlist_signals.md"
 
     data = _load_json(filepath)
-    if not data or not isinstance(data, list):
+    if not data or not isinstance(data, dict):
         return "", "watchlist_signals.md"
+    signals = data.get("signals")
+    exits = data.get("exits")
+    if not isinstance(signals, list):
+        return "", "watchlist_signals.md"
+    if not isinstance(exits, list):
+        exits = []
 
     lines = [
-        "# 观察列表买入机会",
+        "# Watchlist 状态机信号",
         "",
-        "追踪已退出人气榜但趋势依然健康的优质股票，每日检测 MA5/MA10 ±2% 买入机会。",
+        f"- 扫描时间: {data.get('scanned_at', 'N/A')}",
+        f"- 市场风险: {(data.get('market') or {}).get('danger_level', 'N/A')}",
+        f"- 状态信号数: {len(signals)}",
+        f"- 出场信号数: {len(exits)}",
         "",
-        "| 股票 | 代码 | MA5偏离 | MA10偏离 | 趋势 | 星级 | 状态 | 交易信号 |",
-        "|------|------|---------|---------|------|------|------|---------|",
+        "## 状态信号",
+        "",
+        "| 股票 | 代码 | 状态 | 价格 | VR20D | DEV20W | 目标仓位 | 次日动作 |",
+        "|------|------|------|------|-------|--------|----------|----------|",
     ]
 
     has_rows = False
-    for item in data:
+    for item in signals:
         if not isinstance(item, dict):
             continue
         name = item.get("name", "")
         code = item.get("code", "")
-        ma5_dist = item.get("ma5_dist_pct", 0.0)
-        ma10_dist = item.get("ma10_dist_pct", 0.0)
-        is_uptrend = item.get("is_uptrend", False)
-        star_rating = item.get("star_rating", 1)
-        trade_signal = item.get("trade_signal", "观察")
-        source = item.get("source", "")
-
-        trend_icon = "✅" if is_uptrend else "❌"
-        stars = "★" * star_rating + "☆" * (5 - star_rating)
-
-        # 状态标注
-        if source == "watchlist":
-            status_label = "追踪中（退榜）"
-        else:
-            status_label = "追踪中"
-
-        # MA 距离格式化，±2% 内标记 ⚡
-        def _fmt_dist(dist: float) -> str:
-            signal = " ⚡" if abs(dist) <= 2.0 else ""
-            sign = "+" if dist >= 0 else ""
-            return f"**{sign}{dist:.1f}%{signal}**" if signal else f"{sign}{dist:.1f}%"
-
-        ma5_cell = _fmt_dist(ma5_dist)
-        ma10_cell = _fmt_dist(ma10_dist)
-
+        state = item.get("state", "")
+        price = float(item.get("price", 0.0) or 0.0)
+        vr20d = float(item.get("vr20d", 0.0) or 0.0)
+        dev20w = float(item.get("dev20w", 0.0) or 0.0) * 100.0
+        position_target = float(item.get("position_target", 0.0) or 0.0) * 100.0
+        action = item.get("action_next_day", "")
         lines.append(
-            f"| {name} | {code} | {ma5_cell} | {ma10_cell} | {trend_icon} | {stars} | {status_label} | {trade_signal} |"
+            f"| {name} | {code} | {state} | {price:.2f} | {vr20d:.2f} | {dev20w:+.1f}% | {position_target:.0f}% | {action} |"
         )
+        reason = str(item.get("reason", "")).strip()
+        if reason:
+            lines.append(f"|  |  |  |  |  |  |  | 理由: {_escape_md(reason)} |")
         has_rows = True
-
-    if not has_rows:
-        return "", "watchlist_signals.md"
 
     lines += [
         "",
-        "⚡ = 价格在 MA5 或 MA10 ±2% 以内（潜在低风险买点）",
+        "## 出场信号",
         "",
     ]
+    if not exits:
+        lines.append("无出场信号。")
+    else:
+        lines.append("| 股票 | 代码 | 状态 | 价格 | 次日动作 | 理由 |")
+        lines.append("|------|------|------|------|----------|------|")
+        for item in exits:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                "| {name} | {code} | {state} | {price:.2f} | {action} | {reason} |".format(
+                    name=item.get("name", ""),
+                    code=item.get("code", ""),
+                    state=item.get("state", ""),
+                    price=float(item.get("price", 0.0) or 0.0),
+                    action=item.get("action_next_day", ""),
+                    reason=_escape_md(str(item.get("reason", ""))),
+                )
+            )
+
+    if not has_rows and not exits:
+        return "", "watchlist_signals.md"
+
+    lines.append("")
     return "\n".join(lines), "watchlist_signals.md"
 
 
