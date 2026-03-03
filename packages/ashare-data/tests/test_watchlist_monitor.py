@@ -48,25 +48,14 @@ class TestAnalyzeSignalMA5WDirection(unittest.TestCase):
         """5周均线方向向下时，即使价格在均线附近，也不应产生任何信号。
 
         weekly_closes = [100, 98, 96, 94, 92, 90, 88, 86]
-        MA5W_now  = mean([92,90,88,86]) ... 取后5个 = mean([94,92,90,88,86]) = 90.0
-        MA5W_prev = mean([100,98,96,94,92]) = 96.0
-        方向：90.0 <= 96.0 → 向下 → 应返回 None
+        # weekly_closes = [100, 98, 96, 94, 92, 90, 88, 86]
+        # MA5W_now  = mean([-5:]) = mean([94,92,90,88,86]) = 90.0
+        # MA5W_prev = mean([-8:-3]) = mean([100,98,96,94,92]) = 96.0
+        # 90.0 <= 96.0 → 方向向下 → 应返回 None
         """
         weekly_closes = [100.0, 98.0, 96.0, 94.0, 92.0, 90.0, 88.0, 86.0]
-        # MA5W_now = mean(weekly_closes[-5:]) = mean([92,90,88,86]) 不够5个?
-        # 实际 weekly_closes[-5:] = [92, 90, 88, 86] 只有4个...
-        # 修正：需要至少8个元素才触发检查，weekly_closes 有8个
-        # weekly_closes[-5:] = [92, 90, 88, 86] -- 实际上从 index -5 = index 3
-        # 索引: [0]=100, [1]=98, [2]=96, [3]=94, [4]=92, [5]=90, [6]=88, [7]=86
-        # [-5:] = [92, 90, 88, 86] -- 只有4个，不对
-        # 需要 len >= 5 才能算 MA5W，所以要保证最后5个
-        # weekly_closes[-5:] = [92, 90, 88, 86] 只有4个？不，-5 from 8 elements = index 3
-        # [3]=94, [4]=92, [5]=90, [6]=88, [7]=86 → 5个 ✓ MA5W_now = (94+92+90+88+86)/5 = 90.0
-        # [-8:-3] = [0]到[4] = [100,98,96,94,92] → MA5W_prev = (100+98+96+94+92)/5 = 96.0
-        # 90.0 <= 96.0 → 向下
 
         # 日线价格设为89，使 MA20=89，而 current=90.5 > MA20，不被日线过滤
-        # score = 50（在MA5W±3%） + 15（适度下跌-4%） + 10（缩量）= 75 >= 45，无方向检查时会产生 buy_dip
         daily = _make_daily_bars([89.0] * 25)
         weekly = _make_weekly_bars(weekly_closes)
         rt = _make_rt(current=90.5, change_pct=-4.0, volume_lot=500)  # volume_lot=500 < avg_vol=1000*0.7=700
@@ -85,16 +74,16 @@ class TestAnalyzeSignalMA5WDirection(unittest.TestCase):
         weekly_closes = [85.0, 87.0, 89.0, 91.0, 93.0, 95.0, 97.0, 99.0, 101.0]
         ma5w_now = sum(weekly_closes[-5:]) / 5  # = (93+95+97+99+101)/5 = 97.0
 
-        daily = _make_daily_bars([100.0] * 25)
+        # MA20=96.0 < current=97.97，不被日线 MA20 过滤
+        daily = _make_daily_bars([96.0] * 25)
         weekly = _make_weekly_bars(weekly_closes)
         # 价格在MA5W附近 +1%，触发买入区间
         rt = _make_rt(current=round(ma5w_now * 1.01, 2))
 
         result = _analyze_signal("000001", "测试股", daily, weekly, rt, _green_sentiment())
-        # 不强制 buy_dip（其他条件可能不满足），但不应因方向检查被 None
-        # 若 result 非 None，signal 必须合法
-        if result is not None:
-            self.assertIn(result.signal, ("buy_dip", "watch"))
+        # 5周均线向上，不应被方向检查拦截，必须产生合法信号
+        self.assertIsNotNone(result, "5周均线方向向上时不应被方向检查拦截")
+        self.assertIn(result.signal, ("buy_dip", "watch"))
 
 
 if __name__ == "__main__":
