@@ -52,7 +52,7 @@ def run(
     news_count: int = 20,
     taoguba_count: int = 20,
     scan_trends: bool = True,
-    popularity_max: int = 200,
+    popularity_max: int = 1000,
     run_deep_research: bool = True,
     deep_research_min_star: int = 4,
     deep_research_max_workers: int = 6,
@@ -185,7 +185,7 @@ def main() -> None:
         "--no-scan-trends", action="store_true", help="跳过趋势扫描（加快调试）"
     )
     parser.add_argument(
-        "--popularity-max", type=int, default=200, help="人气榜扫描上限"
+        "--popularity-max", type=int, default=1000, help="人气榜扫描上限"
     )
     parser.add_argument(
         "--no-deep-research", action="store_true", help="跳过个股深研预处理"

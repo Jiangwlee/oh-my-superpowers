@@ -48,7 +48,7 @@ from ashare_data.fetchers.taoguba import (  # noqa: E402
     fetch_taoguba_now_recommend,
 )
 from ashare_data.fetchers.trend_scanner import (  # noqa: E402
-    fetch_eastmoney_top200,
+    fetch_eastmoney_top1000,
     fetch_ths_snapshot,
     fetch_ths_history,
     scan_all,
@@ -298,7 +298,7 @@ def collect(
     taoguba_count: int = 20,
     *,
     scan_trends: bool = True,
-    popularity_max: int = 200,
+    popularity_max: int = 1000,
     run_deep_research: bool = True,
     deep_research_min_star: int = 4,
     deep_research_max_workers: int = 6,
@@ -313,9 +313,9 @@ def collect(
     Parameters
     ----------
     scan_trends : bool
-        是否执行趋势扫描（默认 True）。扫描200只股约2-3分钟。
+        是否执行趋势扫描（默认 True）。扫描1000只股约8-12分钟。
     popularity_max : int
-        东方财富人气榜扫描上限（默认200，最大200）。
+        东方财富人气榜扫描上限（默认1000，最大1000）。
     run_deep_research : bool
         是否执行个股深研预处理（默认 True）。
     deep_research_min_star : int
@@ -404,7 +404,7 @@ def collect(
 
         try:
             # 1) 拉取人气榜
-            candidates = fetch_eastmoney_top200(max_rank=min(200, popularity_max))
+            candidates = fetch_eastmoney_top1000(max_rank=min(1000, popularity_max))
             _log(f"  人气榜候选: {len(candidates)} 只")
 
             # 2) 同花顺快照（传入最近交易日，避免假期取到空数据）
@@ -662,7 +662,7 @@ def main() -> None:
     parser.add_argument("--taoguba-count", type=int, default=20, help="淘股吧帖子数")
     parser.add_argument("--no-scan-trends", action="store_true", help="跳过趋势扫描")
     parser.add_argument(
-        "--popularity-max", type=int, default=200, help="人气榜扫描上限(<=200)"
+        "--popularity-max", type=int, default=1000, help="人气榜扫描上限(<=1000)"
     )
     parser.add_argument(
         "--no-deep-research", action="store_true", help="跳过个股深研预处理"

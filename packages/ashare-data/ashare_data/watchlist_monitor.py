@@ -36,6 +36,22 @@ _CN_TZ = timezone(timedelta(hours=8))
 _SIGNALS_DIR = ASHARE_HOME / "signals"
 _SIGNALS_FILE = _SIGNALS_DIR / "watchlist_signals.json"
 _CONFIG_FILE = ASHARE_HOME / "config.json"
+_PULLBACK_STATE_FILE = ASHARE_HOME / "memory" / "pullback_state.json"
+
+_DEFAULT_SIGNAL_PARAMS: dict[str, float] = {
+    "dev5w_band": 0.03,
+    "vr20d_shrink": 0.80,
+    "vr20d_expand": 1.10,
+    "intraday_break_allow": 0.02,
+    "ma5w_break_week": 0.015,
+    "fast_stop_pct": 0.04,
+    "pb_breakout_buffer": 0.003,
+    "dev20w_no_add": 0.20,
+    "dev20w_no_trade": 0.25,
+    "position_base": 0.25,
+    "position_yellow": 0.15,
+    "drawdown20_max": 0.12,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +81,48 @@ def _load_app_config() -> dict[str, Any]:
     except Exception:
         logger.warning("读取 config.json 失败，使用空配置")
         return {}
+
+
+def _load_signal_params(config: dict[str, Any]) -> dict[str, float]:
+    """加载并归一化信号参数。"""
+    raw = config.get("watchlist_monitor")
+    source = raw if isinstance(raw, dict) else config
+    params = dict(_DEFAULT_SIGNAL_PARAMS)
+    for key, default_value in _DEFAULT_SIGNAL_PARAMS.items():
+        value = source.get(key) if isinstance(source, dict) else None
+        if value is None:
+            continue
+        try:
+            params[key] = float(value)
+        except (TypeError, ValueError):
+            logger.warning("参数 %s 非法，使用默认值 %.4f", key, default_value)
+    return params
+
+
+def _load_pullback_state() -> dict[str, dict[str, Any]]:
+    """读取回撤状态文件。"""
+    if not _PULLBACK_STATE_FILE.exists():
+        return {}
+    try:
+        with open(_PULLBACK_STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        normalized: dict[str, dict[str, Any]] = {}
+        for code, state in data.items():
+            if isinstance(code, str) and isinstance(state, dict):
+                normalized[code] = state
+        return normalized
+    except Exception:
+        logger.exception("读取 pullback_state.json 失败，使用空状态")
+        return {}
+
+
+def _save_pullback_state(state_map: dict[str, dict[str, Any]]) -> None:
+    """写入回撤状态文件。"""
+    _PULLBACK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_PULLBACK_STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state_map, f, ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -427,14 +485,23 @@ def _fetch_realtime(codes: list[str]) -> dict[str, _RealtimeQuote]:
 class StockSignal:
     code: str
     name: str
-    signal: str     # "buy_dip" / "watch"
+    state: str
     reason: str
     price: float
-    change: float   # change_pct %
-    ma5_week: float  # 5周均线
-    ma10: float
-    ma20: float
-    star: int
+    change: float
+    ma5w: float
+    ma20w: float
+    ma20d: float
+    vr20d: float
+    dev20w: float
+    dev5w: float
+    pb_start_date: str
+    pb_high: float
+    pb_low: float
+    entry_price: float
+    stop_price: float
+    position_target: float
+    action_next_day: str
     score: int
 
 
@@ -459,6 +526,58 @@ def _compute_star(closes: list[float]) -> int:
     return 2
 
 
+def _mean(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
+def _build_signal(
+    *,
+    code: str,
+    name: str,
+    state: str,
+    reason: str,
+    rt: _RealtimeQuote,
+    ma5w: float,
+    ma20w: float,
+    ma20d: float,
+    vr20d: float,
+    dev20w: float,
+    dev5w: float,
+    pb_start_date: str = "",
+    pb_high: float = 0.0,
+    pb_low: float = 0.0,
+    entry_price: float = 0.0,
+    stop_price: float = 0.0,
+    position_target: float = 0.0,
+    action_next_day: str = "hold",
+    score: int = 0,
+) -> StockSignal:
+    return StockSignal(
+        code=code,
+        name=name,
+        state=state,
+        reason=reason,
+        price=round(rt.current, 3),
+        change=round(rt.change_pct, 2),
+        ma5w=round(ma5w, 3),
+        ma20w=round(ma20w, 3),
+        ma20d=round(ma20d, 3),
+        vr20d=round(vr20d, 3),
+        dev20w=round(dev20w, 4),
+        dev5w=round(dev5w, 4),
+        pb_start_date=pb_start_date,
+        pb_high=round(pb_high, 3),
+        pb_low=round(pb_low, 3),
+        entry_price=round(entry_price, 3),
+        stop_price=round(stop_price, 3),
+        position_target=round(position_target, 3),
+        action_next_day=action_next_day,
+        score=score,
+    )
+
+
 def _analyze_signal(
     code: str,
     name: str,
@@ -466,182 +585,203 @@ def _analyze_signal(
     weekly_bars: list[_KlineBar],
     rt: _RealtimeQuote,
     sentiment: MarketSentiment,
-) -> StockSignal | None:
-    """基于5周均线的买入信号分析。
-
-    核心逻辑：趋势股的真正买点在于回调到5周均线附近。
-    周线买点比日线更稳定，能过滤掉大部分噪音。
-    使用 JRJ 数据源（VPS 可访问）。
-
-    评分规则:
-        周线分析:
-          当前价 < MA5(周)              → 直接排除（周线趋势破坏）
-          当前价在 MA5(周)附近(±3%)     → +50（周线级别回调到位）
-          当前价 > MA5(周)              → 持有信号，不加分
-        日线辅助:
-          当前价 < MA20(日)              → 直接排除
-          适度下跌 -3% ~ -6%            → +15
-          缩量回调                     → +10
-          放量下跌                     → -20
-        市场环境:
-          黄色市场                     → 门槛提高 15 分
-
-    Returns:
-        StockSignal 或 None（不满足最低门槛时）。
-    """
+    params: dict[str, float] | None = None,
+    setup_state: dict[str, Any] | None = None,
+) -> tuple[StockSignal | None, dict[str, Any] | None]:
+    """基于 SETUP/ENTRY 状态机输出交易信号。"""
+    using_params = params or _DEFAULT_SIGNAL_PARAMS
     today_str = datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d")
-    # 只用已完成交易日的历史 K 线，排除今日可能的半日数据
     hist = [b for b in daily_bars if b.date < today_str]
-    if len(hist) < 20:
-        logger.debug("历史数据不足: %s (%d 条历史 K 线)", code, len(hist))
-        return None
+    if len(hist) < 25 or len(weekly_bars) < 20 or rt.current <= 0:
+        return None, None
 
-    # ──────────────── 周线分析（核心） ────────────────
-    if len(weekly_bars) < 5:
-        logger.debug("周K数据不足: %s (%d 周)", code, len(weekly_bars))
-        # 周K不足时降级为日线判断
-        weekly_closes: list[float] = []
-        ma5_week = 0.0
-    else:
-        weekly_closes = [b.close for b in weekly_bars]
-        ma5_week = sum(weekly_closes[-5:]) / 5
-
-    current = rt.current
-    change_pct = rt.change_pct
-    today_vol = rt.volume_lot
-
-    if current <= 0:
-        return None
-
-    # ──────────────── 周线核心过滤 ────────────────
-    if ma5_week > 0:
-        # 周线趋势破坏：跌破5周均线
-        if current < ma5_week:
-            logger.debug("%s 跌破5周均线(%.2f<%.2f)，周线趋势破坏", code, current, ma5_week)
-            return None
-        # 5周均线方向验证：均线本身必须向上倾斜（当前MA5W > 3周前MA5W）
-        if len(weekly_closes) >= 8:
-            ma5w_prev = sum(weekly_closes[-8:-3]) / 5
-            if ma5_week <= ma5w_prev:
-                logger.debug(
-                    "%s 5周均线方向向下(%.2f<=%.2f)，趋势无效",
-                    code, ma5_week, ma5w_prev,
-                )
-                return None
-    else:
-        # 没有周K数据时，用日线MA20作为后备
-        if len(hist) < 20:
-            return None
-
-    # ──────────────── 日线分析（辅助） ────────────────
     closes = [b.close for b in hist]
     volumes = [b.volume for b in hist]
+    weekly_closes = [b.close for b in weekly_bars]
 
-    ma10 = sum(closes[-10:]) / 10 if len(closes) >= 10 else 0.0
-    ma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else 0.0
-    avg_vol_20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else (
-        sum(volumes) / len(volumes) if volumes else 0.0
+    ma20d = _mean(closes[-20:])
+    ma20d_prev5 = _mean(closes[-25:-5])
+    ma5w = _mean(weekly_closes[-5:])
+    ma5w_prev3 = _mean(weekly_closes[-8:-3])
+    ma20w = _mean(weekly_closes[-20:])
+    if min(ma20d, ma20d_prev5, ma5w, ma5w_prev3, ma20w) <= 0:
+        return None, None
+
+    close_w = weekly_closes[-1]
+    if rt.current <= ma20d or ma20d <= ma20d_prev5 or close_w <= ma5w or ma5w <= ma5w_prev3:
+        return None, None
+
+    avg_vol_20 = _mean(volumes[-20:])
+    vr20d = rt.volume_lot / avg_vol_20 if avg_vol_20 > 0 else 0.0
+    dev5w = (rt.current - ma5w) / ma5w
+    dev20w = (rt.current - ma20w) / ma20w
+    highest_close_20 = max(closes[-20:])
+    drawdown20 = (
+        (highest_close_20 - rt.current) / highest_close_20 if highest_close_20 > 0 else 0.0
     )
-    star = _compute_star(closes)
 
-    if ma20 <= 0:
-        return None
+    pb_high_rt = rt.high if rt.high > 0 else rt.current
+    pb_low_rt = rt.low if rt.low > 0 else rt.current
+    position_target = (
+        using_params["position_yellow"]
+        if sentiment.danger_level == "yellow"
+        else using_params["position_base"]
+    )
 
-    # 硬排除：价格跌破日线 MA20（趋势破坏）
-    if current < ma20:
-        return None
+    setup_condition = (
+        abs(dev5w) <= using_params["dev5w_band"]
+        and (drawdown20 <= using_params["drawdown20_max"] or rt.current >= ma20d)
+        and vr20d <= using_params["vr20d_shrink"]
+        and rt.current >= ma5w * (1 - using_params["intraday_break_allow"])
+        and dev20w <= using_params["dev20w_no_trade"]
+    )
 
-    score = 0
-    reasons: list[str] = []
+    if setup_condition:
+        old_high = float((setup_state or {}).get("pb_high") or pb_high_rt)
+        old_low = float((setup_state or {}).get("pb_low") or pb_low_rt)
+        next_state = {
+            "pb_start_date": str((setup_state or {}).get("pb_start_date") or today_str),
+            "pb_high": max(old_high, pb_high_rt),
+            "pb_low": min(old_low, pb_low_rt),
+            "updated_at": datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        return (
+            _build_signal(
+                code=code,
+                name=name,
+                state="SETUP",
+                reason="回撤进入观察区，等待突破PB_HIGH确认",
+                rt=rt,
+                ma5w=ma5w,
+                ma20w=ma20w,
+                ma20d=ma20d,
+                vr20d=vr20d,
+                dev20w=dev20w,
+                dev5w=dev5w,
+                pb_start_date=next_state["pb_start_date"],
+                pb_high=next_state["pb_high"],
+                pb_low=next_state["pb_low"],
+                position_target=position_target,
+                action_next_day="observe_setup",
+                score=70,
+            ),
+            next_state,
+        )
 
-    # ──────────────── 周线评分（核心，只认回调买点） ────────────────
-    # 关键：只有回调到5周均线附近才是买点！
-    # 价格在5周均线之上是"持有"信号，不是"买入"信号
-    if ma5_week > 0:
-        week_deviation = (current - ma5_week) / ma5_week * 100
-        if abs(week_deviation) <= 3.0:
-            # 回调到5周均线附近（±3%），这是周线级别的最佳买点
-            score += 50
-            reasons.append(f"回调至5周均线({week_deviation:+.1f}%)")
-        elif current > ma5_week:
-            # 价格在5周均线之上，这是"持有"信号，不给买入加分
-            reasons.append("周线趋势完好（持有）")
-    else:
-        # 没有周K时，用日线MA10作为后备（同样只认回调）
-        if ma10 > 0 and ma20 > 0:
-            if ma20 <= current < ma10:
-                score += 30
-                reasons.append("回调至MA10附近")
-            elif current >= ma10:
-                # 价格在MA10之上，不给买入加分
-                reasons.append("价格在MA10之上（持有）")
+    if setup_state:
+        prev_pb_high = float(setup_state.get("pb_high") or pb_high_rt)
+        prev_pb_low = float(setup_state.get("pb_low") or pb_low_rt)
+        next_state = {
+            "pb_start_date": str(setup_state.get("pb_start_date") or today_str),
+            "pb_high": max(prev_pb_high, pb_high_rt),
+            "pb_low": min(prev_pb_low, pb_low_rt),
+            "updated_at": datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        trigger_condition = (
+            rt.current > prev_pb_high * (1 + using_params["pb_breakout_buffer"])
+            and vr20d >= using_params["vr20d_expand"]
+            and rt.current > rt.open
+            and dev20w <= using_params["dev20w_no_trade"]
+        )
+        if trigger_condition:
+            stop1 = rt.current * (1 - using_params["fast_stop_pct"])
+            stop2 = next_state["pb_low"] * 0.99
+            stop_price = max(stop1, stop2)
+            return (
+                _build_signal(
+                    code=code,
+                    name=name,
+                    state="ENTRY",
+                    reason="突破PB_HIGH且量能回归，触发确认入场",
+                    rt=rt,
+                    ma5w=ma5w,
+                    ma20w=ma20w,
+                    ma20d=ma20d,
+                    vr20d=vr20d,
+                    dev20w=dev20w,
+                    dev5w=dev5w,
+                    pb_start_date=next_state["pb_start_date"],
+                    pb_high=next_state["pb_high"],
+                    pb_low=next_state["pb_low"],
+                    entry_price=rt.current,
+                    stop_price=stop_price,
+                    position_target=position_target,
+                    action_next_day="buy_open_t1",
+                    score=95,
+                ),
+                None,
+            )
+        return (
+            _build_signal(
+                code=code,
+                name=name,
+                state="HOLD",
+                reason="已在回撤观察阶段，等待突破确认",
+                rt=rt,
+                ma5w=ma5w,
+                ma20w=ma20w,
+                ma20d=ma20d,
+                vr20d=vr20d,
+                dev20w=dev20w,
+                dev5w=dev5w,
+                pb_start_date=next_state["pb_start_date"],
+                pb_high=next_state["pb_high"],
+                pb_low=next_state["pb_low"],
+                position_target=0.0,
+                action_next_day="wait_breakout",
+                score=55,
+            ),
+            next_state,
+        )
 
-    # ──────────────── 日线辅助评分 ────────────────
-    # 成交量对比
-    if avg_vol_20 > 0:
-        vol_ratio = today_vol / avg_vol_20
-        if vol_ratio < 0.7:
-            score += 10
-            reasons.append("缩量回调")
-        elif vol_ratio > 1.5 and change_pct < -2.0:
-            score -= 20
-            reasons.append("放量下跌")
+    if dev20w > using_params["dev20w_no_trade"]:
+        return (
+            _build_signal(
+                code=code,
+                name=name,
+                state="HOLD",
+                reason="周线乖离过大，进入加速区禁止开仓",
+                rt=rt,
+                ma5w=ma5w,
+                ma20w=ma20w,
+                ma20d=ma20d,
+                vr20d=vr20d,
+                dev20w=dev20w,
+                dev5w=dev5w,
+                position_target=0.0,
+                action_next_day="no_new_position",
+                score=40,
+            ),
+            None,
+        )
 
-    # 涨跌幅：适度下跌是低吸机会
-    if -6.0 <= change_pct <= -3.0:
-        score += 15
-        reasons.append(f"适度下跌({change_pct:.1f}%)")
-    elif change_pct < -8.0:
-        score -= 15
-        reasons.append("跌幅过大")
-
-    # 趋势星级
-    if star >= 4:
-        score += 10
-
-    # ──────────────── 门槛设置 ────────────────
-    threshold_bonus = 15 if sentiment.danger_level == "yellow" else 0
-    threshold_buy = 45 + threshold_bonus  # 只有回调到5周均线附近才能触发
-    threshold_watch = 25 + threshold_bonus
-
-    reason_str = "，".join(reasons) if reasons else "观察中"
-
-    if score >= threshold_buy:
-        signal_type = "buy_dip"
-    elif score >= threshold_watch:
-        signal_type = "watch"
-    else:
-        return None
-
-    return StockSignal(
-        code=code,
-        name=name,
-        signal=signal_type,
-        reason=reason_str,
-        price=round(current, 3),
-        change=round(change_pct, 2),
-        ma5_week=round(ma5_week, 3) if ma5_week > 0 else 0.0,
-        ma10=round(ma10, 3),
-        ma20=round(ma20, 3),
-        star=star,
-        score=score,
+    return (
+        _build_signal(
+            code=code,
+            name=name,
+            state="HOLD",
+            reason="趋势完整，等待回撤进入SETUP",
+            rt=rt,
+            ma5w=ma5w,
+            ma20w=ma20w,
+            ma20d=ma20d,
+            vr20d=vr20d,
+            dev20w=dev20w,
+            dev5w=dev5w,
+            position_target=0.0,
+            action_next_day="wait_pullback",
+            score=35,
+        ),
+        None,
     )
 
 
 def _check_exit_signals(
     holdings: list[dict[str, Any]],
     kline_map: dict[str, tuple[str, list[_KlineBar], list[_KlineBar]]],
+    params: dict[str, float],
 ) -> list[StockSignal]:
-    """检查持仓股是否触发出场信号。
-
-    Args:
-        holdings: broker_account hold_list，每项含 code / name / hold_vol。
-        kline_map: 已拉取的 K 线数据映射（可能不含全部持仓）。
-
-    Returns:
-        触发出场条件的 StockSignal 列表。signal 值为
-        "stop_loss" 或 "take_profit_partial"。
-    """
+    """检查持仓股是否触发 REDUCE/EXIT。"""
     today_str = datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d")
     exits: list[StockSignal] = []
 
@@ -662,42 +802,122 @@ def _check_exit_signals(
         if ma5_week <= 0:
             continue
 
+        ma20w = _mean(weekly_closes[-20:]) if len(weekly_closes) >= 20 else 0.0
+        if ma20w <= 0:
+            continue
+
         hist = [b for b in daily_bars if b.date < today_str]
         if not hist:
             continue
         current = hist[-1].close
+        rt = _RealtimeQuote(
+            code=code,
+            name=name,
+            current=current,
+            prev_close=current,
+            open=current,
+            high=current,
+            low=current,
+            volume_lot=0.0,
+            change_pct=0.0,
+        )
 
-        if current < ma5_week:
+        dev20w = (current - ma20w) / ma20w
+        dev5w = (current - ma5_week) / ma5_week
+        close_w = weekly_closes[-1]
+
+        prev_week_break = False
+        if len(weekly_closes) >= 6:
+            prev_ma5w = _mean(weekly_closes[-6:-1])
+            prev_week_close = weekly_closes[-2]
+            prev_week_break = prev_week_close < prev_ma5w * (1 - params["ma5w_break_week"])
+
+        this_week_break = close_w < ma5_week * (1 - params["ma5w_break_week"])
+        if this_week_break and prev_week_break:
             exits.append(
-                StockSignal(
+                _build_signal(
                     code=code,
                     name=name,
-                    signal="stop_loss",
-                    reason="收盘跌破5周均线",
-                    price=round(current, 3),
-                    change=0.0,
-                    ma5_week=round(ma5_week, 3),
-                    ma10=0.0,
-                    ma20=0.0,
-                    star=0,
-                    score=0,
+                    state="EXIT",
+                    reason="连续两周有效跌破5周线，执行清仓",
+                    rt=rt,
+                    ma5w=ma5_week,
+                    ma20w=ma20w,
+                    ma20d=0.0,
+                    vr20d=0.0,
+                    dev20w=dev20w,
+                    dev5w=dev5w,
+                    action_next_day="sell_all_open_t1",
+                    score=100,
                 )
             )
-        elif current > ma5_week * 1.25:
-            pct = (current / ma5_week - 1) * 100
+            continue
+
+        if this_week_break:
             exits.append(
-                StockSignal(
+                _build_signal(
                     code=code,
                     name=name,
-                    signal="take_profit_partial",
-                    reason=f"超涨{pct:.0f}%，建议减仓50%",
-                    price=round(current, 3),
-                    change=0.0,
-                    ma5_week=round(ma5_week, 3),
-                    ma10=0.0,
-                    ma20=0.0,
-                    star=0,
-                    score=0,
+                    state="REDUCE",
+                    reason="周线有效跌破5周线，先减仓50%",
+                    rt=rt,
+                    ma5w=ma5_week,
+                    ma20w=ma20w,
+                    ma20d=0.0,
+                    vr20d=0.0,
+                    dev20w=dev20w,
+                    dev5w=dev5w,
+                    action_next_day="sell_half_open_t1",
+                    score=85,
+                )
+            )
+
+        entry_price = float(
+            h.get("cost_price")
+            or h.get("buy_price")
+            or h.get("price")
+            or 0.0
+        )
+        if entry_price > 0:
+            stop_price = entry_price * (1 - params["fast_stop_pct"])
+            if current < stop_price:
+                exits.append(
+                    _build_signal(
+                        code=code,
+                        name=name,
+                        state="EXIT",
+                        reason=f"触发快速止损({params['fast_stop_pct']:.0%})",
+                        rt=rt,
+                        ma5w=ma5_week,
+                        ma20w=ma20w,
+                        ma20d=0.0,
+                        vr20d=0.0,
+                        dev20w=dev20w,
+                        dev5w=dev5w,
+                        entry_price=entry_price,
+                        stop_price=stop_price,
+                        action_next_day="sell_all_open_t1",
+                        score=95,
+                    )
+                )
+                continue
+
+        if current > ma5_week * 1.25 or dev20w > 0.30:
+            exits.append(
+                _build_signal(
+                    code=code,
+                    name=name,
+                    state="REDUCE",
+                    reason="周线超涨/乖离过大，执行减仓50%",
+                    rt=rt,
+                    ma5w=ma5_week,
+                    ma20w=ma20w,
+                    ma20d=0.0,
+                    vr20d=0.0,
+                    dev20w=dev20w,
+                    dev5w=dev5w,
+                    action_next_day="sell_half_open_t1",
+                    score=75,
                 )
             )
 
@@ -711,10 +931,10 @@ def _check_exit_signals(
 
 def _write_signals(
     signals: list[StockSignal],
-    watched: list[StockSignal],
     sentiment: MarketSentiment,
     *,
     exits: list[StockSignal] | None = None,
+    pullback_states: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """将信号结果覆盖写入 signals/watchlist_signals.json。"""
     _SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
@@ -727,16 +947,15 @@ def _write_signals(
             "danger_level": sentiment.danger_level,
         },
         "signals": [asdict(s) for s in signals],
-        "watched": [asdict(s) for s in watched],
         "exits": [asdict(s) for s in (exits or [])],
+        "pullback_state_count": len(pullback_states or {}),
     }
     with open(_SIGNALS_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
     logger.info(
-        "信号文件已写入: %s（buy_dip=%d, watch=%d, exits=%d）",
+        "信号文件已写入: %s（signals=%d, exits=%d）",
         _SIGNALS_FILE,
         len(signals),
-        len(watched),
         len(exits or []),
     )
 
@@ -767,6 +986,7 @@ def main() -> None:
         return
 
     config = _load_app_config()
+    params = _load_signal_params(config)
     ths_cookie: str | None = config.get("ths_cookie") or None
 
     # ── 1. 市场情绪 ────────────────────────────────────────────────────────
@@ -786,7 +1006,7 @@ def main() -> None:
 
     if sentiment.danger_level == "red":
         logger.warning("市场高压线（跌停 >= 80），中止扫描，写空信号文件")
-        _write_signals([], [], sentiment)
+        _write_signals([], sentiment)
         return
 
     # ── 2. 加载 watchlist ──────────────────────────────────────────────────
@@ -794,10 +1014,15 @@ def main() -> None:
     active = [s for s in stocks if s.get("status") == "active"]
     if not active:
         logger.info("watchlist 中无 active 股票，退出")
-        _write_signals([], [], sentiment)
+        _write_signals([], sentiment)
         return
 
     logger.info("扫描 watchlist: %d 只 active 股", len(active))
+    active_codes = {str(s.get("code", "")).strip() for s in active if s.get("code")}
+    pullback_state_map = _load_pullback_state()
+    for stale_code in list(pullback_state_map):
+        if stale_code not in active_codes:
+            pullback_state_map.pop(stale_code, None)
 
     # ── 2b. 加载当前持仓（用于出场信号） ───────────────────────────��────────────────
     try:
@@ -857,33 +1082,49 @@ def main() -> None:
     logger.info("实时行情获取: %d/%d 只", len(realtime_map), len(codes))
 
     # ── 5. 计算信号 ────────────────────────────────────────────────────────
-    buy_signals: list[StockSignal] = []
-    watch_signals: list[StockSignal] = []
-
-    for code, (name, bars, weekly_bars) in kline_map.items():
+    signals: list[StockSignal] = []
+    for stock in active:
+        code = str(stock.get("code", "")).strip()
+        if not code:
+            continue
+        entry = kline_map.get(code)
+        if entry is None:
+            continue
+        name, bars, weekly_bars = entry
         rt = realtime_map.get(code)
         if rt is None:
             logger.debug("实时行情缺失: %s", code)
             continue
-        sig = _analyze_signal(code, name, bars, weekly_bars, rt, sentiment)
-        if sig is None:
-            continue
-        if sig.signal == "buy_dip":
-            buy_signals.append(sig)
+        prev_state = pullback_state_map.get(code)
+        sig, next_state = _analyze_signal(
+            code, name, bars, weekly_bars, rt, sentiment, params, prev_state
+        )
+        if next_state is None:
+            pullback_state_map.pop(code, None)
         else:
-            watch_signals.append(sig)
+            pullback_state_map[code] = next_state
+        if sig is not None:
+            signals.append(sig)
 
-    buy_signals.sort(key=lambda s: -s.score)
-    watch_signals.sort(key=lambda s: -s.score)
+    signals.sort(key=lambda s: -s.score)
 
     # ── 5b. 计算出场信号 ───────────────────────────────────────────────────
-    exit_signals = _check_exit_signals(holdings, kline_map)
+    exit_signals = _check_exit_signals(holdings, kline_map, params)
     if exit_signals:
-        logger.info("出场信号: %s", [(s.name, s.signal) for s in exit_signals])
+        logger.info("出场信号: %s", [(s.name, s.state) for s in exit_signals])
 
     # ── 6. 写文件 ──────────────────────────────────────────────────────────
-    _write_signals(buy_signals, watch_signals, sentiment, exits=exit_signals)
-    logger.info("扫描完成: buy_dip=%d, watch=%d, exits=%d", len(buy_signals), len(watch_signals), len(exit_signals))
+    _save_pullback_state(pullback_state_map)
+    _write_signals(
+        signals,
+        sentiment,
+        exits=exit_signals,
+        pullback_states=pullback_state_map,
+    )
+    state_count: dict[str, int] = {}
+    for s in signals:
+        state_count[s.state] = state_count.get(s.state, 0) + 1
+    logger.info("扫描完成: states=%s, exits=%d", state_count, len(exit_signals))
 
 
 if __name__ == "__main__":

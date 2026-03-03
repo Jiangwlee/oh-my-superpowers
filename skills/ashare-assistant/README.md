@@ -131,7 +131,7 @@ python3 -m scripts.decision_logger --input "${DATA_DIR}/analysis/candidates.json
 每 30 分钟（cron）
   ashare-collect
     ├── 新闻/资金/行情 → raw/
-    ├── 趋势扫描（200 只人气榜）→ ths_report.md
+    ├── 趋势扫描（1000 只人气榜）→ ths_report.md
     ├── 个股深研（watchlist + 星级≥4）→ analysis/deep_research/
     └── 情绪预处理（opencode）→ report/news_sentiment.md
 

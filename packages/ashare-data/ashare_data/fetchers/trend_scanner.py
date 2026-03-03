@@ -188,13 +188,13 @@ class TrendResult:
 
 
 def fetch_eastmoney_top_rank_xuangu(
-    max_rank: int = 200, timeout: float = 15.0
+    max_rank: int = 1000, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
     cache_key = f"xuangu_top_rank|max_rank={max_rank}"
     cached = cache_get("eastmoney", cache_key)
     if isinstance(cached, list):
         return cached
-    max_rank = max(1, min(200, max_rank))
+    max_rank = max(1, min(1000, max_rank))
     page = 1
     page_size = 50
     rows: list[dict[str, Any]] = []
@@ -211,7 +211,7 @@ def fetch_eastmoney_top_rank_xuangu(
                     "VOLUME_RATIO,HIGH_PRICE,LOW_PRICE,PRE_CLOSE_PRICE,VOLUME,DEAL_AMOUNT,"
                     "TURNOVERRATE,POPULARITY_RANK"
                 ),
-                "filter": "(POPULARITY_RANK>0)(POPULARITY_RANK<=200)",
+                "filter": "(POPULARITY_RANK>0)(POPULARITY_RANK<=1000)",
                 "source": "SELECT_SECURITIES",
                 "client": "WEB",
             }
@@ -268,24 +268,35 @@ def fetch_eastmoney_top_rank_xuangu(
 
 
 def _fetch_eastmoney_current_rank(
-    limit: int = 100, timeout: float = 15.0
+    limit: int = 1000, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
     cache_key = f"current_rank|limit={limit}"
     cached = cache_get("eastmoney", cache_key)
     if isinstance(cached, list):
         return cached
     url = "https://emappdata.eastmoney.com/stockrank/getAllCurrentList"
-    payload = {
-        "appId": "appId01",
-        "globalId": "786e4c21-70dc-435a-93bb-38",
-        "marketType": "",
-        "pageNo": 1,
-        "pageSize": min(100, limit),
-    }
-    result = (
-        http_json(url, method="POST", payload=payload, timeout=timeout).get("data", [])
-        or []
-    )
+    page_size = min(100, max(1, int(limit)))
+    page_no = 1
+    result: list[dict[str, Any]] = []
+    while len(result) < limit:
+        payload = {
+            "appId": "appId01",
+            "globalId": "786e4c21-70dc-435a-93bb-38",
+            "marketType": "",
+            "pageNo": page_no,
+            "pageSize": page_size,
+        }
+        data = (
+            http_json(url, method="POST", payload=payload, timeout=timeout).get("data", [])
+            or []
+        )
+        if not isinstance(data, list) or not data:
+            break
+        result.extend(data)
+        if len(data) < page_size:
+            break
+        page_no += 1
+    result = result[:limit]
     cache_set("eastmoney", cache_key, result, ttl_seconds=1800)
     return result
 
@@ -324,8 +335,8 @@ def _fetch_eastmoney_names(sc_list: list[str], timeout: float = 15.0) -> dict[st
     return out
 
 
-def fetch_eastmoney_top200(
-    max_rank: int = 200, timeout: float = 15.0
+def fetch_eastmoney_top1000(
+    max_rank: int = 1000, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
     """获取东方财富人气榜前N名，xuangu 主接口 + 旧接口 fallback。"""
     try:
@@ -335,7 +346,7 @@ def fetch_eastmoney_top200(
     except Exception:
         pass
 
-    current = _fetch_eastmoney_current_rank(limit=100, timeout=timeout)
+    current = _fetch_eastmoney_current_rank(limit=max_rank, timeout=timeout)
     current.sort(key=lambda x: int(x.get("rk", 10**9)))
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -693,10 +704,10 @@ def fetch_jrj_daily_kline(
         t = item.get("time") or item.get("nTime")
         if t is None:
             continue
-        op = _norm_price(item.get("open") if "open" in item else item.get("nOpenPx"))
-        cp = _norm_price(item.get("close") if "close" in item else item.get("nLastPx"))
-        hp = _norm_price(item.get("high") if "high" in item else item.get("nHighPx"))
-        lp = _norm_price(item.get("low") if "low" in item else item.get("nLowPx"))
+        op = norm_price(item.get("open") if "open" in item else item.get("nOpenPx"))
+        cp = norm_price(item.get("close") if "close" in item else item.get("nLastPx"))
+        hp = norm_price(item.get("high") if "high" in item else item.get("nHighPx"))
+        lp = norm_price(item.get("low") if "low" in item else item.get("nLowPx"))
         # 成交量: llVolume 是股数，转为手(100股)
         vol = item.get("volume") or item.get("llVolume", 0)
         if vol:

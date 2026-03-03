@@ -1,131 +1,96 @@
-# 交易信号系统改进设计
+# 交易信号系统改进设计（Phase 1）
 
-## 背景与问题
+## 目标
 
-### 交易哲学
-趋势跟随，只做上升趋势中的人气股。选股池为东方财富人气前200，选股逻辑不变。
+对 `ashare-data` 完成完整数据侧重构，使交易信号由“评分型 buy_dip/watch”升级为可执行的状态机：
 
-### 已完成改进
-- 买入信号已从"日线MA5/10 ±1%回调"改为"5周均线 ±3%回调"（`watchlist_monitor.py`）
-- 已切换 JRJ 周K线数据源
+- 入场：`SETUP -> ENTRY` 两阶段；
+- 出场：周线有效跌破止损 + 超涨减仓；
+- 信号：统一结构化字段（状态、指标、建议仓位、T+1动作）；
+- 参数：全部来自 `~/.ashare-assistant/config.json`；
+- 状态：落盘到 `~/.ashare-assistant/memory/pullback_state.json`。
 
-### 当前仍存在的缺陷
+## 范围与非范围
 
-1. **5周均线方向未验证**：只判断"价格是否在均线附近"，未判断均线本身是否向上。
-   均线在下行时价格贴近均线，不是买点是逃离点。
-   → 直接导致网宿科技连续4天发出错误买入信号。
+### 范围
 
-2. **无出场信号**：系统只有买入信号，持仓后无任何止损/止盈提示，
-   盈利不知何时兑现，亏损不知何时止损。
+- 改造 `packages/ashare-data/ashare_data/watchlist_monitor.py`。
+- 新增/调整 `packages/ashare-data/tests/test_watchlist_monitor.py`。
+- 输出结构升级为状态机信号结构。
 
-3. **两套信号并行，制造混乱**：
-   - `watchlist_monitor.py` → 新逻辑 → `watchlist_signals.json`
-   - `trend_scanner.py` → 旧逻辑（日线MA±1%）→ `watchlist_scan.json`
-   两套系统同时运行，容易依赖旧信号（错误系统）做决策。
+### 非范围
 
----
+- 不改选股池来源（仍是东方财富人气榜逻辑）。
+- 不改自动下单执行链路。
+- 不改 assistant 侧文案消费（放在 Phase 2）。
 
-## 改进范围
+## 设计决策
 
-**仅修改信号逻辑，不改选股池。**
+### 1. 状态机
 
----
+每只股票按如下状态推进：
 
-## 三处具体改动
+- `NONE`: 未满足条件；
+- `SETUP`: 回撤健康，进入观察；
+- `ENTRY`: 回撤结束确认，生成买点；
+- `HOLD`: 趋势存在但不在买点；
+- `REDUCE`/`EXIT`: 持仓管理信号。
 
-### 改动一：`watchlist_monitor.py` — 加入均线方向验证
+核心是把“靠近 MA5W”从直接买点改成 `SETUP`，只有突破 `PB_HIGH` 才进入 `ENTRY`。
 
-**位置**：`_analyze_signal()` 函数，在现有"跌破5周均线直接排除"之后。
+### 2. 状态持久化
 
-**逻辑**：
-```python
-# 5周均线必须向上倾斜（当前MA5W > 3周前MA5W）
-if len(weekly_closes) >= 8:
-    ma5w_prev = sum(weekly_closes[-8:-3]) / 5
-    if ma5w_now <= ma5w_prev:
-        return None  # 均线方向向下，趋势无效
-```
+在 `~/.ashare-assistant/memory/pullback_state.json` 存储每只股票：
 
-**效果**：
-- 消灭"均线下行+价格贴近均线→买入"的误判
-- 确保只在趋势上行期间买入
+- `pb_start_date`
+- `pb_high`
+- `pb_low`
+- `updated_at`
 
----
+扫描时读入、更新、回写。趋势破坏时清理状态，避免脏状态跨天残留。
 
-### 改动二：`watchlist_monitor.py` — 加入持仓出场信号
+### 3. 指标与阈值
 
-**新增函数**：`_check_exit_signals(holdings, kline_map) -> list[StockSignal]`
+统一量化指标：
 
-**输入**：当前持仓列表（从 broker_account 读取）
+- `ma5w`, `ma20w`, `ma20d`
+- `dev5w`, `dev20w`
+- `vr20d`
+- `drawdown20`
 
-**逻辑**：
-- 对每只持仓股，获取5周均线
-- 若**本周收盘 < 5周均线** → signal = `stop_loss`，原因："收盘跌破5周均线"
-- 若**本周收盘 > 5周均线 × 1.25** → signal = `take_profit_partial`，原因："超涨25%，建议减仓"
+统一参数（可配置）：
 
-**输出格式**（写入 `watchlist_signals.json` 新增 `exits` 字段）：
-```json
-{
-  "scanned_at": "...",
-  "market": {...},
-  "signals": [...],
-  "watched": [...],
-  "exits": [
-    {
-      "code": "603256",
-      "name": "宏和科技",
-      "signal": "stop_loss",
-      "price": 76.21,
-      "ma5_week": 78.5,
-      "reason": "收盘跌破5周均线"
-    }
-  ]
-}
-```
+- `dev5w_band=0.03`
+- `vr20d_shrink=0.80`
+- `vr20d_expand=1.10`
+- `pb_breakout_buffer=0.003`
+- `intraday_break_allow=0.02`
+- `ma5w_break_week=0.015`
+- `fast_stop_pct=0.04`
+- `dev20w_no_add=0.20`
+- `dev20w_no_trade=0.25`
+- `position_base=0.25`
+- `position_yellow=0.15`
 
-**出场规则**（完整）：
-| 条件 | 信号类型 | 操作建议 |
-|------|---------|---------|
-| 收盘 < 5周均线 | `stop_loss` | 止损出局 |
-| 收盘 > 5周均线 × 1.25 | `take_profit_partial` | 减仓50%，剩余跟踪 |
+### 4. 输出结构
 
----
+`watchlist_signals.json` 中每条信号输出：
 
-### 改动三：`trend_scanner.py` — 移除交易信号输出
+- `state`
+- `pb_start_date`, `pb_high`, `pb_low`
+- `ma5w`, `ma20w`, `ma20d`
+- `vr20d`, `dev20w`, `dev5w`
+- `entry_price`, `stop_price`
+- `position_target`
+- `action_next_day`
+- `reason`
 
-**位置**：`_trade_signal_from_ma()` 函数
-
-**改动**：将函数返回值固定为 `("观察", "趋势扫描仅供研究，交易信号见 watchlist_monitor")`，
-不再输出"买入"/"卖出"信号。
-
-`trend_scanner.py` 退化为**纯研究工具**（评分、趋势分析），不再作为操作信号来源。
-
-**效果**：系统只有一个信号来源 `watchlist_signals.json`，消除混乱。
-
----
-
-## 数据依赖
-
-| 数据 | 来源 | 已有？ |
-|------|------|-------|
-| 5周K线 | JRJ | ✅ |
-| 实时报价 | 现有 | ✅ |
-| 当前持仓 | broker_account | ✅ |
-| 当日情绪 | market_sentiment | ✅ |
-
----
-
-## 不在本次改动范围内
-
-- 选股池变更（人气前200保留）
-- 自动下单执行
-- 持仓规模管理（仓位大小）
-- 回测验证
-
----
+不再输出旧语义 `buy_dip/watch`。
 
 ## 成功标准
 
-1. 网宿科技场景重现：均线方向向下时，即使价格贴近5周均线也不发出买入信号
-2. 持仓跌破5周均线时，`exits` 字段出现对应 `stop_loss` 条目
-3. `watchlist_scan.json` 中不再出现"买入"/"卖出"字样（只有"观察"）
+1. 回到 MA5W 附近时仅进入 `SETUP`，不会直接给 `ENTRY`。
+2. 仅当突破 `PB_HIGH + buffer` 且 `vr20d` 回归且收阳时，输出 `ENTRY`。
+3. 价格进入加速区（`dev20w` 超阈值）不会输出加仓类信号。
+4. 持仓满足“周线有效跌破”时输出 `EXIT`，满足超涨/乖离时输出 `REDUCE`。
+5. 所有关键阈值从配置读取，测试覆盖状态转换和出场判定。
