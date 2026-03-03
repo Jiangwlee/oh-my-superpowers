@@ -140,20 +140,6 @@ def _parse_jrj_kline(kline: list[dict], is_weekly: bool = False) -> list[_KlineB
                 volume=vol,
             )
         )
-        if len(ts) != 8:
-            continue
-        date_str = f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}"
-
-        bars.append(
-            _KlineBar(
-                date=date_str,
-                open=open_px,
-                close=close_px,
-                high=high_px,
-                low=low_px,
-                volume=vol,
-            )
-        )
     return bars
 
 
