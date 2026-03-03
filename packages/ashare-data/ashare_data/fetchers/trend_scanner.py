@@ -905,31 +905,11 @@ def _emotion_from_slopes(
 def _trade_signal_from_ma(
     last_close: float, ma5: float, ma10: float, ma20: float
 ) -> tuple[str, str]:
-    if ma5 <= 0 or ma10 <= 0 or ma20 <= 0:
-        return "\u89c2\u5bdf", "\u5747\u7ebf\u6570\u636e\u4e0d\u8db3"
-    dev5 = (last_close - ma5) / ma5
-    if dev5 >= 0.15:
-        return (
-            "\u5356\u51fa",
-            f"\u6700\u65b0\u4ef7\u8f83MA5\u504f\u79bb{dev5 * 100:.2f}%\uff0c\u8d85\u8fc715%",
-        )
-    touch_tol = 0.01
-    touched = []
-    if abs(last_close - ma5) / ma5 <= touch_tol:
-        touched.append("MA5")
-    if abs(last_close - ma10) / ma10 <= touch_tol:
-        touched.append("MA10")
-    if abs(last_close - ma20) / ma20 <= touch_tol:
-        touched.append("MA20")
-    if touched:
-        return (
-            "\u4e70\u5165",
-            f"\u56de\u8c03\u81f3{','.join(touched)}\u9644\u8fd1(\u00b11%)",
-        )
-    return (
-        "\u89c2\u5bdf",
-        f"\u6700\u65b0\u4ef7\u4e0eMA5\u504f\u79bb{dev5 * 100:.2f}%\uff0c\u672a\u89e6\u53d1\u4e70\u5356\u6761\u4ef6",
-    )
+    """趋势信号（仅供研究，不作为操作依据）。
+
+    交易操作信号由 watchlist_monitor 提供。
+    """
+    return "观察", "趋势扫描仅供研究，交易信号见 watchlist_monitor"
 
 
 # ---------------------------------------------------------------------------

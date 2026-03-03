@@ -2,6 +2,7 @@
 import unittest
 from ashare_data.watchlist_monitor import _analyze_signal, _check_exit_signals, _KlineBar, _RealtimeQuote
 from ashare_data.fetchers.market_sentiment import MarketSentiment
+from ashare_data.fetchers.trend_scanner import _trade_signal_from_ma
 
 
 def _make_daily_bars(closes: list[float]) -> list[_KlineBar]:
@@ -146,6 +147,30 @@ class TestCheckExitSignals(unittest.TestCase):
         exits = _check_exit_signals(holdings, kline_map)
 
         self.assertEqual(exits, [])
+
+
+class TestTrendScannerSignalNeutralized(unittest.TestCase):
+    """验证 trend_scanner 的交易信号已被中和（不再输出买入/卖出）。"""
+
+    def test_no_buy_signal(self):
+        """无论价格/均线关系如何，不应返回'买入'。"""
+        signal, _ = _trade_signal_from_ma(100.0, 100.5, 99.0, 98.0)
+        self.assertNotEqual(signal, "买入")
+
+    def test_no_sell_signal(self):
+        """无论价格/均线关系如何，不应返回'卖出'。"""
+        signal, _ = _trade_signal_from_ma(120.0, 100.0, 99.0, 98.0)
+        self.assertNotEqual(signal, "卖出")
+
+    def test_returns_observe(self):
+        """应始终返回'观察'。"""
+        for last, ma5, ma10, ma20 in [
+            (100.0, 100.0, 99.0, 98.0),
+            (85.0, 100.0, 99.0, 98.0),
+            (120.0, 100.0, 99.0, 98.0),
+        ]:
+            signal, _ = _trade_signal_from_ma(last, ma5, ma10, ma20)
+            self.assertEqual(signal, "观察", f"last={last}, ma5={ma5}")
 
 
 if __name__ == "__main__":
