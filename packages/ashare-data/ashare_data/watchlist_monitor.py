@@ -518,6 +518,15 @@ def _analyze_signal(
         if current < ma5_week:
             logger.debug("%s 跌破5周均线(%.2f<%.2f)，周线趋势破坏", code, current, ma5_week)
             return None
+        # 5周均线方向验证：均线本身必须向上倾斜（当前MA5W > 3周前MA5W）
+        if len(weekly_closes) >= 8:
+            ma5w_prev = sum(weekly_closes[-8:-3]) / 5
+            if ma5_week <= ma5w_prev:
+                logger.debug(
+                    "%s 5周均线方向向下(%.2f<=%.2f)，趋势无效",
+                    code, ma5_week, ma5w_prev,
+                )
+                return None
     else:
         # 没有周K数据时，用日线MA20作为后备
         if len(hist) < 20:
