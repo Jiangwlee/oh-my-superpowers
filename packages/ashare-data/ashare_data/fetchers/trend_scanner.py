@@ -21,6 +21,7 @@ from urllib.parse import urlencode
 
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_json
+from ashare_data.core.utils import norm_price
 
 # ---------------------------------------------------------------------------
 # 工具函数
@@ -50,14 +51,6 @@ def _to_secid(sc: str) -> str:
 
 def _to_jrj_security_id(code: str) -> str:
     return f"1{code}" if code.startswith("6") else f"2{code}"
-
-
-def _norm_price(v: Any) -> float:
-    try:
-        x = float(v)
-    except Exception:
-        return 0.0
-    return x / 10000.0 if abs(x) > 1000 else x
 
 
 def _linear_slope(values: list[float]) -> float:

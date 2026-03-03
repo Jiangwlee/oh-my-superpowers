@@ -20,6 +20,7 @@ from typing import Any
 
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_text, http_json
+from ashare_data.core.utils import parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -86,13 +87,6 @@ _INDICATOR_CONFIG: dict[str, tuple[str, str, str]] = {
 _RANK_CACHE: list[dict[str, Any]] = []  # [{code, name, net_inflow, rank}, ...]
 
 
-def _to_float(value: Any) -> float:
-    try:
-        return float(str(value).replace(",", ""))
-    except (TypeError, ValueError):
-        return 0.0
-
-
 def _build_funding_result(
     *,
     northbound_net: float,
@@ -126,7 +120,7 @@ def _parse_northbound(df: Any) -> float:
         north = df[df["资金方向"] == "北向"]
         if north.empty:
             return 0.0
-        return _to_float(north["资金净流入"].sum())
+        return parse_float(north["资金净流入"].sum())
     except Exception:
         return 0.0
 
@@ -162,7 +156,7 @@ def _parse_main_force_rows(
             item = series.to_dict()
             code = str(item.get("代码") or "").strip()
             name = str(item.get("名称") or "").strip()
-            net_yuan = _to_float(item.get(col_net, 0))
+            net_yuan = parse_float(item.get(col_net, 0))
             net_yi = round(net_yuan / 1e8, 3)
             if code and name:
                 all_rows.append(
@@ -285,7 +279,7 @@ def _fetch_fund_flow_rank(indicator: str = "3日") -> list[dict[str, Any]]:
     for rank, row in enumerate(all_rows, start=1):
         code = str(row.get("f12") or "").strip()
         name = str(row.get("f14") or "").strip()
-        net_yuan = _to_float(row.get(net_field, 0))
+        net_yuan = parse_float(row.get(net_field, 0))
         if code and name and net_yuan != 0.0:
             result.append(
                 {

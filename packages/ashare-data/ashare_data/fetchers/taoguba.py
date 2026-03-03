@@ -13,6 +13,7 @@ from html.parser import HTMLParser
 
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_bytes, http_text
+from ashare_data.core.html_parser import class_contains, get_attr, TextExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -140,20 +141,8 @@ class _ListPageParser(HTMLParser):
         self._current: dict = {}
         self._depth = 0                # div 嵌套深度追踪
 
-    def _class_contains(self, attrs: list[tuple[str, str | None]], cls: str) -> bool:
-        for name, val in attrs:
-            if name == "class" and val and cls in val:
-                return True
-        return False
-
-    def _get_attr(self, attrs: list[tuple[str, str | None]], key: str) -> str:
-        for name, val in attrs:
-            if name == key:
-                return val or ""
-        return ""
-
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "div" and self._class_contains(attrs, "Nbbs-tiezi-lists"):
+        if tag == "div" and class_contains(attrs, "Nbbs-tiezi-lists"):
             self._in_item = True
             self._depth = 1
             self._current = {
@@ -169,10 +158,10 @@ class _ListPageParser(HTMLParser):
             self._depth += 1
 
         # 标题链接: <a class="overhide mw300" href="...">
-        if tag == "a" and self._class_contains(attrs, "mw300"):
+        if tag == "a" and class_contains(attrs, "mw300"):
             self._in_title_link = True
-            href = self._get_attr(attrs, "href")
-            title = self._get_attr(attrs, "title")
+            href = get_attr(attrs, "href")
+            title = get_attr(attrs, "title")
             if title:
                 self._current["title"] = title
             if href:
@@ -188,17 +177,17 @@ class _ListPageParser(HTMLParser):
             return
 
         # 浏览/回复数: <div class="... middle-list-talk ...">
-        if tag == "div" and self._class_contains(attrs, "middle-list-talk"):
+        if tag == "div" and class_contains(attrs, "middle-list-talk"):
             self._in_talk_div = True
             return
 
         # 作者链接: <a class="mw100 overhide" ...>
-        if tag == "a" and self._class_contains(attrs, "mw100"):
+        if tag == "a" and class_contains(attrs, "mw100"):
             self._in_author_link = True
             return
 
         # 发帖日期: <div class="... middle-list-post">
-        if tag == "div" and self._class_contains(attrs, "middle-list-post"):
+        if tag == "div" and class_contains(attrs, "middle-list-post"):
             self._in_post_date = True
             return
 
@@ -294,21 +283,9 @@ class _DetailPageParser(HTMLParser):
         self._skip_tags = {"script", "style", "img"}
         self._skip_depth = 0
 
-    def _class_contains(self, attrs: list[tuple[str, str | None]], cls: str) -> bool:
-        for name, val in attrs:
-            if name == "class" and val and cls in val:
-                return True
-        return False
-
-    def _get_attr(self, attrs: list[tuple[str, str | None]], key: str) -> str:
-        for name, val in attrs:
-            if name == key:
-                return val or ""
-        return ""
-
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         # 进入正文区域: <div class="article-text p_coten" id="first">
-        if tag == "div" and self._get_attr(attrs, "id") == "first" and self._class_contains(attrs, "article-text"):
+        if tag == "div" and get_attr(attrs, "id") == "first" and class_contains(attrs, "article-text"):
             self._in_content = True
             self._depth = 1
             return

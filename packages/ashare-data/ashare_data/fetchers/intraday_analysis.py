@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from ashare_data.core.utils import safe_float
 from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline, fetch_jrj_minute_kline
 
 logger = logging.getLogger(__name__)
@@ -93,13 +94,6 @@ def _minute_to_period(hour: int, minute: int) -> str | None:
     return None
 
 
-def _safe_float(v: Any, default: float = 0.0) -> float:
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return default
-
-
 def _pct(a: float, b: float) -> float:
     """(a - b) / b * 100，b=0 时返回 0。"""
     return (a - b) / b * 100.0 if b > 0 else 0.0
@@ -131,19 +125,19 @@ def get_intraday_summary(code: str, date: str | None = None) -> dict[str, Any]:
     today_int = int(date_ymd)
     prev_close = 0.0
     for bar in reversed(daily_bars):
-        if _safe_float(bar.get("time", 0)) < today_int:
-            prev_close = _safe_float(bar.get("close"))
+        if safe_float(bar.get("time", 0)) < today_int:
+            prev_close = safe_float(bar.get("close"))
             break
 
     # 全天基础统计
-    valid_bars = [b for b in minute_bars if _safe_float(b.get("close")) > 0]
+    valid_bars = [b for b in minute_bars if safe_float(b.get("close")) > 0]
     if not valid_bars:
         return {"code": code, "date": date_ymd, "error": "empty_bars"}
 
-    opens = [_safe_float(b.get("open")) for b in valid_bars if _safe_float(b.get("open")) > 0]
-    closes = [_safe_float(b.get("close")) for b in valid_bars]
-    highs = [_safe_float(b.get("high")) for b in valid_bars if _safe_float(b.get("high")) > 0]
-    lows = [_safe_float(b.get("low")) for b in valid_bars if _safe_float(b.get("low")) > 0]
+    opens = [safe_float(b.get("open")) for b in valid_bars if safe_float(b.get("open")) > 0]
+    closes = [safe_float(b.get("close")) for b in valid_bars]
+    highs = [safe_float(b.get("high")) for b in valid_bars if safe_float(b.get("high")) > 0]
+    lows = [safe_float(b.get("low")) for b in valid_bars if safe_float(b.get("low")) > 0]
     volumes = [int(b.get("volume", 0)) for b in valid_bars]
 
     day_open = opens[0] if opens else 0.0
@@ -152,8 +146,8 @@ def get_intraday_summary(code: str, date: str | None = None) -> dict[str, Any]:
     day_low = min(lows) if lows else 0.0
     vol_total = sum(volumes)
 
-    high_bar = max(valid_bars, key=lambda b: _safe_float(b.get("high")))
-    low_bar = min(valid_bars, key=lambda b: _safe_float(b.get("low"), float("inf")))
+    high_bar = max(valid_bars, key=lambda b: safe_float(b.get("high")))
+    low_bar = min(valid_bars, key=lambda b: safe_float(b.get("low"), float("inf")))
 
     # 30分钟聚合
     period_buckets: dict[str, list[dict[str, Any]]] = {}
@@ -168,10 +162,10 @@ def get_intraday_summary(code: str, date: str | None = None) -> dict[str, Any]:
         bars = period_buckets.get(period, [])
         if not bars:
             continue
-        p_open = _safe_float(bars[0].get("open") or bars[0].get("close"))
-        p_close = _safe_float(bars[-1].get("close"))
-        p_high = max(_safe_float(b.get("high")) for b in bars)
-        p_low = min((_safe_float(b.get("low")) for b in bars if _safe_float(b.get("low")) > 0), default=p_close)
+        p_open = safe_float(bars[0].get("open") or bars[0].get("close"))
+        p_close = safe_float(bars[-1].get("close"))
+        p_high = max(safe_float(b.get("high")) for b in bars)
+        p_low = min((safe_float(b.get("low")) for b in bars if safe_float(b.get("low")) > 0), default=p_close)
         p_vol = sum(int(b.get("volume", 0)) for b in bars)
         bars_30min.append(
             {
@@ -261,8 +255,8 @@ def get_trade_context(
         return {"code": code, "date": date_ymd, "trade_time": trade_time, "error": "no_context_bars"}
 
     # 全天高低（用于日内位置计算）
-    all_highs = [_safe_float(b.get("high")) for b in minute_bars if _safe_float(b.get("high")) > 0]
-    all_lows = [_safe_float(b.get("low")) for b in minute_bars if _safe_float(b.get("low")) > 0]
+    all_highs = [safe_float(b.get("high")) for b in minute_bars if safe_float(b.get("high")) > 0]
+    all_lows = [safe_float(b.get("low")) for b in minute_bars if safe_float(b.get("low")) > 0]
     day_high = max(all_highs) if all_highs else 0.0
     day_low = min(all_lows) if all_lows else 0.0
 
@@ -270,7 +264,7 @@ def get_trade_context(
     if trade_price > 0 and day_high > day_low:
         day_pos_pct = round((trade_price - day_low) / (day_high - day_low) * 100, 1)
     elif trade_bar:
-        p = _safe_float(trade_bar.get("close"))
+        p = safe_float(trade_bar.get("close"))
         day_pos_pct = round((p - day_low) / (day_high - day_low) * 100, 1) if day_high > day_low else 50.0
     else:
         day_pos_pct = 50.0
@@ -281,8 +275,8 @@ def get_trade_context(
 
     before_summary: dict[str, Any] = {}
     if before_bars:
-        b_open = _safe_float(before_bars[0].get("open") or before_bars[0].get("close"))
-        b_close = _safe_float(before_bars[-1].get("close"))
+        b_open = safe_float(before_bars[0].get("open") or before_bars[0].get("close"))
+        b_close = safe_float(before_bars[-1].get("close"))
         before_summary = {
             "bars": len(before_bars),
             "price_start": round(b_open, 3),
@@ -293,8 +287,8 @@ def get_trade_context(
 
     after_summary: dict[str, Any] = {}
     if after_bars:
-        a_open = _safe_float(after_bars[0].get("open") or after_bars[0].get("close"))
-        a_close = _safe_float(after_bars[-1].get("close"))
+        a_open = safe_float(after_bars[0].get("open") or after_bars[0].get("close"))
+        a_close = safe_float(after_bars[-1].get("close"))
         ref = trade_price if trade_price > 0 else a_open
         after_summary = {
             "bars": len(after_bars),
@@ -309,10 +303,10 @@ def get_trade_context(
         group = context_bars[i : i + 5]
         if not group:
             continue
-        g_open = _safe_float(group[0].get("open") or group[0].get("close"))
-        g_close = _safe_float(group[-1].get("close"))
-        g_high = max(_safe_float(b.get("high")) for b in group)
-        g_low = min((_safe_float(b.get("low")) for b in group if _safe_float(b.get("low")) > 0), default=g_close)
+        g_open = safe_float(group[0].get("open") or group[0].get("close"))
+        g_close = safe_float(group[-1].get("close"))
+        g_high = max(safe_float(b.get("high")) for b in group)
+        g_low = min((safe_float(b.get("low")) for b in group if safe_float(b.get("low")) > 0), default=g_close)
         simplified.append(
             {
                 "time": _ts_to_hhmm(int(group[0].get("time", 0))),
@@ -359,14 +353,14 @@ def get_opening_context(code: str, date: str | None = None) -> dict[str, Any]:
     today_int = int(date_ymd)
 
     # 分离历史 bar（不含今日）和今日 bar
-    hist_bars = [b for b in daily_bars if int(_safe_float(b.get("time", 0))) < today_int]
-    today_bar = next((b for b in daily_bars if int(_safe_float(b.get("time", 0))) == today_int), None)
+    hist_bars = [b for b in daily_bars if int(safe_float(b.get("time", 0))) < today_int]
+    today_bar = next((b for b in daily_bars if int(safe_float(b.get("time", 0))) == today_int), None)
 
-    prev_close = _safe_float(hist_bars[-1].get("close")) if hist_bars else 0.0
-    today_open = _safe_float(today_bar.get("open")) if today_bar else 0.0
+    prev_close = safe_float(hist_bars[-1].get("close")) if hist_bars else 0.0
+    today_open = safe_float(today_bar.get("open")) if today_bar else 0.0
 
     # MA 计算（基于昨日及之前的收盘价）
-    hist_closes = [_safe_float(b.get("close")) for b in hist_bars if _safe_float(b.get("close")) > 0]
+    hist_closes = [safe_float(b.get("close")) for b in hist_bars if safe_float(b.get("close")) > 0]
     ma5 = sum(hist_closes[-5:]) / 5.0 if len(hist_closes) >= 5 else 0.0
     ma10 = sum(hist_closes[-10:]) / 10.0 if len(hist_closes) >= 10 else 0.0
     ma20 = sum(hist_closes[-20:]) / 20.0 if len(hist_closes) >= 20 else 0.0
@@ -394,10 +388,10 @@ def get_opening_context(code: str, date: str | None = None) -> dict[str, Any]:
             if (lambda h, m: 9 * 60 + 30 <= h * 60 + m < 10 * 60)(*_bar_hm(int(b.get("time", 0))))
         ]
         if open_bars:
-            o_open = _safe_float(open_bars[0].get("open") or open_bars[0].get("close"))
-            o_close = _safe_float(open_bars[-1].get("close"))
-            o_high = max(_safe_float(b.get("high")) for b in open_bars)
-            o_low = min((_safe_float(b.get("low")) for b in open_bars if _safe_float(b.get("low")) > 0), default=o_close)
+            o_open = safe_float(open_bars[0].get("open") or open_bars[0].get("close"))
+            o_close = safe_float(open_bars[-1].get("close"))
+            o_high = max(safe_float(b.get("high")) for b in open_bars)
+            o_low = min((safe_float(b.get("low")) for b in open_bars if safe_float(b.get("low")) > 0), default=o_close)
             o_vol = sum(int(b.get("volume", 0)) for b in open_bars)
             first_30min = {
                 "open": round(o_open, 3),
@@ -467,14 +461,14 @@ def get_relative_strength(
         """将 1分钟K线按分钟索引归一化（以第一根bar的open为基准）。"""
         if not bars:
             return {}
-        base = _safe_float(bars[0].get("open") or bars[0].get("close"))
+        base = safe_float(bars[0].get("open") or bars[0].get("close"))
         if base <= 0:
             return {}
         result: dict[int, float] = {}
         for bar in bars:
             h, m = _bar_hm(int(bar.get("time", 0)))
             mins = h * 60 + m
-            close = _safe_float(bar.get("close"))
+            close = safe_float(bar.get("close"))
             if close > 0:
                 result[mins] = _pct(close, base)
         return result

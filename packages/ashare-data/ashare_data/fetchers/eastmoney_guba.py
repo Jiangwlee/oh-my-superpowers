@@ -21,6 +21,7 @@ from typing import Any
 
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_text
+from ashare_data.core.html_parser import get_attr
 
 _GBAPI_LIST_URL = (
     "https://gbapi.eastmoney.com/webarticlelist/api/Article/Articlelist"
@@ -190,12 +191,6 @@ class _GubaListParser(HTMLParser):
                     return True
         return False
 
-    def _get_attr(self, attrs: list[tuple[str, str | None]], key: str) -> str:
-        for k, v in attrs:
-            if k == key:
-                return v or ""
-        return ""
-
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "tr" and self._class_has(attrs, "listitem"):
             self._in_row = True
@@ -224,9 +219,9 @@ class _GubaListParser(HTMLParser):
             self._in_title_a = True
 
         if tag == "a":
-            href = self._get_attr(attrs, "href")
-            data_post_id = self._get_attr(attrs, "data-postid")
-            data_post_type = self._get_attr(attrs, "data-posttype")
+            href = get_attr(attrs, "href")
+            data_post_id = get_attr(attrs, "data-postid")
+            data_post_type = get_attr(attrs, "data-posttype")
             if href and data_post_id:
                 self._in_title_a = True
                 self._row.href = href
