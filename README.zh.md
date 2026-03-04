@@ -22,17 +22,28 @@
 
 ```
 packages/                          # 共享基础设施包
-└── ashare-data/                   # A股数据采集库（pip install -e）
+└── ashare-data/                   # A 股数据采集库（pip install -e）
 
 skills/                            # 智能体技能（各自独立自治）
-├── ashare-assistant/              # A股交易助手
+├── ashare-assistant/              # A 股交易助手
 ├── agent-roundtable/              # 多智能体协作框架
 ├── github-researcher/             # GitHub 趋势研究
 ├── markdown-to-anything/          # Markdown 转换工具
 └── openclaw-github-tracker/       # GitHub 项目情报
+
+deployment/                        # 部署文档和 Docker 配置
+├── 00_Deployment.md              # 总览和快速开始
+├── 01_n8n.md                     # n8n 详细部署指南
+├── 02_task-runner.md             # task-runner 详细部署指南
+├── 01_Readme.md                  # 入口点（README）
+└── docker/
+    ├── n8n/
+    │   └── docker-compose.yml
+    └── task-runner/
+        └── docker-compose.yml
 ```
 
-`packages/` 存放 skill 共用的 Python 基础设施包；`skills/` 存放各 skill 本体，每个 skill 独立自治。
+`packages/` 存放 skill 共用的 Python 基础设施包；`skills/` 存放各 skill 本体，每个 skill 独立自治；`deployment/` 存放 n8n + task-runner 编排系统的部署文档和 Docker 配置。
 
 ---
 

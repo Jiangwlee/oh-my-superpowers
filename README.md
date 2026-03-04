@@ -30,9 +30,20 @@ skills/                            # Agent Skills (each is autonomous)
 ├── github-researcher/             # GitHub trending research
 ├── markdown-to-anything/          # Markdown conversion utilities
 └── openclaw-github-tracker/       # GitHub project intelligence
+
+deployment/                        # Deployment documentation and Docker configs
+├── 00_Deployment.md              # Overview and quick start
+├── 01_n8n.md                     # n8n detailed deployment guide
+├── 02_task-runner.md             # task-runner detailed deployment guide
+├── 01_Readme.md                  # Entry point (README)
+└── docker/
+    ├── n8n/
+    │   └── docker-compose.yml
+    └── task-runner/
+        └── docker-compose.yml
 ```
 
-`packages/` contains standalone Python packages used as infrastructure by skills. `skills/` contains the agent skills themselves—each skill is independent and autonomous.
+`packages/` contains standalone Python packages used as infrastructure by skills. `skills/` contains the agent skills themselves—each skill is independent and autonomous. `deployment/` contains deployment documentation and Docker configurations for the n8n + task-runner orchestration system.
 
 ---
 

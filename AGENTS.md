@@ -16,11 +16,43 @@
 - [Claude Skill Development Guide](Claude-Skill-Dev-Guide.md)：Claude官方Skill开发手册。
 - [File Header Spec](File-Header-Spec.md)：文件头规范，要求前 20 行让 AI 理解文件全貌。所有 Markdown 和 Python 文件必须遵循。
 - [JVQuant 平台参考](docs/jvquant-reference.md)：JVQuant 券商交易接口文档，含 API 规格、计费标准、费用优化策略。
-
 ## 代码参考
 
-- [n8n-workflows](https://github.com/Zie619/n8n-workflows)：本地代码仓库`~/Github/n8n-workflows`。开发`n8n`工作流时，先从此仓库找到一些类似的场景进行参考。
+- [n8n-workflows](https://github.com/Zie619/n8n-workflows)：外部参考仓库。开发 `n8n` 工作流时可参考此仓库的类似场景。
 
+## 部署与编排
+
+### n8n + task-runner 架构
+
+本项目已集成基于 n8n 的自动化编排系统：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    infra_net (Docker)                     │
+│                                                          │
+│  n8n_app ──HTTP──▶ task_runner ──import──▶ ashare_data  │
+│  :5678              :8000                                │
+│                       │                                  │
+│                       ▼                                  │
+│              ~/.ashare-assistant (volume mount)          │
+└─────────────────────────────────────────────────────────┘
+```
+
+**组件说明**:
+- **n8n**: 工作流编排引擎，负责定时触发、条件分支、错误处理
+- **task-runner**: FastAPI HTTP 服务，封装 ashare-data 功能为 REST API
+- **ashare-data**: A 股数据采集库，通过 volume 挂载到 task-runner
+
+**部署文档**: 参见 [`deployment/`](deployment/) 目录
+- `00_Deployment.md` - 总览和快速开始
+- `01_n8n.md` - n8n 详细部署指南
+- `02_task-runner.md` - task-runner 详细部署指南
+
+**Docker 配置**: 参见 `deployment/docker/` 目录
+- `docker/n8n/docker-compose.yml`
+- `docker/task-runner/docker-compose.yml`
+
+## 技术栈
 ## 技术栈
 
 - **语言**: Python 3.10+ (标准库为主)
