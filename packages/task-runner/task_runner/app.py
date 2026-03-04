@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from task_runner.routers import health
+from task_runner.routers import ashare, health
 
 app = FastAPI(
     title="task-runner",
@@ -17,3 +17,4 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(ashare.router)
