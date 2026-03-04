@@ -238,3 +238,65 @@ docker inspect n8n_app | grep ashare-assistant
 **参考**: 
 - [FastAPI 文档](https://fastapi.tiangolo.com/)
 - [Docker Compose 配置](./docker/task-runner/docker-compose.yml)
+
+## 环境变量配置
+
+### .env 文件
+
+在 `docker/task-runner/.env` 中配置环境变量（复制 `.env.example`）：
+
+```bash
+# Timezone
+TZ=Asia/Shanghai
+
+# Uvicorn configuration
+UVICORN_WORKERS=1
+UVICORN_PORT=8000
+
+# Ashare-Data configuration
+ASHARE_OUTPUT_DIR=/home/bruce/.ashare-assistant
+
+# Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+LOG_LEVEL=INFO
+
+# Health check settings
+HEALTH_CHECK_INTERVAL=30
+HEALTH_CHECK_TIMEOUT=10
+HEALTH_CHECK_RETRIES=3
+HEALTH_CHECK_START_PERIOD=10
+```
+
+### 环境变量说明
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `TZ` | `Asia/Shanghai` | 时区设置 |
+| `UVICORN_PORT` | `8000` | Uvicorn 监听端口 |
+| `ASHARE_OUTPUT_DIR` | `/home/bruce/.ashare-assistant` | ashare-data 输出目录 |
+| `LOG_LEVEL` | `INFO` | 日志级别 |
+| `HEALTH_CHECK_INTERVAL` | `30s` | 健康检查间隔 |
+| `HEALTH_CHECK_TIMEOUT` | `10s` | 健康检查超时 |
+| `HEALTH_CHECK_RETRIES` | `3` | 健康检查重试次数 |
+| `HEALTH_CHECK_START_PERIOD` | `10s` | 健康检查启动宽限期 |
+
+### 使用方法
+
+1. 复制示例文件：
+   ```bash
+   cd /home/bruce/Projects/oh-my-superpowers/deployment/docker/task-runner
+   cp .env.example .env
+   ```
+
+2. 修改 `.env` 文件中的配置
+
+3. 重启容器：
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+
+---
+
+**参考**: 
+- [FastAPI 文档](https://fastapi.tiangolo.com/)
+- [Docker Compose 配置](./docker/task-runner/docker-compose.yml)

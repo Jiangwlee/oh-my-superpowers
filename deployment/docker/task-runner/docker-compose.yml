@@ -1,28 +1,31 @@
 services:
   task-runner:
     build:
-      context: /home/bruce/Projects/oh-my-superpowers/packages/task-runner
+      context: ../../../../packages/task-runner
       dockerfile: Dockerfile
     container_name: task_runner
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      - TZ=Asia/Shanghai
+      - TZ=${TZ:-Asia/Shanghai}
+      - ASHARE_OUTPUT_DIR=${ASHARE_OUTPUT_DIR:-/home/bruce/.ashare-assistant}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      # ashare-data 只读（mount the installed package location）
+      # ashare_data 源码挂载（只读）
       - /home/bruce/Projects/oh-my-superpowers/packages/ashare-data/ashare_data:/usr/local/lib/python3.12/site-packages/ashare_data:ro
-      # task-runner 可写（-e 模式需要写入）
+      # task-runner 源码挂载
       - /home/bruce/Projects/oh-my-superpowers/packages/task-runner:/install/task-runner
       # 数据持久化
-      - ./data/ashare-assistant/:/root/.ashare-assistant/
+      - /home/bruce/.ashare-assistant:/home/bruce/.ashare-assistant
     networks:
       - infra_net
-    # 添加健康检查
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:${UVICORN_PORT:-8000}/health"]
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
+      start_period: ${HEALTH_CHECK_START_PERIOD:-10s}
 
 networks:
   infra_net:
