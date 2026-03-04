@@ -59,6 +59,7 @@ from ashare_data.fetchers.broker_account import fetch_broker_account  # noqa: E4
 from ashare_data.fetchers.us_market import fetch_us_market  # noqa: E402
 from ashare_data.core.cache import cache_cleanup  # noqa: E402
 from ashare_data.core.config import ensure_dirs  # noqa: E402
+from ashare_data.core.config import ASHARE_HOME  # noqa: E402
 from ashare_data.core.watchlist import (  # noqa: E402
     get_extra_candidates,
     load as load_watchlist,
@@ -130,49 +131,85 @@ def _get_result_attr(obj: object, attr: str, default: object = None) -> object:
     return default
 
 
-def _build_deep_research_targets(
-    trend_results: list[object],
-    watchlist_stocks: list[dict[str, object]],
-    min_star: int,
+_BUY_ACTIONS = {"open", "add", "buy", "entry", "buy_open_t1"}
+
+
+def _is_buy_signal(action: object) -> bool:
+    """判断动作是否属于买入类信号。"""
+    raw = str(action or "").strip().lower()
+    if raw in _BUY_ACTIONS:
+        return True
+    return raw.startswith("buy")
+
+
+def _build_deep_research_targets_from_signals(
+    post_close_rows: list[dict[str, object]],
+    watchlist_rows: list[dict[str, object]],
 ) -> list[DeepResearchTarget]:
-    """构建深研目标：watchlist + 四星及以上趋势股（去重）。"""
+    """构建深研目标：仅纳入触发买入信号的股票（去重）。"""
     ordered: list[DeepResearchTarget] = []
     seen: set[str] = set()
 
-    for stock in sorted(watchlist_stocks, key=lambda item: str(item.get("code", ""))):
-        code = str(stock.get("code", "") or "")
-        name = str(stock.get("name", "") or "")
-        if not code:
+    for row in post_close_rows:
+        code = str(row.get("code", "") or "")
+        if not code or code in seen:
             continue
-        if code not in seen:
-            seen.add(code)
-            ordered.append(
-                DeepResearchTarget(
-                    code=code,
-                    name=name,
-                    context="watchlist 跟踪标的，需持续监控情绪与风险。",
-                )
-            )
-
-    for item in trend_results:
-        code = str(_get_result_attr(item, "code", "") or "")
-        if not code:
-            continue
-        star_rating = int(_get_result_attr(item, "star_rating", 0) or 0)
-        if star_rating < min_star:
-            continue
-        if code in seen:
+        if not _is_buy_signal(row.get("action")):
             continue
         seen.add(code)
-        name = str(_get_result_attr(item, "name", "") or "")
-        reason = str(_get_result_attr(item, "reason", "") or "")
-        context = (
-            f"趋势扫描命中：star_rating={star_rating}。{reason}"
-            if reason
-            else f"趋势扫描命中：star_rating={star_rating}。"
-        )
+        name = str(row.get("name", "") or "")
+        reason = str(row.get("reason", "") or "")
+        context = "盘后决策触发买入信号。"
+        if reason:
+            context = f"{context}{reason}"
         ordered.append(DeepResearchTarget(code=code, name=name, context=context))
+
+    for row in watchlist_rows:
+        code = str(row.get("code", "") or "")
+        if not code or code in seen:
+            continue
+        action_next_day = row.get("action_next_day")
+        state = str(row.get("state", "") or "")
+        if not (_is_buy_signal(action_next_day) or state == "ENTRY"):
+            continue
+        seen.add(code)
+        name = str(row.get("name", "") or "")
+        reason = str(row.get("reason", "") or "")
+        context = "watchlist 信号触发买入动作。"
+        if reason:
+            context = f"{context}{reason}"
+        ordered.append(DeepResearchTarget(code=code, name=name, context=context))
+
     return ordered
+
+
+def _load_buy_signal_targets() -> list[DeepResearchTarget]:
+    """从信号文件读取买入目标。"""
+    signals_dir = ASHARE_HOME / "signals"
+    post_close_file = signals_dir / "post_close_decisions.json"
+    watchlist_file = signals_dir / "watchlist_signals.json"
+
+    post_close_rows: list[dict[str, object]] = []
+    if post_close_file.exists():
+        try:
+            payload = json.loads(post_close_file.read_text(encoding="utf-8"))
+            rows = payload.get("decisions", []) if isinstance(payload, dict) else []
+            if isinstance(rows, list):
+                post_close_rows = [r for r in rows if isinstance(r, dict)]
+        except Exception as exc:
+            _log(f"  读取 post_close_decisions.json 失败: {exc}")
+
+    watchlist_rows: list[dict[str, object]] = []
+    if watchlist_file.exists():
+        try:
+            payload = json.loads(watchlist_file.read_text(encoding="utf-8"))
+            rows = payload.get("signals", []) if isinstance(payload, dict) else []
+            if isinstance(rows, list):
+                watchlist_rows = [r for r in rows if isinstance(r, dict)]
+        except Exception as exc:
+            _log(f"  读取 watchlist_signals.json 失败: {exc}")
+
+    return _build_deep_research_targets_from_signals(post_close_rows, watchlist_rows)
 
 
 # ── 数据精简函数 ──────────────────────────────────────
@@ -461,18 +498,14 @@ def collect(
                     json.dump(watchlist_scan_data, f, ensure_ascii=False, indent=2)
                 _log(f"  \u2713 watchlist_scan.json: {len(watchlist_scan_data)} \u53ea")
 
-            # 8) 个股深研预处理：watchlist + 四星以上趋势股（去重）
+            # 8) 个股深研预处理：仅买入信号股
             if run_deep_research:
                 data_dir = _resolve_data_dir(output_dir)
-                dr_targets = _build_deep_research_targets(
-                    trend_results,
-                    watchlist_stocks=watchlist_stocks,
-                    min_star=deep_research_min_star,
-                )
+                dr_targets = _load_buy_signal_targets()
                 if dr_targets:
                     _log(
                         f"  深研预处理目标: {len(dr_targets)} 只 "
-                        f"(watchlist + 星级>={deep_research_min_star})"
+                        f"(仅买入信号)"
                     )
                     dr_result = run_batch_deep_research(
                         targets=dr_targets,

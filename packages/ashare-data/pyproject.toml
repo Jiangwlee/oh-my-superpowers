@@ -7,7 +7,7 @@ name = "ashare-data"
 version = "0.1.0"
 description = "A股数据采集与预处理基础设施（爬虫、券商接口、数据过滤）"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["rich>=13.7.0"]
 
 [project.scripts]
 ashare-collect = "ashare_data.collect:main"
@@ -15,6 +15,7 @@ ashare-diagnose = "ashare_data.diagnose:main"
 ashare-em-collect = "ashare_data.collect_eastmoney_guba:main"
 ashare-tgb-collect = "ashare_data.collect_taoguba_stock:main"
 ashare-wl-monitor = "ashare_data.watchlist_monitor:main"
+ashare-postclose-decide = "ashare_data.post_close_decision_pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

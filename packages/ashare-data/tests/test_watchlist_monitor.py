@@ -171,5 +171,68 @@ class TestPullbackStateStore(unittest.TestCase):
                 monitor._PULLBACK_STATE_FILE = original
 
 
+class TestPostCloseBuyTargets(unittest.TestCase):
+    """盘后买入信号读取。"""
+
+    def test_load_post_close_buy_targets_filters_non_buy_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            signals_file = Path(tmpdir) / "post_close_decisions.json"
+            payload = {
+                "decisions": [
+                    {"code": "000001", "name": "平安银行", "action": "open"},
+                    {"code": "000002", "name": "万科A", "action": "hold"},
+                    {"code": "000003", "name": "国农科技", "action": "buy_open_t1"},
+                    {"code": "000001", "name": "平安银行", "action": "add"},
+                ]
+            }
+            signals_file.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            original = monitor._POST_CLOSE_FILE
+            monitor._POST_CLOSE_FILE = signals_file
+            try:
+                targets = monitor._load_post_close_buy_targets()
+            finally:
+                monitor._POST_CLOSE_FILE = original
+
+            self.assertEqual([row["code"] for row in targets], ["000001", "000003"])
+
+
+class TestHoldingsSnapshotLoad(unittest.TestCase):
+    """持仓快照加载。"""
+
+    def test_load_latest_holdings_snapshot_uses_latest_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            positions_dir = Path(tmpdir)
+            (positions_dir / "2026-03-01.json").write_text(
+                json.dumps(
+                    {
+                        "hold_list": [
+                            {"code": "000001", "name": "平安银行", "hold_vol": "100"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (positions_dir / "2026-03-03.json").write_text(
+                json.dumps(
+                    {
+                        "hold_list": [
+                            {"code": "000002", "name": "万科A", "hold_vol": "200"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            original = monitor._POSITIONS_DIR
+            monitor._POSITIONS_DIR = positions_dir
+            try:
+                date_str, rows = monitor._load_latest_holdings_snapshot()
+            finally:
+                monitor._POSITIONS_DIR = original
+            self.assertEqual(date_str, "2026-03-03")
+            self.assertEqual([r["code"] for r in rows], ["000002"])
+
+
 if __name__ == "__main__":
     unittest.main()

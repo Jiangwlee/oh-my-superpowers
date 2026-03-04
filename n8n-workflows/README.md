@@ -8,8 +8,10 @@ This directory contains n8n workflow JSON files for automating ashare-data opera
 
 1. Open n8n UI: http://localhost:10003
 2. Click **Settings** → **Import from File**
-3. Select `ashare-daily-collect.json`
+3. Select `ashare-daily-simple.json` (recommended) or `ashare-daily-collect.json`
 4. Click **Import**
+
+For detailed deployment instructions, see [FINAL_DEPLOYMENT.md](FINAL_DEPLOYMENT.md).
 
 ### 2. Verify Connections
 

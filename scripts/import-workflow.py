@@ -11,7 +11,6 @@ from pathlib import Path
 
 def open_n8n_import_guide():
     """Open browser with import instructions."""
-    guide_url = "file:///home/bruce/Projects/oh-my-superpowers/n8n-workflows/MCP_SETUP.md"
     
     # Create a simple HTML guide for the user
     html_content = """
@@ -38,21 +37,7 @@ def open_n8n_import_guide():
         </div>
         
         <div class="step">
-            <h2>Step 2: Get API Key (Optional)</h2>
-            <p>If you want to use the automated import:</p>
-            <ol>
-                <li>Click your avatar (top left) → Settings</li>
-                <li>Goto Credentials → API Key section</li>
-                <li>Create new API key</li>
-                <li>Copy the key</li>
-            </ol>
-            <p class="code"># Then run:</p>
-            <p class="code">export N8N_API_KEY="your_key_here"</p>
-            <p class="code">cd /home/bruce/Projects/oh-my-superpowers && ./scripts/deploy-n8n-workflow.sh</p>
-        </div>
-        
-        <div class="step">
-            <h2>Step 3: Manual Import (No API Key Needed)</h2>
+            <h2>Step 2: Manual Import (Recommended)</h2>
             <ol>
                 <li>In n8n UI, click <strong>Settings</strong> → <strong>Import from File</strong></li>
                 <li>Select file: <code>/home/bruce/Projects/oh-my-superpowers/n8n-workflows/ashare-daily-simple.json</code></li>
@@ -64,7 +49,7 @@ def open_n8n_import_guide():
         </div>
         
         <div class="step">
-            <h2>Step 4: Verify Configuration</h2>
+            <h2>Step 3: Verify Configuration</h2>
             <ul>
                 <li>Cron Trigger: Weekdays 22:00-22:59 (Beijing time)</li>
                 <li>HTTP Request URL: <code>http://task_runner:8000/ashare/collect</code></li>
@@ -74,7 +59,7 @@ def open_n8n_import_guide():
         </div>
         
         <div class="step">
-            <h2>Step 5: Test Run</h2>
+            <h2>Step 4: Test Run</h2>
             <ol>
                 <li>Click <strong>Execute Workflow</strong> button (top right)</li>
                 <li>Watch the execution log on the right panel</li>
@@ -95,8 +80,7 @@ def open_n8n_import_guide():
         
         <hr>
         <p style="color: #7f8c8d; font-size: 0.9em;">
-            For more details, see <a href="MCP_SETUP.md" target="_blank">MCP_SETUP.md</a> or 
-            <a href="DEPLOY_STEPS.md" target="_blank">DEPLOY_STEPS.md</a>
+            For complete deployment guide, see <a href="FINAL_DEPLOYMENT.md" target="_blank">FINAL_DEPLOYMENT.md</a>
         </p>
     </body>
     </html>

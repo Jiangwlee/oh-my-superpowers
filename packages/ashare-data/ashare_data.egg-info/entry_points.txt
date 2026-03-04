@@ -1,6 +1,0 @@
-[console_scripts]
-ashare-collect = ashare_data.collect:main
-ashare-diagnose = ashare_data.diagnose:main
-ashare-em-collect = ashare_data.collect_eastmoney_guba:main
-ashare-tgb-collect = ashare_data.collect_taoguba_stock:main
-ashare-wl-monitor = ashare_data.watchlist_monitor:main

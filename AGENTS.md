@@ -17,6 +17,10 @@
 - [File Header Spec](File-Header-Spec.md)：文件头规范，要求前 20 行让 AI 理解文件全貌。所有 Markdown 和 Python 文件必须遵循。
 - [JVQuant 平台参考](docs/jvquant-reference.md)：JVQuant 券商交易接口文档，含 API 规格、计费标准、费用优化策略。
 
+## 代码参考
+
+- [n8n-workflows](https://github.com/Zie619/n8n-workflows)：本地代码仓库`~/Github/n8n-workflows`。开发`n8n`工作流时，先从此仓库找到一些类似的场景进行参考。
+
 ## 技术栈
 
 - **语言**: Python 3.10+ (标准库为主)
@@ -164,6 +168,8 @@ skills/
 ├── github-researcher/
 ├── markdown-to-anything/
 └── openclaw-github-tracker/
+
+n8n/                           # n8n workflows
 ```
 
 **层次关系**：`packages/ashare-data` 是纯基础设施（数据采集/格式转换），`skills/ashare-assistant` 是 LLM 工作流，二者通过固定默认目录 `~/.ashare-assistant` 共享数据目录，不存在代码依赖倒置。
