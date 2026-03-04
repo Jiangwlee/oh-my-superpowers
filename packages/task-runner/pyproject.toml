@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "task-runner"
+version = "0.1.0"
+description = "通用任务执行 HTTP 服务，为 n8n 等编排系统提供后端能力"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "ashare-data",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["task_runner*"]
