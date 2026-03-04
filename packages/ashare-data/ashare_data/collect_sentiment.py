@@ -5,9 +5,9 @@
 单个数据源失败不影响其他源。
 
 券商账户数据（jvQuant）自动采集规则：
-  - 若 ~/.openclaw/jvquant.json 存在，则自动采集账户持仓数据。
+  - 若 ~/.ashare-data/jvquant.json 存在，则自动采集账户持仓数据。
   - 若采集失败，脚本以非零退出码终止，并在 stderr 输出明确错误信息。
-  - 若 ~/.openclaw/jvquant.json 不存在，跳过采集并打印提示（不报错）。
+  - 若 ~/.ashare-data/jvquant.json 不存在，跳过采集并打印提示（不报错）。
 
 用法:
     python3 scripts/collect_sentiment.py \
@@ -321,7 +321,7 @@ def _make_tasks(news_count: int, taoguba_count: int) -> list[dict]:
 # ── 主逻辑 ────────────────────────────────────────────
 
 
-_JVQUANT_CONFIG_PATH = os.path.expanduser("~/.openclaw/jvquant.json")
+_JVQUANT_CONFIG_PATH = os.path.expanduser("~/.ashare-data/jvquant.json")
 
 
 def _jvquant_configured() -> bool:
@@ -343,7 +343,7 @@ def collect(
     """执行全量数据采集，返回 summary dict。
 
     券商账户数据（jvQuant）自动采集规则：
-      - 若 ~/.openclaw/jvquant.json 存在，则自动采集。
+      - 若 ~/.ashare-data/jvquant.json 存在，则自动采集。
       - 若采集失败，直接抛出异常（调用方负责处理）。
       - 若配置文件不存在，跳过采集并在 summary 中记录 skipped 状态。
 

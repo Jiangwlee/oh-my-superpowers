@@ -325,7 +325,7 @@ EASTMONEY_PASSWORD=your_eastmoney_password
 
 #### 方式 2: 凭证文件
 
-创建 `~/.openclaw/jvquant.json` 文件：
+创建 `~/.ashare-data/jvquant.json` 文件：
 
 ```json
 {
@@ -339,7 +339,7 @@ EASTMONEY_PASSWORD=your_eastmoney_password
 
 ```yaml
 volumes:
-  - ~/.openclaw/jvquant.json:/root/.openclaw/jvquant.json:ro
+  - ~/.ashare-data/jvquant.json:/root/.openclaw/jvquant.json:ro
 ```
 
 **注意**: 环境变量优先级高于配置文件。

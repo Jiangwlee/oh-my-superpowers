@@ -6,7 +6,7 @@
 费用注意事项：
   - 每次 login 调用都会产生计费（5毛/次）
   - 本模块通过本地 ticket 缓存复用登录凭证，在 expire 时间内不重新登录
-  - 缓存路径：~/.openclaw/.jvquant_ticket_cache.json
+  - 缓存路径：~/.ashare-data/.jvquant_ticket_cache.json
   - 柜台地址通过 /query/server 自动获取并缓存
   - 每日费用自动追踪，超过限额（默认 5 元）拒绝调用
 
@@ -25,7 +25,7 @@
        JVQUANT_APP_TOKEN=your_jvquant_token
        EASTMONEY_ACCOUNT=your_account
        EASTMONEY_PASSWORD=your_password
-  2. 配置文件 ~/.openclaw/jvquant.json：
+  2. 配置文件 ~/.ashare-data/jvquant.json：
        {"token": "...", "acc": "...", "pass": "..."}
 
 用法：
@@ -58,7 +58,7 @@ _NO_PROXY_OPENER = urllib.request.build_opener(
 
 _CN_TZ = timezone(timedelta(hours=8))
 
-_CACHE_DIR = os.path.expanduser("~/.openclaw")
+_CACHE_DIR = os.path.expanduser("~/.ashare-data")
 _TICKET_CACHE_PATH = os.path.join(_CACHE_DIR, ".jvquant_ticket_cache.json")
 _COUNTER_CACHE_PATH = os.path.join(_CACHE_DIR, ".jvquant_counter_cache.json")
 _CONFIG_PATH = os.path.join(_CACHE_DIR, "jvquant.json")

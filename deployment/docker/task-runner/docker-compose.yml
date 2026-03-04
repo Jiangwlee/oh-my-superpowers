@@ -24,7 +24,7 @@ services:
       - EASTMONEY_PASSWORD=${EASTMONEY_PASSWORD:-}
       
       # JVQuant credentials file path (optional)
-      - JVQUANT_CREDENTIALS_PATH=${JVQUANT_CREDENTIALS_PATH:-/root/.openclaw/jvquant.json}
+      - JVQUANT_CREDENTIALS_PATH=${JVQUANT_CREDENTIALS_PATH:-/root/.ashare-data/jvquant.json}
     volumes:
       # ashare_data 源码挂载（只读）
       - /home/bruce/Projects/oh-my-superpowers/packages/ashare-data/ashare_data:/usr/local/lib/python3.12/site-packages/ashare_data:ro
@@ -33,7 +33,7 @@ services:
       # 数据持久化
       - /home/bruce/.ashare-assistant:/home/bruce/.ashare-assistant
       # JVQuant 凭证文件（可选，如果存在）
-      - ${JVQUANT_CREDENTIALS_PATH}:${JVQUANT_CREDENTIALS_PATH:-/root/.openclaw/jvquant.json}:ro
+      - ${JVQUANT_CREDENTIALS_PATH}:${JVQUANT_CREDENTIALS_PATH:-/root/.ashare-data/jvquant.json}:ro
     networks:
       - infra_net
     healthcheck:
