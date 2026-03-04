@@ -8,9 +8,23 @@ services:
     env_file:
       - .env
     environment:
+      # Timezone
       - TZ=${TZ:-Asia/Shanghai}
+      
+      # Ashare-Data configuration
       - ASHARE_OUTPUT_DIR=${ASHARE_OUTPUT_DIR:-/home/bruce/.ashare-assistant}
+      
+      # Logging level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # JVQuant credentials (optional)
+      # If set, broker account data will be collected
+      - JVQUANT_APP_TOKEN=${JVQUANT_APP_TOKEN:-}
+      - EASTMONEY_ACCOUNT=${EASTMONEY_ACCOUNT:-}
+      - EASTMONEY_PASSWORD=${EASTMONEY_PASSWORD:-}
+      
+      # JVQuant credentials file path (optional)
+      - JVQUANT_CREDENTIALS_PATH=${JVQUANT_CREDENTIALS_PATH:-/root/.openclaw/jvquant.json}
     volumes:
       # ashare_data 源码挂载（只读）
       - /home/bruce/Projects/oh-my-superpowers/packages/ashare-data/ashare_data:/usr/local/lib/python3.12/site-packages/ashare_data:ro
@@ -18,6 +32,8 @@ services:
       - /home/bruce/Projects/oh-my-superpowers/packages/task-runner:/install/task-runner
       # 数据持久化
       - /home/bruce/.ashare-assistant:/home/bruce/.ashare-assistant
+      # JVQuant 凭证文件（可选，如果存在）
+      - ${JVQUANT_CREDENTIALS_PATH}:${JVQUANT_CREDENTIALS_PATH:-/root/.openclaw/jvquant.json}:ro
     networks:
       - infra_net
     healthcheck:

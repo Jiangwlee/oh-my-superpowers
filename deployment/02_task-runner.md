@@ -300,3 +300,79 @@ HEALTH_CHECK_START_PERIOD=10
 **参考**: 
 - [FastAPI 文档](https://fastapi.tiangolo.com/)
 - [Docker Compose 配置](./docker/task-runner/docker-compose.yml)
+
+## JVQuant 券商账户配置（可选）
+
+### 启用券商账户数据采集
+
+要启用 jvQuant 券商账户数据的采集，需要配置凭证信息。有两种方式：
+
+#### 方式 1: 环境变量（推荐用于 Docker）
+
+在 `.env` 文件中设置：
+
+```bash
+# .env 文件
+JVQUANT_APP_TOKEN=your_jvquant_token
+EASTMONEY_ACCOUNT=your_eastmoney_account
+EASTMONEY_PASSWORD=your_eastmoney_password
+```
+
+**优点**: 
+- 安全（不将凭证写入文件）
+- 适合 Docker 环境
+- 易于通过 CI/CD 管理
+
+#### 方式 2: 凭证文件
+
+创建 `~/.openclaw/jvquant.json` 文件：
+
+```json
+{
+  "token": "your_jvquant_token",
+  "acc": "your_eastmoney_account",
+  "pass": "your_eastmoney_password"
+}
+```
+
+然后在 docker-compose.yml 中挂载：
+
+```yaml
+volumes:
+  - ~/.openclaw/jvquant.json:/root/.openclaw/jvquant.json:ro
+```
+
+**注意**: 环境变量优先级高于配置文件。
+
+### 费用控制
+
+jvQuant API 调用会产生费用：
+- **登录费用**: 0.5 元/次
+- **每日预算**: 5 元（默认，最多 10 次登录）
+- **费用追踪**: `~/.ashare-assistant/broker_data/costs/YYYY-MM-DD.json`
+
+当达到每日预算后，新的 API 调用会被拒绝并记录错误日志。
+
+### 验证配置
+
+启动容器后检查日志：
+
+```bash
+docker logs task_runner --tail 50
+```
+
+成功时应该看到类似：
+```
+[broker_account] 成功加载 jvQuant 配置
+```
+
+失败时会看到：
+```
+[broker_account] 未检测到 jvQuant 配置，跳过券商账户采集
+```
+
+---
+
+**参考**: 
+- [JVQuant 平台参考](../../docs/jvquant-reference.md)
+- [Docker Compose 配置](./docker/task-runner/docker-compose.yml)
