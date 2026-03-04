@@ -1,0 +1,30 @@
+# n8n Docker Compose configuration
+# This setup connects to an existing postgres container on the 'infra_net' network
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n_app
+    restart: always
+    ports:
+      - "10003:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=helloPostgresql
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - N8N_SECURE_COOKIE=false
+      - GENERIC_TIMEZONE=Asia/Shanghai
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+    networks:
+      - infra_net
+
+networks:
+  infra_net:
+    external: true
