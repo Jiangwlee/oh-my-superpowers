@@ -8,7 +8,7 @@ Output:  TUI in terminal + ~/.ashare-assistant/signals/watchlist_signals.json.
 
 Public API:
     main()       -- CLI entry (default: continuous watch loop)
-    _scan_once() -- execute one scan and return render snapshot
+    scan_once()  -- execute one scan and return render snapshot
 """
 
 from __future__ import annotations
@@ -1257,6 +1257,18 @@ def _render_tui(snapshot: dict[str, Any], *, clear_screen: bool = True) -> None:
     _CONSOLE.print(footer)
 
 
+def scan_once(*, force: bool = False) -> dict[str, Any]:
+    """执行一次扫描并返回可渲染快照。
+
+    Args:
+        force: 忽略交易时间限制。
+
+    Returns:
+        扫描快照 dict，包含 status/market/signals 等字段。
+    """
+    return _scan_once(force=force)
+
+
 def _scan_once(*, force: bool = False) -> dict[str, Any]:
     """执行一次扫描并返回可渲染快照。"""
     snapshot: dict[str, Any] = {
@@ -1419,13 +1431,13 @@ def main() -> None:
     )
 
     if args.once:
-        snapshot = _scan_once(force=args.force)
+        snapshot = scan_once(force=args.force)
         _render_tui(snapshot, clear_screen=not args.no_clear)
         return
 
     try:
         while True:
-            snapshot = _scan_once(force=args.force)
+            snapshot = scan_once(force=args.force)
             _render_tui(snapshot, clear_screen=not args.no_clear)
             time.sleep(max(3, args.interval))
     except KeyboardInterrupt:
