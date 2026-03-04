@@ -45,7 +45,8 @@ class TestDeepResearchData(unittest.TestCase):
         self.client = TestClient(app)
 
     @patch("task_runner.routers.deep_research._run_load_data")
-    def test_data_found(self, mock_load):
+    def test_data_found_json(self, mock_load):
+        """测试默认 JSON 格式返回"""
         mock_load.return_value = {
             "code": "002050",
             "name": "三花智控",
@@ -60,7 +61,34 @@ class TestDeepResearchData(unittest.TestCase):
         self.assertEqual(body["result"]["code"], "002050")
 
     @patch("task_runner.routers.deep_research._run_load_data")
+    def test_data_found_markdown(self, mock_load):
+        """测试 Markdown 格式返回"""
+        mock_load.return_value = "# 三花智控 (002050)\n\n## 基本信息"
+        resp = self.client.get(
+            "/ashare/deep-research/data",
+            params={"code": "002050", "format": "markdown"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["status"], "success")
+        self.assertIsInstance(body["result"], str)
+        self.assertIn("# 三花智控", body["result"])
+
+    @patch("task_runner.routers.deep_research._run_load_data")
+    def test_data_invalid_format(self, mock_load):
+        """测试无效 format 参数"""
+        resp = self.client.get(
+            "/ashare/deep-research/data",
+            params={"code": "002050", "format": "xml"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["status"], "failed")
+        self.assertIn("invalid_format", body["error"])
+
+    @patch("task_runner.routers.deep_research._run_load_data")
     def test_data_not_found(self, mock_load):
+        """测试股票不存在的情况"""
         mock_load.return_value = None
         resp = self.client.get("/ashare/deep-research/data", params={"code": "999999"})
         self.assertEqual(resp.status_code, 200)

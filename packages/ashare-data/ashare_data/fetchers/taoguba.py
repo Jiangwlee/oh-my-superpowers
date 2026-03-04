@@ -1,19 +1,28 @@
 """淘股吧精华帖数据抓取模块。
 
-目标页面: https://www.tgb.cn/jinghua/1-1
-纯 Python 标准库实现，使用 html.parser 解析 HTML。
+说明
+----
+- 使用 Scrapling Fetcher（curl_cffi 后端），提供 TLS 指纹模拟和自动反爬能力
+- 使用 CSS/XPath 选择器解析 HTML，替代 html.parser 手写解析器
+- 返回结构化数据，无需额外提取
+
+目标页面
+--------
+- 精华列表：https://www.tgb.cn/jinghua/1-1
+- 个股讨论：https://www.tgb.cn/quotes/{full_code}
+- 今日推荐：API /newIndex/getNowRecommend
+- 热门讨论：API /quotes/hotDiscussion
 """
 
 import json
 import logging
-import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from html.parser import HTMLParser
+from typing import Any
 
 from ashare_data.core.cache import cache_get, cache_set
-from ashare_data.core.http_client import http_bytes, http_text
-from ashare_data.core.html_parser import class_contains, get_attr, TextExtractor
+from ashare_data.core.http_client import http_text, http_json
+from ashare_data.core.scraper import parse_html
 
 logger = logging.getLogger(__name__)
 
@@ -24,23 +33,6 @@ _XGGN_URL = f"{_BASE_URL}/quotes/getXGGNStockType"
 _ZH_URL = f"{_BASE_URL}/newIndex/getZh?pageNo={{page_no}}"
 _NOW_RECOMMEND_URL = f"{_BASE_URL}/newIndex/getNowRecommend?pageNo={{page_no}}"
 _HOT_DISCUSSION_URL = f"{_BASE_URL}/quotes/hotDiscussion?groupID=0&pageNo={{page_no}}"
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://www.tgb.cn/",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-}
-# 今日推荐接口需要 agree=enter Cookie，不需要登录 JSESSIONID
-_HEADERS_JSON = {
-    **_HEADERS,
-    "Accept": "*/*",
-    "X-Requested-With": "XMLHttpRequest",
-    "Cookie": "agree=enter",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -48,12 +40,12 @@ _HEADERS_JSON = {
 # ---------------------------------------------------------------------------
 
 def _fetch_html(url: str, timeout: int = 15) -> str:
-    """获取页面 HTML，容忍 IncompleteRead。"""
+    """获取页面 HTML，缓存 30 分钟。"""
     cache_key = f"html|{datetime.now().strftime('%Y-%m-%d')}|{url}"
     cached = cache_get("taoguba", cache_key)
     if isinstance(cached, str):
         return cached
-    text = http_text(url, headers=_HEADERS, timeout=timeout)
+    text = http_text(url, timeout=timeout)
     cache_set("taoguba", cache_key, text, ttl_seconds=1800)
     return text
 
@@ -64,318 +56,179 @@ def _fetch_json_get(url: str, timeout: int = 15, headers: dict | None = None) ->
     cached = cache_get("taoguba", cache_key)
     if isinstance(cached, dict):
         return cached
-    req_headers = dict(_HEADERS)
-    req_headers["Accept"] = "application/json, text/javascript, */*; q=0.01"
-    req_headers["X-Requested-With"] = "XMLHttpRequest"
+    req_headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.tgb.cn/",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+    }
     if headers:
         req_headers.update(headers)
-    data = json.loads(http_text(url, headers=req_headers, timeout=timeout))
+    data = http_json(url, headers=req_headers, timeout=timeout)
     cache_set("taoguba", cache_key, data, ttl_seconds=1800)
     return data
 
 
 def _fetch_json_post_form(url: str, form: dict, timeout: int = 15, headers: dict | None = None) -> dict:
     """POST form 请求并解析 JSON。"""
+    import urllib.parse as _urllib_parse
+
     cache_key = (
         f"post|{datetime.now().strftime('%Y-%m-%d')}|{url}|"
-        f"{urllib.parse.urlencode(sorted((str(k), str(v)) for k, v in form.items()))}"
+        f"{_urllib_parse.urlencode(sorted((str(k), str(v)) for k, v in form.items()))}"
     )
     cached = cache_get("taoguba", cache_key)
     if isinstance(cached, dict):
         return cached
-    req_headers = dict(_HEADERS)
-    req_headers["Accept"] = "application/json, text/javascript, */*; q=0.01"
-    req_headers["X-Requested-With"] = "XMLHttpRequest"
-    req_headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+    
+    # 默认 headers
+    merged_headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.tgb.cn/",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    }
+    
+    # 允许调用方覆盖特定 headers（如 Referer）
     if headers:
-        req_headers.update(headers)
+        for k, v in headers.items():
+            merged_headers[k] = v
 
-    form_body = urllib.parse.urlencode(form)
-    out = json.loads(
-        http_text(
-            url,
-            method="POST",
-            payload=form_body,
-            headers=req_headers,
-            timeout=timeout,
-        )
-    )
-    cache_set("taoguba", cache_key, out, ttl_seconds=1800)
-    return out
+    import urllib.request
+    import json
+    
+    try:
+        form_data = _urllib_parse.urlencode(form).encode("utf-8")
+        req = urllib.request.Request(url, data=form_data, headers=merged_headers, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            cache_set("taoguba", cache_key, data, ttl_seconds=1800)
+            return data
+    except Exception as e:
+        logger.exception("_fetch_json_post_form 出错：%s — %s", url, e)
+        raise
 
 
 # ---------------------------------------------------------------------------
-# 列表页解析器
+# 列表页解析（Scrapling CSS）
 # ---------------------------------------------------------------------------
 
-class _ListPageParser(HTMLParser):
-    """解析淘股吧精华帖列表页。
+class _ListPageParser:
+    """解析淘股吧精华帖列表页（Scrapling）。"""
 
-    页面结构 (每条帖子):
-        <div class="Nbbs-tiezi-lists">
-            <div class="left middle-list-tittle ...">
-                <a class="overhide mw300" href="a/xxx" title="标题">...</a>
-                <span>&nbsp;(评论数)</span>
-            </div>
-            <div class="left middle-list-talk ...">回复 / 浏览</div>
-            <div class="left middle-list-reply">回帖日期</div>
-            <div class="left middle-list-user ...">
-                <a class="mw100 overhide" ...>作者</a>
-            </div>
-            <div class="left middle-list-post">发帖日期</div>
-        </div>
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, html: str):
         self.posts: list[dict] = []
+        self._parse(html)
 
-        # 状态跟踪
-        self._in_item = False          # 在 Nbbs-tiezi-lists 内
-        self._in_title_link = False    # 在标题 <a> 内
-        self._in_reply_span = False    # 在评论数 <span> 内
-        self._in_talk_div = False      # 在 middle-list-talk 内
-        self._in_author_link = False   # 在作者 <a> 内
-        self._in_post_date = False     # 在 middle-list-post 内
+    def _parse(self, html: str) -> None:
+        """使用 Scrapling Response 解析 HTML。"""
+        try:
+            resp = parse_html(html, url=_LIST_URL)
 
-        self._current: dict = {}
-        self._depth = 0                # div 嵌套深度追踪
+            # 查找所有帖子项 div.Nbbs-tiezi-lists
+            items = resp.css("div.Nbbs-tiezi-lists")
+            for item in items:
+                post = self._parse_item(item)
+                if post and post.get("title") and post.get("url"):
+                    self.posts.append(post)
+        except Exception as e:
+            logger.exception("列表页解析失败：%s", e)
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "div" and class_contains(attrs, "Nbbs-tiezi-lists"):
-            self._in_item = True
-            self._depth = 1
-            self._current = {
-                "title": "", "url": "", "author": "",
-                "date": "", "view_count": 0, "reply_count": 0,
-            }
-            return
+    def _parse_item(self, item: Any) -> dict[str, Any]:
+        """解析单个帖子项。"""
+        post: dict[str, Any] = {
+            "title": "",
+            "url": "",
+            "author": "",
+            "date": "",
+            "view_count": 0,
+            "reply_count": 0,
+        }
 
-        if not self._in_item:
-            return
+        # 标题链接：<a class="overhide mw300" href="..." title="...">
+        title_link = item.css("a.mw300.overhide")
+        if title_link:
+            link_el = title_link.first
+            if link_el:
+                href = link_el.attrib.get("href", "")
+                title = link_el.attrib.get("title", "")
+                if title:
+                    post["title"] = title
+                if href:
+                    post["url"] = href if href.startswith("http") else f"{_BASE_URL}/{href.lstrip('/')}"
 
-        if tag == "div":
-            self._depth += 1
-
-        # 标题链接: <a class="overhide mw300" href="...">
-        if tag == "a" and class_contains(attrs, "mw300"):
-            self._in_title_link = True
-            href = get_attr(attrs, "href")
-            title = get_attr(attrs, "title")
-            if title:
-                self._current["title"] = title
-            if href:
-                if href.startswith("http"):
-                    self._current["url"] = href
-                else:
-                    self._current["url"] = f"{_BASE_URL}/{href.lstrip('/')}"
-            return
-
-        # 评论数 span (紧跟标题链接后面)
-        if tag == "span" and not self._in_title_link and self._current.get("url") and not self._current.get("reply_count"):
-            self._in_reply_span = True
-            return
-
-        # 浏览/回复数: <div class="... middle-list-talk ...">
-        if tag == "div" and class_contains(attrs, "middle-list-talk"):
-            self._in_talk_div = True
-            return
-
-        # 作者链接: <a class="mw100 overhide" ...>
-        if tag == "a" and class_contains(attrs, "mw100"):
-            self._in_author_link = True
-            return
-
-        # 发帖日期: <div class="... middle-list-post">
-        if tag == "div" and class_contains(attrs, "middle-list-post"):
-            self._in_post_date = True
-            return
-
-    def handle_endtag(self, tag: str) -> None:
-        if not self._in_item:
-            return
-
-        if tag == "a":
-            self._in_title_link = False
-            self._in_author_link = False
-
-        if tag == "span":
-            self._in_reply_span = False
-
-        if tag == "div":
-            self._depth -= 1
-            self._in_talk_div = False
-            self._in_post_date = False
-            # 当 item div 关闭
-            if self._depth <= 0:
-                self._in_item = False
-                if self._current.get("title") and self._current.get("url"):
-                    # 清理标题
-                    title = self._current["title"]
-                    for tag_str in ("[精]", "[红包]", "[投票]"):
-                        title = title.replace(tag_str, "")
-                    self._current["title"] = title.strip()
-                    self.posts.append(self._current)
-                self._current = {}
-
-    def handle_data(self, data: str) -> None:
-        if not self._in_item:
-            return
-
-        text = data.strip()
-        if not text:
-            return
-
-        if self._in_title_link:
-            # title 已经从 attr 获取，跳过
-            return
-
-        if self._in_reply_span:
-            # 格式: "&nbsp;(12345)"
+        # 评论数 span（紧跟标题链接后面）
+        reply_span = item.css("span:contains('(')")
+        if reply_span:
+            text = reply_span.first.text if reply_span.first else ""
             cleaned = text.replace("\xa0", "").strip()
             if cleaned.startswith("(") and cleaned.endswith(")"):
                 try:
-                    self._current["reply_count"] = int(cleaned[1:-1])
+                    post["reply_count"] = int(cleaned[1:-1])
                 except ValueError:
                     pass
-            self._in_reply_span = False
-            return
 
-        if self._in_talk_div:
-            # 格式: "106 / 9616"
+        # 浏览/回复数：<div class="... middle-list-talk ...">
+        talk_div = item.css("div.middle-list-talk")
+        if talk_div:
+            text = talk_div.first.text if talk_div.first else ""
             if "/" in text:
                 parts = text.split("/")
                 if len(parts) == 2:
                     try:
-                        self._current["view_count"] = int(parts[1].strip())
+                        post["view_count"] = int(parts[1].strip())
                     except ValueError:
                         pass
-            self._in_talk_div = False
-            return
 
-        if self._in_author_link:
-            self._current["author"] = text
-            self._in_author_link = False
-            return
+        # 作者链接：<a class="mw100 overhide" ...>
+        author_link = item.css("a.mw100.overhide")
+        if author_link:
+            post["author"] = author_link.first.text if author_link.first else ""
 
-        if self._in_post_date:
-            self._current["date"] = text
-            self._in_post_date = False
-            return
+        # 发帖日期：<div class="... middle-list-post">
+        post_date = item.css("div.middle-list-post")
+        if post_date:
+            post["date"] = post_date.first.text if post_date.first else ""
+
+        return post
 
 
 # ---------------------------------------------------------------------------
-# 详情页解析器
+# 详情页解析（Scrapling CSS）
 # ---------------------------------------------------------------------------
 
-class _DetailPageParser(HTMLParser):
-    """解析淘股吧帖子详情页，提取正文文本。
+def _fetch_detail(url: str) -> str:
+    """获取单个帖子详情页的正文摘要。"""
+    try:
+        html = _fetch_html(url, timeout=15)
+        resp = parse_html(html, url=url)
 
-    正文在 <div class="article-text p_coten" id="first"> 内。
-    """
+        # 正文在 <div class="article-text p_coten" id="first"> 内
+        content_div = resp.css('div[id="first"].article-text')
+        if not content_div:
+            return ""
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.text_parts: list[str] = []
+        # 提取纯文本，跳过 script/style
+        text_parts: list[str] = []
+        for el in content_div.below_elements:
+            tag = el.tag.lower()
+            if tag in ("script", "style"):
+                continue
+            text = el.text.clean() if el.text else ""
+            if text:
+                text_parts.append(text)
+            if tag == "br":
+                text_parts.append("\n")
 
-        self._in_content = False
-        self._depth = 0
-        self._skip_tags = {"script", "style", "img"}
-        self._skip_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        # 进入正文区域: <div class="article-text p_coten" id="first">
-        if tag == "div" and get_attr(attrs, "id") == "first" and class_contains(attrs, "article-text"):
-            self._in_content = True
-            self._depth = 1
-            return
-
-        if not self._in_content:
-            return
-
-        if tag == "div":
-            self._depth += 1
-
-        # 跳过脚本和样式
-        if tag in self._skip_tags:
-            self._skip_depth += 1
-
-        # br 标签当作换行
-        if tag == "br":
-            self.text_parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if not self._in_content:
-            return
-
-        if tag in self._skip_tags and self._skip_depth > 0:
-            self._skip_depth -= 1
-
-        if tag == "div":
-            self._depth -= 1
-            if self._depth <= 0:
-                self._in_content = False
-
-    def handle_data(self, data: str) -> None:
-        if not self._in_content or self._skip_depth > 0:
-            return
-        text = data.strip()
-        if text and text != "[淘股吧]":
-            self.text_parts.append(text)
-
-    def get_text(self) -> str:
-        content = " ".join(self.text_parts)
-        # 合并多余空白
+        content = " ".join(text_parts)
         while "  " in content:
             content = content.replace("  ", " ")
         return content.strip()
 
-
-class _HtmlFragmentTextParser(HTMLParser):
-    """提取 HTML 片段中的纯文本。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: list[str] = []
-        self._skip_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in {"script", "style"}:
-            self._skip_depth += 1
-            return
-        if self._skip_depth > 0:
-            return
-        if tag in {"br", "p", "div", "li"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style"} and self._skip_depth > 0:
-            self._skip_depth -= 1
-            return
-        if self._skip_depth > 0:
-            return
-        if tag in {"p", "div", "li"}:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if self._skip_depth > 0:
-            return
-        text = data.strip()
-        if text:
-            self.parts.append(text)
-
-    def to_text(self) -> str:
-        merged = " ".join(p if p != "\n" else "\n" for p in self.parts)
-        lines = [" ".join(line.split()) for line in merged.splitlines()]
-        lines = [l for l in lines if l]
-        return "\n".join(lines)
-
-
-def _strip_html_fragment(html_text: str) -> str:
-    parser = _HtmlFragmentTextParser()
-    parser.feed(html_text or "")
-    parser.close()
-    return parser.to_text()
+    except Exception as e:
+        logger.debug("获取详情页失败 %s: %s", url, e)
+        return ""
 
 
 def _extract_js_array(page: str, marker: str) -> list[dict]:
@@ -425,20 +278,31 @@ def _extract_js_array(page: str, marker: str) -> list[dict]:
         return []
 
 
-# ---------------------------------------------------------------------------
-# 详情页获取
-# ---------------------------------------------------------------------------
-
-def _fetch_detail(url: str) -> str:
-    """获取单个帖子详情页的正文摘要。"""
-    try:
-        html = _fetch_html(url, timeout=15)
-        parser = _DetailPageParser()
-        parser.feed(html)
-        return parser.get_text()
-    except Exception as e:
-        logger.debug("获取详情页失败 %s: %s", url, e)
+def _strip_html_fragment(html_text: str) -> str:
+    """提取 HTML 片段中的纯文本。"""
+    if not html_text:
         return ""
+    try:
+        resp = parse_html(html_text, url="")
+
+        # 跳过 script/style，收集文本
+        text_parts: list[str] = []
+        for el in resp.below_elements:
+            tag = el.tag.lower()
+            if tag in ("script", "style"):
+                continue
+            text = el.text.clean() if el.text else ""
+            if text:
+                text_parts.append(text)
+            if tag in ("br", "p", "div", "li"):
+                text_parts.append("\n")
+
+        merged = " ".join(p if p != "\n" else "\n" for p in text_parts)
+        lines = [" ".join(line.split()) for line in merged.splitlines()]
+        lines = [l for l in lines if l]
+        return "\n".join(lines)
+    except Exception:
+        return html_text
 
 
 # ---------------------------------------------------------------------------
@@ -458,8 +322,7 @@ def fetch_taoguba_hot(count: int = 20) -> list[dict]:
     """
     try:
         html = _fetch_html(_LIST_URL)
-        parser = _ListPageParser()
-        parser.feed(html)
+        parser = _ListPageParser(html)
         posts = parser.posts[:count]
 
         if not posts:
@@ -479,15 +342,15 @@ def fetch_taoguba_hot(count: int = 20) -> list[dict]:
         return posts
 
     except Exception as e:
-        logger.exception("fetch_taoguba_hot 出错: %s", e)
+        logger.exception("fetch_taoguba_hot 出错：%s", e)
         return []
 
 
 def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
     """获取淘股吧「今日推荐」帖子列表（实时题材热点）。
 
-    数据源: /newIndex/getNowRecommend，每页固定 15 条。
-    仅需 agree=enter Cookie，不需要登录。
+    数据源：/newIndex/getNowRecommend，每页固定 15 条。
+    仅需 agree=enter Cookie，不需要登录 JSESSIONID。
 
     Args:
         count: 需要返回的帖子数量，默认 15（一页上限）。
@@ -496,7 +359,7 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
         帖子列表，每条包含 subject / subinfo / content / author / date /
         view_count / reply_count / url / stock_codes 字段。
     """
-    is_mocked_http = getattr(http_bytes.__class__, "__module__", "").startswith("unittest.mock")
+    is_mocked_http = getattr(http_text.__class__, "__module__", "").startswith("unittest.mock")
     is_mocked_detail = getattr(_fetch_detail.__class__, "__module__", "").startswith("unittest.mock")
     skip_cache = is_mocked_http or is_mocked_detail
     cache_key = f"now_recommend_{datetime.now().strftime('%Y-%m-%d')}_{count}"
@@ -506,19 +369,18 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
             return cached
     try:
         url = _NOW_RECOMMEND_URL.format(page_no=1)
-        raw = http_bytes(url, headers=_HEADERS_JSON, timeout=15)
-        try:
-            import gzip as _gzip
-            data = json.loads(_gzip.decompress(raw))
-        except Exception:
-            data = json.loads(raw.decode("utf-8"))
+        from ashare_data.core.scraper import fetch_page
+
+        resp = fetch_page(url, headers={"Cookie": "agree=enter"}, timeout=15)
+        # Scrapling 自动处理 gzip，直接解析 JSON
+        data = resp.json()
 
         if not data.get("status"):
             logger.warning("今日推荐接口返回 status=false")
             return []
 
         items = data.get("dto", {}).get("list", [])
-        posts = []
+        posts: list[dict] = []
         for item in items[:count]:
             new_id = item.get("newTopicID") or ""
             post_url = f"{_BASE_URL}/a/{new_id}" if new_id else ""
@@ -557,7 +419,7 @@ def fetch_taoguba_now_recommend(count: int = 15) -> list[dict]:
         return posts
 
     except Exception as e:
-        logger.exception("fetch_taoguba_now_recommend 出错: %s", e)
+        logger.exception("fetch_taoguba_now_recommend 出错：%s", e)
         return []
 
 
@@ -619,7 +481,7 @@ def fetch_taoguba_hot_discussion(page_no: int = 1, count: int = 20) -> list[dict
             )
         return out
     except Exception as e:
-        logger.exception("fetch_taoguba_hot_discussion 出错: %s", e)
+        logger.exception("fetch_taoguba_hot_discussion 出错：%s", e)
         return []
 
 
@@ -653,7 +515,7 @@ def fetch_taoguba_stock_tags(full_code: str) -> list[dict]:
             )
         return tags
     except Exception as e:
-        logger.exception("fetch_taoguba_stock_tags 出错: %s", e)
+        logger.exception("fetch_taoguba_stock_tags 出错：%s", e)
         return []
 
 
@@ -678,7 +540,7 @@ def fetch_taoguba_quotes_posts(full_code: str, count: int = 20) -> list[dict]:
             if isinstance(post_ts, (int, float)):
                 post_time = datetime.fromtimestamp(post_ts / 1000).strftime("%Y-%m-%d %H:%M:%S")
             elif isinstance(item.get("actionDate"), str):
-                # 接口常见格式: 2026-02-19T15:17:28.000+08:00
+                # 接口常见格式：2026-02-19T15:17:28.000+08:00
                 post_time = item.get("actionDate")
 
             posts.append(
@@ -698,7 +560,7 @@ def fetch_taoguba_quotes_posts(full_code: str, count: int = 20) -> list[dict]:
             )
         return posts
     except Exception as e:
-        logger.exception("fetch_taoguba_quotes_posts 出错: %s", e)
+        logger.exception("fetch_taoguba_quotes_posts 出错：%s", e)
         return []
 
 
@@ -736,5 +598,5 @@ def fetch_taoguba_zh_recommend(page_no: int = 1, count: int = 20) -> list[dict]:
             )
         return out
     except Exception as e:
-        logger.exception("fetch_taoguba_zh_recommend 出错: %s", e)
+        logger.exception("fetch_taoguba_zh_recommend 出错：%s", e)
         return []

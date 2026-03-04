@@ -65,12 +65,34 @@ def _run_collect(req: CollectRequest) -> dict[str, Any]:
     return collect_deep_research(force=req.force)
 
 
-def _run_load_data(code: str) -> dict[str, Any] | None:
+def _run_load_data(code: str, format: str = "json") -> dict[str, Any] | str | None:
+    """加载深研数据，支持 JSON 和 Markdown 格式。"""
     from ashare_data.core.config import ASHARE_HOME
-    from ashare_data.deep_research import DeepResearchArchive
+    from ashare_data.deep_research import (
+        DeepResearchArchive,
+        format_deep_research_to_markdown,
+    )
 
     archive = DeepResearchArchive(ASHARE_HOME / "deep_research")
-    return archive.load_raw_data(code)
+    raw = archive.load_raw_data(code)
+    if raw is None:
+        return None
+
+    if format == "markdown":
+        name = raw.get("name", "")
+        last_collected_at = raw.get("last_collected_at")
+        raw_em = raw.get("raw_em", {})
+        raw_tgb = raw.get("raw_tgb", {})
+        return format_deep_research_to_markdown(
+            code=code,
+            name=name,
+            raw_em=raw_em,
+            raw_tgb=raw_tgb,
+            last_collected_at=last_collected_at,
+        )
+    else:
+        # 默认返回 JSON
+        return raw
 
 
 def _run_save_report(req: SaveReportRequest) -> dict[str, Any]:
@@ -110,12 +132,33 @@ async def collect(req: CollectRequest | None = None) -> TaskResult:
 
 
 @router.get("/data")
-async def get_data(code: str = Query(description="股票代码")) -> TaskResult:
-    """读取单只股票的深研原始数据。"""
+async def get_data(
+    code: str = Query(description="股票代码"),
+    format: str = Query(default="json", description="返回格式：json/markdown"),
+) -> TaskResult:
+    """读取单只股票的深研数据。
+
+    Args:
+        code: 股票代码
+        format: 返回格式，支持 json（默认）和 markdown
+
+    Returns:
+        JSON 格式：包含 raw_em 和 raw_tgb 的完整数据结构
+        Markdown 格式：格式化后的文本摘要
+    """
+    # 验证 format 参数
+    if format not in ("json", "markdown"):
+        return _make_result(
+            task_id=str(uuid.uuid4()),
+            started_at=datetime.now(timezone.utc),
+            ok=False,
+            error=f"invalid_format: {format} (supported: json, markdown)",
+        )
+
     task_id = str(uuid.uuid4())
     started_at = datetime.now(timezone.utc)
     try:
-        result = await asyncio.to_thread(_run_load_data, code)
+        result = await asyncio.to_thread(_run_load_data, code, format)
         if result is None:
             return _make_result(
                 task_id=task_id, started_at=started_at, ok=False,

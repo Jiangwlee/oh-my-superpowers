@@ -1,13 +1,20 @@
-"""金融界新闻数据抓取模块。"""
+"""金融界新闻数据抓取模块。
+
+说明
+----
+- 使用 Scrapling Fetcher（curl_cffi 后端），提供 TLS 指纹模拟和自动反爬能力
+- 使用 CSS/XPath 选择器解析 HTML，替代 html.parser 手写解析器
+- 返回结构化数据，无需额外提取
+"""
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from html.parser import HTMLParser
+from typing import Any
 
 from ashare_data.core.cache import cache_get, cache_set
-from ashare_data.core.http_client import http_json as core_http_json
-from ashare_data.core.http_client import http_text
+from ashare_data.core.http_client import http_json
+from ashare_data.core.scraper import parse_html
 
 
 def _today_ymd() -> str:
@@ -23,7 +30,7 @@ def _http_json(url: str, *, method: str = "GET", body: dict | None = None, heade
     _headers = {"Content-Type": "application/json", "Accept": "application/json"}
     if headers:
         _headers.update(headers)
-    data = core_http_json(url, method=method, payload=body, headers=_headers, timeout=15)
+    data = http_json(url, method=method, payload=body, headers=_headers, timeout=15)
     ttl = 7200 if "queryNewsFlash" in url else 1800
     cache_set("news", cache_key, data, ttl_seconds=ttl)
     return data
@@ -46,56 +53,8 @@ def _extract_list(resp: dict) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# 文章正文抓取（HTMLParser，不使用正则）
+# 文章正文抓取（Scrapling CSS）
 # ---------------------------------------------------------------------------
-
-class _ArticleContentParser(HTMLParser):
-    """提取 <div class="article_content"> 内的纯文本。"""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._in_article = False
-        self._depth = 0          # article_content div 的嵌套深度计数
-        self._skip_depth = 0     # script/style 跳过深度
-        self.parts: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list) -> None:
-        attr_map = dict(attrs)
-        cls = attr_map.get("class") or ""
-        if tag == "div" and "article_content" in cls:
-            self._in_article = True
-            self._depth = 1
-            return
-        if self._in_article:
-            if tag == "div":
-                self._depth += 1
-            if tag in {"script", "style"}:
-                self._skip_depth += 1
-            if tag in {"br", "p", "li"}:
-                self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if not self._in_article:
-            return
-        if tag in {"script", "style"} and self._skip_depth > 0:
-            self._skip_depth -= 1
-        if tag == "div":
-            self._depth -= 1
-            if self._depth <= 0:
-                self._in_article = False
-
-    def handle_data(self, data: str) -> None:
-        if self._in_article and self._skip_depth == 0:
-            text = data.strip()
-            if text:
-                self.parts.append(text)
-
-    def get_text(self) -> str:
-        text = " ".join(self.parts)
-        while "  " in text:
-            text = text.replace("  ", " ")
-        return text.strip()
-
 
 def _fetch_article_body(url: str) -> str:
     """抓取文章详情页，返回正文纯文本。失败返回空字符串。"""
@@ -106,14 +65,32 @@ def _fetch_article_body(url: str) -> str:
     if isinstance(cached, str):
         return cached
     try:
-        html = http_text(
-            url,
-            headers={"User-Agent": "Mozilla/5.0", "Accept": "text/html"},
-            timeout=10,
-        )
-        parser = _ArticleContentParser()
-        parser.feed(html)
-        text = parser.get_text()
+        from ashare_data.core.scraper import fetch_page
+
+        resp = fetch_page(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "text/html"}, timeout=10)
+        
+        # 查找 <div class="article_content">
+        content_div = resp.css("div.article_content")
+        if not content_div:
+            return ""
+
+        # 提取纯文本，跳过 script/style
+        text_parts: list[str] = []
+        for el in content_div.below_elements:
+            tag = el.tag.lower()
+            if tag in ("script", "style"):
+                continue
+            text = el.text.clean() if el.text else ""
+            if text:
+                text_parts.append(text)
+            if tag == "br":
+                text_parts.append("\n")
+
+        content = " ".join(text_parts)
+        while "  " in content:
+            content = content.replace("  ", " ")
+        text = content.strip()
+
         cache_set("news", cache_key, text, ttl_seconds=1800)
         return text
     except Exception:
@@ -193,7 +170,7 @@ def fetch_news_flash(page_size: int = 20) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def fetch_headline(page_size: int = 20, fetch_body: bool = False) -> list[dict]:
-    """A股头条 (channelNum=010, infoCls=001062)。"""
+    """A 股头条 (channelNum=010, infoCls=001062)。"""
     return fetch_news_list("010", "001062", page_size=page_size, fetch_body=fetch_body)
 
 

@@ -1,7 +1,7 @@
 services:
   task-runner:
     build:
-      context: ../../../../packages/task-runner
+      context: ../../../packages/task-runner
       dockerfile: Dockerfile
     container_name: task_runner
     restart: unless-stopped
@@ -37,7 +37,7 @@ services:
     networks:
       - infra_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${UVICORN_PORT:-8000}/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${UVICORN_PORT:-8000}/health')"]
       interval: ${HEALTH_CHECK_INTERVAL:-30}s
       timeout: ${HEALTH_CHECK_TIMEOUT:-10}s
       retries: ${HEALTH_CHECK_RETRIES:-3}

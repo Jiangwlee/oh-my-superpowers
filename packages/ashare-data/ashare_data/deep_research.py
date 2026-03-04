@@ -27,6 +27,101 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+# ── Markdown 转换器 ────────────────────────────────────────────────────────
+
+
+def _escape_markdown(text: str) -> str:
+    """转义 Markdown 特殊字符。"""
+    if not text:
+        return ""
+    # 转义列表标记（防止误解析）
+    text = text.replace("|", "\\|")
+    return text
+
+
+def format_deep_research_to_markdown(
+    code: str,
+    name: str,
+    raw_em: dict[str, Any],
+    raw_tgb: dict[str, Any],
+    last_collected_at: str | None = None,
+) -> str:
+    """将深研原始数据转换为 Markdown 格式。
+
+    Args:
+        code: 股票代码
+        name: 股票名称
+        raw_em: 东方财富股吧原始数据
+        raw_tgb: 淘股吧原始数据
+        last_collected_at: 最后采集时间
+
+    Returns:
+        Markdown 格式的深研摘要
+    """
+    lines: list[str] = []
+
+    # 1. 股票信息
+    lines.append(f"# {name} ({code})")
+    lines.append("")
+    lines.append("## 基本信息")
+    lines.append("")
+    lines.append(f"- **代码**: {code}")
+    lines.append(f"- **名称**: {name}")
+    if last_collected_at:
+        lines.append(f"- **采集时间**: {last_collected_at}")
+    lines.append("")
+
+    # 2. 淘股吧股票标签
+    stock_tags = raw_tgb.get("stock_tags", [])
+    if stock_tags:
+        lines.append("## 股票标签")
+        lines.append("")
+        for tag in stock_tags:
+            if isinstance(tag, str):
+                lines.append(f"- {tag}")
+            elif isinstance(tag, dict):
+                tag_name = tag.get("name", "") or tag.get("tagName", "")
+                if tag_name:
+                    lines.append(f"- {tag_name}")
+        lines.append("")
+
+    # 3. 东方财富股吧 - 列表形式
+    em_posts = raw_em.get("latest_posts", [])
+    if em_posts:
+        lines.append("## 东方财富股吧")
+        lines.append("")
+        lines.append("### 最新帖子")
+        lines.append("")
+        for i, post in enumerate(em_posts[:20], 1):
+            title = _escape_markdown(post.get("post_title", "无标题"))
+            pub_time = post.get("post_publish_time", "")
+            lines.append(f"{i}. **{title}** ({pub_time})")
+        lines.append("")
+
+    # 4. 淘股吧 - 表格形式
+    tgb_posts = raw_tgb.get("quotes_posts", [])
+    if tgb_posts:
+        lines.append("## 淘股吧")
+        lines.append("")
+        lines.append("### 讨论贴")
+        lines.append("")
+        # 表头
+        lines.append("| 序号 | 帖子标题 | 发帖时间 | 内容摘要 |")
+        lines.append("|------|----------|----------|----------|")
+        for i, post in enumerate(tgb_posts[:20], 1):
+            title = _escape_markdown(post.get("post_title", post.get("topicTitle", "无标题")))
+            pub_time = post.get("post_time", post.get("postDate", ""))
+            content = post.get("content", post.get("body", post.get("subinfo", "")))
+            # 截取前 50 字作为摘要
+            if len(content) > 50:
+                content = content[:50] + "..."
+            content = _escape_markdown(content.strip())
+            lines.append(f"| {i} | {title} | {pub_time} | {content} |")
+        lines.append("")
+
+    return "\n".join(lines)
+
 _STALE_DAYS = 7
 _TIME_FMT = "%Y-%m-%d %H:%M:%S"
 

@@ -7,7 +7,10 @@ name = "ashare-data"
 version = "0.1.0"
 description = "A股数据采集与预处理基础设施（爬虫、券商接口、数据过滤）"
 requires-python = ">=3.10"
-dependencies = ["rich>=13.7.0"]
+dependencies = [
+    "rich>=13.7.0",
+    "scrapling[fetchers]>=0.4.0",
+]
 
 [project.scripts]
 ashare-collect = "ashare_data.collect:main"

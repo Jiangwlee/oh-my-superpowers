@@ -263,12 +263,6 @@ def collect(
         是否执行趋势扫描（默认 True）。扫描1000只股约8-12分钟。
     popularity_max : int
         东方财富人气榜扫描上限（默认1000，最大1000）。
-    run_deep_research : bool
-        是否执行个股深研预处理（默认 True）。
-    deep_research_min_star : int
-        趋势股纳入深研的最低星级（默认 4）。
-    deep_research_max_workers : int
-        个股深研并行 worker 数（默认 6）。
     """
     ensure_dirs()
     try:
@@ -407,63 +401,6 @@ def collect(
                 with open(watchlist_scan_path, "w", encoding="utf-8") as f:
                     json.dump(watchlist_scan_data, f, ensure_ascii=False, indent=2)
                 _log(f"  \u2713 watchlist_scan.json: {len(watchlist_scan_data)} \u53ea")
-
-            # 8) 个股深研预处理：仅买入信号股
-            if run_deep_research:
-                data_dir = _resolve_data_dir(output_dir)
-                dr_targets = _load_buy_signal_targets()
-                if dr_targets:
-                    _log(
-                        f"  深研预处理目标: {len(dr_targets)} 只 "
-                        f"(仅买入信号)"
-                    )
-                    dr_result = run_batch_deep_research(
-                        targets=dr_targets,
-                        data_dir=Path(data_dir),
-                        llm_model="github-copilot/gpt-5-mini",
-                        max_workers=deep_research_max_workers,
-                        per_stock_timeout_sec=300,
-                        total_timeout_sec=1800,
-                        post_limit=36,
-                        detail_limit=5,
-                        notice_days=3,
-                        quotes_count=8,
-                        zh_page=1,
-                        zh_count=20,
-                    )
-                    if dr_result.get("ok"):
-                        dr_rows = dr_result.get("rows", [])
-                        report_path = write_timing_report(
-                            data_dir=Path(data_dir), rows=dr_rows
-                        )
-                        ok_count = sum(
-                            1 for row in dr_rows if row.get("status") == "ok"
-                        )
-                        _log(
-                            f"  \u2713 deep_research: {ok_count}/{len(dr_rows)} 只，"
-                            f"耗时 {dr_result.get('elapsed_sec', 0):.1f}s，"
-                            f"报告 {report_path}"
-                        )
-                        results["deep_research"] = (
-                            "ok",
-                            {
-                                "target_count": len(dr_targets),
-                                "ok_count": ok_count,
-                                "elapsed_sec": dr_result.get("elapsed_sec", 0.0),
-                            },
-                            float(dr_result.get("elapsed_sec", 0.0)),
-                        )
-                    else:
-                        err = str(dr_result.get("error", "unknown_error"))
-                        _log(f"  \u2717 deep_research: {err}")
-                        results["deep_research"] = ("error", err, 0.0)
-                else:
-                    _log("  深研预处理目标为空，跳过")
-                    results["deep_research"] = (
-                        "ok",
-                        {"target_count": 0, "ok_count": 0, "elapsed_sec": 0.0},
-                        0.0,
-                    )
 
             # 包装输出
             results["trend_scan"] = (

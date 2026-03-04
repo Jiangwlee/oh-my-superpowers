@@ -2,26 +2,33 @@
 
 说明
 ----
-- 使用标准库实现（urllib + html.parser），避免正则解析 HTML。
-- 支持：
-  1) 最新帖子列表（gbapi JSONP）
-  2) 单帖正文（news 页面内嵌 post_article）
-  3) 股票资讯列表（list,code,1,f.html）
-  4) 股票公告列表（list,code,3,f.html，支持近 N 天过滤）
+- 使用 Scrapling Fetcher（curl_cffi 后端），提供 TLS 指纹模拟和自动反爬能力
+- 使用 CSS/XPath 选择器解析 HTML，替代 html.parser 手写解析器
+- 返回结构化数据，无需额外提取
+
+支持功能
+--------
+1. 最新帖子列表（gbapi JSONP）
+2. 单帖正文（news 页面内嵌 post_article）
+3. 股票资讯列表（list,code,1,f.html）
+4. 股票公告列表（list,code,3,f.html，支持近 N 天过滤）
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from html import unescape
-from html.parser import HTMLParser
 from typing import Any
 
 from ashare_data.core.cache import cache_get, cache_set
 from ashare_data.core.http_client import http_text
-from ashare_data.core.html_parser import get_attr
+from ashare_data.core.scraper import parse_html
+
+logger = logging.getLogger(__name__)
+
 
 _GBAPI_LIST_URL = (
     "https://gbapi.eastmoney.com/webarticlelist/api/Article/Articlelist"
@@ -34,22 +41,19 @@ _GUBA_NEWS_URL = "https://guba.eastmoney.com/news,{code},{post_id}.html"
 _GUBA_LIST_URL = "https://guba.eastmoney.com/list,{code},{tab},f.html"
 _GUBA_BASE = "https://guba.eastmoney.com"
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "Gecko/20100101 Firefox/147.0"
-    ),
-    "Accept": "*/*",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-}
-
 
 def _http_text(url: str, timeout: float = 15.0, headers: dict[str, str] | None = None) -> str:
+    """获取文本并缓存。"""
     cache_key = f"em_guba_text|{datetime.now().strftime('%Y-%m-%d')}|{url}"
     cached = cache_get("eastmoney", cache_key)
     if isinstance(cached, str):
         return cached
-    req_headers = dict(_HEADERS)
+    req_headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Referer": "https://guba.eastmoney.com/",
+    }
     if headers:
         req_headers.update(headers)
     text = http_text(url, headers=req_headers, timeout=timeout)
@@ -59,7 +63,7 @@ def _http_text(url: str, timeout: float = 15.0, headers: dict[str, str] | None =
 
 
 def _parse_jsonp(payload: str) -> dict[str, Any]:
-    """解析 JSONP 为 dict，不使用正则。"""
+    """解析 JSONP 为 dict。"""
     left = payload.find("(")
     right = payload.rfind(")")
     if left == -1 or right == -1 or left >= right:
@@ -68,51 +72,31 @@ def _parse_jsonp(payload: str) -> dict[str, Any]:
     return json.loads(inner)
 
 
-class _TextExtractor(HTMLParser):
-    """HTML 转纯文本（简单提取）。"""
+def _html_to_text(html_fragment: str) -> str:
+    """提取 HTML 片段中的纯文本。"""
+    if not html_fragment:
+        return ""
+    try:
+        resp = parse_html(html_fragment, url="")
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: list[str] = []
-        self._skip_depth = 0
+        # 跳过 script/style，收集文本
+        text_parts: list[str] = []
+        for el in resp.below_elements:
+            tag = el.tag.lower()
+            if tag in ("script", "style"):
+                continue
+            text = el.text.clean() if el.text else ""
+            if text:
+                text_parts.append(text)
+            if tag in ("br", "p", "div", "li", "tr"):
+                text_parts.append("\n")
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in {"script", "style"}:
-            self._skip_depth += 1
-            return
-        if self._skip_depth > 0:
-            return
-        if tag in {"br", "p", "div", "li", "tr"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style"} and self._skip_depth > 0:
-            self._skip_depth -= 1
-            return
-        if self._skip_depth > 0:
-            return
-        if tag in {"p", "div", "li", "tr"}:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if self._skip_depth > 0:
-            return
-        text = data.strip()
-        if text:
-            self.parts.append(text)
-
-    def to_text(self) -> str:
-        merged = " ".join(p if p != "\n" else "\n" for p in self.parts)
+        merged = " ".join(p if p != "\n" else "\n" for p in text_parts)
         lines = [" ".join(line.split()) for line in merged.splitlines()]
         lines = [l for l in lines if l]
-        return "\n".join(lines)
-
-
-def _html_to_text(html_fragment: str) -> str:
-    parser = _TextExtractor()
-    parser.feed(html_fragment)
-    parser.close()
-    return unescape(parser.to_text())
+        return unescape("\n".join(lines))
+    except Exception:
+        return unescape(html_fragment.strip())
 
 
 def _extract_js_object(page: str, marker: str) -> dict[str, Any]:
@@ -170,118 +154,77 @@ class _Row:
     pub_time: str = ""
 
 
-class _GubaListParser(HTMLParser):
-    """解析股吧列表页（资讯/公告）。"""
+class _GubaListParser:
+    """解析股吧列表页（资讯/公告）（Scrapling）。"""
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, html: str):
         self.rows: list[dict[str, Any]] = []
+        self._parse(html)
 
-        self._in_row = False
-        self._row_depth = 0
-        self._row: _Row | None = None
-        self._field: str = ""
-        self._in_title_a = False
+    def _parse(self, html: str) -> None:
+        """使用 Scrapling Response 解析 HTML。"""
+        try:
+            resp = parse_html(html, url="")
 
-    def _class_has(self, attrs: list[tuple[str, str | None]], key: str) -> bool:
-        for k, v in attrs:
-            if k == "class" and v:
-                parts = v.split()
-                if key in parts:
-                    return True
-        return False
+            # 查找所有 tr.listitem
+            items = resp.css("tr.listitem")
+            for item in items:
+                row = self._parse_row(item)
+                if row and row.post_id and row.title:
+                    self.rows.append({
+                        "post_id": row.post_id,
+                        "title": row.title,
+                        "href": row.href,
+                        "url": self._normalize_url(row.href),
+                        "post_type": row.post_type,
+                        "read": row.read,
+                        "reply": row.reply,
+                        "notice_type": row.notice_type,
+                        "pub_time": row.pub_time,
+                    })
+        except Exception as e:
+            logger.exception("列表页解析失败：%s", e)
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "tr" and self._class_has(attrs, "listitem"):
-            self._in_row = True
-            self._row_depth = 1
-            self._row = _Row()
-            return
+    def _parse_row(self, item: Any) -> _Row:
+        """解析单个行。"""
+        row = _Row()
 
-        if not self._in_row or self._row is None:
-            return
-
-        if tag == "tr":
-            self._row_depth += 1
-
-        if tag == "div":
-            if self._class_has(attrs, "read"):
-                self._field = "read"
-            elif self._class_has(attrs, "reply"):
-                self._field = "reply"
-            elif self._class_has(attrs, "notice_type"):
-                self._field = "notice_type"
-            elif self._class_has(attrs, "pub_time") or self._class_has(attrs, "update"):
-                self._field = "pub_time"
-
-        if tag == "a" and self._class_has(attrs, "title"):
-            # 页面结构里 title class 在 div 上，a 无 class，这里兜底
-            self._in_title_a = True
-
-        if tag == "a":
-            href = get_attr(attrs, "href")
-            data_post_id = get_attr(attrs, "data-postid")
-            data_post_type = get_attr(attrs, "data-posttype")
-            if href and data_post_id:
-                self._in_title_a = True
-                self._row.href = href
-                self._row.post_id = data_post_id
-                self._row.post_type = data_post_type
-
-    def handle_endtag(self, tag: str) -> None:
-        if not self._in_row:
-            return
-
-        if tag == "a":
-            self._in_title_a = False
-
-        if tag == "tr":
-            self._row_depth -= 1
-            if self._row_depth <= 0 and self._row is not None:
-                if self._row.post_id and self._row.title:
-                    item = {
-                        "post_id": self._row.post_id,
-                        "title": self._row.title,
-                        "href": self._row.href,
-                        "url": self._normalize_url(self._row.href),
-                        "post_type": self._row.post_type,
-                        "read": self._row.read,
-                        "reply": self._row.reply,
-                        "notice_type": self._row.notice_type,
-                        "pub_time": self._row.pub_time,
-                    }
-                    self.rows.append(item)
-                self._in_row = False
-                self._row = None
-                self._field = ""
-
-    def handle_data(self, data: str) -> None:
-        if not self._in_row or self._row is None:
-            return
-
-        text = data.strip()
-        if not text:
-            return
-
-        if self._in_title_a and not self._row.title:
-            self._row.title = text
-            return
-
-        if self._field == "read":
+        # 阅读数：<div class="read">
+        read_div = item.css("div.read")
+        if read_div:
+            text = read_div.first.text if read_div.first else ""
             try:
-                self._row.read = int(text)
+                row.read = int(text.replace(",", "").strip())
             except ValueError:
                 pass
-        elif self._field == "reply":
+
+        # 回复数：<div class="reply">
+        reply_div = item.css("div.reply")
+        if reply_div:
+            text = reply_div.first.text if reply_div.first else ""
             try:
-                self._row.reply = int(text)
+                row.reply = int(text.replace(",", "").strip())
             except ValueError:
                 pass
-        elif self._field == "notice_type":
-            self._row.notice_type = text
-        elif self._field == "pub_time":
-            # list 页面时间通常形如 "02-19 10:24" 或 "10-31 07:41"
-            self._row.pub_time = text
+
+        # 标题链接：<a class="title" ...>
+        title_a = item.css("a.title")
+        if title_a:
+            link_el = title_a.first
+            if link_el:
+                row.href = link_el.attrib.get("href", "")
+                row.title = link_el.text if link_el.text else ""
+
+        # 其他字段
+        notice_div = item.css("div.notice_type")
+        if notice_div:
+            row.notice_type = notice_div.first.text if notice_div.first else ""
+
+        pub_div = item.css("div.pub_time, div.update")
+        if pub_div:
+            row.pub_time = pub_div.first.text if pub_div.first else ""
+
+        return row
 
     def _normalize_url(self, href: str) -> str:
         if href.startswith("http://") or href.startswith("https://"):
@@ -308,6 +251,10 @@ def _parse_mmdd_hhmm(text: str, now: datetime) -> datetime | None:
         dt = datetime(now.year - 1, month, day, hour, minute)
     return dt
 
+
+# ---------------------------------------------------------------------------
+# 核心函数
+# ---------------------------------------------------------------------------
 
 def fetch_latest_posts(code: str, limit: int = 36) -> list[dict[str, Any]]:
     """抓取最新帖子列表（JSONP）。"""
@@ -384,9 +331,7 @@ def fetch_stock_info_list(code: str) -> list[dict[str, Any]]:
         return cached
     url = _GUBA_LIST_URL.format(code=code, tab=1)
     html = _http_text(url, headers={"Accept": "text/html,application/xhtml+xml"})
-    parser = _GubaListParser()
-    parser.feed(html)
-    parser.close()
+    parser = _GubaListParser(html)
     cache_set("eastmoney", cache_key, parser.rows, ttl_seconds=1800)
     return parser.rows
 
@@ -399,9 +344,7 @@ def fetch_stock_notice_list(code: str, recent_days: int = 3) -> list[dict[str, A
         return cached
     url = _GUBA_LIST_URL.format(code=code, tab=3)
     html = _http_text(url, headers={"Accept": "text/html,application/xhtml+xml"})
-    parser = _GubaListParser()
-    parser.feed(html)
-    parser.close()
+    parser = _GubaListParser(html)
 
     now = datetime.now()
     threshold = now - timedelta(days=recent_days)
@@ -422,7 +365,7 @@ def fetch_stock_notice_list(code: str, recent_days: int = 3) -> list[dict[str, A
 
 
 def fetch_stock_deep_research_inputs(code: str, notice_days: int = 3, post_limit: int = 36) -> dict[str, Any]:
-    """聚合抓取：帖子列表 + 资讯 + 近N天公告。"""
+    """聚合抓取：帖子列表 + 资讯 + 近 N 天公告。"""
     cache_key = (
         f"em_guba_deep_{code}_{notice_days}_{post_limit}_{datetime.now().strftime('%Y-%m-%d')}"
     )

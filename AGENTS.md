@@ -55,9 +55,17 @@
 ## 技术栈
 ## 技术栈
 
-- **语言**: Python 3.10+ (标准库为主)
+- **语言**: Python 3.10+
+- **HTTP 客户端**: Scrapling Fetcher（基于 curl_cffi，TLS 指纹模拟）
+- **HTML 解析**: Scrapling Selector（CSS/XPath 选择器，lxml 后端）
 - **测试**: unittest / pytest
-- **HTML 解析**: html.parser (禁止正则)
+
+说明
+----
+- Scrapling 提供 `Fetcher.get(url)` 返回 Response 对象（继承自 Selector）
+- Response 支持链式调用 `.css()/.xpath()/.re()` 提取结构化数据
+- 避免使用 `urllib.request` 和 `html.parser` 手写解析器
+- 核心模块：`ashare_data.core.scraper` 封装 Scrapling API
 
 ## 研究与参考
 

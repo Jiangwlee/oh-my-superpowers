@@ -20,6 +20,7 @@ services:
       - NODE_ENV=production
       - N8N_SECURE_COOKIE=false
       - GENERIC_TIMEZONE=Asia/Shanghai
+      - TZ=Asia/Shanghai
     volumes:
       - ./n8n_data:/home/node/.n8n
     networks:

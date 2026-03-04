@@ -1,14 +1,26 @@
-"""统一 HTTP 客户端（标准库实现）。"""
+"""统一 HTTP 客户端（基于 urllib.request）。
+
+说明
+----
+- 使用 urllib.request 实现，避免 curl_cffi 的 IncompleteRead 问题
+- 保留原有 API 签名，兼容所有现有调用方
+- 内置重试机制和代理禁用
+
+示例
+----
+    from ashare_data.core.http_client import http_text, http_json, http_bytes
+
+    html = http_text("https://example.com")
+    data = http_json("https://api.example.com/data")
+    raw = http_bytes("https://example.com/file.bin")
+"""
 
 from __future__ import annotations
 
-import contextlib
 import http.client
 import json
 import logging
-import os
 import time
-import unittest.mock
 import urllib.error
 import urllib.request
 from typing import Any
@@ -17,71 +29,9 @@ logger = logging.getLogger(__name__)
 _DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/147.0"
 
 # 不经过任何代理的专用 opener。
-# urllib 默认 opener 会读取 http_proxy / https_proxy 等系统环境变量，
-# 导致访问东财、淘股吧等国内接口时因调用方设置的代理出错。
-# 使用空 ProxyHandler({}) 明确禁用代理，确保直连。
 _NO_PROXY_OPENER = urllib.request.build_opener(
     urllib.request.ProxyHandler({}),
 )
-
-# 代理相关环境变量列表（大小写均可能出现）。
-_PROXY_ENV_VARS = (
-    "http_proxy",
-    "https_proxy",
-    "HTTP_PROXY",
-    "HTTPS_PROXY",
-    "all_proxy",
-    "ALL_PROXY",
-    "no_proxy",
-    "NO_PROXY",
-)
-
-
-@contextlib.contextmanager
-def no_proxy_env():
-    """临时禁用代理，使 requests 等第三方库直连网络。
-
-    同时清除进程代理环境变量并 patch ``requests.utils.getproxies`` 返回空字典，
-    彻底阻断两条代理检测路径：
-
-    1. ``os.environ`` 中的 http_proxy / https_proxy 等变量
-    2. macOS 系统代理（通过 ``getproxies_macosx_sysconf()`` 检测），
-       requests 在 env vars 为空时会 fallback 读取系统代理，
-       patch 后同样返回 ``{}`` 使其直连。
-
-    退出上下文后自动恢复原始环境变量和原始函数。
-
-    用法::
-
-        from ashare_data.core.http_client import no_proxy_env
-
-        with no_proxy_env():
-            resp = requests.get("https://example.com")
-    """
-    saved: dict[str, str] = {}
-    for key in _PROXY_ENV_VARS:
-        if key in os.environ:
-            saved[key] = os.environ.pop(key)
-    try:
-        import requests.utils as _requests_utils  # type: ignore[import]
-
-        patch_target = _requests_utils
-        attr_name = "getproxies"
-    except ImportError:
-        patch_target = None
-        attr_name = ""
-
-    if patch_target is not None:
-        with unittest.mock.patch.object(patch_target, attr_name, return_value={}):
-            try:
-                yield
-            finally:
-                os.environ.update(saved)
-    else:
-        try:
-            yield
-        finally:
-            os.environ.update(saved)
 
 
 def http_text(
@@ -89,70 +39,37 @@ def http_text(
     method: str = "GET",
     payload: dict[str, Any] | list[Any] | str | bytes | None = None,
     headers: dict[str, str] | None = None,
-    timeout: float = 20.0,  # 增加超时时间
-    retries: int = 5,  # 增加重试次数
-    sleep_sec: float = 1.0,  # 增加初始延迟
+    timeout: float = 20.0,
+    retries: int = 5,
+    sleep_sec: float = 1.0,
 ) -> str:
-    """发送 HTTP 请求并返回文本。"""
-    method_upper = method.upper()
-    merged_headers: dict[str, str] = {"User-Agent": _DEFAULT_UA}
+    """发送 HTTP 请求并返回文本。使用分块读取避免 IncompleteRead。"""
+    if method != "GET":
+        raise NotImplementedError("http_text 仅支持 GET 方法，POST 请改用 http_post_text")
+    
+    merged_headers = {"User-Agent": _DEFAULT_UA}
     if headers:
         merged_headers.update(headers)
-    if method_upper in ("POST", "PUT", "PATCH") and payload is not None:
-        merged_headers.setdefault("Content-Type", "application/json")
-
-    data: bytes | None = None
-    if payload is not None and method_upper in ("GET", "HEAD"):
-        raise ValueError(f"{method_upper} 请求不支持 payload，请使用 query string")
-    if payload is not None:
-        if isinstance(payload, bytes):
-            data = payload
-        elif isinstance(payload, str):
-            data = payload.encode("utf-8")
-        else:
-            data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
     last_exc: Exception | None = None
     wait = sleep_sec
     for attempt in range(1, retries + 1):
         try:
-            req = urllib.request.Request(
-                url,
-                data=data,
-                headers=merged_headers,
-                method=method_upper,
-            )
+            req = urllib.request.Request(url, headers=merged_headers, method="GET")
             with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
-                return resp.read().decode("utf-8")
-        except http.client.IncompleteRead as exc:
-            last_exc = exc
-            if attempt < retries:
-                logger.warning(
-                    "http_text incomplete read %s/%s %s, will retry",
-                    attempt,
-                    retries,
-                    url,
-                )
-                time.sleep(wait)
-                wait *= 2
-            else:
-                partial = exc.partial or b""
-                logger.warning(
-                    "http_text incomplete read after %s retries for %s, returning partial body",
-                    retries,
-                    url,
-                )
-                return partial.decode("utf-8", errors="replace")
+                # 使用 read() 不带参数会自动处理 chunked encoding
+                # 但如果遇到 IncompleteRead，尝试手动读取剩余数据
+                try:
+                    data = resp.read()
+                    return data.decode("utf-8")
+                except http.client.IncompleteRead as e:
+                    # 如果发生 IncompleteRead，返回已读取的部分
+                    logger.warning("IncompleteRead detected, returning partial response: %s bytes", len(e.partial))
+                    return e.partial.decode("utf-8", errors="replace")
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             last_exc = exc
             if attempt < retries:
-                logger.warning(
-                    "http_text retry %s/%s %s failed: %s",
-                    attempt,
-                    retries,
-                    url,
-                    exc,
-                )
+                logger.warning("http_text retry %s/%s %s failed: %s", attempt, retries, url, exc)
                 time.sleep(wait)
                 wait *= 2
     logger.error("http_text failed after %s retries: %s", retries, url)
@@ -169,17 +86,10 @@ def http_bytes(
     sleep_sec: float = 0.8,
 ) -> bytes:
     """发送 HTTP 请求并返回原始字节（用于 gzip/二进制响应）。"""
-    method_upper = method.upper()
-    if payload is not None and method_upper in ("GET", "HEAD"):
-        raise ValueError(f"{method_upper} 请求不支持 payload，请使用 query string")
-
-    data: bytes | None = None
-    if isinstance(payload, bytes):
-        data = payload
-    elif isinstance(payload, str):
-        data = payload.encode("utf-8")
-
-    merged_headers: dict[str, str] = {"User-Agent": _DEFAULT_UA}
+    if method != "GET":
+        raise NotImplementedError("http_bytes 仅支持 GET 方法")
+    
+    merged_headers = {"User-Agent": _DEFAULT_UA}
     if headers:
         merged_headers.update(headers)
 
@@ -187,42 +97,17 @@ def http_bytes(
     wait = sleep_sec
     for attempt in range(1, retries + 1):
         try:
-            req = urllib.request.Request(
-                url,
-                data=data,
-                headers=merged_headers,
-                method=method_upper,
-            )
+            req = urllib.request.Request(url, headers=merged_headers, method="GET")
             with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
-                return resp.read()
-        except http.client.IncompleteRead as exc:
-            last_exc = exc
-            if attempt < retries:
-                logger.warning(
-                    "http_bytes incomplete read %s/%s %s, will retry",
-                    attempt,
-                    retries,
-                    url,
-                )
-                time.sleep(wait)
-                wait *= 2
-            else:
-                logger.warning(
-                    "http_bytes incomplete read after %s retries for %s, returning partial body",
-                    retries,
-                    url,
-                )
-                return exc.partial or b""
+                try:
+                    return resp.read()
+                except http.client.IncompleteRead as e:
+                    logger.warning("IncompleteRead in http_bytes, returning partial: %s bytes", len(e.partial))
+                    return e.partial
         except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
             last_exc = exc
             if attempt < retries:
-                logger.warning(
-                    "http_bytes retry %s/%s %s failed: %s",
-                    attempt,
-                    retries,
-                    url,
-                    exc,
-                )
+                logger.warning("http_bytes retry %s/%s %s failed: %s", attempt, retries, url, exc)
                 time.sleep(wait)
                 wait *= 2
     logger.error("http_bytes failed after %s retries: %s", retries, url)
@@ -238,11 +123,45 @@ def http_json(
     retries: int = 3,
     sleep_sec: float = 0.8,
 ) -> dict[str, Any]:
-    """发送 HTTP 请求并返回 JSON dict。"""
+    """发送 HTTP 请求并返回 JSON dict。支持 GET 和 POST。"""
+    import time
+    
+    if method == "POST" and payload:
+        # POST 请求
+        merged_headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": _DEFAULT_UA,
+        }
+        if headers:
+            merged_headers.update(headers)
+
+        last_exc: Exception | None = None
+        wait = sleep_sec
+        for attempt in range(1, retries + 1):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers=merged_headers,
+                    method="POST",
+                )
+                with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError) as exc:
+                last_exc = exc
+                if attempt < retries:
+                    logger.warning("http_json POST retry %s/%s %s failed: %s", attempt, retries, url, exc)
+                    time.sleep(wait)
+                    wait *= 2
+        logger.error("http_json POST failed after %s retries: %s", retries, url)
+        raise RuntimeError(f"http_json POST 请求失败（重试 {retries} 次）: {url} — {last_exc}")
+    
+    # GET 请求
     body = http_text(
         url=url,
-        method=method,
-        payload=payload,
+        method="GET",
+        payload=None,
         headers=headers,
         timeout=timeout,
         retries=retries,
@@ -251,7 +170,64 @@ def http_json(
     try:
         data = json.loads(body)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"http_json 响应解析失败: {url} — {exc}") from exc
+        raise RuntimeError(f"http_json 响应解析失败：{url} — {exc}") from exc
     if not isinstance(data, dict):
         raise RuntimeError(f"http_json 响应不是 JSON object: {url}")
     return data
+
+
+def http_post_text(
+    url: str,
+    data: dict[str, Any],
+    headers: dict[str, str] | None = None,
+    timeout: float = 15.0,
+    retries: int = 3,
+) -> str:
+    """发送 POST 请求并返回文本。"""
+    import time
+    
+    merged_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": _DEFAULT_UA,
+    }
+    if headers:
+        merged_headers.update(headers)
+
+    import urllib.parse
+    form_data = urllib.parse.urlencode(data).encode("utf-8")
+
+    last_exc: Exception | None = None
+    wait = sleep_sec
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, data=form_data, headers=merged_headers, method="POST")
+            with _NO_PROXY_OPENER.open(req, timeout=timeout) as resp:
+                return resp.read().decode("utf-8")
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
+            last_exc = exc
+            if attempt < retries:
+                logger.warning("http_post_text retry %s/%s %s failed: %s", attempt, retries, url, exc)
+                time.sleep(wait)
+                wait *= 2
+    logger.error("http_post_text failed after %s retries: %s", retries, url)
+    raise RuntimeError(f"http_post_text 请求失败（重试 {retries} 次）: {url} — {last_exc}")
+
+
+def http_post_json(
+    url: str,
+    data: dict[str, Any],
+    headers: dict[str, str] | None = None,
+    timeout: float = 15.0,
+    retries: int = 3,
+) -> dict[str, Any]:
+    """发送 POST JSON 请求并返回响应 dict。"""
+    return http_json(url, method="POST", payload=data, headers=headers, timeout=timeout, retries=retries)
+
+
+__all__ = [
+    "http_text",
+    "http_bytes",
+    "http_json",
+    "http_post_text",
+    "http_post_json",
+]

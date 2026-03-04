@@ -20,5 +20,5 @@ class TaskResult(BaseModel):
     started_at: datetime = Field(description="任务开始时间")
     finished_at: datetime = Field(description="任务结束时间")
     duration_seconds: float = Field(description="耗时（秒）")
-    result: dict[str, Any] | None = Field(default=None, description="任务返回数据")
+    result: dict[str, Any] | str | None = Field(default=None, description="任务返回数据")
     error: str | None = Field(default=None, description="错误信息")
