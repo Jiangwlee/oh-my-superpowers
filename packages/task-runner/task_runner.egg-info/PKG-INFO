@@ -5,4 +5,3 @@ Summary: 通用任务执行 HTTP 服务，为 n8n 等编排系统提供后端能
 Requires-Python: >=3.10
 Requires-Dist: fastapi>=0.115.0
 Requires-Dist: uvicorn[standard]>=0.34.0
-Requires-Dist: ashare-data
