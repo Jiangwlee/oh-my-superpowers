@@ -65,13 +65,6 @@ from ashare_data.core.watchlist import (  # noqa: E402
     load as load_watchlist,
     update_from_scan,
 )
-from ashare_data.deep_research_batch import (  # noqa: E402
-    DeepResearchTarget,
-    run_batch_deep_research,
-    write_timing_report,
-)
-
-
 def _log(msg: str) -> None:
     print(f"[collect] {msg}", file=sys.stderr, flush=True)
 
@@ -130,86 +123,6 @@ def _get_result_attr(obj: object, attr: str, default: object = None) -> object:
         return obj.get(attr, default)
     return default
 
-
-_BUY_ACTIONS = {"open", "add", "buy", "entry", "buy_open_t1"}
-
-
-def _is_buy_signal(action: object) -> bool:
-    """判断动作是否属于买入类信号。"""
-    raw = str(action or "").strip().lower()
-    if raw in _BUY_ACTIONS:
-        return True
-    return raw.startswith("buy")
-
-
-def _build_deep_research_targets_from_signals(
-    post_close_rows: list[dict[str, object]],
-    watchlist_rows: list[dict[str, object]],
-) -> list[DeepResearchTarget]:
-    """构建深研目标：仅纳入触发买入信号的股票（去重）。"""
-    ordered: list[DeepResearchTarget] = []
-    seen: set[str] = set()
-
-    for row in post_close_rows:
-        code = str(row.get("code", "") or "")
-        if not code or code in seen:
-            continue
-        if not _is_buy_signal(row.get("action")):
-            continue
-        seen.add(code)
-        name = str(row.get("name", "") or "")
-        reason = str(row.get("reason", "") or "")
-        context = "盘后决策触发买入信号。"
-        if reason:
-            context = f"{context}{reason}"
-        ordered.append(DeepResearchTarget(code=code, name=name, context=context))
-
-    for row in watchlist_rows:
-        code = str(row.get("code", "") or "")
-        if not code or code in seen:
-            continue
-        action_next_day = row.get("action_next_day")
-        state = str(row.get("state", "") or "")
-        if not (_is_buy_signal(action_next_day) or state == "ENTRY"):
-            continue
-        seen.add(code)
-        name = str(row.get("name", "") or "")
-        reason = str(row.get("reason", "") or "")
-        context = "watchlist 信号触发买入动作。"
-        if reason:
-            context = f"{context}{reason}"
-        ordered.append(DeepResearchTarget(code=code, name=name, context=context))
-
-    return ordered
-
-
-def _load_buy_signal_targets() -> list[DeepResearchTarget]:
-    """从信号文件读取买入目标。"""
-    signals_dir = ASHARE_HOME / "signals"
-    post_close_file = signals_dir / "post_close_decisions.json"
-    watchlist_file = signals_dir / "watchlist_signals.json"
-
-    post_close_rows: list[dict[str, object]] = []
-    if post_close_file.exists():
-        try:
-            payload = json.loads(post_close_file.read_text(encoding="utf-8"))
-            rows = payload.get("decisions", []) if isinstance(payload, dict) else []
-            if isinstance(rows, list):
-                post_close_rows = [r for r in rows if isinstance(r, dict)]
-        except Exception as exc:
-            _log(f"  读取 post_close_decisions.json 失败: {exc}")
-
-    watchlist_rows: list[dict[str, object]] = []
-    if watchlist_file.exists():
-        try:
-            payload = json.loads(watchlist_file.read_text(encoding="utf-8"))
-            rows = payload.get("signals", []) if isinstance(payload, dict) else []
-            if isinstance(rows, list):
-                watchlist_rows = [r for r in rows if isinstance(r, dict)]
-        except Exception as exc:
-            _log(f"  读取 watchlist_signals.json 失败: {exc}")
-
-    return _build_deep_research_targets_from_signals(post_close_rows, watchlist_rows)
 
 
 # ── 数据精简函数 ──────────────────────────────────────
@@ -335,10 +248,7 @@ def collect(
     taoguba_count: int = 20,
     *,
     scan_trends: bool = True,
-    popularity_max: int = 1000,
-    run_deep_research: bool = True,
-    deep_research_min_star: int = 4,
-    deep_research_max_workers: int = 6,
+    popularity_max: int = 1000
 ) -> dict:
     """执行全量数据采集，返回 summary dict。
 
@@ -697,21 +607,7 @@ def main() -> None:
     parser.add_argument(
         "--popularity-max", type=int, default=1000, help="人气榜扫描上限(<=1000)"
     )
-    parser.add_argument(
-        "--no-deep-research", action="store_true", help="跳过个股深研预处理"
-    )
-    parser.add_argument(
-        "--deep-research-min-star",
-        type=int,
-        default=4,
-        help="趋势股纳入深研的最低星级",
-    )
-    parser.add_argument(
-        "--deep-research-max-workers",
-        type=int,
-        default=6,
-        help="个股深研并行 worker 数",
-    )
+
     args = parser.parse_args()
 
     _log(f"开始采集 -> {args.output_dir}")
@@ -722,9 +618,7 @@ def main() -> None:
             args.taoguba_count,
             scan_trends=not args.no_scan_trends,
             popularity_max=args.popularity_max,
-            run_deep_research=not args.no_deep_research,
-            deep_research_min_star=args.deep_research_min_star,
-            deep_research_max_workers=args.deep_research_max_workers,
+
         )
     except RuntimeError as exc:
         _log(f"[ERROR] 采集中止：{exc}")
