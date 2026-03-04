@@ -78,7 +78,7 @@ services:
       # task-runner 源码挂载
       - /home/bruce/Projects/oh-my-superpowers/packages/task-runner:/install/task-runner
       # 数据持久化
-      - /home/bruce/.ashare-assistant:/home/bruce/.ashare-assistant
+      - /root/.ashare-assistant (container) → /home/bruce/.ashare-assistant (host):/root/.ashare-assistant (container) → /home/bruce/.ashare-assistant (host)
     networks:
       - infra_net
 ```
@@ -155,7 +155,7 @@ docker compose restart task_runner
   "duration_seconds": 300.0,
   "result": {
     "ok": true,
-    "data_dir": "/home/bruce/.ashare-assistant/data/2026-03-04",
+    "data_dir": "/root/.ashare-assistant (container) → /home/bruce/.ashare-assistant (host)/data/2026-03-04",
     "collect": {"ok_count": 5, "error_count": 0},
     "filter": {"converted": 5},
     "sentiment": {"ok": true}
@@ -254,7 +254,7 @@ UVICORN_WORKERS=1
 UVICORN_PORT=8000
 
 # Ashare-Data configuration
-ASHARE_OUTPUT_DIR=/home/bruce/.ashare-assistant
+ASHARE_OUTPUT_DIR=/root/.ashare-assistant (container) → /home/bruce/.ashare-assistant (host)
 
 # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 LOG_LEVEL=INFO
@@ -272,7 +272,7 @@ HEALTH_CHECK_START_PERIOD=10
 |--------|--------|------|
 | `TZ` | `Asia/Shanghai` | 时区设置 |
 | `UVICORN_PORT` | `8000` | Uvicorn 监听端口 |
-| `ASHARE_OUTPUT_DIR` | `/home/bruce/.ashare-assistant` | ashare-data 输出目录 |
+| `ASHARE_OUTPUT_DIR` | `/root/.ashare-assistant (container) → /home/bruce/.ashare-assistant (host)` | ashare-data 输出目录 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
 | `HEALTH_CHECK_INTERVAL` | `30s` | 健康检查间隔 |
 | `HEALTH_CHECK_TIMEOUT` | `10s` | 健康检查超时 |

@@ -11,8 +11,8 @@ services:
       # Timezone
       - TZ=${TZ:-Asia/Shanghai}
       
-      # Ashare-Data configuration
-      - ASHARE_OUTPUT_DIR=${ASHARE_OUTPUT_DIR:-/home/bruce/.ashare-assistant}
+      # Ashare-Data configuration (use /root in container)
+      - ASHARE_OUTPUT_DIR=${ASHARE_OUTPUT_DIR:-/root/.ashare-assistant}
       
       # Logging level
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -23,15 +23,15 @@ services:
       - EASTMONEY_ACCOUNT=${EASTMONEY_ACCOUNT:-}
       - EASTMONEY_PASSWORD=${EASTMONEY_PASSWORD:-}
       
-      # JVQuant credentials file path (optional)
+      # JVQuant credentials file path (optional, use /root in container)
       - JVQUANT_CREDENTIALS_PATH=${JVQUANT_CREDENTIALS_PATH:-/root/.ashare-data/jvquant.json}
     volumes:
       # ashare_data 源码挂载（只读）
       - /home/bruce/Projects/oh-my-superpowers/packages/ashare-data/ashare_data:/usr/local/lib/python3.12/site-packages/ashare_data:ro
       # task-runner 源码挂载
       - /home/bruce/Projects/oh-my-superpowers/packages/task-runner:/install/task-runner
-      # 数据持久化
-      - /home/bruce/.ashare-assistant:/home/bruce/.ashare-assistant
+      # 数据持久化 - 宿主机路径 → 容器内/root路径
+      - /home/bruce/.ashare-assistant:/root/.ashare-assistant
       # JVQuant 凭证文件（可选，如果存在）
       - ${JVQUANT_CREDENTIALS_PATH}:${JVQUANT_CREDENTIALS_PATH:-/root/.ashare-data/jvquant.json}:ro
     networks:
