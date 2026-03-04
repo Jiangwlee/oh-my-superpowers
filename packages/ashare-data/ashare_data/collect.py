@@ -26,10 +26,12 @@ cron 示例（每日 22:05 盘后采集）：
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from typing import Any
 
 from ashare_data.core.config import DATA_DIR, ensure_dirs
 from ashare_data.collect_sentiment import collect
@@ -59,7 +61,7 @@ def run(
     run_sentiment: bool = True,
     sentiment_model: str = "deepseek/deepseek-chat",
     sentiment_timeout: int = 300,
-) -> bool:
+) -> dict[str, Any]:
     """执行完整采集流水线。
 
     Args:
@@ -78,7 +80,7 @@ def run(
         sentiment_timeout: 单个情绪任务超时（秒）。
 
     Returns:
-        True 表示全部成功，False 表示至少一个阶段失败。
+        {"ok": bool, "data_dir": str, "collect": dict | None, "filter": dict | None, "sentiment": dict | None, "error": str | None}
     """
     ensure_dirs()
     date_str = date_str or _today_cn()
@@ -86,8 +88,16 @@ def run(
     raw_dir = data_dir / "raw"
     filtered_dir = data_dir / "filtered"
 
-    logger.info("日期: %s  数据目录: %s", date_str, data_dir)
-    success = True
+    logger.info("日期：%s  数据目录：%s", date_str, data_dir)
+
+    result: dict[str, Any] = {
+        "ok": True,
+        "data_dir": str(data_dir),
+        "collect": None,
+        "filter": None,
+        "sentiment": None,
+        "error": None,
+    }
 
     # ── 阶段 1: 数据采集 ──────────────────────────────────────────
     if not skip_collect:
@@ -107,15 +117,23 @@ def run(
             ok = summary["ok_count"]
             err = summary["error_count"]
             elapsed = summary["total_elapsed_sec"]
-            logger.info("[collect] 完成: %d 成功, %d 失败, %.1fs", ok, err, elapsed)
+            logger.info("[collect] 完成：%d 成功，%d 失败，%.1fs", ok, err, elapsed)
             if err > 0:
                 for name, info in summary["sources"].items():
                     if info["status"] == "error":
-                        logger.warning("[collect] 失败: %s — %s", name, info["error"])
-                success = False
+                        logger.warning("[collect] 失败：%s — %s", name, info["error"])
+            result["collect"] = {
+                "ok_count": ok,
+                "error_count": err,
+                "total_elapsed_sec": elapsed,
+            }
+            if err > 0:
+                result["ok"] = False
         except RuntimeError as exc:
-            logger.error("[collect] 中止: %s", exc)
-            return False
+            logger.error("[collect] 中止：%s", exc)
+            result["ok"] = False
+            result["error"] = str(exc)
+            return result
     else:
         logger.info("[collect] 已跳过（--skip-collect）")
 
@@ -123,51 +141,67 @@ def run(
     if not skip_filter:
         if not raw_dir.exists():
             logger.error("[filter] raw/ 目录不存在，请先运行 collect: %s", raw_dir)
-            return False
+            result["ok"] = False
+            return result
         logger.info("[filter] 开始转换 %s -> %s", raw_dir, filtered_dir)
         filtered_dir.mkdir(parents=True, exist_ok=True)
         try:
-            result = filter_all(str(raw_dir), str(filtered_dir))
+            filter_result = filter_all(str(raw_dir), str(filtered_dir))
             logger.info(
-                "[filter] 完成: %d 转换, %d 跳过, %d 失败, %.1f KB",
-                result["converted"],
-                result["skipped"],
-                result["errors"],
-                result["total_size_kb"],
+                "[filter] 完成：%d 转换，%d 跳过，%d 失败，%.1f KB",
+                filter_result["converted"],
+                filter_result["skipped"],
+                filter_result["errors"],
+                filter_result["total_size_kb"],
             )
-            if result["errors"] > 0:
-                success = False
+            result["filter"] = {
+                "converted": filter_result["converted"],
+                "skipped": filter_result["skipped"],
+                "errors": filter_result["errors"],
+                "total_size_kb": filter_result["total_size_kb"],
+            }
+            if filter_result["errors"] > 0:
+                result["ok"] = False
         except Exception as exc:
-            logger.exception("[filter] 异常: %s", exc)
-            return False
+            logger.exception("[filter] 异常：%s", exc)
+            result["ok"] = False
+            result["error"] = str(exc)
+            return result
     else:
         logger.info("[filter] 已跳过（--skip-filter）")
 
     # ── 阶段 3: 情绪预处理（news/social） ────────────────────────
     if run_sentiment:
         if not filtered_dir.exists():
-            logger.error("[sentiment] filtered/ 目录不存在: %s", filtered_dir)
-            return False
+            logger.error("[sentiment] filtered/ 目录不存在：%s", filtered_dir)
+            result["ok"] = False
+            return result
         logger.info("[sentiment] 开始预处理 -> %s/report", data_dir)
-        result = run_sentiment_preprocess(
+        sentiment_result = run_sentiment_preprocess(
             data_dir=data_dir,
             model=sentiment_model,
             timeout_sec=sentiment_timeout,
             overwrite=False,
         )
         logger.info(
-            "[sentiment] 完成: ok=%s, %.1fs, news=%s, social=%s",
-            result.get("ok"),
-            float(result.get("elapsed_sec", 0.0)),
-            result.get("news", {}).get("message"),
-            result.get("social", {}).get("message"),
+            "[sentiment] 完成：ok=%s, %.1fs, news=%s, social=%s",
+            sentiment_result.get("ok"),
+            float(sentiment_result.get("elapsed_sec", 0.0)),
+            sentiment_result.get("news", {}).get("message"),
+            sentiment_result.get("social", {}).get("message"),
         )
-        if not bool(result.get("ok")):
-            success = False
+        result["sentiment"] = {
+            "ok": sentiment_result.get("ok"),
+            "elapsed_sec": float(sentiment_result.get("elapsed_sec", 0.0)),
+            "news": sentiment_result.get("news", {}),
+            "social": sentiment_result.get("social", {}),
+        }
+        if not bool(sentiment_result.get("ok")):
+            result["ok"] = False
     else:
         logger.info("[sentiment] 已跳过（--no-sentiment-preprocess）")
 
-    return success
+    return result
 
 
 def main() -> None:
@@ -227,7 +261,7 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
-    ok = run(
+    result = run(
         date_str=args.date,
         skip_collect=args.skip_collect,
         skip_filter=args.skip_filter,
@@ -242,7 +276,8 @@ def main() -> None:
         sentiment_model=args.sentiment_model,
         sentiment_timeout=args.sentiment_timeout,
     )
-    sys.exit(0 if ok else 1)
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    sys.exit(0 if result["ok"] else 1)
 
 
 if __name__ == "__main__":
