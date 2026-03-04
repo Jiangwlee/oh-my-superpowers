@@ -89,9 +89,9 @@ def http_text(
     method: str = "GET",
     payload: dict[str, Any] | list[Any] | str | bytes | None = None,
     headers: dict[str, str] | None = None,
-    timeout: float = 15.0,
-    retries: int = 3,
-    sleep_sec: float = 0.8,
+    timeout: float = 20.0,  # 增加超时时间
+    retries: int = 5,  # 增加重试次数
+    sleep_sec: float = 1.0,  # 增加初始延迟
 ) -> str:
     """发送 HTTP 请求并返回文本。"""
     method_upper = method.upper()

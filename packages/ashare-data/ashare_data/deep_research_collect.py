@@ -132,8 +132,12 @@ def _collect_one_stock(
     archive: DeepResearchArchive,
 ) -> dict[str, Any]:
     """采集单只股票的深研数据。"""
+    import random
+    
     start = time.monotonic()
     try:
+        # 添加随机延迟避免请求风暴
+        time.sleep(random.uniform(0.1, 0.3))
         em_data = _fetch_em_data(code)
         tgb_data = _fetch_tgb_data(code)
         archive.save_raw_data(code, name, em_data, tgb_data)
@@ -152,7 +156,7 @@ def collect_deep_research(
     *,
     archive_dir: Path | None = None,
     force: bool = False,
-    max_workers: int = 6,
+    max_workers: int = 3,  # 降低并发避免淘股吧 HTTP 错误
 ) -> dict[str, Any]:
     """执行深研数据采集。
 
