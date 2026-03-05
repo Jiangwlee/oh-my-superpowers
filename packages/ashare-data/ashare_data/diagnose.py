@@ -17,8 +17,10 @@ from urllib.parse import urlencode
 from ashare_data.core.config import ASHARE_HOME, DECISION_LOG
 from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
 from ashare_data.core.http_client import http_json
+from ashare_data.core.utils import atomic_write_text
 
 FEEDBACK_FILE = ASHARE_HOME / "evolution" / "feedback.md"
+_OUTCOME_SCHEMA_VERSION = "1.0"
 
 
 # ---------------------------------------------------------------------------
@@ -162,9 +164,8 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    payload = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+    atomic_write_text(path, payload)
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +278,7 @@ def process_diagnose(
                 outcome["t1"] = mean_t1
                 outcome["benchmark_t1"] = bm_val
                 outcome["excess_t1"] = excess
+                outcome["schema_version"] = _OUTCOME_SCHEMA_VERSION
                 outcome["written_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                 row["outcome"] = outcome
                 updated_t1 += 1
@@ -298,6 +300,7 @@ def process_diagnose(
                 outcome["t5"] = mean_t5
                 outcome["benchmark_t5"] = bm_val5
                 outcome["excess_t5"] = excess5
+                outcome["schema_version"] = _OUTCOME_SCHEMA_VERSION
                 row["outcome"] = outcome
                 updated_t5 += 1
 

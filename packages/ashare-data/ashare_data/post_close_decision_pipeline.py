@@ -23,6 +23,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 from ashare_data.core.config import ASHARE_HOME
+from ashare_data.core.governance import load_latest_run_id
+from ashare_data.core.utils import atomic_write_json
 from ashare_data.core.watchlist import load as load_watchlist
 from ashare_data.core.http_client import http_json
 from ashare_data.core.utils import norm_price
@@ -34,6 +36,7 @@ _CN_TZ = timezone(timedelta(hours=8))
 _SIGNALS_DIR = ASHARE_HOME / "signals"
 _OUTPUT_FILE = _SIGNALS_DIR / "post_close_decisions.json"
 _STATE_FILE = ASHARE_HOME / "memory" / "post_close_state.json"
+_OUTPUT_SCHEMA_VERSION = "1.0"
 
 _DEFAULT_PARAMS: dict[str, float | int] = {
     "stage1_threshold": 0.18,
@@ -126,10 +129,7 @@ def _load_state() -> dict[str, dict[str, Any]]:
 
 def _save_state(state: dict[str, dict[str, Any]]) -> None:
     _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _STATE_FILE.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(_STATE_FILE, state)
 
 
 def _can_reduce_today(
@@ -471,18 +471,18 @@ def run_pipeline() -> dict[str, Any]:
     decisions.sort(key=lambda d: (rank.get(str(d.get("action")), 9), str(d.get("code"))))
 
     output = {
+        "schema_version": _OUTPUT_SCHEMA_VERSION,
         "generated_at": datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d %H:%M:%S"),
         "source": "watchlist",
+        "source_run_id": load_latest_run_id(),
+        "source_files": ["memory/watchlist.json", "broker_data/positions/*.json"],
         "priority": ["exit", "reduce", "add", "open"],
         "count": len(decisions),
         "decisions": decisions,
     }
 
     _SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
-    _OUTPUT_FILE.write_text(
-        json.dumps(output, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(_OUTPUT_FILE, output)
     _save_state(state)
     return output
 

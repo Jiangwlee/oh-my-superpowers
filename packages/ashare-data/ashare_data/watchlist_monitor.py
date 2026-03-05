@@ -32,7 +32,9 @@ from rich.text import Text
 
 from ashare_data.core.config import ASHARE_HOME, BROKER_DIR
 from ashare_data.core.cache import cache_get, cache_set
+from ashare_data.core.governance import load_latest_run_id
 from ashare_data.core.http_client import http_bytes, http_text
+from ashare_data.core.utils import atomic_write_json
 from ashare_data.core.utils import norm_price as _norm_price
 from ashare_data.fetchers.market_overview import fetch_market_sectors_top_n
 from ashare_data.fetchers.trend_scanner import fetch_jrj_daily_kline
@@ -63,6 +65,7 @@ _DEFAULT_SIGNAL_PARAMS: dict[str, float] = {
     "position_yellow": 0.15,
     "drawdown20_max": 0.12,
 }
+_SIGNALS_SCHEMA_VERSION = "1.0"
 
 # ---------------------------------------------------------------------------
 # Trading hours
@@ -131,8 +134,7 @@ def _load_pullback_state() -> dict[str, dict[str, Any]]:
 def _save_pullback_state(state_map: dict[str, dict[str, Any]]) -> None:
     """写入回撤状态文件。"""
     _PULLBACK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(_PULLBACK_STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state_map, f, ensure_ascii=False, indent=2)
+    atomic_write_json(_PULLBACK_STATE_FILE, state_map)
 
 
 def _is_buy_action(value: Any) -> bool:
@@ -144,18 +146,18 @@ def _is_buy_action(value: Any) -> bool:
     return raw.startswith("buy")
 
 
-def _load_post_close_buy_targets() -> list[dict[str, str]]:
+def _load_post_close_buy_targets() -> tuple[list[dict[str, str]], dict[str, Any]]:
     """读取 post_close_decisions.json 中触发买入动作的个股。"""
     if not _POST_CLOSE_FILE.exists():
-        return []
+        return [], {"source_run_id": load_latest_run_id(), "source_files": []}
     try:
         payload = json.loads(_POST_CLOSE_FILE.read_text(encoding="utf-8"))
     except Exception:
         logger.exception("读取 post_close_decisions.json 失败")
-        return []
+        return [], {"source_run_id": load_latest_run_id(), "source_files": ["signals/post_close_decisions.json"]}
     rows = payload.get("decisions", []) if isinstance(payload, dict) else []
     if not isinstance(rows, list):
-        return []
+        return [], {"source_run_id": load_latest_run_id(), "source_files": ["signals/post_close_decisions.json"]}
 
     targets: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -169,7 +171,10 @@ def _load_post_close_buy_targets() -> list[dict[str, str]]:
             continue
         seen.add(code)
         targets.append({"code": code, "name": str(row.get("name", code))})
-    return targets
+    source_run_id = load_latest_run_id()
+    if isinstance(payload, dict):
+        source_run_id = str(payload.get("source_run_id") or source_run_id)
+    return targets, {"source_run_id": source_run_id, "source_files": ["signals/post_close_decisions.json"]}
 
 
 def _load_latest_holdings_snapshot() -> tuple[str, list[dict[str, Any]]]:
@@ -1009,11 +1014,14 @@ def _write_signals(
     monitored: dict[str, int] | None = None,
     holdings_live: list[dict[str, Any]] | None = None,
     holdings_source_date: str = "",
+    source_run_id: str = "",
+    source_files: list[str] | None = None,
 ) -> None:
     """将信号结果覆盖写入 signals/watchlist_signals.json。"""
     _SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
     scanned_at = datetime.now(tz=_CN_TZ).strftime("%Y-%m-%d %H:%M:%S")
     output = {
+        "schema_version": _SIGNALS_SCHEMA_VERSION,
         "scanned_at": scanned_at,
         "market": {
             "limit_up": sentiment.limit_up,
@@ -1024,12 +1032,13 @@ def _write_signals(
         "monitored": monitored or {},
         "holdings_source_date": holdings_source_date,
         "holdings_live": holdings_live or [],
+        "source_run_id": source_run_id or load_latest_run_id(),
+        "source_files": source_files or [],
         "signals": [asdict(s) for s in signals],
         "exits": [asdict(s) for s in (exits or [])],
         "pullback_state_count": len(pullback_states or {}),
     }
-    with open(_SIGNALS_FILE, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
+    atomic_write_json(_SIGNALS_FILE, output)
     logger.info(
         "信号文件已写入: %s（signals=%d, exits=%d）",
         _SIGNALS_FILE,
@@ -1303,14 +1312,22 @@ def _scan_once(*, force: bool = False) -> dict[str, Any]:
         snapshot["message"] = f"THS 报告市场未开盘（{sentiment.danger_level}）"
         return snapshot
 
+    buy_targets, source_lineage = _load_post_close_buy_targets()
     if sentiment.danger_level == "red":
-        _write_signals([], sentiment, sectors={}, monitored={"buy_targets": 0, "universe": 0})
+        _write_signals(
+            [],
+            sentiment,
+            sectors={},
+            monitored={"buy_targets": 0, "universe": 0},
+            source_run_id=str(source_lineage.get("source_run_id", "")),
+            source_files=list(source_lineage.get("source_files", [])),
+        )
         snapshot["status"] = "skipped"
         snapshot["message"] = "市场高压线（跌停 >= 80）"
         return snapshot
 
     # ── 2. 读取盘后买入信号 + 板块概览 ────────────────────────────────────────
-    buy_targets = _load_post_close_buy_targets()
+    # buy_targets/source_lineage 已在 red 分支前读取，避免重复 IO
     try:
         sectors = fetch_market_sectors_top_n(5)
     except Exception:
@@ -1337,6 +1354,8 @@ def _scan_once(*, force: bool = False) -> dict[str, Any]:
             sentiment,
             sectors=sectors,
             monitored={"buy_targets": 0, "universe": 0},
+            source_run_id=str(source_lineage.get("source_run_id", "")),
+            source_files=list(source_lineage.get("source_files", [])),
         )
         snapshot["status"] = "ok"
         snapshot["message"] = "买入信号为空"
@@ -1405,6 +1424,8 @@ def _scan_once(*, force: bool = False) -> dict[str, Any]:
             "buy_targets": len(buy_targets),
             "universe": len(universe),
         },
+        source_run_id=str(source_lineage.get("source_run_id", "")),
+        source_files=list(source_lineage.get("source_files", [])),
     )
     snapshot["signals"] = [asdict(s) for s in signals]
     snapshot["monitored"] = {

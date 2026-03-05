@@ -77,6 +77,7 @@ ashare-collect [--date YYYY-MM-DD] [--skip-collect] [--skip-filter] \
 ~/.ashare-assistant/
 ├── data/
 │   └── {DATE}/
+│       ├── manifest.json # 批次清单（文件哈希/大小/记录数）
 │       ├── raw/        # 原始 JSON（ashare-collect 输出）
 │       ├── filtered/   # Markdown 格式（ashare-assistant 读取）
 │       ├── analysis/   # ashare-assistant 生成的结构化 JSON 产物
@@ -91,6 +92,14 @@ ashare-collect [--date YYYY-MM-DD] [--skip-collect] [--skip-filter] \
     └── decision_log.jsonl
 ```
 
+治理说明（当前实现）：
+- 核心输出均带 `schema_version` 字段（如 `collection_summary.json`、`run_id.json`、`post_close_decisions.json`、`watchlist_signals.json`、`outcome`）
+- 每日批次会生成 `manifest.json`，记录 `raw/` 与 `filtered/` 文件的 `sha256`、大小和记录数
+- `collection_summary.json` 的每个 `source` 包含最小 DQ 指标：`record_count` / `is_empty` / `freshness_sec` / `missing_key_rate`
+- `ashare-collect` 会执行 retention 策略：按保留期清理历史 `data/`、过期信号文件和过旧 `decision_log.jsonl` 记录
+- `ashare-collect` 返回 `degraded/degraded_reasons`，用于标记“可用但质量降级”的批次
+- 关键决策产物包含血缘字段：`source_run_id` / `source_files`
+
 ## 数据源
 
 | 模块 | 数据源 | 说明 |
@@ -104,7 +113,7 @@ ashare-collect [--date YYYY-MM-DD] [--skip-collect] [--skip-filter] \
 | `fetchers/trend_scanner.py` | JRJ/THS | 趋势评分、K线数据 |
 | `fetchers/market_sentiment.py` | 同花顺 | 涨跌停计数、市场危险等级、是否开盘 |
 | `fetchers/broker_account.py` | JVQuant | 账户持仓、委托记录 |
-| `fetchers/trade_date.py` | 内置日历 | 交易日判断 |
+| `fetchers/trade_date.py` | 金融界 JRJ 接口 | 最近交易日获取（`tradedate`） |
 
 ## 包结构
 

@@ -4,7 +4,6 @@
 流程：
   1. collect   — 并发拉取所有数据源，写入 {data_dir}/raw/
   2. filter    — 将 raw/ JSON 过滤转换为 {data_dir}/filtered/ Markdown
-  3. sentiment — 生成 report/news_sentiment.md 与 report/social_sentiment.md
 
 用法：
     # 采集今日数据（最常用）
@@ -26,24 +25,101 @@ cron 示例（每日 22:05 盘后采集）：
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
 from ashare_data.core.config import DATA_DIR, ensure_dirs
+from ashare_data.core.governance import apply_retention_policy, evaluate_degraded
+from ashare_data.core.utils import atomic_write_json
 from ashare_data.collect_sentiment import collect
 from ashare_data.filter_to_markdown import filter_all
 
 logger = logging.getLogger(__name__)
 
 _CN_TZ = timezone(timedelta(hours=8))
+_MANIFEST_SCHEMA_VERSION = "1.0"
 
 
 def _today_cn() -> str:
     return datetime.now(_CN_TZ).strftime("%Y-%m-%d")
+
+
+def _hash_file(path: Path) -> str:
+    sha256 = hashlib.sha256()
+    with path.open("rb") as f:
+        while True:
+            chunk = f.read(8192)
+            if not chunk:
+                break
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def _json_record_count(path: Path) -> int | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict):
+        for key in ("data", "rows", "decisions", "signals"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return len(value)
+        return 1
+    return None
+
+
+def _build_manifest(data_dir: Path, *, run_result: dict[str, Any]) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for base in (data_dir / "raw", data_dir / "filtered"):
+        if not base.exists():
+            continue
+        for root, _, names in os.walk(base):
+            for name in sorted(names):
+                path = Path(root) / name
+                rel = path.relative_to(data_dir)
+                try:
+                    size_bytes = path.stat().st_size
+                    file_hash = _hash_file(path)
+                except OSError:
+                    continue
+                files.append(
+                    {
+                        "path": str(rel),
+                        "size_bytes": size_bytes,
+                        "sha256": file_hash,
+                        "record_count": _json_record_count(path) if path.suffix == ".json" else None,
+                    }
+                )
+    run_id = ""
+    run_id_file = data_dir / "raw" / "run_id.json"
+    if run_id_file.exists():
+        try:
+            run_id_payload = json.loads(run_id_file.read_text(encoding="utf-8"))
+            run_id = str(run_id_payload.get("run_id", ""))
+        except Exception:
+            run_id = ""
+    return {
+        "schema_version": _MANIFEST_SCHEMA_VERSION,
+        "generated_at": datetime.now(_CN_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+        "date": data_dir.name,
+        "run_id": run_id,
+        "status": {
+            "ok": bool(run_result.get("ok")),
+            "collect": run_result.get("collect"),
+            "filter": run_result.get("filter"),
+            "error": run_result.get("error"),
+        },
+        "files": files,
+    }
 
 
 def run(
@@ -66,7 +142,17 @@ def run(
         scan_trends:    是否执行趋势扫描。
         popularity_max: 人气榜扫描上限。
         Returns:
-        {"ok": bool, "data_dir": str, "collect": dict | None, "filter": dict | None, "sentiment": dict | None, "error": str | None}
+        {
+            "ok": bool,
+            "data_dir": str,
+            "collect": dict | None,
+            "filter": dict | None,
+            "manifest": dict | None,
+            "retention": dict | None,
+            "degraded": bool,
+            "degraded_reasons": list[str],
+            "error": str | None,
+        }
     """
     ensure_dirs()
     date_str = date_str or _today_cn()
@@ -81,8 +167,16 @@ def run(
         "data_dir": str(data_dir),
         "collect": None,
         "filter": None,
+        "manifest": None,
+        "retention": None,
+        "degraded": False,
+        "degraded_reasons": [],
         "error": None,
     }
+    try:
+        result["retention"] = apply_retention_policy()
+    except Exception as exc:
+        logger.warning("[retention] 执行失败：%s", exc)
 
     # ── 阶段 1: 数据采集 ──────────────────────────────────────────
     if not skip_collect:
@@ -108,6 +202,7 @@ def run(
                 "ok_count": ok,
                 "error_count": err,
                 "total_elapsed_sec": elapsed,
+                "sources": summary.get("sources", {}),
             }
             if err > 0:
                 result["ok"] = False
@@ -152,7 +247,25 @@ def run(
     else:
         logger.info("[filter] 已跳过（--skip-filter）")
 
-    # ── 阶段 3: 情绪预处理（news/social） ────────────────────────
+    try:
+        collect_sources = {}
+        collect_error_count = 0
+        filter_error_count = 0
+        if isinstance(result.get("collect"), dict):
+            collect_sources = result["collect"].get("sources", {}) or {}
+            collect_error_count = int(result["collect"].get("error_count", 0) or 0)
+        if isinstance(result.get("filter"), dict):
+            filter_error_count = int(result["filter"].get("errors", 0) or 0)
+        degraded, reasons = evaluate_degraded(collect_sources, collect_error_count, filter_error_count)
+        result["degraded"] = degraded
+        result["degraded_reasons"] = reasons
+
+        manifest = _build_manifest(data_dir, run_result=result)
+        manifest_path = data_dir / "manifest.json"
+        atomic_write_json(manifest_path, manifest)
+        result["manifest"] = {"path": str(manifest_path), "files": len(manifest["files"])}
+    except Exception as exc:
+        logger.warning("[manifest] 生成失败：%s", exc)
 
     return result
 

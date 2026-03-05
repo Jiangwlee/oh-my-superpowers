@@ -60,6 +60,7 @@ from ashare_data.fetchers.us_market import fetch_us_market  # noqa: E402
 from ashare_data.core.cache import cache_cleanup  # noqa: E402
 from ashare_data.core.config import ensure_dirs  # noqa: E402
 from ashare_data.core.config import ASHARE_HOME  # noqa: E402
+from ashare_data.core.utils import atomic_write_json, atomic_write_text  # noqa: E402
 from ashare_data.core.watchlist import (  # noqa: E402
     get_extra_candidates,
     load as load_watchlist,
@@ -67,6 +68,95 @@ from ashare_data.core.watchlist import (  # noqa: E402
 )
 def _log(msg: str) -> None:
     print(f"[collect] {msg}", file=sys.stderr, flush=True)
+
+
+_RAW_SCHEMA_VERSION = "1.0"
+_SUMMARY_SCHEMA_VERSION = "1.1"
+_RUN_ID_SCHEMA_VERSION = "1.0"
+
+
+def _extract_rows(payload: object) -> list[dict]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("data", "rows", "items", "decisions", "signals"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _calc_missing_key_rate(rows: list[dict], required_keys: set[str]) -> float | None:
+    if not rows or not required_keys:
+        return None
+    total = len(rows) * len(required_keys)
+    missing = 0
+    for row in rows:
+        for key in required_keys:
+            value = row.get(key)
+            if value is None or value == "":
+                missing += 1
+    return round(missing / total, 4)
+
+
+def _calc_freshness_sec(rows: list[dict], now_ts: float) -> int | None:
+    if not rows:
+        return None
+    for field in ("makeDate", "date", "time", "fetched_at", "generated_at"):
+        raw = rows[0].get(field)
+        if not raw:
+            continue
+        if isinstance(raw, (int, float)):
+            # 20260217 (YYYYMMDD) 或秒级时间戳
+            text = str(int(raw))
+            if len(text) == 8:
+                try:
+                    dt = datetime.strptime(text, "%Y%m%d")
+                    return int(max(0, now_ts - dt.timestamp()))
+                except ValueError:
+                    continue
+            if len(text) >= 10:
+                return int(max(0, now_ts - float(raw)))
+        if isinstance(raw, str):
+            text = raw.strip()
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y%m%d"):
+                try:
+                    dt = datetime.strptime(text, fmt)
+                    return int(max(0, now_ts - dt.timestamp()))
+                except ValueError:
+                    continue
+    return None
+
+
+def _build_dq(name: str, payload: object, status: str, now_ts: float) -> dict[str, float | int | bool | None]:
+    if status != "ok":
+        return {"record_count": None, "is_empty": None, "freshness_sec": None, "missing_key_rate": None}
+    rows = _extract_rows(payload)
+    required_by_source: dict[str, set[str]] = {
+        "news_headline": {"title", "makeDate", "detail"},
+        "news_realtime": {"title", "makeDate", "detail"},
+        "news_opportunity": {"title", "makeDate", "detail"},
+        "news_daily": {"title", "makeDate", "detail"},
+        "news_flash": {"title", "makeDate"},
+        "taoguba_hot": {"title", "date"},
+        "taoguba_hot_discussion": {"subject", "author"},
+        "taoguba_recommend": {"subject", "author"},
+    }
+    required = required_by_source.get(name, set())
+    count: int | None = None
+    if isinstance(payload, list):
+        count = len(payload)
+    elif isinstance(payload, dict):
+        if rows:
+            count = len(rows)
+        else:
+            count = 1
+    return {
+        "record_count": count,
+        "is_empty": (count == 0) if count is not None else None,
+        "freshness_sec": _calc_freshness_sec(rows, now_ts),
+        "missing_key_rate": _calc_missing_key_rate(rows, required),
+    }
 
 
 def _read_strategy_version(skill_root: str) -> tuple[str, bool]:
@@ -284,6 +374,7 @@ def collect(
         "strategy_version_fallback": strategy_version_fallback,
     }
     t0 = time.time()
+    now_ts = time.time()
 
     def _run(task: dict) -> tuple[str, str, object, float]:
         name = task["name"]
@@ -367,8 +458,7 @@ def collect(
             # 生成 ths_report.md（结构化 Markdown，供 LLM 直接阅读）
             ths_md = format_ths_md(ths, ths_hist)
             ths_report_path = os.path.join(output_dir, "ths_report.md")
-            with open(ths_report_path, "w", encoding="utf-8") as f:
-                f.write(ths_md)
+            atomic_write_text(ths_report_path, ths_md)
             _log(f"  \u2713 ths_report.md \u5df2\u751f\u6210")
 
             # 4) 合并 watchlist 额外候选（未在东方财富池中的股票）
@@ -398,8 +488,7 @@ def collect(
                     r.to_dict() for r in trend_results if r.code in watchlist_codes
                 ]
                 watchlist_scan_path = os.path.join(output_dir, "watchlist_scan.json")
-                with open(watchlist_scan_path, "w", encoding="utf-8") as f:
-                    json.dump(watchlist_scan_data, f, ensure_ascii=False, indent=2)
+                atomic_write_json(watchlist_scan_path, watchlist_scan_data)
                 _log(f"  \u2713 watchlist_scan.json: {len(watchlist_scan_data)} \u53ea")
 
             # 包装输出
@@ -422,8 +511,7 @@ def collect(
                 ths_date=ths.get("date"),
             )
             report_path = os.path.join(output_dir, "trend_report.md")
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(report_md)
+            atomic_write_text(report_path, report_md)
 
             # ── 趋势候选股资金交叉验证 ──
             # 从已缓存的全量排名中查询趋势候选股的主力净流入，补充写入 funding.json
@@ -445,8 +533,7 @@ def collect(
                     if isinstance(funding_data, dict):
                         funding_data["trend_candidates_funding"] = trend_funding
                         funding_path = os.path.join(output_dir, "funding.json")
-                        with open(funding_path, "w", encoding="utf-8") as f:
-                            json.dump(funding_data, f, ensure_ascii=False, indent=2)
+                        atomic_write_json(funding_path, funding_data)
                         _log(
                             f"  ✓ trend_candidates_funding: {len(trend_funding)} 只趋势股已补充资金数据"
                         )
@@ -472,14 +559,17 @@ def collect(
 
         if status == "ok":
             if isinstance(data, str):
-                data = {"trade_date": data}
+                data = {"trade_date": data, "schema_version": _RAW_SCHEMA_VERSION}
             # 写入前精简数据
             if name.startswith("news_"):
                 data = _slim_news(data)
             elif name == "trend_scan":
                 data = _slim_trend_results(data)
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            if isinstance(data, dict):
+                data.setdefault("schema_version", _RAW_SCHEMA_VERSION)
+                data.setdefault("source_run_id", run_id)
+                data.setdefault("source_files", [])
+            atomic_write_json(filepath, data)
 
         count = "-"
         if status == "ok":
@@ -499,9 +589,19 @@ def collect(
             "count": count,
             "elapsed_sec": round(elapsed, 2),
             "error": data if status == "error" else None,
+            "dq": _build_dq(name, data, status, now_ts),
         }
 
     total_elapsed = time.time() - t0
+    summary["schema_version"] = _SUMMARY_SCHEMA_VERSION
+    summary["source_run_id"] = run_id
+    summary["source_files"] = sorted(
+        [
+            str(v["file"])
+            for v in summary["sources"].values()
+            if isinstance(v, dict) and isinstance(v.get("file"), str) and v.get("file")
+        ]
+    )
     summary["total_elapsed_sec"] = round(total_elapsed, 2)
     summary["ok_count"] = sum(
         1 for v in summary["sources"].values() if v["status"] == "ok"
@@ -512,22 +612,21 @@ def collect(
 
     # 写 summary
     summary_path = os.path.join(output_dir, "collection_summary.json")
-    with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
+    atomic_write_json(summary_path, summary)
 
     run_id_path = os.path.join(output_dir, "run_id.json")
-    with open(run_id_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "run_id": run_id,
-                "as_of_date": as_of_date,
-                "strategy_version": strategy_version,
-                "strategy_version_fallback": strategy_version_fallback,
-            },
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
+    atomic_write_json(
+        run_id_path,
+        {
+            "schema_version": _RUN_ID_SCHEMA_VERSION,
+            "run_id": run_id,
+            "as_of_date": as_of_date,
+            "strategy_version": strategy_version,
+            "strategy_version_fallback": strategy_version_fallback,
+            "source_run_id": run_id,
+            "source_files": ["collection_summary.json"],
+        },
+    )
 
     return summary
 

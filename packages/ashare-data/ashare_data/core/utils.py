@@ -5,7 +5,10 @@
 
 from __future__ import annotations
 
+import json
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 # 时区
@@ -97,3 +100,15 @@ def safe_int(value: Any, default: int = 0) -> int:
         return int(float(value))
     except (TypeError, ValueError):
         return default
+
+
+def atomic_write_text(path: str | Path, content: str, encoding: str = "utf-8") -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(content, encoding=encoding)
+    os.replace(tmp, target)
+
+
+def atomic_write_json(path: str | Path, payload: Any) -> None:
+    atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
