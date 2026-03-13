@@ -25,7 +25,9 @@ def get_theme_pool_daily(
         query = session.query(ThemePoolDaily).filter(ThemePoolDaily.trade_date == trade_date)
         if stage:
             query = query.filter(ThemePoolDaily.theme_stage == stage)
-        if sort == "-theme_strength":
+        if sort == "-theme_score":
+            query = query.order_by(ThemePoolDaily.theme_score.desc())
+        elif sort == "-theme_strength":
             query = query.order_by(ThemePoolDaily.theme_strength.desc())
         else:
             query = query.order_by(ThemePoolDaily.theme_rank.asc())
@@ -36,9 +38,12 @@ def get_theme_pool_daily(
                 theme_name=row.theme_name,
                 theme_rank=row.theme_rank,
                 theme_strength=row.theme_strength,
+                theme_score=row.theme_score,
                 theme_stage=row.theme_stage,
                 market_attitude=row.market_attitude,
                 core_stock_count=row.core_stock_count,
+                trend_stock_count=row.trend_stock_count,
+                core_trend_stock_count=row.core_trend_stock_count,
                 summary=row.summary,
             )
             for row in rows
@@ -98,9 +103,12 @@ def get_theme_history(
                 theme_name=row.theme_name,
                 theme_rank=row.theme_rank,
                 theme_strength=row.theme_strength,
+                theme_score=row.theme_score,
                 theme_stage=row.theme_stage,
                 market_attitude=row.market_attitude,
                 core_stock_count=row.core_stock_count,
+                trend_stock_count=row.trend_stock_count,
+                core_trend_stock_count=row.core_trend_stock_count,
                 summary=row.summary,
             )
             for row in rows

@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from ashare_data.fetchers.trend_scanner import fetch_ths_snapshot
 
+from app.core.config import get_settings
 from app.core.runtime import build_run_id
 from app.db.session import init_db, open_session
 from app.models.trend_pool_daily import TrendPoolDaily
@@ -52,6 +53,26 @@ def _theme_strength(limit_up_num: int, change: float | None) -> float:
     return round(base, 2)
 
 
+def _theme_score(
+    *,
+    theme_strength: float,
+    trend_stock_count: int,
+    core_trend_stock_count: int,
+    strongest_trend_score: float,
+    weight_theme_strength: float,
+    weight_trend_stock_count: float,
+    weight_core_trend_stock_count: float,
+    weight_strongest_trend_score: float,
+) -> float:
+    return round(
+        theme_strength * weight_theme_strength
+        + trend_stock_count * weight_trend_stock_count
+        + core_trend_stock_count * weight_core_trend_stock_count
+        + strongest_trend_score * weight_strongest_trend_score,
+        2,
+    )
+
+
 def build_theme_pool(
     *,
     trade_date: str,
@@ -61,6 +82,7 @@ def build_theme_pool(
     """Build and persist one day of theme pool facts."""
     resolved_date, ths_date = _normalize_trade_date(trade_date)
     run_id = build_run_id(trade_date, "build-theme-pool")
+    settings = get_settings()
     snapshot = snapshot_fetcher(end_date=ths_date)
     block_top = snapshot.get("block_top") or []
 
@@ -82,6 +104,7 @@ def build_theme_pool(
             theme_stock_rows: list[dict[str, Any]] = []
             trend_stock_count = 0
             core_trend_stock_count = 0
+            strongest_trend_score = 0.0
             for stock_idx, stock in enumerate(stocks, start=1):
                 code = str(stock.get("code", "")).strip()
                 if not code:
@@ -91,6 +114,7 @@ def build_theme_pool(
                     trend_stock_count += 1
                     if stock_idx <= 3:
                         core_trend_stock_count += 1
+                    strongest_trend_score = max(strongest_trend_score, float(trend_row.score_total or 0.0))
                 if not _should_keep_theme_stock(stock_idx, trend_row):
                     continue
                 theme_stock_rows.append(
@@ -116,27 +140,45 @@ def build_theme_pool(
                     }
                 )
 
-            if trend_stock_count == 0:
+            if trend_stock_count < settings.theme_pool_min_trend_stock_count:
                 continue
+            if core_trend_stock_count < settings.theme_pool_min_core_trend_stock_count:
+                continue
+
+            theme_strength = _theme_strength(limit_up_num, change_float)
 
             theme_row = {
                 "trade_date": resolved_date,
                 "run_id": run_id,
                 "theme_name": theme_name,
                 "theme_rank": idx,
-                "theme_strength": _theme_strength(limit_up_num, change_float),
+                "theme_strength": theme_strength,
+                "theme_score": _theme_score(
+                    theme_strength=theme_strength,
+                    trend_stock_count=trend_stock_count,
+                    core_trend_stock_count=core_trend_stock_count,
+                    strongest_trend_score=strongest_trend_score,
+                    weight_theme_strength=settings.theme_pool_weight_theme_strength,
+                    weight_trend_stock_count=settings.theme_pool_weight_trend_stock_count,
+                    weight_core_trend_stock_count=settings.theme_pool_weight_core_trend_stock_count,
+                    weight_strongest_trend_score=settings.theme_pool_weight_strongest_trend_score,
+                ),
                 "theme_stage": _theme_stage(limit_up_num, change_float),
                 "market_attitude": None,
                 "core_stock_count": sum(1 for row in theme_stock_rows if row["is_core"]),
+                "trend_stock_count": trend_stock_count,
+                "core_trend_stock_count": core_trend_stock_count,
                 "summary": None,
                 "evidence_json": {
                     "limit_up_num": limit_up_num,
                     "change": change_float,
                     "trend_stock_count": trend_stock_count,
                     "core_trend_stock_count": core_trend_stock_count,
+                    "strongest_trend_score": strongest_trend_score,
                 },
                 "tags_json": {
                     "source": "ths_block_top",
+                    "source_rank": idx,
                 },
             }
 
@@ -147,6 +189,18 @@ def build_theme_pool(
             )
             theme_rows.append(enriched_theme_row)
             stock_rows.extend(enriched_stock_rows)
+
+        theme_rows.sort(
+            key=lambda row: (
+                -float(row.get("theme_score", 0.0) or 0.0),
+                -int(row.get("trend_stock_count", 0) or 0),
+                -int(row.get("core_trend_stock_count", 0) or 0),
+                -float(row.get("theme_strength", 0.0) or 0.0),
+                int(((row.get("tags_json") or {}).get("source_rank", 0)) or 0),
+            )
+        )
+        for rank, row in enumerate(theme_rows, start=1):
+            row["theme_rank"] = rank
 
         themes_written, stocks_written = replace_for_date(session, resolved_date, theme_rows, stock_rows)
 

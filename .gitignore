@@ -1,4 +1,4 @@
-github_cache
+github
 .skills/
 .agents/
 .memory/
@@ -11,3 +11,4 @@ __pycache__/
 .pytest_cache/
 
 *.egg-info/
+apps/ashare-platform/backend/data/

@@ -85,20 +85,108 @@ class TestBuildThemePool(unittest.TestCase):
                                 {"code": "000006", "name": "深振业A", "continue_num": 1},
                                 {"code": "000007", "name": "全新好", "continue_num": 1},
                             ],
+                        },
+                        {
+                            "name": "趋势更强",
+                            "limit_up_num": 3,
+                            "change": 2.0,
+                            "stock_list": [
+                                {"code": "000004", "name": "国华网安", "continue_num": 2},
+                                {"code": "000008", "name": "神州高铁", "continue_num": 1},
+                            ],
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(result["themes_written"], 2)
+            self.assertEqual(result["stocks_written"], 5)
+
+            with session_module.open_session() as session:
+                theme_rows = session.query(ThemePoolDaily).order_by(ThemePoolDaily.theme_rank.asc()).all()
+                self.assertEqual(len(theme_rows), 2)
+                self.assertEqual(theme_rows[0].theme_name, "深海科技")
+                self.assertGreater(theme_rows[0].theme_score or 0.0, theme_rows[1].theme_score or 0.0)
+                self.assertEqual(theme_rows[0].trend_stock_count, 2)
+                self.assertEqual(theme_rows[0].core_trend_stock_count, 2)
+                self.assertEqual(theme_rows[1].trend_stock_count, 1)
+
+                self.assertEqual(session.query(ThemeStockDaily).count(), 5)
+                deep_sea_codes = [
+                    row.code
+                    for row in session.query(ThemeStockDaily)
+                    .filter(ThemeStockDaily.theme_name == "深海科技")
+                    .order_by(ThemeStockDaily.rank_in_theme.asc())
+                    .all()
+                ]
+                stronger_codes = [
+                    row.code
+                    for row in session.query(ThemeStockDaily)
+                    .filter(ThemeStockDaily.theme_name == "趋势更强")
+                    .order_by(ThemeStockDaily.rank_in_theme.asc())
+                    .all()
+                ]
+                self.assertEqual(deep_sea_codes, ["000001", "000002", "000004"])
+                self.assertEqual(stronger_codes, ["000004", "000008"])
+
+            os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
+    def test_build_theme_pool_filters_theme_when_core_trend_threshold_is_not_met(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
+            os.environ["ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT"] = "2"
+            import app.core.config as config_module
+            import app.db.session as session_module
+            from app.models.trend_pool_daily import TrendPoolDaily
+            from app.models.theme_pool_daily import ThemePoolDaily
+            from app.pipelines.build_theme_pool import build_theme_pool
+
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+            session_module.init_db()
+            with session_module.open_session() as session:
+                session.add(
+                    TrendPoolDaily(
+                        trade_date=date.fromisoformat("2026-03-13"),
+                        run_id="trend-run",
+                        code="000004",
+                        name="国华网安",
+                        rank=4,
+                        score_total=91.0,
+                        star_rating=5,
+                        emotion_level=4,
+                        trade_signal="观察",
+                        is_uptrend=True,
+                    )
+                )
+                session.commit()
+
+            result = build_theme_pool(
+                trade_date="2026-03-13",
+                snapshot_fetcher=lambda **_: {
+                    "date": "20260313",
+                    "block_top": [
+                        {
+                            "name": "核心不强",
+                            "limit_up_num": 4,
+                            "change": 3.2,
+                            "stock_list": [
+                                {"code": "000001", "name": "平安银行", "continue_num": 2},
+                                {"code": "000002", "name": "万科A", "continue_num": 1},
+                                {"code": "000004", "name": "国华网安", "continue_num": 1},
+                            ],
                         }
                     ],
                 },
             )
-            self.assertEqual(result["themes_written"], 1)
-            self.assertEqual(result["stocks_written"], 3)
+            self.assertEqual(result["themes_written"], 0)
 
             with session_module.open_session() as session:
-                self.assertEqual(session.query(ThemePoolDaily).count(), 1)
-                self.assertEqual(session.query(ThemeStockDaily).count(), 3)
-                stock_codes = [row.code for row in session.query(ThemeStockDaily).order_by(ThemeStockDaily.rank_in_theme.asc()).all()]
-                self.assertEqual(stock_codes, ["000001", "000002", "000004"])
+                self.assertEqual(session.query(ThemePoolDaily).count(), 0)
 
             os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            os.environ.pop("ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT", None)
             config_module.get_settings.cache_clear()
             session_module.reset_db_runtime()
 

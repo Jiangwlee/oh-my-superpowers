@@ -33,9 +33,12 @@ class ThemePoolDailyResponse(BaseModel):
     theme_name: str
     theme_rank: int
     theme_strength: float | None = None
+    theme_score: float | None = None
     theme_stage: str | None = None
     market_attitude: str | None = None
     core_stock_count: int
+    trend_stock_count: int
+    core_trend_stock_count: int
     summary: str | None = None
 
 
