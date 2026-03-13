@@ -50,6 +50,11 @@ class Settings:
     theme_pool_weight_trend_stock_count: float
     theme_pool_weight_core_trend_stock_count: float
     theme_pool_weight_strongest_trend_score: float
+    theme_semantic_enrich_enabled: bool
+    market_review_semantic_enrich_enabled: bool
+    openai_base_url: str | None
+    openai_model: str | None
+    openai_api_key: str | None
 
 
 def _default_home_dir() -> Path:
@@ -75,6 +80,21 @@ def _float_env(name: str, default: float) -> float:
     if raw is None:
         return default
     return float(raw)
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _str_env(name: str) -> str | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    value = raw.strip()
+    return value or None
 
 
 @lru_cache(maxsize=1)
@@ -123,6 +143,11 @@ def get_settings() -> Settings:
             "ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE",
             float(theme_defaults["weight_strongest_trend_score"]),
         ),
+        theme_semantic_enrich_enabled=_bool_env("ASHARE_THEME_SEMANTIC_ENRICH_ENABLED", False),
+        market_review_semantic_enrich_enabled=_bool_env("ASHARE_MARKET_REVIEW_SEMANTIC_ENRICH_ENABLED", False),
+        openai_base_url=_str_env("OPENAI_BASE_URL"),
+        openai_model=_str_env("OPENAI_MODEL"),
+        openai_api_key=_str_env("OPENAI_API_KEY"),
     )
 
 

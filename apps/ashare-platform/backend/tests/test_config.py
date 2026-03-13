@@ -16,8 +16,26 @@ if str(_BACKEND_ROOT) not in sys.path:
 class TestConfig(unittest.TestCase):
     """Config tests."""
 
+    def _clear_env(self) -> None:
+        for key in (
+            "ASHARE_PLATFORM_HOME",
+            "ASHARE_THEME_POOL_PROFILE",
+            "ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_WEIGHT_THEME_STRENGTH",
+            "ASHARE_THEME_POOL_WEIGHT_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_WEIGHT_CORE_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE",
+            "ASHARE_THEME_SEMANTIC_ENRICH_ENABLED",
+            "OPENAI_BASE_URL",
+            "OPENAI_MODEL",
+            "OPENAI_API_KEY",
+        ):
+            os.environ.pop(key, None)
+
     def test_runtime_paths_are_resolved(self) -> None:
         with TemporaryDirectory() as tmp_dir:
+            self._clear_env()
             os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
             try:
                 import app.core.config as config_module
@@ -31,11 +49,12 @@ class TestConfig(unittest.TestCase):
                 self.assertEqual(settings.theme_pool_min_core_trend_stock_count, 0)
                 self.assertEqual(settings.theme_pool_weight_theme_strength, 1.0)
             finally:
-                os.environ.pop("ASHARE_PLATFORM_HOME", None)
+                self._clear_env()
                 config_module.get_settings.cache_clear()
 
     def test_theme_pool_scoring_settings_can_be_overridden(self) -> None:
         with TemporaryDirectory() as tmp_dir:
+            self._clear_env()
             os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
             os.environ["ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT"] = "2"
             os.environ["ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT"] = "1"
@@ -55,17 +74,12 @@ class TestConfig(unittest.TestCase):
                 self.assertEqual(settings.theme_pool_weight_core_trend_stock_count, 5.0)
                 self.assertEqual(settings.theme_pool_weight_strongest_trend_score, 0.1)
             finally:
-                os.environ.pop("ASHARE_PLATFORM_HOME", None)
-                os.environ.pop("ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT", None)
-                os.environ.pop("ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT", None)
-                os.environ.pop("ASHARE_THEME_POOL_WEIGHT_THEME_STRENGTH", None)
-                os.environ.pop("ASHARE_THEME_POOL_WEIGHT_TREND_STOCK_COUNT", None)
-                os.environ.pop("ASHARE_THEME_POOL_WEIGHT_CORE_TREND_STOCK_COUNT", None)
-                os.environ.pop("ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE", None)
+                self._clear_env()
                 config_module.get_settings.cache_clear()
 
     def test_mainline_strict_profile_applies_expected_defaults(self) -> None:
         with TemporaryDirectory() as tmp_dir:
+            self._clear_env()
             os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
             os.environ["ASHARE_THEME_POOL_PROFILE"] = "mainline_strict"
             try:
@@ -81,8 +95,7 @@ class TestConfig(unittest.TestCase):
                 self.assertEqual(settings.theme_pool_weight_core_trend_stock_count, 6.0)
                 self.assertEqual(settings.theme_pool_weight_strongest_trend_score, 0.03)
             finally:
-                os.environ.pop("ASHARE_PLATFORM_HOME", None)
-                os.environ.pop("ASHARE_THEME_POOL_PROFILE", None)
+                self._clear_env()
                 config_module.get_settings.cache_clear()
 
 

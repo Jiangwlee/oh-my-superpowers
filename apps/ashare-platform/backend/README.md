@@ -4,7 +4,7 @@ Purpose: Host the platform backend for retained daily facts, task pipelines,
          and read-only HTTP APIs.
 Audience: Developers extracting platform logic from `ashare-data` and future
           clients such as skills and frontend apps.
-Sections: Scope | Layout | Entry Points | Local Run | Theme Tuning | Docker Run
+Sections: Scope | Layout | Entry Points | Local Run | Theme Tuning | Semantic Enrichment | Docker Run
 
 ## Scope
 
@@ -109,6 +109,37 @@ export ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE=0.04
 This profile de-emphasizes raw heat and rewards themes whose core names already
 show trend confirmation.
 
+## Semantic Enrichment
+
+Theme semantics are optional and disabled by default.
+
+Enable them with an OpenAI-compatible endpoint:
+
+```bash
+export ASHARE_THEME_SEMANTIC_ENRICH_ENABLED=1
+export ASHARE_MARKET_REVIEW_SEMANTIC_ENRICH_ENABLED=1
+export OPENAI_BASE_URL=http://127.0.0.1:10000/v1
+export OPENAI_MODEL=qwen3.5-32b
+export OPENAI_API_KEY=sk-placeholder
+```
+
+When enabled, the backend may fill:
+
+- `theme_pool_daily.market_attitude`
+- `theme_pool_daily.theme_stage`
+- `theme_pool_daily.summary`
+- `theme_stock_daily.comment`
+- `market_review_daily.summary`
+- `market_review_daily.report_markdown`
+
+Deterministic fields remain protected:
+
+- `theme_strength`
+- `theme_score`
+- `trend_stock_count`
+- `core_trend_stock_count`
+- stock trend scores and ranks
+
 ## Docker Run
 
 Build from the repository root:
@@ -124,3 +155,8 @@ docker run --rm -p 8000:8000 \
   -e ASHARE_PLATFORM_HOME=/data \
   ashare-platform-backend
 ```
+
+The image now defaults `ASHARE_PLATFORM_HOME` to `/app/runtime` so API routes and
+CLI tasks share the same retained database even when you do not override the
+environment variable. Keep setting `ASHARE_PLATFORM_HOME` explicitly when you
+want to bind-mount data outside the container.

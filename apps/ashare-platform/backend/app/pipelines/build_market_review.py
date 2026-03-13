@@ -13,11 +13,13 @@ from typing import Any, Callable
 
 from sqlalchemy import desc
 
+from app.core.config import get_settings
 from app.core.runtime import build_run_id
 from app.db.session import init_db, open_session
 from app.models.theme_pool_daily import ThemePoolDaily
 from app.models.trend_pool_daily import TrendPoolDaily
 from app.repositories.market_review_repository import replace_for_date
+from app.services.market_review_semantic_enricher import create_market_review_semantic_enricher
 
 
 def _default_markdown_builder(
@@ -50,10 +52,18 @@ def build_market_review(
     *,
     trade_date: str,
     markdown_builder: Callable[..., str] = _default_markdown_builder,
+    semantic_enricher: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build and persist one market review row."""
     resolved_date = date.fromisoformat(trade_date)
     run_id = build_run_id(trade_date, "build-market-review")
+    settings = get_settings()
+    effective_enricher = semantic_enricher
+    if effective_enricher is None and settings.market_review_semantic_enrich_enabled:
+        try:
+            effective_enricher = create_market_review_semantic_enricher()
+        except ValueError:
+            effective_enricher = None
 
     init_db()
     with open_session() as session:
@@ -93,6 +103,10 @@ def build_market_review(
             "report_markdown": report_markdown,
             "report_version": "v1",
         }
+        if effective_enricher is not None:
+            enriched = effective_enricher(dict(row))
+            row["summary"] = enriched.get("summary")
+            row["report_markdown"] = str(enriched.get("report_markdown") or row["report_markdown"])
         stored = replace_for_date(session, resolved_date, row)
 
     return {

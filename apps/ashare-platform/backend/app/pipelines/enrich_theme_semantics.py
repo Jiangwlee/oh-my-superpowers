@@ -20,7 +20,10 @@ _PROTECTED_THEME_FIELDS = {
     "theme_name",
     "theme_rank",
     "theme_strength",
+    "theme_score",
     "core_stock_count",
+    "trend_stock_count",
+    "core_trend_stock_count",
 }
 _PROTECTED_STOCK_FIELDS = {
     "trade_date",

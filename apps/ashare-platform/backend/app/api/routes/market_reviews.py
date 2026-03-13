@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.db.session import init_db, open_session
 from app.models.market_review_daily import MarketReviewDaily
@@ -16,7 +16,13 @@ def get_market_review_daily(trade_date: str) -> MarketReviewDailyResponse:
     """Get one daily market review."""
     init_db()
     with open_session() as session:
-        row = session.query(MarketReviewDaily).filter(MarketReviewDaily.trade_date == trade_date).one()
+        row = (
+            session.query(MarketReviewDaily)
+            .filter(MarketReviewDaily.trade_date == trade_date)
+            .one_or_none()
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="market review not found")
         return MarketReviewDailyResponse(
             trade_date=row.trade_date.isoformat(),
             run_id=row.run_id,

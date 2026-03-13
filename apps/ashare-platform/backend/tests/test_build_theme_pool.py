@@ -17,8 +17,23 @@ if str(_BACKEND_ROOT) not in sys.path:
 class TestBuildThemePool(unittest.TestCase):
     """Theme pool build tests."""
 
+    def _clear_env(self) -> None:
+        for key in (
+            "ASHARE_PLATFORM_HOME",
+            "ASHARE_THEME_POOL_PROFILE",
+            "ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_WEIGHT_THEME_STRENGTH",
+            "ASHARE_THEME_POOL_WEIGHT_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_WEIGHT_CORE_TREND_STOCK_COUNT",
+            "ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE",
+            "ASHARE_THEME_SEMANTIC_ENRICH_ENABLED",
+        ):
+            os.environ.pop(key, None)
+
     def test_build_theme_pool_keeps_only_supported_themes_and_stocks(self) -> None:
         with TemporaryDirectory() as tmp_dir:
+            self._clear_env()
             os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
             import app.core.config as config_module
             import app.db.session as session_module
@@ -128,12 +143,13 @@ class TestBuildThemePool(unittest.TestCase):
                 self.assertEqual(deep_sea_codes, ["000001", "000002", "000004"])
                 self.assertEqual(stronger_codes, ["000004", "000008"])
 
-            os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            self._clear_env()
             config_module.get_settings.cache_clear()
             session_module.reset_db_runtime()
 
     def test_build_theme_pool_filters_theme_when_core_trend_threshold_is_not_met(self) -> None:
         with TemporaryDirectory() as tmp_dir:
+            self._clear_env()
             os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
             os.environ["ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT"] = "2"
             import app.core.config as config_module
@@ -185,8 +201,72 @@ class TestBuildThemePool(unittest.TestCase):
             with session_module.open_session() as session:
                 self.assertEqual(session.query(ThemePoolDaily).count(), 0)
 
-            os.environ.pop("ASHARE_PLATFORM_HOME", None)
-            os.environ.pop("ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT", None)
+            self._clear_env()
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
+    def test_build_theme_pool_uses_semantic_enricher_when_enabled(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            self._clear_env()
+            os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
+            os.environ["ASHARE_THEME_SEMANTIC_ENRICH_ENABLED"] = "1"
+            import app.core.config as config_module
+            import app.db.session as session_module
+            from app.models.trend_pool_daily import TrendPoolDaily
+            from app.models.theme_pool_daily import ThemePoolDaily
+            from app.pipelines.build_theme_pool import build_theme_pool
+
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+            session_module.init_db()
+            with session_module.open_session() as session:
+                session.add(
+                    TrendPoolDaily(
+                        trade_date=date.fromisoformat("2026-03-13"),
+                        run_id="trend-run",
+                        code="000001",
+                        name="平安银行",
+                        rank=1,
+                        score_total=88.0,
+                        star_rating=4,
+                        emotion_level=3,
+                        trade_signal="观察",
+                        is_uptrend=True,
+                    )
+                )
+                session.commit()
+
+            def fake_semantic_enricher(theme_row: dict, stock_rows: list[dict]) -> tuple[dict, list[dict]]:
+                theme_row["market_attitude"] = "认可度高"
+                theme_row["summary"] = "语义总结"
+                stock_rows[0]["comment"] = "核心观察"
+                return theme_row, stock_rows
+
+            result = build_theme_pool(
+                trade_date="2026-03-13",
+                snapshot_fetcher=lambda **_: {
+                    "date": "20260313",
+                    "block_top": [
+                        {
+                            "name": "深海科技",
+                            "limit_up_num": 4,
+                            "change": 3.2,
+                            "stock_list": [
+                                {"code": "000001", "name": "平安银行", "continue_num": 2},
+                            ],
+                        }
+                    ],
+                },
+                semantic_enricher=fake_semantic_enricher,
+            )
+            self.assertEqual(result["themes_written"], 1)
+
+            with session_module.open_session() as session:
+                row = session.query(ThemePoolDaily).one()
+                self.assertEqual(row.market_attitude, "认可度高")
+                self.assertEqual(row.summary, "语义总结")
+
+            self._clear_env()
             config_module.get_settings.cache_clear()
             session_module.reset_db_runtime()
 

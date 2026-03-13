@@ -19,6 +19,7 @@ from app.db.session import init_db, open_session
 from app.models.trend_pool_daily import TrendPoolDaily
 from app.pipelines.enrich_theme_semantics import ThemeEnricher, enrich_theme_semantics
 from app.repositories.theme_pool_repository import replace_for_date
+from app.services.theme_semantic_enricher import create_theme_semantic_enricher
 
 
 def _normalize_trade_date(trade_date: str) -> tuple[date, str]:
@@ -83,6 +84,12 @@ def build_theme_pool(
     resolved_date, ths_date = _normalize_trade_date(trade_date)
     run_id = build_run_id(trade_date, "build-theme-pool")
     settings = get_settings()
+    effective_enricher = semantic_enricher
+    if effective_enricher is None and settings.theme_semantic_enrich_enabled:
+        try:
+            effective_enricher = create_theme_semantic_enricher()
+        except ValueError:
+            effective_enricher = None
     snapshot = snapshot_fetcher(end_date=ths_date)
     block_top = snapshot.get("block_top") or []
 
@@ -185,7 +192,7 @@ def build_theme_pool(
             enriched_theme_row, enriched_stock_rows = enrich_theme_semantics(
                 theme_row,
                 theme_stock_rows,
-                enrich_fn=semantic_enricher,
+                enrich_fn=effective_enricher,
             )
             theme_rows.append(enriched_theme_row)
             stock_rows.extend(enriched_stock_rows)

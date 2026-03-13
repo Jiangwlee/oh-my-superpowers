@@ -93,6 +93,61 @@ class TestApiRoutes(unittest.TestCase):
             config_module.get_settings.cache_clear()
             session_module.reset_db_runtime()
 
+    def test_market_review_route_returns_row(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
+            import app.core.config as config_module
+            import app.db.session as session_module
+            from app.api.routes.market_reviews import get_market_review_daily
+            from app.models.market_review_daily import MarketReviewDaily
+
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+            session_module.init_db()
+            with session_module.open_session() as session:
+                session.add(
+                    MarketReviewDaily(
+                        trade_date=date.fromisoformat("2026-03-13"),
+                        run_id="r1",
+                        regime="strong",
+                        position_guidance="60-80%",
+                        main_themes_json=["风电"],
+                        emerging_themes_json=[],
+                        fading_themes_json=[],
+                        summary="主线聚焦风电。",
+                        report_markdown="# 市场复盘",
+                    )
+                )
+                session.commit()
+
+            row = get_market_review_daily("2026-03-13")
+            self.assertEqual(row.trade_date, "2026-03-13")
+            self.assertEqual(row.summary, "主线聚焦风电。")
+
+            os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
+    def test_market_review_route_returns_404_when_missing(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
+            import app.core.config as config_module
+            import app.db.session as session_module
+            from fastapi import HTTPException
+            from app.api.routes.market_reviews import get_market_review_daily
+
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+            session_module.init_db()
+
+            with self.assertRaises(HTTPException) as ctx:
+                get_market_review_daily("2026-03-13")
+            self.assertEqual(ctx.exception.status_code, 404)
+
+            os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
 
 if __name__ == "__main__":
     unittest.main()
