@@ -8,7 +8,9 @@ Sections: Required Inputs | Mapping Rules | Output Schema | Validation | Hard Ru
 ## Required Inputs
 
 1. `~/.ashare-assistant/data/{DATE}/market_review.md`
-2. `~/.ashare-assistant/data/{DATE}/filtered/run_id.md`
+2. Prefer `~/.ashare-assistant/data/{DATE}/report/platform_trend_pool.json` and
+   `~/.ashare-assistant/data/{DATE}/report/platform_theme_pool.json` when present
+3. `~/.ashare-assistant/data/{DATE}/filtered/run_id.md`
 3. `skills/ashare-assistant/evolution/selection_rules.md` (optional but recommended)
 
 ## Mapping Rules
@@ -16,6 +18,9 @@ Sections: Required Inputs | Mapping Rules | Output Schema | Validation | Hard Ru
 1. Extract `market.regime` from the market review.
 2. Build candidate rows with fields:
    - `code`, `name`, `sector`, `thesis_short`, `risk_note`, `trigger_condition`
+   Prefer stocks that are confirmed by retained platform facts:
+   - trend candidates from `platform_trend_pool.json`
+   - main themes from `platform_theme_pool.json`
 3. Normalize action values:
    - 买入/建仓 -> `buy`
    - 持有 -> `hold`

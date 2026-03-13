@@ -20,18 +20,23 @@ ashare-assistant 是一个 **LLM 工作流 Skill**，负责每日盘后的三段
 
 **核心原则**：LLM 做判断，代码做执行。数据采集、风险校验、决策日志均由确定性脚本完成，LLM 只负责分析推理。
 
+当前项目方向已经调整为 **数据平台优先**。未来 `ashare-assistant`
+应逐步转为 `apps/ashare-platform/backend` 的下游消费者，而不是继续
+直接绑定底层采集与加工细节。
+
 ---
 
 ## 架构
 
 ```
 ashare-data 包（数据基础设施）
-  └─ ashare-collect / ashare-em-collect / ashare-tgb-collect（CLI）
-       └─ ~/.ashare-assistant/data/{DATE}/
-            ├── raw/           原始 JSON
-            ├── filtered/      过滤后 Markdown（LLM 输入）
-            ├── report/        情绪预处理报告
-            └── analysis/      LLM 输出产物
+  └─ fetchers / shared utilities / trend scoring
+
+apps/ashare-platform/backend（平台后端，建设中）
+  ├── tasks/                  平台任务入口
+  ├── pipelines/              数据加工与入库
+  ├── retained daily facts    趋势池 / 题材池 / 复盘报告
+  └── read-only HTTP APIs     给 skill / frontend / app 使用
 
 ashare-assistant Skill（LLM 工作流）
   ├── SKILL.md                 Skill 入口（Openclaw 读取）
@@ -96,6 +101,9 @@ DATA_DIR="$HOME/.ashare-assistant/data/${DATE}"
 # 1. 确保数据就绪（cron 已采集则跳过）
 ashare-collect --date "${DATE}" --verbose
 
+# 1.5 若平台后端可用，优先同步 retained facts 到本地上下文
+python3 -m scripts.platform_context --date "${DATE}" || true
+
 # 2. 风险检查（在 LLM 生成 candidates.json 后）
 python3 -m scripts.risk_check --input "${DATA_DIR}/analysis/candidates.json"
 
@@ -105,6 +113,15 @@ python3 -m scripts.decision_logger --input "${DATA_DIR}/analysis/candidates.json
 
 > **注意**：scripts 使用相对导入，必须以 `-m scripts.<module>` 方式调用，
 > 直接运行 `python3 scripts/foo.py` 会报 `ModuleNotFoundError`。
+
+平台迁移期间：
+
+- 短期内本 Skill 仍可读取 `~/.ashare-assistant/data/{DATE}/` 下的产物
+- 中期目标是改为优先读取 `apps/ashare-platform/backend` 暴露的 retained facts
+- Skill 不再承担平台级数据生产职责
+- 当前已提供桥接脚本：`python3 -m scripts.platform_context --date ${DATE}`
+  会将平台中的趋势池、题材池、复盘 retained facts 同步到
+  `${DATA_DIR}/report/platform_*.json`
 
 ---
 

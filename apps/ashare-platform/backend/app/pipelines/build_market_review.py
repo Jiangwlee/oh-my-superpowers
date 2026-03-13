@@ -1,0 +1,102 @@
+"""Market review build pipeline.
+
+Purpose: Produce one retained daily market review from trend/theme daily facts.
+
+Public API:
+    build_market_review(...) -> dict
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any, Callable
+
+from sqlalchemy import desc
+
+from app.core.runtime import build_run_id
+from app.db.session import init_db, open_session
+from app.models.theme_pool_daily import ThemePoolDaily
+from app.models.trend_pool_daily import TrendPoolDaily
+from app.repositories.market_review_repository import replace_for_date
+
+
+def _default_markdown_builder(
+    *,
+    trade_date: str,
+    main_themes: list[str],
+    strong_trend_codes: list[str],
+) -> str:
+    lines = [
+        f"# 市场复盘 - {trade_date}",
+        "",
+        "## 主线题材",
+        "",
+    ]
+    if main_themes:
+        for theme in main_themes:
+            lines.append(f"- {theme}")
+    else:
+        lines.append("- 待确认")
+    lines.extend(["", "## 趋势观察", ""])
+    if strong_trend_codes:
+        for code in strong_trend_codes:
+            lines.append(f"- {code}")
+    else:
+        lines.append("- 待确认")
+    return "\n".join(lines)
+
+
+def build_market_review(
+    *,
+    trade_date: str,
+    markdown_builder: Callable[..., str] = _default_markdown_builder,
+) -> dict[str, Any]:
+    """Build and persist one market review row."""
+    resolved_date = date.fromisoformat(trade_date)
+    run_id = build_run_id(trade_date, "build-market-review")
+
+    init_db()
+    with open_session() as session:
+        main_theme_rows = (
+            session.query(ThemePoolDaily)
+            .filter(ThemePoolDaily.trade_date == resolved_date)
+            .order_by(ThemePoolDaily.theme_rank)
+            .limit(3)
+            .all()
+        )
+        trend_rows = (
+            session.query(TrendPoolDaily)
+            .filter(TrendPoolDaily.trade_date == resolved_date)
+            .order_by(desc(TrendPoolDaily.star_rating), desc(TrendPoolDaily.score_total))
+            .limit(5)
+            .all()
+        )
+
+        main_themes = [row.theme_name for row in main_theme_rows]
+        strong_trend_codes = [row.code for row in trend_rows]
+        regime = "strong" if len(main_themes) >= 2 else "neutral"
+        position_guidance = "60-80%" if regime == "strong" else "30-50%"
+        report_markdown = markdown_builder(
+            trade_date=trade_date,
+            main_themes=main_themes,
+            strong_trend_codes=strong_trend_codes,
+        )
+        row = {
+            "trade_date": resolved_date,
+            "run_id": run_id,
+            "regime": regime,
+            "position_guidance": position_guidance,
+            "main_themes_json": main_themes,
+            "emerging_themes_json": [],
+            "fading_themes_json": [],
+            "summary": None,
+            "report_markdown": report_markdown,
+            "report_version": "v1",
+        }
+        stored = replace_for_date(session, resolved_date, row)
+
+    return {
+        "run_id": run_id,
+        "trade_date": trade_date,
+        "stored": stored,
+    }

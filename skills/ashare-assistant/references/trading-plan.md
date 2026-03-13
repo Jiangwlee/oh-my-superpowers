@@ -15,6 +15,16 @@ Sections: Required Inputs | Pre-Run Scripts | Intraday Tools | Execution Steps |
 6. `~/.ashare-assistant/data/{DATE}/report/dr_*_brief.md` (optional)
 7. `skills/ashare-assistant/strategy/active.yaml`
 8. `skills/ashare-assistant/evolution/known_pitfalls.md` (optional but recommended)
+9. Optional retained platform facts:
+   - `~/.ashare-assistant/data/{DATE}/report/platform_trend_pool.json`
+   - `~/.ashare-assistant/data/{DATE}/report/platform_theme_pool.json`
+   - `~/.ashare-assistant/data/{DATE}/report/platform_market_review.json`
+
+Interpretation rule:
+
+- If retained platform facts exist, prefer them when discussing theme strength,
+  trend quality, and prior market context.
+- Legacy files remain valid fallback sources.
 
 ## Pre-Run Scripts
 
@@ -46,6 +56,8 @@ python3 -m scripts.relative_strength --code {CODE} --date {YYYYMMDD} --benchmark
 3. Compute account health metrics (cash ratio, position count, violation count) and output red/yellow/green ratings.
 4. Evaluate each executed order using intraday tools; infer root cause for each violation (choose from the five defined categories).
 5. Merge market regime and `candidates.json` to derive per-position disposition priority (immediate / today / hold).
+   When platform retained facts exist, use them to verify whether the
+   candidates still align with the strongest themes and trend pool.
 6. Convert `holding_insight.json` decisions into per-position if-then tables (take-profit / hold / stop-loss, one row each).
 7. If deep-research briefs exist, apply conviction multiplier; else use `x1.0`.
 8. Round all share counts down to 100-share lots.

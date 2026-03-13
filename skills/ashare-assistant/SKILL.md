@@ -15,6 +15,11 @@ Input:   `~/.ashare-assistant/data/{DATE}/filtered/` data and strategy config.
 Output:  `market_review.md`, `analysis/candidates.json`, `trading_plan.md`.
 Sections: Prerequisite Check | Workflow | Failure Handling | Done Criteria | Guardrails
 
+Note: `ashare-assistant` is a downstream consumer of the A-share data platform.
+As the platform backend under `apps/ashare-platform/backend` matures, this skill
+should prefer platform APIs and retained daily facts over direct coupling to
+raw processing internals.
+
 ## Prerequisite Check
 
 Run all commands from the skill install directory. Scripts use relative imports
@@ -36,6 +41,9 @@ If `python3` is unavailable, try `python` instead (or vice versa).
 DATE=$(date +%Y-%m-%d)
 DATA_DIR="$HOME/.ashare-assistant/data/${DATE}"
 
+# Prefer retained facts from the platform backend when available
+python3 -m scripts.platform_context --date "${DATE}" || true
+
 if [ ! -d "${DATA_DIR}/filtered" ] || [ -z "$(ls -A "${DATA_DIR}/filtered" 2>/dev/null)" ]; then
   ashare-collect --date "${DATE}" --verbose
 fi
@@ -47,6 +55,10 @@ Required files before Step 2:
 2. `strategy/active.yaml`
 3. Optional: `~/.ashare-assistant/signals/watchlist_signals.json` (if present)
    Used in Step 3 for signal-vs-execution comparison in the trading plan.
+4. Optional: `${DATA_DIR}/report/platform_trend_pool.json`,
+   `${DATA_DIR}/report/platform_theme_pool.json`,
+   `${DATA_DIR}/report/platform_market_review.json`
+   When present, prefer them as retained platform facts over ad hoc raw inputs.
 
 ## Workflow
 

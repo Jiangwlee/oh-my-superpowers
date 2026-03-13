@@ -1,0 +1,79 @@
+"""Command-line entrypoint for backend task execution.
+
+Purpose: Provide a unified CLI for running backend tasks without exposing write APIs.
+
+Public API:
+    main() -> None
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from typing import Any, Callable
+
+from app.tasks.build_market_review import run as run_build_market_review
+from app.tasks.build_theme_pool import run as run_build_theme_pool
+from app.tasks.build_trend_pool import run as run_build_trend_pool
+from app.tasks.cleanup_ephemeral_data import run as run_cleanup_ephemeral_data
+from app.tasks.collect_ephemeral import run as run_collect_ephemeral
+
+TaskFn = Callable[..., dict[str, Any]]
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="ashare-platform", description="A-share platform backend CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    collect = subparsers.add_parser("collect-ephemeral", help="Collect short-lived source data")
+    collect.add_argument("--date", dest="trade_date")
+    collect.add_argument("--news-count", type=int, default=20)
+    collect.add_argument("--taoguba-count", type=int, default=20)
+    collect.add_argument("--no-scan-trends", action="store_true")
+    collect.add_argument("--popularity-max", type=int, default=1000)
+
+    trend = subparsers.add_parser("build-trend-pool", help="Build retained trend pool daily facts")
+    trend.add_argument("--date", dest="trade_date")
+    trend.add_argument("--max-rank", type=int, default=1000)
+
+    theme = subparsers.add_parser("build-theme-pool", help="Build retained theme pool daily facts")
+    theme.add_argument("--date", dest="trade_date")
+
+    review = subparsers.add_parser("build-market-review", help="Build retained daily market review")
+    review.add_argument("--date", dest="trade_date")
+
+    cleanup = subparsers.add_parser("cleanup-ephemeral-data", help="Clean expired ephemeral files")
+    cleanup.add_argument("--max-age-days", type=int, default=3)
+
+    return parser
+
+
+def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
+    if args.command == "collect-ephemeral":
+        return run_collect_ephemeral(
+            trade_date=args.trade_date,
+            news_count=args.news_count,
+            taoguba_count=args.taoguba_count,
+            scan_trends=not args.no_scan_trends,
+            popularity_max=args.popularity_max,
+        )
+    if args.command == "build-trend-pool":
+        return run_build_trend_pool(
+            trade_date=args.trade_date,
+            max_rank=args.max_rank,
+        )
+    if args.command == "build-theme-pool":
+        return run_build_theme_pool(trade_date=args.trade_date)
+    if args.command == "build-market-review":
+        return run_build_market_review(trade_date=args.trade_date)
+    if args.command == "cleanup-ephemeral-data":
+        return run_cleanup_ephemeral_data(max_age_days=args.max_age_days)
+    raise ValueError(f"Unsupported command: {args.command}")
+
+
+def main() -> None:
+    """Run the backend CLI."""
+    parser = _build_parser()
+    args = parser.parse_args()
+    result = _dispatch(args)
+    print(json.dumps(result, ensure_ascii=False, indent=2))

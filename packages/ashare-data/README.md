@@ -2,6 +2,12 @@
 
 A股数据采集与预处理基础设施包。为 `ashare-assistant` skill 提供定时数据采集能力，独立于 LLM 工作流运行。
 
+当前重构方向下，`ashare-data` 的长期定位是 **可复用基础库**：
+
+- 保留 source fetchers、共享 HTTP/缓存/解析工具、趋势评分等通用能力
+- 逐步减少平台级业务逻辑、数据库落库、HTTP API、工作台职责
+- 新的数据平台后端位于 `apps/ashare-platform/backend`
+
 ## 安装
 
 ```bash
@@ -132,6 +138,13 @@ ashare_data/
 ├── watchlist_monitor.py     # Watchlist 盘中信号扫描（ashare-wl-monitor CLI）
 └── filter_to_markdown.py    # JSON → Markdown 格式转换
 ```
+
+说明：
+
+- 上述结构反映的是当前状态，不是最终目标边界
+- 平台级 task / pipeline / retained fact / API 将逐步迁往
+  `apps/ashare-platform/backend`
+- `ashare-data` 将收敛为“拿数据、洗数据、算分”的基础能力层
 
 ## 开发
 

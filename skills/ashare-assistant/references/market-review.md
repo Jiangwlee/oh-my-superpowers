@@ -7,16 +7,30 @@ Sections: Required Inputs | Execution Steps | Output Template | Hard Rules
 
 ## Required Inputs
 
-1. `~/.ashare-assistant/data/{DATE}/report/news_sentiment.md`
-2. `~/.ashare-assistant/data/{DATE}/report/social_sentiment.md`
-3. `~/.ashare-assistant/data/{DATE}/filtered/market_sectors.md`
-4. `~/.ashare-assistant/data/{DATE}/filtered/funding.md`
-5. `~/.ashare-assistant/data/{DATE}/filtered/ths_report.md`
-6. `~/.ashare-assistant/data/{DATE}/filtered/trend_report.md`
-7. `~/.ashare-assistant/data/{DATE}/filtered/news_flash.md`
-8. `~/.ashare-assistant/data/{DATE}/filtered/us_market.md` (optional)
-9. `skills/ashare-assistant/strategy/active.yaml`
-10. `skills/ashare-assistant/evolution/feedback.md` (optional but recommended)
+Priority order:
+
+1. Prefer retained platform facts when present:
+   - `~/.ashare-assistant/data/{DATE}/report/platform_trend_pool.json`
+   - `~/.ashare-assistant/data/{DATE}/report/platform_theme_pool.json`
+   - `~/.ashare-assistant/data/{DATE}/report/platform_theme_stocks.json`
+   - `~/.ashare-assistant/data/{DATE}/report/platform_market_review.json`
+2. `~/.ashare-assistant/data/{DATE}/report/news_sentiment.md`
+3. `~/.ashare-assistant/data/{DATE}/report/social_sentiment.md`
+4. `~/.ashare-assistant/data/{DATE}/filtered/market_sectors.md`
+5. `~/.ashare-assistant/data/{DATE}/filtered/funding.md`
+6. `~/.ashare-assistant/data/{DATE}/filtered/ths_report.md`
+7. `~/.ashare-assistant/data/{DATE}/filtered/trend_report.md`
+8. `~/.ashare-assistant/data/{DATE}/filtered/news_flash.md`
+9. `~/.ashare-assistant/data/{DATE}/filtered/us_market.md` (optional)
+10. `skills/ashare-assistant/strategy/active.yaml`
+11. `skills/ashare-assistant/evolution/feedback.md` (optional but recommended)
+
+Interpretation rule:
+
+- Treat `platform_*.json` as the most reliable retained facts for trend pool,
+  theme pool, theme constituents, and prior market-review summary.
+- Use legacy `filtered/*.md` files as fallback evidence when platform JSON is
+  missing or insufficient.
 
 ## Execution Steps
 
@@ -24,6 +38,7 @@ Sections: Required Inputs | Execution Steps | Output Template | Hard Rules
 2. Derive position guidance aligned with the regime.
 3. Summarize US overnight impact per major index and key tech stocks; if missing, state unavailable reason.
 4. Extract themes into three tiers: leading (主线), emerging (新兴), fading (衰退警示).
+   If `platform_theme_pool.json` exists, use it as the primary theme source.
 5. Provide sentiment evidence with at least:
    - 2 social/community quotes (verbatim, with author handle)
    - 1 news headline
@@ -46,6 +61,8 @@ Sections: Required Inputs | Execution Steps | Output Template | Hard Rules
    Emotion level: L1 (coldest) → L5 (hottest); emoji: ⚪L1 🔵L2 🟡L3 🟠L4 🔴L5
 
 7. Include ALL 4-star and 5-star names from `trend_report.md` in the summary table. For each entry state whether it is selected (是/否) and if not, provide the exclusion reason.
+   If `platform_trend_pool.json` exists, use it as the primary source of trend
+   candidates and only fall back to `trend_report.md` for missing detail.
 
 ## Output Template
 
@@ -82,7 +99,7 @@ Sections: Required Inputs | Execution Steps | Output Template | Hard Rules
 ## Hard Rules
 
 1. Do not fabricate numbers, events, or quotes.
-2. Do not skip "趋势候选股汇总"; it must include every 4-star and 5-star stock from `trend_report.md`.
+2. Do not skip "趋势候选股汇总"; it must include every 4-star and 5-star stock from the best available trend source, preferring `platform_trend_pool.json` over `trend_report.md`.
 3. Mark uncertain items as `待确认`.
 4. Section 四 candidate format is mandatory: 四维标签 + 共振逻辑 + 趋势评分 + 风险点; free-text only is forbidden.
 5. Section 六 must have ≥5 verbatim community quotes with author handles.
