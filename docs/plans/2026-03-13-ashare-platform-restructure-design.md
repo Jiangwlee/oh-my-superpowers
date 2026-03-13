@@ -7,7 +7,8 @@ Audience: Project maintainers designing `ashare-data`, `ashare-assistant`,
 Usage:   Read before moving code, creating new modules, or introducing API/db
          boundaries; this document captures scope, constraints, and key choices.
 Sections: Background | Current State | Goals | Decisions | Architecture
-          | Storage | Repository Boundaries | Non-Goals | Open Items
+          | Storage | Repository Boundaries | Emotion Facts | Non-Goals
+          | Open Items
 
 **Date**: 2026-03-13
 **Author**: Codex
@@ -444,7 +445,177 @@ The following are explicitly out of scope for the current phase:
 - introducing a heavy workflow orchestration framework
 - optimizing for frontend/workbench before the data foundation is stable
 
-## 11. Immediate Next Design Topics
+## 11. Multi-Day Emotion Facts
+
+The current theme-stage problem is not just a prompt problem.
+
+The approved direction is to introduce retained multi-day emotion facts so that
+theme stage and market-attitude judgments are grounded in objective structure
+rather than same-day heat or forum language alone.
+
+The user explicitly wants to avoid a specific error mode:
+
+- misclassifying late-stage decay as mid-cycle pullback
+- treating topping behavior as a buyable dip
+
+This means the platform must model both:
+
+- market heat
+- market risk
+
+and must do so over multiple trading days, not only on a daily snapshot.
+
+### 11.1 Data horizon
+
+The approved lookback horizon is:
+
+- 30 trading days
+
+This horizon is intended to support:
+
+- multi-day cycle shifts
+- continuity and compression in ladder structure
+- theme expansion vs exhaustion
+- risk escalation through limit-down and blowup behavior
+
+### 11.2 New retained fact family
+
+Two new retained fact tables are proposed:
+
+1. `market_emotion_daily`
+2. `theme_emotion_daily`
+
+These are deterministic data products. They are not LLM outputs.
+
+### 11.3 `market_emotion_daily`
+
+Purpose:
+
+- describe the market-level short-term emotion cycle
+- combine heat, risk, and recent change
+- provide context for all theme-stage judgments
+
+#### Core source-backed fields
+
+- `trade_date`
+- `limit_up_count`
+- `limit_down_count`
+- `highest_board`
+- `limit_up_ladder_count`
+- `board_ge_2_count`
+- `board_ge_3_count`
+- `board_ge_4_count`
+- `top_theme_name`
+- `top_theme_limit_up_num`
+- `theme_count`
+- `blowup_rate` (nullable in V1 if source not yet integrated)
+- `yesterday_limit_up_return` (nullable in V1 if source not yet integrated)
+
+#### Derived fields
+
+- `highest_board_3d_delta`
+- `highest_board_5d_delta`
+- `board_ge_3_count_3d_delta`
+- `board_ge_4_count_3d_delta`
+- `limit_up_count_3d_delta`
+- `limit_down_count_3d_delta`
+- `top_theme_limit_up_num_3d_delta`
+
+#### Composite fields
+
+- `heat_score`
+- `risk_score`
+- `emotion_score`
+- `cycle_stage_hint`
+
+Suggested values for `cycle_stage_hint`:
+
+- `ice`
+- `warming`
+- `expanding`
+- `peak`
+- `weakening`
+- `cooling`
+
+Interpretation rule:
+
+- this table must not only track offensive strength
+- it must also track risk expansion such as limit-down pressure and blowup rate
+
+### 11.4 `theme_emotion_daily`
+
+Purpose:
+
+- describe one theme’s daily structure inside the broader market cycle
+- support later semantic classification into start / ferment / rise / climax /
+  divergence / fade style judgments
+
+#### Core source-backed fields
+
+- `trade_date`
+- `theme_name`
+- `theme_rank`
+- `limit_up_num`
+- `theme_change_pct`
+- `sample_stock_count`
+- `leader_names_json`
+- `leader_board_max`
+- `leader_board_count_ge_2`
+- `first_limit_count`
+- `limit_back_count`
+- `high_limit_count`
+
+#### Derived fields
+
+- `theme_rank_3d_delta`
+- `limit_up_num_3d_delta`
+- `limit_up_num_5d_delta`
+- `theme_change_3d_mean`
+- `leader_board_max_3d_trend`
+- `leader_continuity_score`
+- `heat_score`
+- `risk_score`
+- `theme_cycle_hint`
+
+Suggested values for `theme_cycle_hint`:
+
+- `start`
+- `ferment`
+- `main_rise`
+- `climax`
+- `healthy_divergence`
+- `bad_divergence`
+- `fade`
+
+### 11.5 Responsibility boundary
+
+These two tables must follow the approved rule:
+
+- facts are produced by code
+- interpretations are produced by LLMs
+
+Therefore:
+
+- Tonghuashun data and deterministic derived metrics belong in retained facts
+- semantic outputs such as `theme_stage`, `market_attitude`, and narrative
+  explanation remain downstream consumers of those facts
+
+### 11.6 Importance of risk-side fields
+
+The user explicitly pointed out that down-limit count is a critical risk
+indicator and should not be omitted.
+
+This design therefore rejects a heat-only model. The emotion fact layer must
+cover:
+
+- heat
+- risk
+- multi-day change
+
+Otherwise the system will remain prone to confusing late-stage exhaustion with
+mid-cycle pullback.
+
+## 12. Immediate Next Design Topics
 
 The next design topics, in order, should be:
 
@@ -454,19 +625,21 @@ The next design topics, in order, should be:
    - `market_review`
 2. database table design for those objects
 3. precise split between file-based ephemeral data and DB-retained data
-4. pipeline module boundaries inside `apps/ashare-platform/backend`
+4. database schema for `market_emotion_daily` and `theme_emotion_daily`
+5. pipeline module boundaries inside `apps/ashare-platform/backend`
 
-## 12. Open Items
+## 13. Open Items
 
 The following items remain intentionally open:
 
 - final database toolkit choice: `SQLAlchemy` vs `SQLModel`
 - exact schema for trend/theme/review tables
+- exact schema for `market_emotion_daily` and `theme_emotion_daily`
 - exact retention period for ephemeral data
 - exact API resource design
 - prompt redesign strategy after data processing inputs are improved
 
-## 13. Summary
+## 14. Summary
 
 This refactor is not a skill rewrite. It is a platform extraction.
 

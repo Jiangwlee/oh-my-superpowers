@@ -7,7 +7,7 @@ _SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from ashare_data.fetchers.market_sentiment import fetch_market_sentiment
+from ashare_data.fetchers.market_sentiment import fetch_market_sentiment, fetch_market_sentiment_for_date
 
 
 def _mock_resp(trade_status_id: str, trade_status_name: str = "") -> dict:
@@ -39,6 +39,23 @@ class MarketSentimentTest(unittest.TestCase):
         mock_http_json.return_value = _mock_resp("closed", "已收盘")
         result = fetch_market_sentiment()
         self.assertFalse(result.market_open)
+
+    @patch("ashare_data.fetchers.market_sentiment.http_json")
+    def test_fetch_market_sentiment_for_date_uses_requested_date(self, mock_http_json):
+        mock_http_json.return_value = _mock_resp("closed", "已收盘")
+        result = fetch_market_sentiment_for_date("20260313")
+        self.assertEqual(result.limit_up, 12)
+        self.assertEqual(result.limit_down, 3)
+        requested_url = mock_http_json.call_args.kwargs["url"]
+        self.assertIn("date=20260313", requested_url)
+
+    @patch("ashare_data.fetchers.market_sentiment.http_json")
+    def test_fetch_market_sentiment_for_date_computes_blowup_rate(self, mock_http_json):
+        payload = _mock_resp("closed", "已收盘")
+        payload["data"]["limit_up_count"] = {"today": {"num": 12, "history_num": 20, "open_num": 8}}
+        mock_http_json.return_value = payload
+        result = fetch_market_sentiment_for_date("20260313")
+        self.assertAlmostEqual(result.blowup_rate or 0.0, 0.4, places=6)
 
 
 if __name__ == "__main__":

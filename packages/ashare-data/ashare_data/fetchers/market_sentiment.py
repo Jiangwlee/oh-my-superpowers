@@ -5,6 +5,7 @@ Purpose: Fetch today's limit-up and limit-down counts from Tonghuashun,
 
 Public API:
     fetch_market_sentiment() -> MarketSentiment
+    fetch_market_sentiment_for_date(yyyymmdd) -> MarketSentiment
     MarketSentiment.danger_level: "green" / "yellow" / "red" / "unknown"
     MarketSentiment.market_open: True only when THS reports trading session is active
 """
@@ -51,8 +52,81 @@ class MarketSentiment:
 
     limit_up: int = 0
     limit_down: int = 0
+    blowup_rate: float | None = None
     danger_level: str = "unknown"
     market_open: bool = False
+
+
+def fetch_market_sentiment_for_date(trade_date: str, cookie: str | None = None) -> MarketSentiment:
+    """调用同花顺涨停池接口，返回指定日期的涨跌停计数与市场情绪等级。
+
+    Args:
+        trade_date: 交易日，格式 YYYYMMDD。
+        cookie: 可选，同花顺 Cookie（通常不需要）。
+
+    Returns:
+        MarketSentiment。接口不可用时返回 danger_level="unknown"。
+    """
+    headers = dict(_THS_HEADERS)
+    if cookie:
+        headers["Cookie"] = cookie
+
+    ts_ms = int(time.time() * 1000)
+    url = (
+        f"{_THS_URL}"
+        f"?limit=1&field={_THS_FIELDS}"
+        f"&page=1&filter=HS,GEM2STAR&order_field=330324&order_type=0"
+        f"&date={trade_date}&_={ts_ms}"
+    )
+
+    try:
+        resp = http_json(url=url, headers=headers, timeout=10, retries=1)
+    except Exception as exc:
+        logger.warning("fetch_market_sentiment_for_date 请求失败: %s", exc)
+        return MarketSentiment(danger_level="unknown")
+
+    pool_data = resp.get("data") or {}
+    if not isinstance(pool_data, dict):
+        logger.warning("fetch_market_sentiment_for_date: 响应格式异常")
+        return MarketSentiment(danger_level="unknown")
+
+    trade_status = pool_data.get("trade_status") or {}
+    trade_status_id = str(trade_status.get("id", ""))
+    trade_status_name = str(trade_status.get("name", ""))
+    market_open = trade_status_id in _OPEN_TRADE_STATUS_IDS or ("交易中" in trade_status_name)
+
+    limit_up = int((pool_data.get("page") or {}).get("total", 0))
+    ld_today = (pool_data.get("limit_down_count") or {}).get("today") or {}
+    limit_down = int(ld_today.get("num", ld_today.get("count", ld_today.get("total", 0))))
+    lu_today = (pool_data.get("limit_up_count") or {}).get("today") or {}
+    history_num = lu_today.get("history_num")
+    open_num = lu_today.get("open_num")
+    blowup_rate: float | None = None
+    try:
+        history_total = float(history_num or 0)
+        if history_total > 0:
+            blowup_rate = float(open_num or 0) / history_total
+    except (TypeError, ValueError):
+        blowup_rate = None
+
+    if limit_up == 0 and limit_down == 0:
+        logger.warning("市场情绪数据获取失败（涨跌停均为 0），降级为 unknown")
+        return MarketSentiment(danger_level="unknown", market_open=market_open, blowup_rate=blowup_rate)
+
+    if limit_down >= 80:
+        danger_level = "red"
+    elif limit_down >= 30:
+        danger_level = "yellow"
+    else:
+        danger_level = "green"
+
+    return MarketSentiment(
+        limit_up=limit_up,
+        limit_down=limit_down,
+        blowup_rate=blowup_rate,
+        danger_level=danger_level,
+        market_open=market_open,
+    )
 
 
 def fetch_market_sentiment(cookie: str | None = None) -> MarketSentiment:
@@ -67,64 +141,5 @@ def fetch_market_sentiment(cookie: str | None = None) -> MarketSentiment:
     Returns:
         MarketSentiment。接口不可用时返回 danger_level="unknown"。
     """
-    headers = dict(_THS_HEADERS)
-    if cookie:
-        headers["Cookie"] = cookie
-
     today = datetime.now().strftime("%Y%m%d")  # THS 要求格式 YYYYMMDD，不含横线
-    ts_ms = int(time.time() * 1000)
-    url = (
-        f"{_THS_URL}"
-        f"?limit=1&field={_THS_FIELDS}"
-        f"&page=1&filter=HS,GEM2STAR&order_field=330324&order_type=0"
-        f"&date={today}&_={ts_ms}"
-    )
-
-    try:
-        resp = http_json(url, headers=headers, timeout=10, retries=1)
-    except Exception as exc:
-        logger.warning("fetch_market_sentiment 请求失败: %s", exc)
-        return MarketSentiment(danger_level="unknown")
-
-    pool_data = resp.get("data") or {}
-    if not isinstance(pool_data, dict):
-        logger.warning("fetch_market_sentiment: 响应格式异常")
-        return MarketSentiment(danger_level="unknown")
-
-    # THS 交易状态字段在不同时段可能返回：
-    # - trading / morning_trade / afternoon_trade: 交易中
-    # - closed / holiday 等: 非交易中
-    trade_status = pool_data.get("trade_status") or {}
-    trade_status_id = str(trade_status.get("id", ""))
-    trade_status_name = str(trade_status.get("name", ""))
-    market_open = (
-        trade_status_id in _OPEN_TRADE_STATUS_IDS
-        or ("交易中" in trade_status_name)
-    )
-
-    # 涨停总数：data.page.total
-    limit_up = int((pool_data.get("page") or {}).get("total", 0))
-
-    # 跌停数：data.limit_down_count.today（字段名可能是 num 或 count）
-    ld_today = (pool_data.get("limit_down_count") or {}).get("today") or {}
-    limit_down = int(
-        ld_today.get("num", ld_today.get("count", ld_today.get("total", 0)))
-    )
-
-    if limit_up == 0 and limit_down == 0:
-        logger.warning("市场情绪数据获取失败（涨跌停均为 0），降级为 unknown")
-        return MarketSentiment(danger_level="unknown", market_open=market_open)
-
-    if limit_down >= 80:
-        danger_level = "red"
-    elif limit_down >= 30:
-        danger_level = "yellow"
-    else:
-        danger_level = "green"
-
-    return MarketSentiment(
-        limit_up=limit_up,
-        limit_down=limit_down,
-        danger_level=danger_level,
-        market_open=market_open,
-    )
+    return fetch_market_sentiment_for_date(today, cookie=cookie)

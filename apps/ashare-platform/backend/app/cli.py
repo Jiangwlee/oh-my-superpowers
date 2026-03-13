@@ -13,6 +13,7 @@ import json
 from typing import Any, Callable
 
 from app.tasks.build_market_review import run as run_build_market_review
+from app.tasks.build_emotion_facts import run as run_build_emotion_facts
 from app.tasks.build_theme_pool import run as run_build_theme_pool
 from app.tasks.build_trend_pool import run as run_build_trend_pool
 from app.tasks.cleanup_ephemeral_data import run as run_cleanup_ephemeral_data
@@ -39,6 +40,9 @@ def _build_parser() -> argparse.ArgumentParser:
     theme = subparsers.add_parser("build-theme-pool", help="Build retained theme pool daily facts")
     theme.add_argument("--date", dest="trade_date")
 
+    emotion = subparsers.add_parser("build-emotion-facts", help="Build retained market and theme emotion facts")
+    emotion.add_argument("--date", dest="trade_date")
+
     review = subparsers.add_parser("build-market-review", help="Build retained daily market review")
     review.add_argument("--date", dest="trade_date")
 
@@ -64,6 +68,8 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
         )
     if args.command == "build-theme-pool":
         return run_build_theme_pool(trade_date=args.trade_date)
+    if args.command == "build-emotion-facts":
+        return run_build_emotion_facts(trade_date=args.trade_date)
     if args.command == "build-market-review":
         return run_build_market_review(trade_date=args.trade_date)
     if args.command == "cleanup-ephemeral-data":
