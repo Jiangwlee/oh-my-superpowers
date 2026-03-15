@@ -18,7 +18,7 @@ JsonRequestFn = Callable[[str, dict[str, Any], dict[str, str]], dict[str, Any]]
 def _default_request(url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=120) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -44,6 +44,8 @@ def _build_prompt(theme_row: dict[str, Any], stock_rows: list[dict[str, Any]]) -
             "core_trend_stock_count": theme_row.get("core_trend_stock_count"),
             "evidence_json": theme_row.get("evidence_json"),
         },
+        "market_emotion": theme_row.get("market_emotion_json"),
+        "theme_emotion": theme_row.get("theme_emotion_json"),
         "stocks": [
             {
                 "code": row.get("code"),
@@ -65,7 +67,13 @@ def _build_prompt(theme_row: dict[str, Any], stock_rows: list[dict[str, Any]]) -
         "Allowed stock fields: stock_comments as a mapping from code to short comment.\n"
         "theme_stage must be one of: early, middle, late, unknown.\n"
         "market_attitude should be one short phrase in Chinese.\n"
-        "summary should be concise Chinese text.\n"
+        "summary should be concise Chinese text and include a brief reasoning summary.\n"
+        "请在 summary 中简要说明判断过程，至少点出市场情绪、题材阶段证据、核心股承接或风险信号中的两项依据。\n"
+        "识别末端风险优先于判断中段回调机会。\n"
+        "如果高位风险、炸板率、跌停压力、题材恶性分歧明显上升，应优先判断为 late。\n"
+        "如果市场转弱但题材核心承接稳定、并非恶性分歧，可保留为 middle。\n"
+        "只有在核心股承接稳定、情绪分歧可修复时，才能判断为 middle。\n"
+        "当 theme_cycle_hint 显示 main_rise 或 healthy_divergence，且 leader_board_max/leader_continuity_score 仍强时，不要轻易判 late。\n"
         f"Input:\n{json.dumps(payload, ensure_ascii=False)}"
     )
 

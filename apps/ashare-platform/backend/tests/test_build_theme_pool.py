@@ -212,6 +212,8 @@ class TestBuildThemePool(unittest.TestCase):
             os.environ["ASHARE_THEME_SEMANTIC_ENRICH_ENABLED"] = "1"
             import app.core.config as config_module
             import app.db.session as session_module
+            from app.models.market_emotion_daily import MarketEmotionDaily
+            from app.models.theme_emotion_daily import ThemeEmotionDaily
             from app.models.trend_pool_daily import TrendPoolDaily
             from app.models.theme_pool_daily import ThemePoolDaily
             from app.pipelines.build_theme_pool import build_theme_pool
@@ -234,9 +236,48 @@ class TestBuildThemePool(unittest.TestCase):
                         is_uptrend=True,
                     )
                 )
+                session.add(
+                    MarketEmotionDaily(
+                        trade_date=date.fromisoformat("2026-03-13"),
+                        run_id="emotion-run",
+                        limit_down_count=13,
+                        highest_board=5,
+                        limit_up_ladder_count=8,
+                        board_ge_2_count=8,
+                        board_ge_3_count=3,
+                        board_ge_4_count=2,
+                        theme_count=20,
+                        top_theme_name="风电",
+                        top_theme_limit_up_num=13,
+                        risk_score=5.0,
+                        emotion_score=12.0,
+                        cycle_stage_hint="weakening",
+                    )
+                )
+                session.add(
+                    ThemeEmotionDaily(
+                        trade_date=date.fromisoformat("2026-03-13"),
+                        run_id="emotion-run",
+                        theme_name="深海科技",
+                        theme_rank=1,
+                        limit_up_num=4,
+                        sample_stock_count=1,
+                        leader_names_json=["平安银行"],
+                        leader_board_max=2,
+                        leader_board_count_ge_2=1,
+                        first_limit_count=0,
+                        limit_back_count=1,
+                        high_limit_count=0,
+                        heat_score=8.0,
+                        risk_score=2.0,
+                        theme_cycle_hint="ferment",
+                    )
+                )
                 session.commit()
 
             def fake_semantic_enricher(theme_row: dict, stock_rows: list[dict]) -> tuple[dict, list[dict]]:
+                self.assertEqual(theme_row["market_emotion_json"]["limit_down_count"], 13)
+                self.assertEqual(theme_row["theme_emotion_json"]["theme_cycle_hint"], "ferment")
                 theme_row["market_attitude"] = "认可度高"
                 theme_row["summary"] = "语义总结"
                 stock_rows[0]["comment"] = "核心观察"

@@ -16,6 +16,7 @@ from sqlalchemy import desc
 from app.core.config import get_settings
 from app.core.runtime import build_run_id
 from app.db.session import init_db, open_session
+from app.models.market_emotion_daily import MarketEmotionDaily
 from app.models.theme_pool_daily import ThemePoolDaily
 from app.models.trend_pool_daily import TrendPoolDaily
 from app.repositories.market_review_repository import replace_for_date
@@ -74,6 +75,11 @@ def build_market_review(
             .limit(3)
             .all()
         )
+        market_emotion_row = (
+            session.query(MarketEmotionDaily)
+            .filter(MarketEmotionDaily.trade_date == resolved_date)
+            .one_or_none()
+        )
         trend_rows = (
             session.query(TrendPoolDaily)
             .filter(TrendPoolDaily.trade_date == resolved_date)
@@ -99,6 +105,30 @@ def build_market_review(
             "main_themes_json": main_themes,
             "emerging_themes_json": [],
             "fading_themes_json": [],
+            "market_emotion_json": (
+                {
+                    "limit_up_count": market_emotion_row.limit_up_count,
+                    "limit_down_count": market_emotion_row.limit_down_count,
+                    "blowup_rate": market_emotion_row.blowup_rate,
+                    "highest_board": market_emotion_row.highest_board,
+                    "cycle_stage_hint": market_emotion_row.cycle_stage_hint,
+                    "risk_score": market_emotion_row.risk_score,
+                    "emotion_score": market_emotion_row.emotion_score,
+                }
+                if market_emotion_row is not None
+                else None
+            ),
+            "themes_json": [
+                {
+                    "theme_name": theme.theme_name,
+                    "theme_rank": theme.theme_rank,
+                    "theme_stage": theme.theme_stage,
+                    "market_attitude": theme.market_attitude,
+                    "summary": theme.summary,
+                }
+                for theme in main_theme_rows
+            ],
+            "trend_codes_json": strong_trend_codes,
             "summary": None,
             "report_markdown": report_markdown,
             "report_version": "v1",
@@ -107,6 +137,9 @@ def build_market_review(
             enriched = effective_enricher(dict(row))
             row["summary"] = enriched.get("summary")
             row["report_markdown"] = str(enriched.get("report_markdown") or row["report_markdown"])
+        row.pop("market_emotion_json", None)
+        row.pop("themes_json", None)
+        row.pop("trend_codes_json", None)
         stored = replace_for_date(session, resolved_date, row)
 
     return {

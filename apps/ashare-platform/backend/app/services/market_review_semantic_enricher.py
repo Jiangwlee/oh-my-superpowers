@@ -19,7 +19,7 @@ JsonRequestFn = Callable[[str, dict[str, Any], dict[str, str]], dict[str, Any]]
 def _default_request(url: str, payload: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=120) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -50,6 +50,9 @@ def _build_prompt(review_row: dict[str, Any]) -> str:
         "main_themes": _json_safe(review_row.get("main_themes_json")),
         "emerging_themes": _json_safe(review_row.get("emerging_themes_json")),
         "fading_themes": _json_safe(review_row.get("fading_themes_json")),
+        "market_emotion": _json_safe(review_row.get("market_emotion_json")),
+        "themes": _json_safe(review_row.get("themes_json")),
+        "trend_codes": _json_safe(review_row.get("trend_codes_json")),
         "report_markdown": _json_safe(review_row.get("report_markdown")),
     }
     return (
@@ -58,6 +61,16 @@ def _build_prompt(review_row: dict[str, Any]) -> str:
         "Allowed fields: summary, report_markdown.\n"
         "summary should be concise Chinese text.\n"
         "report_markdown should be a polished Chinese markdown review.\n"
+        "The markdown must include these sections in order:\n"
+        "1. 市场情绪定位\n"
+        "2. 主线与非主线\n"
+        "3. 推演过程\n"
+        "4. 题材逐项判断\n"
+        "5. 核心股观察\n"
+        "6. 交易结论\n"
+        "推演过程必须写出简要思考过程，明确说明你是如何从市场情绪、题材阶段、核心股承接、风险信号推导出结论的。\n"
+        "不要省略推演过程，不要只给最终结论。\n"
+        "The review must reflect market emotion, theme stage, risk signals, and actionable trading judgment.\n"
         f"Input:\n{json.dumps(payload, ensure_ascii=False)}"
     )
 
