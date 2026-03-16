@@ -1,6 +1,9 @@
 ---
 name: website-operator
-description: Use mcp-cli to control Chrome via the chrome-devtools MCP server for browser automation and debugging. Use when: (1) user asks to automate a website task (click, fill form, login); (2) user says "open browser and do X", "operate/navigate to some URL"; (3) user needs to inspect console errors, network requests, or run a Lighthouse audit; (4) user says "take screenshot of a page".
+description: |
+  Use mcp-cli to control Chrome via chrome-devtools MCP for browser automation and debugging.
+  Use when: automate website tasks (click, fill form, login); open/navigate to URLs;
+  inspect console errors, network requests, run Lighthouse audits; take screenshots.
 ---
 
 # Website Operator
