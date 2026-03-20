@@ -44,5 +44,18 @@ class TestFetchJrjDailyKline(unittest.TestCase):
         self.assertAlmostEqual(bars[0]["low"], 10.00)
 
 
+class TestFetchEastmoneyPopularityRank(unittest.TestCase):
+    """验证东方财富人气榜 fetcher 的 top_n 语义。"""
+
+    @patch("ashare_data.fetchers.trend_scanner.fetch_eastmoney_top_rank_xuangu")
+    def test_fetch_eastmoney_popularity_rank_caps_top_n_at_4000(self, mock_xuangu) -> None:
+        mock_xuangu.return_value = [{"code": "000001", "sc": "SZ000001", "rank": 1, "name": "平安银行"}]
+
+        result = trend_scanner.fetch_eastmoney_popularity_rank(top_n=5000, timeout=5.0)
+
+        mock_xuangu.assert_called_once_with(top_n=4000, timeout=5.0)
+        self.assertEqual(len(result), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

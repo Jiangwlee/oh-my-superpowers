@@ -26,6 +26,20 @@ class HttpClientTest(unittest.TestCase):
 
         self.assertEqual(result["ok"], True)
 
+    @mock.patch("ashare_data.core.http_client._NO_PROXY_OPENER")
+    def test_http_json_post_without_payload_still_uses_post(self, mock_opener: mock.Mock) -> None:
+        resp = mock.Mock()
+        resp.read.return_value = b'{"ok": true}'
+        mock_opener.open.return_value.__enter__ = mock.Mock(return_value=resp)
+        mock_opener.open.return_value.__exit__ = mock.Mock(return_value=False)
+
+        result = http_client.http_json("https://example.com/post", method="POST")
+
+        self.assertEqual(result["ok"], True)
+        request = mock_opener.open.call_args.args[0]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.data, b"{}")
+
     @mock.patch("ashare_data.core.http_client.time.sleep")
     @mock.patch("ashare_data.core.http_client._NO_PROXY_OPENER")
     def test_http_text_retries_then_succeeds(

@@ -46,6 +46,8 @@ def http_text(
     """发送 HTTP 请求并返回文本。使用分块读取避免 IncompleteRead。"""
     if method != "GET":
         raise NotImplementedError("http_text 仅支持 GET 方法，POST 请改用 http_post_text")
+    if payload is not None:
+        raise ValueError("http_text GET 请求不接受 payload")
     
     merged_headers = {"User-Agent": _DEFAULT_UA}
     if headers:
@@ -88,6 +90,8 @@ def http_bytes(
     """发送 HTTP 请求并返回原始字节（用于 gzip/二进制响应）。"""
     if method != "GET":
         raise NotImplementedError("http_bytes 仅支持 GET 方法")
+    if payload is not None:
+        raise ValueError("http_bytes GET 请求不接受 payload")
     
     merged_headers = {"User-Agent": _DEFAULT_UA}
     if headers:
@@ -126,7 +130,7 @@ def http_json(
     """发送 HTTP 请求并返回 JSON dict。支持 GET 和 POST。"""
     import time
     
-    if method == "POST" and payload:
+    if method == "POST":
         # POST 请求
         merged_headers = {
             "Content-Type": "application/json",
@@ -142,7 +146,7 @@ def http_json(
             try:
                 req = urllib.request.Request(
                     url,
-                    data=json.dumps(payload).encode("utf-8"),
+                    data=json.dumps(payload if payload is not None else {}).encode("utf-8"),
                     headers=merged_headers,
                     method="POST",
                 )

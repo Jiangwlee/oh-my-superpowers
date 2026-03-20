@@ -48,7 +48,7 @@ from ashare_data.fetchers.taoguba import (  # noqa: E402
     fetch_taoguba_now_recommend,
 )
 from ashare_data.fetchers.trend_scanner import (  # noqa: E402
-    fetch_eastmoney_top1000,
+    fetch_eastmoney_popularity_rank,
     fetch_ths_snapshot,
     fetch_ths_history,
     scan_all,
@@ -436,7 +436,7 @@ def collect(
 
         try:
             # 1) 拉取人气榜
-            candidates = fetch_eastmoney_top1000(max_rank=min(1000, popularity_max))
+            candidates = fetch_eastmoney_popularity_rank(top_n=min(1000, popularity_max))
             _log(f"  人气榜候选: {len(candidates)} 只")
 
             # 2) 同花顺快照（传入最近交易日，避免假期取到空数据）

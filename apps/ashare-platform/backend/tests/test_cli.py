@@ -44,6 +44,32 @@ class TestCli(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["theme_rows_written"], 2)
 
+    def test_cli_dispatches_red_for_n_days(self) -> None:
+        from app.cli import main
+
+        with patch("app.cli.run_red_for_n_days", return_value={"matched_count": 2}) as mocked:
+            stdout = io.StringIO()
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "ashare-platform",
+                    "red-for-n-days",
+                    "--date",
+                    "2026-03-13",
+                    "--days",
+                    "5",
+                    "--top-n",
+                    "2000",
+                ],
+            ):
+                with redirect_stdout(stdout):
+                    main()
+
+        mocked.assert_called_once_with(trade_date="2026-03-13", days=5, top_n=2000)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["matched_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

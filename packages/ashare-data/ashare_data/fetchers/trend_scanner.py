@@ -188,13 +188,13 @@ class TrendResult:
 
 
 def fetch_eastmoney_top_rank_xuangu(
-    max_rank: int = 1000, timeout: float = 15.0
+    top_n: int = 1000, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
-    cache_key = f"xuangu_top_rank|max_rank={max_rank}"
+    cache_key = f"xuangu_top_rank|top_n={top_n}"
     cached = cache_get("eastmoney", cache_key)
     if isinstance(cached, list):
         return cached
-    max_rank = max(1, min(1000, max_rank))
+    top_n = max(1, min(4000, top_n))
     page = 1
     page_size = 50
     rows: list[dict[str, Any]] = []
@@ -211,7 +211,7 @@ def fetch_eastmoney_top_rank_xuangu(
                     "VOLUME_RATIO,HIGH_PRICE,LOW_PRICE,PRE_CLOSE_PRICE,VOLUME,DEAL_AMOUNT,"
                     "TURNOVERRATE,POPULARITY_RANK"
                 ),
-                "filter": "(POPULARITY_RANK>0)(POPULARITY_RANK<=1000)",
+                "filter": f"(POPULARITY_RANK>0)(POPULARITY_RANK<={top_n})",
                 "source": "SELECT_SECURITIES",
                 "client": "WEB",
             }
@@ -222,7 +222,7 @@ def fetch_eastmoney_top_rank_xuangu(
         if not page_rows:
             break
         rows.extend(page_rows)
-        if len(rows) >= max_rank or not result.get("nextpage"):
+        if len(rows) >= top_n or not result.get("nextpage"):
             break
         page += 1
 
@@ -230,7 +230,7 @@ def fetch_eastmoney_top_rank_xuangu(
     seen: set[str] = set()
     for item in rows:
         rank = int(item.get("POPULARITY_RANK", 0) or 0)
-        if rank <= 0 or rank > max_rank:
+        if rank <= 0 or rank > top_n:
             continue
         secucode = str(item.get("SECUCODE", "")).upper()
         code = str(item.get("SECURITY_CODE", "")).strip()
@@ -262,7 +262,7 @@ def fetch_eastmoney_top_rank_xuangu(
             }
         )
     out.sort(key=lambda x: x["rank"])
-    result = out[:max_rank]
+    result = out[:top_n]
     cache_set("eastmoney", cache_key, result, ttl_seconds=1800)
     return result
 
@@ -335,18 +335,19 @@ def _fetch_eastmoney_names(sc_list: list[str], timeout: float = 15.0) -> dict[st
     return out
 
 
-def fetch_eastmoney_top1000(
-    max_rank: int = 1000, timeout: float = 15.0
+def fetch_eastmoney_popularity_rank(
+    top_n: int = 1000, timeout: float = 15.0
 ) -> list[dict[str, Any]]:
-    """获取东方财富人气榜前N名，xuangu 主接口 + 旧接口 fallback。"""
+    """获取东方财富个股人气榜前N名，支持最多 4000 只。"""
+    top_n = max(1, min(4000, top_n))
     try:
-        top = fetch_eastmoney_top_rank_xuangu(max_rank=max_rank, timeout=timeout)
+        top = fetch_eastmoney_top_rank_xuangu(top_n=top_n, timeout=timeout)
         if top:
             return top
     except Exception:
         pass
 
-    current = _fetch_eastmoney_current_rank(limit=max_rank, timeout=timeout)
+    current = _fetch_eastmoney_current_rank(limit=top_n, timeout=timeout)
     current.sort(key=lambda x: int(x.get("rk", 10**9)))
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -364,7 +365,7 @@ def fetch_eastmoney_top1000(
                 "from": "eastmoney_current",
             }
         )
-        if len(out) >= max_rank:
+        if len(out) >= top_n:
             break
 
     names = _fetch_eastmoney_names([x["sc"] for x in out], timeout=timeout)

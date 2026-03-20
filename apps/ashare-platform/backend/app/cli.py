@@ -18,6 +18,7 @@ from app.tasks.build_theme_pool import run as run_build_theme_pool
 from app.tasks.build_trend_pool import run as run_build_trend_pool
 from app.tasks.cleanup_ephemeral_data import run as run_cleanup_ephemeral_data
 from app.tasks.collect_ephemeral import run as run_collect_ephemeral
+from app.tasks.red_for_n_days import run as run_red_for_n_days
 
 TaskFn = Callable[..., dict[str, Any]]
 
@@ -49,6 +50,14 @@ def _build_parser() -> argparse.ArgumentParser:
     cleanup = subparsers.add_parser("cleanup-ephemeral-data", help="Clean expired ephemeral files")
     cleanup.add_argument("--max-age-days", type=int, default=3)
 
+    red = subparsers.add_parser(
+        "red-for-n-days",
+        help="Screen Eastmoney popularity names whose last N trading days close at or above open",
+    )
+    red.add_argument("--date", dest="trade_date")
+    red.add_argument("--days", type=int, default=7)
+    red.add_argument("--top-n", type=int, default=1000)
+
     return parser
 
 
@@ -74,6 +83,12 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
         return run_build_market_review(trade_date=args.trade_date)
     if args.command == "cleanup-ephemeral-data":
         return run_cleanup_ephemeral_data(max_age_days=args.max_age_days)
+    if args.command == "red-for-n-days":
+        return run_red_for_n_days(
+            trade_date=args.trade_date,
+            days=args.days,
+            top_n=args.top_n,
+        )
     raise ValueError(f"Unsupported command: {args.command}")
 
 

@@ -94,6 +94,43 @@ class TestTaskRunLogging(unittest.TestCase):
             config_module.get_settings.cache_clear()
             session_module.reset_db_runtime()
 
+    def test_red_for_n_days_task_persists_success_run(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
+            import app.core.config as config_module
+            import app.db.session as session_module
+            from app.models.run import Run
+            from app.tasks.red_for_n_days import run
+
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
+            with patch(
+                "app.tasks.red_for_n_days.build_red_for_n_days",
+                return_value={
+                    "run_id": "20260313-red-for-n-days-test",
+                    "trade_date": "2026-03-13",
+                    "matched_count": 5,
+                },
+            ):
+                result = run(
+                    trade_date="2026-03-13",
+                    days=7,
+                    top_n=2000,
+                )
+            self.assertIn("run_id", result)
+
+            with session_module.open_session() as session:
+                rows = session.query(Run).all()
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(rows[0].pipeline_name, "red-for-n-days")
+                self.assertEqual(rows[0].status, "success")
+                self.assertFalse(rows[0].degraded)
+
+            os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
 
 if __name__ == "__main__":
     unittest.main()

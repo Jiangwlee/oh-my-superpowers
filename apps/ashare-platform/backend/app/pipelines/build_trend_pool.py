@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Callable
 
-from ashare_data.fetchers.trend_scanner import fetch_eastmoney_top1000, scan_all
+from ashare_data.fetchers.trend_scanner import fetch_eastmoney_popularity_rank, scan_all
 
 from app.core.runtime import build_run_id
 from app.db.session import init_db, open_session
@@ -48,13 +48,13 @@ def build_trend_pool(
     *,
     trade_date: str,
     max_rank: int = 1000,
-    fetch_candidates: Callable[..., list[dict[str, Any]]] = fetch_eastmoney_top1000,
+    fetch_candidates: Callable[..., list[dict[str, Any]]] = fetch_eastmoney_popularity_rank,
     scanner: Callable[..., list[Any]] = scan_all,
 ) -> dict[str, Any]:
     """Build and persist one day of trend pool facts."""
     resolved_date = date.fromisoformat(trade_date)
     run_id = build_run_id(trade_date, "build-trend-pool")
-    candidates = fetch_candidates(max_rank=max_rank)
+    candidates = fetch_candidates(top_n=max_rank)
     results = scanner(candidates)
     rows = [
         _to_row(resolved_date, run_id, item)
