@@ -12,3 +12,8 @@ __pycache__/
 
 *.egg-info/
 apps/ashare-platform/backend/data/
+deployment/docker/ashare-platform/data/
+
+# Environment files
+.env
+**/.env

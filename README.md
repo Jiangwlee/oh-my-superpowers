@@ -118,6 +118,22 @@ Deployment order: install/deploy `ashare-data` first, then deploy `ashare-assist
 - Python 3.10+
 - Openclaw platform or compatible agent runtime
 
+### Project Installer
+
+Use the project-level installer to install only the packages, apps, or skills you need:
+
+```bash
+./install.sh --list
+./install.sh --package ashare-data --app ashare-platform
+./install.sh --skill ashare-assistant,unified-memory
+./install.sh --all-skills --project-skills
+```
+
+Skill install targets:
+
+- `--project-skills`: install to `./.agents/skills/` (default)
+- `--global-skills`: install to `~/.agents/skills/`
+
 ### Install shared packages
 
 ```bash

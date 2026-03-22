@@ -234,12 +234,3 @@ logger = logging.getLogger(__name__)
 skills/<skill-name>/          ← 源码（在此修改）
 ```
 
-部署前必须先读：
-- 通用规则：[Deployment.md](Deployment.md)
-- Skill 专属：`skills/<skill-name>/DEPLOYMENT.md`（如存在）
-
-部署目标：
-- 通用部署规则：详见 [Deployment.md](Deployment.md)
-- ashare-assistant：详见 [skills/ashare-assistant/DEPLOYMENT.md](skills/ashare-assistant/DEPLOYMENT.md)
-- unified-memory：详见 [skills/unified-memory/DEPLOYMENT.md](skills/unified-memory/DEPLOYMENT.md)
-- 访问 Tencent VPS：`ssh root@tencent-vps`

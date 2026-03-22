@@ -111,8 +111,15 @@ http://127.0.0.1:8000/docs
 Build and start:
 
 ```bash
+bash deployment/docker/ashare-platform/install.sh
 docker compose -f deployment/docker/ashare-platform/docker-compose.yml build
 docker compose -f deployment/docker/ashare-platform/docker-compose.yml up -d
+```
+
+Optional bootstrap:
+
+```bash
+bash deployment/docker/ashare-platform/install.sh --with-init-data --init-days 30
 ```
 
 Runtime notes:

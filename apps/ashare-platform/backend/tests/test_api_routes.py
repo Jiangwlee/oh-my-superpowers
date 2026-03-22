@@ -8,6 +8,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(_BACKEND_ROOT) not in sys.path:
@@ -281,6 +282,89 @@ class TestApiRoutes(unittest.TestCase):
             os.environ.pop("ASHARE_PLATFORM_HOME", None)
             config_module.get_settings.cache_clear()
             session_module.reset_db_runtime()
+
+    def test_theme_daily_stocks_exposes_evidence_fields(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            os.environ["ASHARE_PLATFORM_HOME"] = tmp_dir
+            import app.core.config as config_module
+            import app.db.session as session_module
+            from app.api.routes.theme_pool import get_theme_daily_stocks
+            from app.models.theme_stock_daily import ThemeStockDaily
+
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+            session_module.init_db()
+            with session_module.open_session() as session:
+                session.add(
+                    ThemeStockDaily(
+                        trade_date=date.fromisoformat("2026-03-13"),
+                        run_id="r1",
+                        theme_name="新能源汽车",
+                        code="002913",
+                        name="奥士康",
+                        role="leader",
+                        is_core=True,
+                        rank_in_theme=1,
+                        trend_score=85.2,
+                        star_rating=4,
+                        emotion_level=3,
+                        comment=None,
+                        evidence_json={
+                            "continue_num": 3,
+                            "change_rate": 10.01,
+                            "reason_type": "新能源汽车+锂电池",
+                            "change_tag": "HIGH_LIMIT",
+                        },
+                    )
+                )
+                session.commit()
+
+            rows = get_theme_daily_stocks("新能源汽车", trade_date="2026-03-13")
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].continue_num, 3)
+            self.assertAlmostEqual(rows[0].change_rate or 0.0, 10.01, places=2)
+            self.assertEqual(rows[0].reason_type, "新能源汽车+锂电池")
+            self.assertEqual(rows[0].change_tag, "HIGH_LIMIT")
+
+            os.environ.pop("ASHARE_PLATFORM_HOME", None)
+            config_module.get_settings.cache_clear()
+            session_module.reset_db_runtime()
+
+    def test_kline_daily_route_formats_fetcher_payload(self) -> None:
+        from app.api.routes.kline import get_daily_kline
+
+        with patch(
+            "app.api.routes.kline.fetch_jrj_daily_kline",
+            return_value=[
+                {
+                    "time": 20260317,
+                    "open": 12.5,
+                    "high": 13.0,
+                    "low": 12.3,
+                    "close": 12.8,
+                    "volume": 15234.0,
+                    "amount": 198563200.0,
+                    "change_pct": None,
+                },
+                {
+                    "time": 20260318,
+                    "open": 12.8,
+                    "high": 13.2,
+                    "low": 12.7,
+                    "close": 13.1,
+                    "volume": 1523400.0,
+                    "amount": 198563200.0,
+                    "change_pct": 2.34,
+                },
+            ],
+        ) as mocked_fetch:
+            rows = get_daily_kline("002913", days=2)
+
+        mocked_fetch.assert_called_once_with("002913", range_num=2)
+        self.assertEqual([row.date for row in rows], ["2026-03-17", "2026-03-18"])
+        self.assertEqual(rows[1].volume, 1523400)
+        self.assertAlmostEqual(rows[1].amount, 1.99, places=2)
+        self.assertAlmostEqual(rows[1].change_pct or 0.0, 2.34, places=2)
 
 
 if __name__ == "__main__":

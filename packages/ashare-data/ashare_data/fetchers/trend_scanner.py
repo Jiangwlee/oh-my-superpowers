@@ -718,8 +718,45 @@ def fetch_jrj_daily_kline(
                 vol = 0.0
         else:
             vol = 0.0
-        out.append({"time": int(t), "open": op, "close": cp, "high": hp, "low": lp, "volume": vol})
+        raw_amount = item.get("llValue") or item.get("amount") or item.get("nAmount") or 0
+        try:
+            amount = float(raw_amount)
+        except (TypeError, ValueError):
+            amount = 0.0
+
+        raw_change_pct = (
+            item.get("change_pct")
+            or item.get("changePct")
+            or item.get("chgPct")
+            or item.get("nChgPct")
+            or item.get("changeRatio")
+        )
+        try:
+            change_pct = float(raw_change_pct) if raw_change_pct is not None else None
+        except (TypeError, ValueError):
+            change_pct = None
+
+        out.append(
+            {
+                "time": int(t),
+                "open": op,
+                "close": cp,
+                "high": hp,
+                "low": lp,
+                "volume": vol,
+                "amount": amount,
+                "change_pct": change_pct,
+            }
+        )
     out.sort(key=lambda x: x["time"])
+    for idx in range(1, len(out)):
+        if out[idx].get("change_pct") is not None:
+            continue
+        prev_close = out[idx - 1].get("close")
+        curr_close = out[idx].get("close")
+        if prev_close is None or curr_close is None or float(prev_close) <= 0:
+            continue
+        out[idx]["change_pct"] = round((float(curr_close) / float(prev_close) - 1.0) * 100.0, 2)
     cache_set("kline", cache_key, out, ttl_seconds=None)
     return out
 

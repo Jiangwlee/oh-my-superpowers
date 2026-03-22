@@ -12,6 +12,28 @@ from app.schemas.api import ThemePoolDailyResponse, ThemeStockDailyResponse
 router = APIRouter(prefix="/theme-pool", tags=["theme-pool"])
 
 
+def _to_theme_stock_response(row: ThemeStockDaily) -> ThemeStockDailyResponse:
+    evidence = row.evidence_json if isinstance(row.evidence_json, dict) else {}
+    continue_num = evidence.get("continue_num")
+    return ThemeStockDailyResponse(
+        trade_date=row.trade_date.isoformat(),
+        theme_name=row.theme_name,
+        code=row.code,
+        name=row.name,
+        role=row.role,
+        is_core=row.is_core,
+        rank_in_theme=row.rank_in_theme,
+        trend_score=row.trend_score,
+        star_rating=row.star_rating,
+        emotion_level=row.emotion_level,
+        comment=row.comment,
+        continue_num=int(continue_num) if continue_num is not None else None,
+        change_rate=float(evidence["change_rate"]) if evidence.get("change_rate") is not None else None,
+        reason_type=str(evidence["reason_type"]) if evidence.get("reason_type") is not None else None,
+        change_tag=str(evidence["change_tag"]) if evidence.get("change_tag") is not None else None,
+    )
+
+
 @router.get("/daily", response_model=list[ThemePoolDailyResponse])
 def get_theme_pool_daily(
     trade_date: str = Query(...),
@@ -64,22 +86,7 @@ def get_theme_daily_stocks(
             .order_by(ThemeStockDaily.rank_in_theme.asc())
             .all()
         )
-        return [
-            ThemeStockDailyResponse(
-                trade_date=row.trade_date.isoformat(),
-                theme_name=row.theme_name,
-                code=row.code,
-                name=row.name,
-                role=row.role,
-                is_core=row.is_core,
-                rank_in_theme=row.rank_in_theme,
-                trend_score=row.trend_score,
-                star_rating=row.star_rating,
-                emotion_level=row.emotion_level,
-                comment=row.comment,
-            )
-            for row in rows
-        ]
+        return [_to_theme_stock_response(row) for row in rows]
 
 
 @router.get("/themes/{theme_name}/history", response_model=list[ThemePoolDailyResponse])

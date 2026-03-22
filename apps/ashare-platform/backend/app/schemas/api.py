@@ -54,6 +54,21 @@ class ThemeStockDailyResponse(BaseModel):
     star_rating: int | None = None
     emotion_level: int | None = None
     comment: str | None = None
+    continue_num: int | None = None
+    change_rate: float | None = None
+    reason_type: str | None = None
+    change_tag: str | None = None
+
+
+class KlineDailyResponse(BaseModel):
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+    amount: float
+    change_pct: float | None = None
 
 
 class MarketReviewDailyResponse(BaseModel):

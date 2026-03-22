@@ -2,8 +2,10 @@
 name: website-operator
 description: |
   Use mcp-cli to control Chrome via chrome-devtools MCP for browser automation and debugging.
-  Use when: automate website tasks (click, fill form, login); open/navigate to URLs;
-  inspect console errors, network requests, run Lighthouse audits; take screenshots.
+  Use when: (1) user asks to automate a website task — click, fill form, login, search;
+  (2) user says "访问/打开/操作某网站", "搜索XXX", "在浏览器里做XXX", "open/navigate to URL";
+  (3) user needs to inspect console errors, network requests, or run a Lighthouse audit;
+  (4) user says "take screenshot" or "截图".
 ---
 
 # Website Operator
@@ -28,11 +30,11 @@ Before executing any browser command:
    ```
    If not found, stop and tell the user: "mcp-cli is not installed. Install it first."
 
-2. **Verify chrome-devtools server is registered:**
+2. **Verify chrome-devtools tools are accessible:**
    ```bash
-   mcp-cli list-servers 2>/dev/null | grep -q chrome-devtools || echo "NOT FOUND"
+   mcp-cli 2>/dev/null | grep -q navigate_page || echo "NOT FOUND"
    ```
-   If not listed, stop and tell the user to add the chrome-devtools MCP server to their configuration.
+   If not found, stop and tell the user to add the chrome-devtools MCP server to their configuration.
 
 ---
 

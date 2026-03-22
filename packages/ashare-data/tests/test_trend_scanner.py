@@ -30,18 +30,32 @@ class TestFetchJrjDailyKline(unittest.TestCase):
                         "nHighPx": "10.80",
                         "nLowPx": "10.00",
                         "llVolume": "1234500",
-                    }
+                        "llValue": "34567890",
+                    },
+                    {
+                        "nTime": 20260304,
+                        "nOpenPx": "10.60",
+                        "nLastPx": "10.80",
+                        "nHighPx": "10.98",
+                        "nLowPx": "10.40",
+                        "llVolume": "2234500",
+                        "llValue": "45678900",
+                    },
                 ]
             }
         }
 
         bars = trend_scanner.fetch_jrj_daily_kline("600000", range_num=60, timeout=5.0)
 
-        self.assertEqual(len(bars), 1)
+        self.assertEqual(len(bars), 2)
         self.assertAlmostEqual(bars[0]["open"], 10.12)
         self.assertAlmostEqual(bars[0]["close"], 10.56)
         self.assertAlmostEqual(bars[0]["high"], 10.80)
         self.assertAlmostEqual(bars[0]["low"], 10.00)
+        self.assertAlmostEqual(bars[0]["amount"], 34567890.0)
+        self.assertIsNone(bars[0]["change_pct"])
+        self.assertAlmostEqual(bars[1]["amount"], 45678900.0)
+        self.assertAlmostEqual(bars[1]["change_pct"], 2.27, places=2)
 
 
 class TestFetchEastmoneyPopularityRank(unittest.TestCase):

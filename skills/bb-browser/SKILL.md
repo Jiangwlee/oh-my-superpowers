@@ -15,34 +15,13 @@ Purpose: Guide authenticated web access and adapter development via bb-browser C
          which tunnels through your real Chrome instance using its live login state.
 Input:   User goal, target website or command, and access to local `bb-browser` CLI.
 Output:  Fetched content, structured JSON results, or a working `.js` adapter file.
-Sections: Prerequisite Check | Workflow | Adapter Development | Failure Handling | Output Format | Completion Criteria | Guardrails | References
+Sections: Workflow | Adapter Development | Failure Handling | Output Format | Completion Criteria | Guardrails | References
 
 <HARD-GATE>
-NO `bb-browser site` COMMAND WITHOUT CHECKING DAEMON STATUS FIRST.
-
 NO ADAPTER WRITE WITHOUT VERIFYING THE API VIA `bb-browser eval` FIRST.
 
 NO BLIND RETRY — COLLECT EVIDENCE BEFORE TRYING AGAIN.
 </HARD-GATE>
-
-## Prerequisite Check
-
-Before any task, verify the setup:
-
-```bash
-# 1. Check CLI is available
-command -v bb-browser
-
-# 2. Check daemon is running
-curl -s http://localhost:19824/sse | head -1
-# Expected: event: connected
-
-# 3. If daemon is not running, start it
-bb-browser daemon
-```
-
-If the daemon is not running and Chrome extension is not connected, stop and ask the
-user to start the daemon and ensure the Chrome extension is loaded.
 
 ## Workflow A: Using bb-browser Commands
 
@@ -166,14 +145,12 @@ Default response shape:
 
 The task is complete only when:
 
-1. Daemon connectivity verified before execution
-2. Target command or site adapter ran without error
-3. Output data was collected and summarized
-4. For new adapters: adapter file saved, tested with `bb-browser site <platform>/<command>`, and output verified
+1. Target command or site adapter ran without error
+2. Output data was collected and summarized
+3. For new adapters: adapter file saved, tested with `bb-browser site <platform>/<command>`, and output verified
 
 ## Guardrails
 
-- ALWAYS check daemon status before any `bb-browser site` command.
 - ALWAYS verify with `bb-browser eval` before writing an adapter.
 - NEVER write an adapter without testing the API call first.
 - NEVER keep retrying a failing command — collect evidence first.
