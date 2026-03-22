@@ -6,7 +6,9 @@ from collections import defaultdict
 from datetime import date
 from typing import Any, Callable
 
+from ashare_data.fetchers.market_breadth import MarketBreadth, fetch_market_breadth_for_date
 from ashare_data.fetchers.market_sentiment import fetch_market_sentiment_for_date
+from ashare_data.fetchers.market_turnover import MarketTurnover, fetch_market_turnover_for_date
 from ashare_data.fetchers.trend_scanner import fetch_ths_history
 
 from app.core.runtime import build_run_id
@@ -67,6 +69,71 @@ def _theme_cycle_hint(limit_up_num: int, leader_board_max: int, limit_up_num_3d_
     return "start"
 
 
+def _board_count_from_history_label(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    text = str(value).strip()
+    if not text or text == "--":
+        return None
+    if "首板" in text:
+        return 1
+    if "天" in text and "板" in text:
+        try:
+            return int(text.split("天", 1)[1].split("板", 1)[0])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _continuous_board_map(day: dict[str, Any]) -> dict[str, int]:
+    board_map: dict[str, int] = {}
+    for item in day.get("continuous_limit_up") or []:
+        code = str(item.get("code") or "").strip()
+        if not code:
+            continue
+        board_map[code] = _safe_int(item.get("continue_num"), 1)
+    for theme in day.get("block_top") or []:
+        for stock in theme.get("stock_list") or []:
+            code = str(stock.get("code") or "").strip()
+            if not code or code in board_map:
+                continue
+            board_count = _board_count_from_history_label(stock.get("high_days"))
+            if board_count is None:
+                board_count = _safe_int(stock.get("continue_num"), 0) or None
+            if board_count is not None:
+                board_map[code] = board_count
+    return board_map
+
+
+def _promotion_stats(previous_day: dict[str, Any] | None, current_day: dict[str, Any]) -> dict[str, Any]:
+    if previous_day is None:
+        return {
+            "promotion_2to3_total": None,
+            "promotion_2to3_success": None,
+            "promotion_3to4_total": None,
+            "promotion_3to4_success": None,
+            "promotion_candidates_2to3": [],
+            "promotion_candidates_3to4": [],
+        }
+
+    previous_boards = _continuous_board_map(previous_day)
+    current_boards = _continuous_board_map(current_day)
+    candidates_2to3 = sorted(code for code, board in previous_boards.items() if board == 2)
+    candidates_3to4 = sorted(code for code, board in previous_boards.items() if board == 3)
+    success_2to3 = sum(1 for code in candidates_2to3 if current_boards.get(code, 0) >= 3)
+    success_3to4 = sum(1 for code in candidates_3to4 if current_boards.get(code, 0) >= 4)
+    return {
+        "promotion_2to3_total": len(candidates_2to3),
+        "promotion_2to3_success": success_2to3,
+        "promotion_3to4_total": len(candidates_3to4),
+        "promotion_3to4_success": success_3to4,
+        "promotion_candidates_2to3": candidates_2to3,
+        "promotion_candidates_3to4": candidates_3to4,
+    }
+
+
 def _extract_market_stats(day: dict[str, Any]) -> dict[str, Any]:
     ladder = day.get("continuous_limit_up") or []
     heights = [_safe_int(item.get("continue_num"), 1) for item in ladder]
@@ -116,6 +183,8 @@ def build_emotion_facts(
     trade_date: str,
     history_fetcher: Callable[..., list[dict[str, Any]]] = fetch_ths_history,
     sentiment_fetcher: Callable[[str], Any] = fetch_market_sentiment_for_date,
+    breadth_fetcher: Callable[[str], MarketBreadth] = fetch_market_breadth_for_date,
+    turnover_fetcher: Callable[[str], MarketTurnover] = fetch_market_turnover_for_date,
 ) -> dict[str, Any]:
     """Build and persist market/theme emotion rows for one trade date."""
     resolved_date = date.fromisoformat(trade_date)
@@ -130,11 +199,12 @@ def build_emotion_facts(
     current_key = ordered_dates[-1]
     current_stats = by_date[current_key]
     idx = len(ordered_dates) - 1
+    previous_day = history[idx - 1] if idx >= 1 else None
     prev_3_key = ordered_dates[idx - 2] if idx >= 2 else None
     prev_5_key = ordered_dates[idx - 4] if idx >= 4 else None
     prev_3 = by_date.get(prev_3_key) if prev_3_key else None
     prev_5 = by_date.get(prev_5_key) if prev_5_key else None
-    sentiment_by_date: dict[str, dict[str, int | None]] = {}
+    sentiment_by_date: dict[str, dict[str, Any]] = {}
     for date_key in ordered_dates:
         try:
             sentiment = sentiment_fetcher(date_key)
@@ -145,16 +215,49 @@ def build_emotion_facts(
                 "limit_up": _safe_int(sentiment.get("limit_up")) if sentiment.get("limit_up") is not None else None,
                 "limit_down": _safe_int(sentiment.get("limit_down")) if sentiment.get("limit_down") is not None else None,
                 "blowup_rate": _safe_float(sentiment.get("blowup_rate")),
+                "seal_rate": _safe_float(sentiment.get("seal_rate")),
+                "limit_up_history_num": _safe_int(sentiment.get("limit_up_history_num"))
+                if sentiment.get("limit_up_history_num") is not None
+                else None,
+                "limit_up_open_num": _safe_int(sentiment.get("limit_up_open_num"))
+                if sentiment.get("limit_up_open_num") is not None
+                else None,
+                "limit_down_history_num": _safe_int(sentiment.get("limit_down_history_num"))
+                if sentiment.get("limit_down_history_num") is not None
+                else None,
+                "limit_down_open_num": _safe_int(sentiment.get("limit_down_open_num"))
+                if sentiment.get("limit_down_open_num") is not None
+                else None,
             }
         else:
             sentiment_by_date[date_key] = {
-                "limit_up": _safe_int(getattr(sentiment, "limit_up", None)) if getattr(sentiment, "limit_up", None) is not None else None,
-                "limit_down": _safe_int(getattr(sentiment, "limit_down", None)) if getattr(sentiment, "limit_down", None) is not None else None,
+                "limit_up": _safe_int(getattr(sentiment, "limit_up", None))
+                if getattr(sentiment, "limit_up", None) is not None
+                else None,
+                "limit_down": _safe_int(getattr(sentiment, "limit_down", None))
+                if getattr(sentiment, "limit_down", None) is not None
+                else None,
                 "blowup_rate": _safe_float(getattr(sentiment, "blowup_rate", None)),
+                "seal_rate": _safe_float(getattr(sentiment, "seal_rate", None)),
+                "limit_up_history_num": _safe_int(getattr(sentiment, "limit_up_history_num", None))
+                if getattr(sentiment, "limit_up_history_num", None) is not None
+                else None,
+                "limit_up_open_num": _safe_int(getattr(sentiment, "limit_up_open_num", None))
+                if getattr(sentiment, "limit_up_open_num", None) is not None
+                else None,
+                "limit_down_history_num": _safe_int(getattr(sentiment, "limit_down_history_num", None))
+                if getattr(sentiment, "limit_down_history_num", None) is not None
+                else None,
+                "limit_down_open_num": _safe_int(getattr(sentiment, "limit_down_open_num", None))
+                if getattr(sentiment, "limit_down_open_num", None) is not None
+                else None,
             }
 
     current_sentiment = sentiment_by_date.get(current_key, {})
     prev_3_sentiment = sentiment_by_date.get(prev_3_key, {}) if prev_3_key else {}
+    breadth = breadth_fetcher(trade_date)
+    turnover = turnover_fetcher(current_key)
+    promotion_stats = _promotion_stats(previous_day, history[idx])
 
     heat_score = round(
         current_stats["highest_board"] * 1.2
@@ -180,10 +283,19 @@ def build_emotion_facts(
         "board_ge_2_count": current_stats["board_ge_2_count"],
         "board_ge_3_count": current_stats["board_ge_3_count"],
         "board_ge_4_count": current_stats["board_ge_4_count"],
+        "advance_count": breadth.advance_count,
+        "decline_count": breadth.decline_count,
+        "flat_count": breadth.flat_count,
         "theme_count": current_stats["theme_count"],
         "top_theme_name": current_stats["top_theme_name"],
         "top_theme_limit_up_num": current_stats["top_theme_limit_up_num"],
         "blowup_rate": current_sentiment.get("blowup_rate"),
+        "seal_rate": current_sentiment.get("seal_rate"),
+        "promotion_2to3_total": promotion_stats["promotion_2to3_total"],
+        "promotion_2to3_success": promotion_stats["promotion_2to3_success"],
+        "promotion_3to4_total": promotion_stats["promotion_3to4_total"],
+        "promotion_3to4_success": promotion_stats["promotion_3to4_success"],
+        "market_volume": turnover.market_volume,
         "yesterday_limit_up_return": None,
         "highest_board_3d_delta": _delta(current_stats["highest_board"], prev_3["highest_board"] if prev_3 else None),
         "highest_board_5d_delta": _delta(current_stats["highest_board"], prev_5["highest_board"] if prev_5 else None),
@@ -209,6 +321,25 @@ def build_emotion_facts(
         "evidence_json": {
             "history_window_start": ordered_dates[0],
             "history_window_end": ordered_dates[-1],
+            "market_breadth": {
+                "zdfb_bins": breadth.zdfb_bins or [],
+                "universe_total": breadth.universe_total,
+            },
+            "market_sentiment": {
+                "limit_up_history_num": current_sentiment.get("limit_up_history_num"),
+                "limit_up_open_num": current_sentiment.get("limit_up_open_num"),
+                "limit_down_history_num": current_sentiment.get("limit_down_history_num"),
+                "limit_down_open_num": current_sentiment.get("limit_down_open_num"),
+            },
+            "market_volume": {
+                "source": "ths_turnover_day",
+                "source_code": turnover.source_code,
+                "source_name": turnover.source_name,
+            },
+            "promotion": {
+                "candidates_2to3": promotion_stats["promotion_candidates_2to3"],
+                "candidates_3to4": promotion_stats["promotion_candidates_3to4"],
+            },
         },
     }
 

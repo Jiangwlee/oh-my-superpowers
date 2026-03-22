@@ -1,0 +1,4 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+30 15 * * 1-5 root /app/deploy/run_scheduled_collect.sh >> /var/log/ashare-platform-cron.log 2>&1

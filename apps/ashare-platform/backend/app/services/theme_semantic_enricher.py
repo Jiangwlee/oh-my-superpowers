@@ -126,12 +126,13 @@ def create_theme_semantic_enricher(
             return theme_row, stock_rows
 
         if isinstance(parsed, dict):
-            if isinstance(parsed.get("market_attitude"), str):
-                theme_row["market_attitude"] = parsed["market_attitude"].strip() or None
-            if parsed.get("theme_stage") in {"early", "middle", "late", "unknown"}:
-                theme_row["theme_stage"] = parsed["theme_stage"]
-            if isinstance(parsed.get("summary"), str):
-                theme_row["summary"] = parsed["summary"].strip() or None
+            theme_payload = parsed.get("theme") if isinstance(parsed.get("theme"), dict) else parsed
+            if isinstance(theme_payload.get("market_attitude"), str):
+                theme_row["market_attitude"] = theme_payload["market_attitude"].strip() or None
+            if theme_payload.get("theme_stage") in {"early", "middle", "late", "unknown"}:
+                theme_row["theme_stage"] = theme_payload["theme_stage"]
+            if isinstance(theme_payload.get("summary"), str):
+                theme_row["summary"] = theme_payload["summary"].strip() or None
             stock_comments = parsed.get("stock_comments")
             if isinstance(stock_comments, dict):
                 comment_map = {

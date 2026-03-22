@@ -1,0 +1,21 @@
+services:
+  ashare-platform:
+    build:
+      context: ../../..
+      dockerfile: apps/ashare-platform/backend/Dockerfile
+    container_name: ashare_platform_backend
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      - ASHARE_PLATFORM_HOME=/data
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

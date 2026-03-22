@@ -16,8 +16,10 @@ from app.tasks.build_market_review import run as run_build_market_review
 from app.tasks.build_emotion_facts import run as run_build_emotion_facts
 from app.tasks.build_theme_pool import run as run_build_theme_pool
 from app.tasks.build_trend_pool import run as run_build_trend_pool
+from app.tasks.collect_all import run as run_collect_all
 from app.tasks.cleanup_ephemeral_data import run as run_cleanup_ephemeral_data
 from app.tasks.collect_ephemeral import run as run_collect_ephemeral
+from app.tasks.init_data import run as run_init_data
 from app.tasks.red_for_n_days import run as run_red_for_n_days
 
 TaskFn = Callable[..., dict[str, Any]]
@@ -33,6 +35,25 @@ def _build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--taoguba-count", type=int, default=20)
     collect.add_argument("--no-scan-trends", action="store_true")
     collect.add_argument("--popularity-max", type=int, default=1000)
+
+    collect_all = subparsers.add_parser(
+        "collect-all",
+        help="Collect and build retained platform data for one trading day",
+    )
+    collect_all.add_argument("--date", dest="trade_date")
+    collect_all.add_argument("--with-ephemeral", action="store_true")
+    collect_all.add_argument("--news-count", type=int, default=20)
+    collect_all.add_argument("--taoguba-count", type=int, default=20)
+    collect_all.add_argument("--no-scan-trends", action="store_true")
+    collect_all.add_argument("--popularity-max", type=int, default=1000)
+    collect_all.add_argument("--trend-max-rank", type=int, default=1000)
+
+    init_data = subparsers.add_parser(
+        "init-data",
+        help="Backfill recent trading days without running analysis steps",
+    )
+    init_data.add_argument("--date", dest="trade_date")
+    init_data.add_argument("--days", type=int, default=30)
 
     trend = subparsers.add_parser("build-trend-pool", help="Build retained trend pool daily facts")
     trend.add_argument("--date", dest="trade_date")
@@ -69,6 +90,21 @@ def _dispatch(args: argparse.Namespace) -> dict[str, Any]:
             taoguba_count=args.taoguba_count,
             scan_trends=not args.no_scan_trends,
             popularity_max=args.popularity_max,
+        )
+    if args.command == "collect-all":
+        return run_collect_all(
+            trade_date=args.trade_date,
+            with_ephemeral=args.with_ephemeral,
+            news_count=args.news_count,
+            taoguba_count=args.taoguba_count,
+            scan_trends=not args.no_scan_trends,
+            popularity_max=args.popularity_max,
+            trend_max_rank=args.trend_max_rank,
+        )
+    if args.command == "init-data":
+        return run_init_data(
+            trade_date=args.trade_date,
+            days=args.days,
         )
     if args.command == "build-trend-pool":
         return run_build_trend_pool(

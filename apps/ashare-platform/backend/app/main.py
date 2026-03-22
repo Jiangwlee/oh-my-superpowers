@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from app.api.routes.emotion import router as emotion_router
 from app.api.routes.health import router as health_router
 from app.api.routes.market_reviews import router as market_reviews_router
 from app.api.routes.runs import router as runs_router
@@ -26,3 +27,4 @@ app.include_router(runs_router)
 app.include_router(trend_pool_router)
 app.include_router(theme_pool_router)
 app.include_router(market_reviews_router)
+app.include_router(emotion_router)

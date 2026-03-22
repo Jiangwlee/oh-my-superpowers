@@ -44,6 +44,70 @@ class TestCli(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["theme_rows_written"], 2)
 
+    def test_cli_dispatches_collect_all(self) -> None:
+        from app.cli import main
+
+        with patch("app.cli.run_collect_all", return_value={"trade_date": "2026-03-13"}) as mocked:
+            stdout = io.StringIO()
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "ashare-platform",
+                    "collect-all",
+                    "--date",
+                    "2026-03-13",
+                    "--with-ephemeral",
+                    "--news-count",
+                    "50",
+                    "--taoguba-count",
+                    "40",
+                    "--no-scan-trends",
+                    "--popularity-max",
+                    "800",
+                    "--trend-max-rank",
+                    "500",
+                ],
+            ):
+                with redirect_stdout(stdout):
+                    main()
+
+        mocked.assert_called_once_with(
+            trade_date="2026-03-13",
+            with_ephemeral=True,
+            news_count=50,
+            taoguba_count=40,
+            scan_trends=False,
+            popularity_max=800,
+            trend_max_rank=500,
+        )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["trade_date"], "2026-03-13")
+
+    def test_cli_dispatches_init_data(self) -> None:
+        from app.cli import main
+
+        with patch("app.cli.run_init_data", return_value={"trade_dates": ["2026-03-12", "2026-03-13"]}) as mocked:
+            stdout = io.StringIO()
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "ashare-platform",
+                    "init-data",
+                    "--date",
+                    "2026-03-13",
+                    "--days",
+                    "2",
+                ],
+            ):
+                with redirect_stdout(stdout):
+                    main()
+
+        mocked.assert_called_once_with(trade_date="2026-03-13", days=2)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["trade_dates"], ["2026-03-12", "2026-03-13"])
+
     def test_cli_dispatches_red_for_n_days(self) -> None:
         from app.cli import main
 

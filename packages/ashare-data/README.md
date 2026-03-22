@@ -19,6 +19,7 @@ pip install -e packages/ashare-data
 | 命令 | 说明 |
 |------|------|
 | `ashare-collect` | 每日收盘后数据采集（新闻/资金/板块/论坛） |
+| `ashare-cdp-debug` | Chrome CDP 调试入口（用于受保护接口排障） |
 | `ashare-diagnose` | 数据质量诊断 |
 | `ashare-em-collect` | 东方财富股吧热帖采集 |
 | `ashare-tgb-collect` | 淘股吧热帖采集 |
@@ -54,6 +55,12 @@ ashare-wl-monitor --interval 60
 
 # 盘后决策流水线
 ashare-postclose-decide --verbose
+
+# 用真实浏览器上下文抓同花顺 indexflash
+ashare-cdp-debug ths-indexflash
+
+# 通用页内 fetch 调试
+ashare-cdp-debug fetch-json --page-url https://q.10jqka.com.cn/ --url '/api.php?t=indexflash'
 ```
 
 ### `ashare-collect` 参数（当前实现）

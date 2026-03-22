@@ -66,3 +66,67 @@ class MarketReviewDailyResponse(BaseModel):
     fading_themes: list[str] = []
     summary: str | None = None
     report_markdown: str
+
+
+class MarketEmotionDailyResponse(BaseModel):
+    trade_date: str
+    source: str
+    limit_up_count: int | None = None
+    limit_down_count: int | None = None
+    highest_board: int
+    limit_up_ladder_count: int
+    board_ge_2_count: int
+    board_ge_3_count: int
+    board_ge_4_count: int
+    advance_count: int | None = None
+    decline_count: int | None = None
+    flat_count: int | None = None
+    blowup_rate: float | None = None
+    seal_rate: float | None = None
+    promotion_2to3_total: int | None = None
+    promotion_2to3_success: int | None = None
+    promotion_3to4_total: int | None = None
+    promotion_3to4_success: int | None = None
+    market_volume: float | None = None
+    yesterday_limit_up_return: float | None = None
+    theme_count: int
+    top_theme_name: str | None = None
+    top_theme_limit_up_num: int | None = None
+    highest_board_3d_delta: int | None = None
+    highest_board_5d_delta: int | None = None
+    board_ge_3_count_3d_delta: int | None = None
+    board_ge_4_count_3d_delta: int | None = None
+    limit_up_count_3d_delta: int | None = None
+    limit_down_count_3d_delta: int | None = None
+    top_theme_limit_up_num_3d_delta: int | None = None
+    heat_score: float | None = None
+    risk_score: float | None = None
+    emotion_score: float | None = None
+    cycle_stage_hint: str | None = None
+    evidence_json: dict | list | None = None
+
+
+class ThemeEmotionDailyResponse(BaseModel):
+    trade_date: str
+    theme_name: str
+    theme_rank: int
+    source: str
+    limit_up_num: int
+    theme_change_pct: float | None = None
+    sample_stock_count: int
+    first_limit_count: int
+    limit_back_count: int
+    high_limit_count: int
+    leader_names_json: list[str] | dict | None = None
+    leader_board_max: int
+    leader_board_count_ge_2: int
+    leader_continuity_score: float | None = None
+    theme_rank_3d_delta: int | None = None
+    limit_up_num_3d_delta: int | None = None
+    limit_up_num_5d_delta: int | None = None
+    theme_change_3d_mean: float | None = None
+    leader_board_max_3d_trend: int | None = None
+    heat_score: float | None = None
+    risk_score: float | None = None
+    theme_cycle_hint: str | None = None
+    evidence_json: dict | list | None = None

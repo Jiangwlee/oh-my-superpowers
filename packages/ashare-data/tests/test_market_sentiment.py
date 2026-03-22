@@ -52,10 +52,16 @@ class MarketSentimentTest(unittest.TestCase):
     @patch("ashare_data.fetchers.market_sentiment.http_json")
     def test_fetch_market_sentiment_for_date_computes_blowup_rate(self, mock_http_json):
         payload = _mock_resp("closed", "已收盘")
-        payload["data"]["limit_up_count"] = {"today": {"num": 12, "history_num": 20, "open_num": 8}}
+        payload["data"]["limit_up_count"] = {"today": {"num": 12, "history_num": 20, "open_num": 8, "rate": 0.6}}
+        payload["data"]["limit_down_count"] = {"today": {"num": 3, "history_num": 5, "open_num": 2}}
         mock_http_json.return_value = payload
         result = fetch_market_sentiment_for_date("20260313")
         self.assertAlmostEqual(result.blowup_rate or 0.0, 0.4, places=6)
+        self.assertAlmostEqual(result.seal_rate or 0.0, 0.6, places=6)
+        self.assertEqual(result.limit_up_history_num, 20)
+        self.assertEqual(result.limit_up_open_num, 8)
+        self.assertEqual(result.limit_down_history_num, 5)
+        self.assertEqual(result.limit_down_open_num, 2)
 
 
 if __name__ == "__main__":

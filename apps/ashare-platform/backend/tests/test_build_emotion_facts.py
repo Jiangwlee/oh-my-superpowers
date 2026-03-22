@@ -58,6 +58,8 @@ class TestBuildEmotionFacts(unittest.TestCase):
                     "date": "20260312",
                     "continuous_limit_up": [
                         {"code": "000001", "name": "A", "continue_num": 5},
+                        {"code": "000008", "name": "H", "continue_num": 3},
+                        {"code": "000009", "name": "I", "continue_num": 2},
                         {"code": "000005", "name": "E", "continue_num": 3},
                     ],
                     "block_top": [
@@ -85,7 +87,7 @@ class TestBuildEmotionFacts(unittest.TestCase):
                     "continuous_limit_up": [
                         {"code": "000001", "name": "A", "continue_num": 6},
                         {"code": "000008", "name": "H", "continue_num": 4},
-                        {"code": "000009", "name": "I", "continue_num": 2},
+                        {"code": "000009", "name": "I", "continue_num": 3},
                     ],
                     "block_top": [
                         {
@@ -115,10 +117,59 @@ class TestBuildEmotionFacts(unittest.TestCase):
                 trade_date="2026-03-13",
                 history_fetcher=lambda **_: history,
                 sentiment_fetcher=lambda day: {
-                    "20260311": {"limit_up": 52, "limit_down": 4, "blowup_rate": 0.10},
-                    "20260312": {"limit_up": 48, "limit_down": 6, "blowup_rate": 0.12},
-                    "20260313": {"limit_up": 45, "limit_down": 11, "blowup_rate": 0.28},
+                    "20260311": {
+                        "limit_up": 52,
+                        "limit_down": 4,
+                        "blowup_rate": 0.10,
+                        "seal_rate": 0.80,
+                        "limit_up_history_num": 60,
+                        "limit_up_open_num": 8,
+                        "limit_down_history_num": 5,
+                        "limit_down_open_num": 1,
+                    },
+                    "20260312": {
+                        "limit_up": 48,
+                        "limit_down": 6,
+                        "blowup_rate": 0.12,
+                        "seal_rate": 0.75,
+                        "limit_up_history_num": 55,
+                        "limit_up_open_num": 7,
+                        "limit_down_history_num": 7,
+                        "limit_down_open_num": 1,
+                    },
+                    "20260313": {
+                        "limit_up": 45,
+                        "limit_down": 11,
+                        "blowup_rate": 0.28,
+                        "seal_rate": 0.66,
+                        "limit_up_history_num": 62,
+                        "limit_up_open_num": 17,
+                        "limit_down_history_num": 15,
+                        "limit_down_open_num": 4,
+                    },
                 }[day],
+                breadth_fetcher=lambda day: type(
+                    "Breadth",
+                    (),
+                    {
+                        "trade_date": day,
+                        "advance_count": 1200,
+                        "decline_count": 3100,
+                        "flat_count": 180,
+                        "zdfb_bins": [100, 200, 500],
+                        "universe_total": 4480,
+                    },
+                )(),
+                turnover_fetcher=lambda day: type(
+                    "Turnover",
+                    (),
+                    {
+                        "trade_date": day,
+                        "market_volume": 23027.77,
+                        "source_name": "同花顺全A(沪深京)",
+                        "source_code": "883957",
+                    },
+                )(),
             )
             self.assertEqual(result["market_rows_written"], 1)
             self.assertEqual(result["theme_rows_written"], 2)
@@ -128,14 +179,32 @@ class TestBuildEmotionFacts(unittest.TestCase):
                 self.assertEqual(market_row.trade_date.isoformat(), "2026-03-13")
                 self.assertEqual(market_row.highest_board, 6)
                 self.assertEqual(market_row.limit_up_ladder_count, 3)
-                self.assertEqual(market_row.board_ge_3_count, 2)
+                self.assertEqual(market_row.board_ge_3_count, 3)
                 self.assertEqual(market_row.top_theme_name, "风电")
                 self.assertEqual(market_row.top_theme_limit_up_num, 14)
                 self.assertEqual(market_row.limit_up_count, 45)
                 self.assertEqual(market_row.limit_down_count, 11)
                 self.assertAlmostEqual(market_row.blowup_rate or 0.0, 0.28, places=6)
+                self.assertAlmostEqual(market_row.seal_rate or 0.0, 0.66, places=6)
+                self.assertEqual(market_row.advance_count, 1200)
+                self.assertEqual(market_row.decline_count, 3100)
+                self.assertEqual(market_row.flat_count, 180)
+                self.assertEqual(market_row.promotion_2to3_total, 2)
+                self.assertEqual(market_row.promotion_2to3_success, 1)
+                self.assertEqual(market_row.promotion_3to4_total, 2)
+                self.assertEqual(market_row.promotion_3to4_success, 1)
+                self.assertAlmostEqual(market_row.market_volume or 0.0, 23027.77, places=2)
                 self.assertEqual(market_row.limit_down_count_3d_delta, 7)
                 self.assertEqual(market_row.highest_board_3d_delta, 2)
+                self.assertEqual(market_row.evidence_json["market_breadth"]["zdfb_bins"], [100, 200, 500])
+                self.assertEqual(
+                    market_row.evidence_json["promotion"]["candidates_2to3"],
+                    ["000007", "000009"],
+                )
+                self.assertEqual(
+                    market_row.evidence_json["promotion"]["candidates_3to4"],
+                    ["000005", "000008"],
+                )
 
                 theme_rows = (
                     session.query(ThemeEmotionDaily)

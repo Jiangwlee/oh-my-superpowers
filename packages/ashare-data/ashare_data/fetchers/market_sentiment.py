@@ -53,6 +53,11 @@ class MarketSentiment:
     limit_up: int = 0
     limit_down: int = 0
     blowup_rate: float | None = None
+    seal_rate: float | None = None
+    limit_up_history_num: int | None = None
+    limit_up_open_num: int | None = None
+    limit_down_history_num: int | None = None
+    limit_down_open_num: int | None = None
     danger_level: str = "unknown"
     market_open: bool = False
 
@@ -101,17 +106,27 @@ def fetch_market_sentiment_for_date(trade_date: str, cookie: str | None = None) 
     lu_today = (pool_data.get("limit_up_count") or {}).get("today") or {}
     history_num = lu_today.get("history_num")
     open_num = lu_today.get("open_num")
+    ld_history_num = ld_today.get("history_num")
+    ld_open_num = ld_today.get("open_num")
     blowup_rate: float | None = None
+    seal_rate: float | None = None
     try:
         history_total = float(history_num or 0)
         if history_total > 0:
             blowup_rate = float(open_num or 0) / history_total
+            seal_rate = float(lu_today.get("rate")) if lu_today.get("rate") is not None else None
     except (TypeError, ValueError):
         blowup_rate = None
+        seal_rate = None
 
     if limit_up == 0 and limit_down == 0:
         logger.warning("市场情绪数据获取失败（涨跌停均为 0），降级为 unknown")
-        return MarketSentiment(danger_level="unknown", market_open=market_open, blowup_rate=blowup_rate)
+        return MarketSentiment(
+            danger_level="unknown",
+            market_open=market_open,
+            blowup_rate=blowup_rate,
+            seal_rate=seal_rate,
+        )
 
     if limit_down >= 80:
         danger_level = "red"
@@ -124,6 +139,11 @@ def fetch_market_sentiment_for_date(trade_date: str, cookie: str | None = None) 
         limit_up=limit_up,
         limit_down=limit_down,
         blowup_rate=blowup_rate,
+        seal_rate=seal_rate,
+        limit_up_history_num=int(history_num) if history_num is not None else None,
+        limit_up_open_num=int(open_num) if open_num is not None else None,
+        limit_down_history_num=int(ld_history_num) if ld_history_num is not None else None,
+        limit_down_open_num=int(ld_open_num) if ld_open_num is not None else None,
         danger_level=danger_level,
         market_open=market_open,
     )
