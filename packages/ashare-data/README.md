@@ -124,7 +124,12 @@ ashare-collect [--date YYYY-MM-DD] [--skip-collect] [--skip-filter] \
 | `fetchers/taoguba.py` | 淘股吧 | 热帖、推荐、热议 |
 | `fetchers/eastmoney_guba.py` | 东方财富 | 股吧热帖 |
 | `fetchers/trend_scanner.py` | JRJ/THS | 趋势评分、K线数据 |
-| `fetchers/market_sentiment.py` | 同花顺 | 涨跌停计数、市场危险等级、是否开盘 |
+| `fetchers/market_sentiment.py` | 同花顺 | 涨跌停计数、封板率、晋级统计、市场危险等级、是否开盘 |
+| `fetchers/market_breadth.py` | 搜狐/同花顺 | 历史涨跌平家数，最新快照支持 THS CDP fallback |
+| `fetchers/market_turnover.py` | 同花顺 | 市场总成交额（日级） |
+| `fetchers/sohu_zdt.py` | 搜狐 | 历史涨停/跌停/涨跌平/成交额 HTML 表 |
+| `fetchers/sse_stock_data.py` | 上交所 | 日概览、统计数据、活跃股榜 |
+| `fetchers/ths_cdp.py` | 同花顺 | 受浏览器上下文保护接口的 CDP 采集适配层 |
 | `fetchers/broker_account.py` | JVQuant | 账户持仓、委托记录 |
 | `fetchers/trade_date.py` | 金融界 JRJ 接口 | 最近交易日获取（`tradedate`） |
 
@@ -139,9 +144,19 @@ ashare_data/
 │   └── cache.py           # 磁盘缓存
 ├── fetchers/
 │   ├── market_sentiment.py  # 同花顺涨跌停池 → MarketSentiment
+│   ├── market_breadth.py    # 历史/最新涨跌平家数
+│   ├── market_turnover.py   # 市场成交额
+│   ├── sohu_zdt.py          # 搜狐历史涨跌分布表
+│   ├── sse_stock_data.py    # 上交所公共统计接口
+│   ├── ths_cdp.py           # 同花顺 CDP 适配层
 │   ├── trend_scanner.py     # 趋势评分、历史 K 线
 │   └── ...                  # 其他数据源
+├── cdp/
+│   ├── client.py            # Chrome DevTools Protocol 客户端
+│   ├── session.py           # 页面会话与页内 fetch/eval
+│   └── errors.py            # CDP 相关异常
 ├── collect.py               # 统一采集入口（ashare-collect CLI）
+├── cdp_debug.py             # CDP 调试入口（ashare-cdp-debug）
 ├── watchlist_monitor.py     # Watchlist 盘中信号扫描（ashare-wl-monitor CLI）
 └── filter_to_markdown.py    # JSON → Markdown 格式转换
 ```
@@ -152,6 +167,43 @@ ashare_data/
 - 平台级 task / pipeline / retained fact / API 将逐步迁往
   `apps/ashare-platform/backend`
 - `ashare-data` 将收敛为“拿数据、洗数据、算分”的基础能力层
+
+## 与 ashare-platform 的边界
+
+当前职责边界：
+
+- `ashare-data` 负责抓取、解析、清洗、评分、CDP 访问适配
+- `ashare-platform` 负责 retained DB、日级 pipeline、HTTP API、容器内调度
+
+典型链路：
+
+- `market_sentiment.py` / `market_breadth.py` / `market_turnover.py`
+  提供市场情绪原始能力
+- `apps/ashare-platform/backend/app/pipelines/build_emotion_facts.py`
+  将这些原始能力汇总为 retained `market_emotion_daily`
+
+## Chrome CDP
+
+`ashare-data` 现在内置通用 CDP 客户端，用于处理必须依赖真实浏览器上下文的数据源。
+
+典型场景：
+
+- 同花顺 `indexflash` 普通 HTTP 访问会遇到 `403`
+- 在真实 Chrome 会话中可正常返回
+- `market_breadth.py` 会在直接 HTTP 失败时切到 `ths_cdp.py`
+
+调试命令：
+
+```bash
+ashare-cdp-debug ths-indexflash
+ashare-cdp-debug fetch-json --page-url https://q.10jqka.com.cn/ --url '/api.php?t=indexflash'
+```
+
+默认依赖本机 Chrome DevTools endpoint：
+
+```bash
+http://127.0.0.1:9222
+```
 
 ## 开发
 
@@ -164,6 +216,8 @@ python -m unittest tests.test_broker_account
 ```
 
 ## 部署（定时任务）
+
+`ashare-data` 自身仍可独立以 cron 方式运行，但日级 retained facts、HTTP API 和容器内定时任务现在由 `apps/ashare-platform/backend` 承担。
 
 ```cron
 # 每个工作日 15:30 采集收盘数据

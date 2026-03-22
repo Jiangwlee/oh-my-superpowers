@@ -1,20 +1,17 @@
 # A-Share Platform Backend
 
-Purpose: Host the platform backend for retained daily facts, task pipelines,
-         and read-only HTTP APIs.
-Audience: Developers extracting platform logic from `ashare-data` and future
-          clients such as skills and frontend apps.
-Sections: Scope | Layout | Entry Points | Local Run | Theme Tuning | Semantic Enrichment | Docker Run
+Purpose: Host retained daily facts, production pipelines, and read-only HTTP APIs.
+Audience: Developers building data pipelines, skills, and frontend consumers.
+Sections: Scope | Entry Points | CLI | APIs | Local Run | Docker | LLM | Theme Tuning
 
 ## Scope
 
-This backend will own:
+This backend owns:
 
 - retained DB-backed daily facts
-- task-based data production entrypoints
-- read-only HTTP APIs for downstream consumers
-
-## Layout
+- daily production pipelines
+- read-only HTTP APIs for downstream clients
+- scheduled collection inside the container image
 
 Core application code lives under `app/`.
 
@@ -23,20 +20,62 @@ Core application code lives under `app/`.
 - FastAPI app: `app.main:app`
 - CLI: `ashare-platform <command>`
 - Health: `GET /health`
+- OpenAPI docs: `GET /docs`
 
-### CLI Commands
+## CLI
+
+Single-purpose commands:
 
 - `ashare-platform collect-ephemeral --date YYYY-MM-DD`
+- `ashare-platform build-emotion-facts --date YYYY-MM-DD`
 - `ashare-platform build-trend-pool --date YYYY-MM-DD`
 - `ashare-platform build-theme-pool --date YYYY-MM-DD`
 - `ashare-platform build-market-review --date YYYY-MM-DD`
 - `ashare-platform cleanup-ephemeral-data --max-age-days N`
+
+High-level commands:
+
+- `ashare-platform collect-all`
+- `ashare-platform collect-all --date YYYY-MM-DD`
+- `ashare-platform init-data --days 30`
+- `ashare-platform init-data --date YYYY-MM-DD --days 30`
+
+Command semantics:
+
+- `collect-all` is the daily production entrypoint. It only processes one trading day and includes analysis steps.
+- `init-data` is the historical bootstrap entrypoint. It backfills the last `N` trading days of retained market emotion facts and does not run trend/theme/review analysis.
+
+## HTTP APIs
+
+Core endpoints:
+
+- `GET /health`
+- `GET /market-emotion/daily/{trade_date}`
+- `GET /market-emotion/history`
+- `GET /theme-emotion/daily`
+- `GET /theme-emotion/themes/{theme_name}/history`
+- `GET /trend-pool/daily`
+- `GET /theme-pool/daily`
+- `GET /market-reviews/daily/{trade_date}`
+
+Market emotion now includes:
+
+- `advance_count`
+- `decline_count`
+- `flat_count`
+- `seal_rate`
+- `promotion_2to3_total`
+- `promotion_2to3_success`
+- `promotion_3to4_total`
+- `promotion_3to4_success`
+- `market_volume`
 
 ## Local Run
 
 Use the project `.venv` from the repository root:
 
 ```bash
+./.venv/bin/python -m pip install -e packages/ashare-data
 ./.venv/bin/python -m pip install -e apps/ashare-platform/backend
 ./.venv/bin/uvicorn app.main:app --app-dir apps/ashare-platform/backend --host 127.0.0.1 --port 8000
 ```
@@ -45,73 +84,68 @@ Optional runtime env:
 
 ```bash
 export ASHARE_PLATFORM_HOME=/tmp/ashare-platform-dev
+export TZ=Asia/Shanghai
 ```
 
 Example task execution:
 
 ```bash
-./.venv/bin/python -m app.cli build-trend-pool --date 2026-03-13
-./.venv/bin/python -m app.cli build-theme-pool --date 2026-03-13
-./.venv/bin/python -m app.cli build-market-review --date 2026-03-13
+./.venv/bin/python -m app.cli init-data --days 30
+./.venv/bin/python -m app.cli collect-all --date 2026-03-20
+./.venv/bin/python -m app.cli build-theme-pool --date 2026-03-20
 ```
 
-## Theme Tuning
+## Docker
 
-`theme_pool` is ranked by deterministic factors before any LLM enrichment.
+Compose file:
 
-Preset profiles:
+- `deployment/docker/ashare-platform/docker-compose.yml`
+
+The current compose setup uses `network_mode: host`, so the backend is reachable from the host at:
 
 ```bash
-export ASHARE_THEME_POOL_PROFILE=default
-export ASHARE_THEME_POOL_PROFILE=mainline_strict
+http://127.0.0.1:8000/health
+http://127.0.0.1:8000/docs
 ```
 
-`default` keeps broader candidate coverage. `mainline_strict` requires core
-trend confirmation and is closer to a "mainline only" trading style.
-
-Available env vars:
+Build and start:
 
 ```bash
-export ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT=1
-export ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT=0
-export ASHARE_THEME_POOL_WEIGHT_THEME_STRENGTH=1.0
-export ASHARE_THEME_POOL_WEIGHT_TREND_STOCK_COUNT=2.0
-export ASHARE_THEME_POOL_WEIGHT_CORE_TREND_STOCK_COUNT=3.0
-export ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE=0.05
+docker compose -f deployment/docker/ashare-platform/docker-compose.yml build
+docker compose -f deployment/docker/ashare-platform/docker-compose.yml up -d
 ```
 
-Meaning:
+Runtime notes:
 
-- `MIN_TREND_STOCK_COUNT`: minimum number of trend stocks required for a theme to enter the pool
-- `MIN_CORE_TREND_STOCK_COUNT`: minimum number of core stocks that must also be trend stocks
-- `WEIGHT_THEME_STRENGTH`: weight of THS theme strength
-- `WEIGHT_TREND_STOCK_COUNT`: weight of trend stock breadth inside the theme
-- `WEIGHT_CORE_TREND_STOCK_COUNT`: weight of core-stock confirmation
-- `WEIGHT_STRONGEST_TREND_SCORE`: weight of the strongest trend stock quality
+- The image runs `supervisord` as PID 1.
+- `uvicorn` and `cron` are both managed inside the same container.
+- The image is configured for `TZ=Asia/Shanghai`.
+- A cron job runs `collect-all` at `15:30` on weekdays and skips non-trading days.
 
-A more "mainline-first" profile can be enabled directly:
+## Data Sources
+
+Current market emotion inputs:
+
+- THS `limit_up_pool`: limit-up/limit-down counts, seal rate, promotion stats
+- THS `turnover_day`: market turnover
+- Sohu `zdt.shtml`: historical advance/decline/flat breadth
+- THS `indexflash`: latest breadth snapshot, with CDP fallback when direct HTTP is blocked
+
+## Chrome CDP Fallback
+
+Some THS endpoints require a real browser session context. The backend relies on the shared `ashare-data` CDP client for those cases.
+
+Expected Chrome DevTools endpoint:
 
 ```bash
-export ASHARE_THEME_POOL_PROFILE=mainline_strict
+http://127.0.0.1:9222
 ```
 
-Or overridden manually:
-
-```bash
-export ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT=2
-export ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT=1
-export ASHARE_THEME_POOL_WEIGHT_THEME_STRENGTH=0.8
-export ASHARE_THEME_POOL_WEIGHT_TREND_STOCK_COUNT=2.5
-export ASHARE_THEME_POOL_WEIGHT_CORE_TREND_STOCK_COUNT=5.0
-export ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE=0.04
-```
-
-This profile de-emphasizes raw heat and rewards themes whose core names already
-show trend confirmation.
+Container access works because the current compose setup uses host networking.
 
 ## Semantic Enrichment
 
-Theme semantics are optional and disabled by default.
+Theme and market-review semantics are optional and disabled unless explicitly enabled.
 
 Enable them with an OpenAI-compatible endpoint:
 
@@ -119,7 +153,7 @@ Enable them with an OpenAI-compatible endpoint:
 export ASHARE_THEME_SEMANTIC_ENRICH_ENABLED=1
 export ASHARE_MARKET_REVIEW_SEMANTIC_ENRICH_ENABLED=1
 export OPENAI_BASE_URL=http://127.0.0.1:10000/v1
-export OPENAI_MODEL=qwen3.5-32b
+export OPENAI_MODEL=qwen3.5-27b
 export OPENAI_API_KEY=sk-placeholder
 ```
 
@@ -140,23 +174,26 @@ Deterministic fields remain protected:
 - `core_trend_stock_count`
 - stock trend scores and ranks
 
-## Docker Run
+## Theme Tuning
 
-Build from the repository root:
+`theme_pool` is ranked by deterministic factors before any LLM enrichment.
 
-```bash
-docker build -f apps/ashare-platform/backend/Dockerfile -t ashare-platform-backend .
-```
-
-Run:
+Preset profiles:
 
 ```bash
-docker run --rm -p 8000:8000 \
-  -e ASHARE_PLATFORM_HOME=/data \
-  ashare-platform-backend
+export ASHARE_THEME_POOL_PROFILE=default
+export ASHARE_THEME_POOL_PROFILE=mainline_strict
 ```
 
-The image now defaults `ASHARE_PLATFORM_HOME` to `/app/runtime` so API routes and
-CLI tasks share the same retained database even when you do not override the
-environment variable. Keep setting `ASHARE_PLATFORM_HOME` explicitly when you
-want to bind-mount data outside the container.
+`default` keeps broader candidate coverage. `mainline_strict` requires core trend confirmation and is closer to a "mainline only" trading style.
+
+Available env vars:
+
+```bash
+export ASHARE_THEME_POOL_MIN_TREND_STOCK_COUNT=1
+export ASHARE_THEME_POOL_MIN_CORE_TREND_STOCK_COUNT=0
+export ASHARE_THEME_POOL_WEIGHT_THEME_STRENGTH=1.0
+export ASHARE_THEME_POOL_WEIGHT_TREND_STOCK_COUNT=2.0
+export ASHARE_THEME_POOL_WEIGHT_CORE_TREND_STOCK_COUNT=3.0
+export ASHARE_THEME_POOL_WEIGHT_STRONGEST_TREND_SCORE=0.05
+```
