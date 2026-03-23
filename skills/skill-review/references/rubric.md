@@ -1,330 +1,292 @@
 # Skill Review Rubric
 
-Purpose: Define detailed evaluation criteria for the 12 skill quality dimensions.
-Input:   Called by the LLM during Phase 2 of skill-review.
-Output:  (reference only — no output produced by this file)
-Sections: Dimensions 1–12 | Severity Guide
+Purpose: Define layered evaluation criteria for skill-review v2.
+Input:   Called by the LLM during semantic review.
+Output:  Reference only. This file defines layers, dimensions, labels, and severity guidance.
+Sections: Layer A | Layer B | Layer C | Label Rules | Severity Guide
 
 ---
 
-## Dimension 1: description Trigger Formula
+## Layer A: Spec Compliance
+
+These dimensions answer: does the skill conform to the Agent Skills spec and to path-level execution rules?
+
+### A1. Frontmatter and Directory Spec
+
+**Labels**
+- `SPEC`
 
 **Criteria**
 
-The `description` field must follow this formula:
-```
-[Capability overview] + "Use when" + [(1) scenario (2) scenario ...]
-```
+Check:
+- `SKILL.md` exists and uses valid opening and closing `---` delimiters.
+- `name` matches the parent directory name.
+- `name` is 1-64 characters, lowercase, hyphenated, and has no leading, trailing, or consecutive hyphens.
+- `description` exists, is non-empty, and is under 1024 characters.
+- Optional spec fields such as `license`, `compatibility`, `metadata`, and `allowed-tools` are structurally valid if present.
 
-Both parts are required. The trigger list must cover multiple phrasing styles:
-declarative ("convert markdown"), interrogative ("how do I export"), imperative ("export this").
+Prefer script output for mechanical violations.
 
-**Common violations**
+**Severity**
+- CRITICAL for malformed frontmatter, invalid `name`, or missing `description`
+- WARNING for optional-field misuse that does not block activation
 
-| Violation | Example |
-|-----------|---------|
-| Only capability, no trigger | `description: Converts markdown to images.` |
-| Workflow summary instead of trigger | `description: Fetches data, runs analysis, writes report.` |
-| Trigger only, no capability | `description: Use when user says "review".` |
-| Single trigger phrase, narrow coverage | `Use when user says "export to PDF"` |
+### A2. File Reference Discipline
 
-**CSO trap**: If description summarises the workflow, the LLM may follow the description
-and skip reading the body. The body becomes dead documentation.
-
-**Severity**: CRITICAL if trigger section is absent or is a workflow summary.
-
----
-
-## Dimension 2: YAML Compliance
+**Labels**
+- `SPEC`
+- `BEST_PRACTICE`
 
 **Criteria**
 
-| Field | Rule |
-|-------|------|
-| `name` | kebab-case, lowercase only, no spaces, no underscores |
-| `name` | Must not start with `claude` or `anthropic` |
-| `description` | Under 1024 characters total |
-| `description` | No XML angle brackets (`<` or `>`) |
-| Frontmatter delimiters | Must open and close with `---` |
+Check:
+- Script invocations use relative paths such as `python scripts/foo.py`.
+- The skill does not use path variables such as `$SKILL_DIR` to invoke its own files.
+- Cross-skill references do not use force-load syntax such as `@skills/foo/SKILL.md`.
+- Referenced files exist.
+- References are introduced with loading conditions when they are not always needed.
 
-**Common violations**
+Prefer script output for missing files, force-load syntax, and path-style violations.
 
-- `name: My Cool Skill` — spaces and capitals
-- `name: my_skill` — underscores
-- Description contains `<br>` or `<code>` tags
-- Missing closing `---` delimiter
+**Severity**
+- CRITICAL when a bad path or missing file will cause runtime failure
+- WARNING for unstable reference style or unconditional large-file loading
 
-**Severity**: CRITICAL for name format or missing delimiters; WARNING for description length.
+### A3. Mechanical Consistency
 
----
-
-## Dimension 3: Prerequisite Check
+**Labels**
+- `SPEC`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-The skill must have a `## Prerequisite Check` section that:
-1. Lists all external tools, credentials, or data required before execution.
-2. Provides detection commands (e.g., `command -v node`, `gh auth status`).
-3. Explicitly instructs the agent to **stop** if any prerequisite fails — not to continue.
+This dimension is populated primarily from `consistency_check.py`.
+Use script findings for:
+- parameter mismatches
+- missing files
+- name mismatch
+- frontmatter errors
+- description length violations
+- orphaned references
+- legacy pollution
 
-**Common violations**
+Do not invent a finding here if the script produced no evidence.
 
-- Prerequisite check section is absent entirely.
-- Section exists but has no detection commands — just prose warnings.
-- Section says "ensure X is installed" without saying what to do if it is not.
+**Severity**
+- CRITICAL for parameter mismatches
+- WARNING for missing files, name mismatch, orphaned references, or stale script content
 
-**Severity**: WARNING if section is absent; SUGGESTION if detection commands are missing.
+## Layer B: Design Quality
 
----
+These dimensions answer: is the skill written in a way that helps an agent succeed reliably and efficiently?
 
-## Dimension 4: Hard Constraints (Iron Law / HARD-GATE)
+### B1. Trigger Description Quality
 
-**Criteria**
-
-Critical rules that cannot be bypassed must use one or both patterns:
-
-**Iron Law format:**
-```
-NO <prohibited action> WITHOUT <required prerequisite> FIRST.
-No exceptions.
-```
-
-**HARD-GATE tag:**
-```
-<HARD-GATE>
-<constraint content>
-</HARD-GATE>
-```
-
-Authority-level language must accompany hard constraints: `YOU MUST`, `ALWAYS`, `NEVER`,
-`No exceptions`.
-
-**Common violations**
-
-- Critical rules written as polite suggestions: "please make sure to validate…"
-- Iron Law present but missing "No exceptions" clause, leaving a loophole.
-- Constraint buried in prose rather than in a dedicated section or tag.
-
-**Severity**: CRITICAL if a constraint that can break the workflow uses soft language.
-
----
-
-## Dimension 5: Token Cost Control
+**Labels**
+- `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-| Skill type | SKILL.md body target |
-|------------|---------------------|
-| Getting-started / entry | < 150 words |
-| Frequently loaded | < 200 words |
-| Other | < 500 words; hard limit 500 lines |
+The `description` should:
+- describe both capability and when to use it
+- focus on user intent, not workflow internals
+- avoid becoming a workflow summary
+- cover realistic wording breadth, including near-miss phrasing where relevant
 
-- Large reference material (API docs, examples > 100 lines) must live in `references/`.
-- `@path/to/file` syntax must not appear — it force-loads files immediately.
-- Cross-skill references must use `REQUIRED SUB-SKILL: Use <skill-name>` pattern.
+Use `references/how-to-optimize-skill-descriptions.md` when trigger quality is in scope.
 
-**Common violations**
+**Severity**
+- CRITICAL if the description is so narrow or malformed that triggering is likely to fail
+- WARNING if the description is vague, over-broad, or likely to false-trigger
 
-- Inline API documentation that belongs in `references/`.
-- `@skills/xxx/SKILL.md` link that burns 200k+ context before needed.
-- Repeated instructions that duplicate content from another skill.
+### B2. Progressive Disclosure and Context Cost
 
-**Severity**: WARNING if body exceeds 500 lines; SUGGESTION for `@` syntax.
-
----
-
-## Dimension 6: Workflow Structure
+**Labels**
+- `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-Every step-based workflow must contain all three elements:
+Check:
+- `SKILL.md` contains only the core workflow and constraints needed on every run
+- large examples and long reference material live in `references/`
+- the skill avoids `@path` force-load syntax
+- the skill tells the agent when to load each reference file
 
-1. **Numbered steps** — unambiguous execution order.
-2. **Done Criteria** — explicit definition of what "complete" means for each step and overall.
-3. **Failure Handling** — explicit instruction for each failure mode: what to report, whether to stop or retry.
+**Severity**
+- WARNING when the body is bloated or references are always-on without need
+- SUGGESTION when structure works but can be tighter
 
-**Common violations**
+### B3. Workflow Structure and Failure Handling
 
-- Steps are numbered but Done Criteria section is absent.
-- Failure Handling says "handle errors" without specifying stop vs retry vs escalate.
-- Workflow sections exist but steps are unnumbered, allowing arbitrary reordering.
-
-**Severity**: WARNING for missing Done Criteria or Failure Handling.
-
----
-
-## Dimension 7: Output Format Specification
+**Labels**
+- `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-The skill must declare one of two output modes and honour it consistently:
+For multi-step tasks, check:
+- clear execution order
+- explicit completion conditions
+- explicit failure handling
+- coherent scope rather than an over-broad menu of unrelated tasks
 
-- **Strict template**: `ALWAYS use this exact template`. Provide the template verbatim.
-- **Flexible guidance**: `Here is a default; use judgment`. Provide a sensible default.
+**Severity**
+- WARNING when missing done criteria or failure handling degrades reliability
+- SUGGESTION when the workflow works but is harder to follow than necessary
 
-Input/Output examples are required when output format is non-obvious.
+### B4. Guardrails and Hard Constraints
 
-**Common violations**
-
-- No output format declared — the LLM free-styles every time.
-- Template declared but not provided ("output a JSON object").
-- Multiple output formats described without a decision rule for which to use.
-
-**Severity**: WARNING if no format is declared for structured output; SUGGESTION otherwise.
-
----
-
-## Dimension 8: File Reference Style
+**Labels**
+- `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-| Pattern | Rule |
-|---------|------|
-| Script invocation | `python scripts/foo.py` — relative path only |
-| Script invocation | Never `python $SKILL_DIR/scripts/foo.py` |
-| Config file access | Script uses `pathlib.Path(__file__).resolve().parent` to self-locate |
-| Cross-skill reference | `REQUIRED SUB-SKILL: Use <skill-name>` |
-| Cross-skill reference | Never `@skills/xxx/SKILL.md` |
-| Conditional reference | State the condition: "If X, read references/x.md" |
+Check:
+- likely failure modes are called out explicitly
+- critical constraints use strong language
+- the skill mixes positive anchors and negative prohibitions
+- hard constraints are not buried in soft prose
 
-**Common violations**
+**Severity**
+- CRITICAL when a fragile workflow relies on soft or optional language
+- WARNING when guardrails exist but are generic or weak
 
-- `python3 $SKILL_DIR/scripts/foo.py` — environment variable path prefix.
-- `@skills/testing/SKILL.md` — force-load syntax.
-- `references/api.md` referenced without a loading condition, causing default load.
+### B5. Script Interface Design
 
-**Severity**: WARNING for `$SKILL_DIR` usage or `@` syntax.
-
----
-
-## Dimension 9: LLM Behaviour Control (Guardrails)
+**Labels**
+- `BEST_PRACTICE`
 
 **Criteria**
 
-The skill must have a `## Guardrails` section (or equivalent) that:
-- Uses authority language: `YOU MUST`, `Do NOT`, `NEVER`, `Always`, `No exceptions`.
-- Lists the most likely failure modes for that specific skill.
-- Mixes positive rules (what to do) and negative rules (what not to do).
+When scripts exist, check:
+- the skill gives a default script path rather than a menu of equal options
+- scripts are introduced by relative path
+- complex shell logic is pushed into scripts instead of copied inline
+- prerequisites are stated clearly
+- script usage in `SKILL.md` matches how the script is meant to be invoked
 
-**Common violations**
+Use `references/how-to-use-scripts-in-skills.md` when script design is in scope.
 
-- Guardrails section is absent.
-- Rules use hedging language: "try to avoid", "it is recommended that".
-- Only negative rules — no positive anchors to correct behaviour.
-- Generic rules copied from a template that do not address this skill's failure modes.
+**Severity**
+- WARNING when script usage is likely to confuse the agent or drift from reality
+- SUGGESTION when script usage is correct but not well-calibrated
 
-**Severity**: WARNING if section is absent; SUGGESTION for weak language.
+### B6. Output Contract Quality
 
----
-
-## Dimension 10: Consistency (Script Results)
-
-**Criteria**
-
-This dimension is populated exclusively from `consistency_check.py` output.
-The LLM must not invent findings here — only report what the script detected.
-
-Three categories:
-
-| Category | What it means |
-|----------|---------------|
-| `parameter_mismatches` | A `--flag` in SKILL.md does not appear in the script's `--help` |
-| `missing_files` | A path in SKILL.md (`references/`, `assets/`, `scripts/`) does not exist |
-| `name_mismatch` | `name` in frontmatter differs from the directory name |
-
-**Severity**: CRITICAL for parameter mismatches (silent runtime failure); WARNING for missing
-files; WARNING for name mismatch.
-
----
-
-## Dimension 11: Language and Writing Quality
+**Labels**
+- `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-All documentation in the skill (SKILL.md, references/, scripts docstrings) must meet
-all four standards:
+Check:
+- the expected output shape is clear
+- strict templates include the actual template
+- flexible output guidance still provides a sensible default
+- examples exist when the output is non-obvious
 
-| Standard | Rule |
-|----------|------|
-| Language | English throughout. Chinese only for user-facing trigger phrases. |
-| Grammar | Correct English grammar. Subject–verb agreement, proper tense. |
-| Precision | No ambiguous verbs. Use `parse`, `validate`, `write to` not `handle`, `process`, `do`. |
-| Self-containment | No assumed context. No "as mentioned above", "previously", "like before". |
-| No compatibility prose | No "for backward compatibility", "previously this was X", migration notes. |
+**Severity**
+- WARNING when the output contract is underspecified for a structured task
+- SUGGESTION when output guidance exists but lacks polish
 
-**Common violations**
+### B7. Writing Quality and Dead Documentation
 
-- Chinese prose mixed into workflow steps.
-- Ambiguous verb: "handle errors" (handle how? stop? retry? log?).
-- Context-dependent reference: "use the same format as above".
-- Compatibility note: "this replaces the old `--input` flag".
-- Stale comments: "// 旧版兼容" or "# TODO: remove after migration".
-
-**Severity**: WARNING for non-English prose in instructions; SUGGESTION for precision issues.
-
----
-
-## Dimension 12: Legacy Pollution (Dead Content)
+**Labels**
+- `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-Skills accumulate stale content across upgrades. Detect three categories:
+Check:
+- precise verbs
+- self-contained wording
+- no migration prose or compatibility notes
+- no stale workflow branch, stale reference, or dead documentation that no longer maps to the current skill
 
-**Category A — Dead steps in SKILL.md**
-Workflow steps or sections that reference scripts, flags, files, or behaviours that no
-longer exist or are no longer reachable in any execution path.
+Use script findings as anchors, then extend with semantic judgment only when you can cite the exact stale content.
 
-Signals:
-- A step references a script not present in `scripts/`.
-- A step describes a flag or parameter that Phase 1 reported as mismatched.
-- A conditional branch references a file or mode that does not exist.
-- An entire section (e.g., an old workflow variant) is never reached from any trigger.
+**Severity**
+- WARNING for dead documentation or non-English operational prose that harms reliability
+- SUGGESTION for wording precision issues
 
-**Category B — Dead code in scripts/**
-Stale artefacts inside Python or shell scripts:
-- Commented-out code blocks (more than one consecutive commented line of logic).
-- Functions defined but never called within the skill's execution paths.
-- Imports that are never used.
-- `# TODO: remove`, `# FIXME: migrate`, `# legacy`, or `# compat` comments.
+## Layer C: Evidence Quality
 
-The script `consistency_check.py` reports commented-out blocks and migration TODOs.
-Use those findings as input. LLM must also read scripts and apply judgment.
+These dimensions answer: is there evidence that the skill triggers well and produces good outputs?
 
-**Category C — Dead documentation in references/**
-Reference files that describe features, parameters, or workflows that have been removed
-from SKILL.md or from the underlying scripts.
+### C1. Eval Readiness
 
-Signals:
-- A section in a reference file describes a `--flag` that no longer exists in any script.
-- A reference file is no longer linked from SKILL.md (orphaned file).
-- A reference file documents a workflow path that was deleted from SKILL.md.
+**Labels**
+- `BEST_PRACTICE`
 
-**Common violations**
+**Criteria**
 
-| Location | Example |
-|----------|---------|
-| SKILL.md | Step 4 calls `scripts/validate_output.py` which was deleted two versions ago |
-| scripts/ | 30 lines of commented-out argparse block from a refactor |
-| scripts/ | `import csv` at top; csv is never used after data format changed |
-| references/ | `references/legacy-format.md` describes JSON v1 format; skill now only uses v2 |
-| references/ | `references/old-workflow.md` exists but is not referenced anywhere in SKILL.md |
+Check whether the skill includes any evaluation assets such as:
+- `evals/`
+- prompt cases
+- expected outputs
+- assertions
+- benchmark or grading files
 
-**How to detect**
+If the skill claims production readiness but has no evaluation assets, call that out.
 
-1. Cross-reference all script calls in SKILL.md against `scripts/` directory contents.
-2. Read each script: flag commented blocks (>1 line), unused imports, TODO/compat comments.
-3. List all `references/` files. For each, check whether SKILL.md links to it.
-4. For each linked reference file, check whether its described features still exist.
+**Severity**
+- WARNING when a complex or deployment-bound skill has no evaluation assets
+- SUGGESTION when basic eval assets exist but are incomplete
 
-**Severity**: CRITICAL if a dead step will cause runtime failure; WARNING for dead code
-blocks or orphaned reference files; SUGGESTION for single commented lines or stale TODOs.
+### C2. Trigger Evidence
 
----
+**Labels**
+- `BEST_PRACTICE`
+
+**Criteria**
+
+If trigger evaluation assets exist, check:
+- both should-trigger and should-not-trigger cases exist
+- near-miss negatives are represented
+- train and validation separation exists where optimization is claimed
+- trigger behavior is supported by evidence, not assertion
+
+Use `references/how-to-optimize-skill-descriptions.md` when this dimension is in scope.
+
+**Severity**
+- WARNING when trigger quality is claimed but unsupported by eval evidence
+- SUGGESTION when evidence exists but coverage is shallow
+
+### C3. Output Quality Evidence
+
+**Labels**
+- `BEST_PRACTICE`
+
+**Criteria**
+
+If output evaluation assets exist, check:
+- realistic prompts
+- expected outputs
+- assertions with concrete pass/fail criteria
+- baseline comparison
+- grading or benchmark artifacts
+
+Use `references/how-to-evaluate-skill-output-quality.md` when this dimension is in scope.
+
+**Severity**
+- WARNING when output quality is claimed but unsupported by eval evidence
+- SUGGESTION when evidence exists but lacks assertions, baselines, or grading discipline
+
+## Label Rules
+
+- Use `SPEC` only for issues grounded in the Agent Skills spec or strict format requirements.
+- Use `BEST_PRACTICE` for broadly useful design guidance from the reference set.
+- Use `PROJECT_POLICY` for repository-specific style, stricter conventions, or deployment expectations.
+- A finding may have more than one label.
+- Do not mark a pure project preference as `SPEC`.
 
 ## Severity Guide
 
 | Level | Definition |
 |-------|------------|
-| `[CRITICAL]` | The skill will fail to execute correctly or fail to trigger. Fix before deploying. |
-| `[WARNING]` | The skill will work but produce unreliable or low-quality results. Fix soon. |
-| `[SUGGESTION]` | The skill works correctly but has room for improvement. Fix opportunistically. |
+| `[CRITICAL]` | The skill will fail to execute correctly, fail to trigger correctly, or is likely to mislead the agent into a broken path. |
+| `[WARNING]` | The skill will probably work, but reliability, output quality, maintainability, or evidence quality is meaningfully degraded. |
+| `[SUGGESTION]` | The skill works, but there is a defensible improvement in clarity, efficiency, or calibration. |

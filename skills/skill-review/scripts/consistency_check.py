@@ -3,11 +3,10 @@
 
 Purpose: Extract command references and file references from SKILL.md,
          then validate them against actual scripts and files on disk.
-         Also detects legacy pollution: commented-out code blocks and
-         migration TODOs in Python scripts.
+         Also detect mechanical spec violations and stale content that
+         should be reported before semantic review begins.
 Input:   --skill-dir path to skill directory
-Output:  JSON to stdout with fields: parameter_mismatches[], missing_files[],
-         name_mismatch (object or null), legacy_pollution[]
+Output:  JSON to stdout with fields for mechanical review findings.
 
 Public API:
     run_checks(skill_dir) -> dict  -- run all consistency checks
@@ -20,6 +19,13 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+
+_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_FORCE_LOAD_PATTERN = re.compile(r"@[\w./-]*SKILL\.md|@skills/[\w./-]+")
+_SCRIPT_PATH_VAR_PATTERN = re.compile(
+    r"(?:python3?|bash)\s+[$][A-Z_][A-Z0-9_]*[/][\w.\-/]+",
+)
 
 
 def parse_frontmatter_name(content: str) -> str:
@@ -37,6 +43,45 @@ def parse_frontmatter_name(content: str) -> str:
     if not m:
         return ""
     return m.group(1).strip().strip('"').strip("'")
+
+
+def parse_frontmatter(content: str) -> dict[str, str] | None:
+    """Extract simple frontmatter key-value pairs.
+
+    Returns None when frontmatter delimiters are missing.
+    """
+    if not content.startswith("---"):
+        return None
+    end = content.find("\n---", 3)
+    if end == -1:
+        return None
+
+    data: dict[str, str] = {}
+    lines = content[3:end].splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if ":" not in line:
+            i += 1
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if value in {">", ">-", "|", "|-"}:
+            block_lines: list[str] = []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i]
+                if next_line.startswith(" ") or next_line.startswith("\t"):
+                    block_lines.append(next_line.strip())
+                    i += 1
+                    continue
+                break
+            data[key] = " ".join(block_lines).strip()
+            continue
+        data[key] = value.strip('"').strip("'")
+        i += 1
+    return data
 
 
 def extract_script_commands(content: str) -> list[dict]:
@@ -124,6 +169,106 @@ def extract_file_references(content: str) -> list[dict]:
     return results
 
 
+def extract_linked_references(content: str) -> set[str]:
+    """Return referenced files under references/ from SKILL.md."""
+    return {item["path"] for item in extract_file_references(content)}
+
+
+def find_force_load_syntax(content: str) -> list[dict]:
+    """Detect force-load syntax such as @skills/foo/SKILL.md."""
+    findings: list[dict] = []
+    for i, line in enumerate(content.splitlines(), 1):
+        match = _FORCE_LOAD_PATTERN.search(line)
+        if match:
+            findings.append({
+                "line": i,
+                "snippet": line.strip(),
+            })
+    return findings
+
+
+def find_path_variable_invocations(content: str) -> list[dict]:
+    """Detect script invocations using environment path variables."""
+    findings: list[dict] = []
+    for i, line in enumerate(content.splitlines(), 1):
+        match = _SCRIPT_PATH_VAR_PATTERN.search(line.strip())
+        if match:
+            findings.append({
+                "line": i,
+                "snippet": line.strip(),
+            })
+    return findings
+
+
+def validate_frontmatter(
+    content: str,
+    skill_dir: Path,
+) -> tuple[list[dict], list[dict], dict | None]:
+    """Validate frontmatter structure and name constraints."""
+    spec_violations: list[dict] = []
+    warnings: list[dict] = []
+    data = parse_frontmatter(content)
+
+    if data is None:
+        spec_violations.append({
+            "type": "frontmatter",
+            "reason": "missing_or_unclosed_frontmatter",
+        })
+        return spec_violations, warnings, None
+
+    name = data.get("name", "")
+    description = data.get("description", "")
+
+    if not name:
+        spec_violations.append({
+            "type": "name",
+            "reason": "missing_name",
+        })
+    elif not _NAME_PATTERN.fullmatch(name) or len(name) > 64:
+        spec_violations.append({
+            "type": "name",
+            "reason": "invalid_name_format",
+            "value": name,
+        })
+
+    if not description:
+        spec_violations.append({
+            "type": "description",
+            "reason": "missing_description",
+        })
+    elif len(description) > 1024:
+        warnings.append({
+            "type": "description",
+            "reason": "description_too_long",
+            "length": len(description),
+        })
+
+    if name and name != skill_dir.name:
+        return spec_violations, warnings, {
+            "frontmatter_name": name,
+            "directory_name": skill_dir.name,
+        }
+    return spec_violations, warnings, None
+
+
+def find_orphaned_references(skill_dir: Path, linked_references: set[str]) -> list[dict]:
+    """Find reference files that exist but are never linked from SKILL.md."""
+    references_dir = skill_dir / "references"
+    findings: list[dict] = []
+    if not references_dir.is_dir():
+        return findings
+
+    for path in sorted(references_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(skill_dir).as_posix()
+        if relative == "references/rubric.md":
+            continue
+        if relative not in linked_references:
+            findings.append({"path": relative})
+    return findings
+
+
 def detect_legacy_pollution(scripts_dir: Path) -> list[dict]:
     """Scan Python scripts for commented-out code blocks and migration TODOs.
 
@@ -191,7 +336,7 @@ def detect_legacy_pollution(scripts_dir: Path) -> list[dict]:
 def run_checks(skill_dir: Path) -> dict:
     """Run all consistency checks against the skill directory.
 
-    Returns dict with keys: parameter_mismatches, missing_files, name_mismatch, legacy_pollution.
+    Returns dict with keys used by skill-review mechanical checks.
     """
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
@@ -202,18 +347,24 @@ def run_checks(skill_dir: Path) -> dict:
     issues: dict = {
         "parameter_mismatches": [],
         "missing_files": [],
+        "frontmatter_warnings": [],
         "name_mismatch": None,
+        "spec_violations": [],
+        "force_load_syntax": [],
+        "path_style_violations": [],
+        "orphaned_references": [],
         "legacy_pollution": [],
     }
 
-    # Check frontmatter name vs directory name
-    fm_name = parse_frontmatter_name(content)
-    dir_name = skill_dir.name
-    if fm_name and fm_name != dir_name:
-        issues["name_mismatch"] = {
-            "frontmatter_name": fm_name,
-            "directory_name": dir_name,
-        }
+    spec_violations, frontmatter_warnings, name_mismatch = validate_frontmatter(
+        content,
+        skill_dir,
+    )
+    issues["spec_violations"] = spec_violations
+    issues["frontmatter_warnings"] = frontmatter_warnings
+    issues["name_mismatch"] = name_mismatch
+    issues["force_load_syntax"] = find_force_load_syntax(content)
+    issues["path_style_violations"] = find_path_variable_invocations(content)
 
     # Check script command references
     commands = extract_script_commands(content)
@@ -241,6 +392,7 @@ def run_checks(skill_dir: Path) -> dict:
                 })
 
     # Check file references (references/, assets/)
+    linked_references = extract_linked_references(content)
     for ref in extract_file_references(content):
         full_path = skill_dir / ref["path"]
         if not full_path.exists():
@@ -249,6 +401,10 @@ def run_checks(skill_dir: Path) -> dict:
                 "path": ref["path"],
                 "line": ref["line"],
             })
+    issues["orphaned_references"] = find_orphaned_references(
+        skill_dir,
+        linked_references,
+    )
 
     # Detect legacy pollution in scripts/
     issues["legacy_pollution"] = detect_legacy_pollution(skill_dir / "scripts")
