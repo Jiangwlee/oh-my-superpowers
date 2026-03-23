@@ -366,6 +366,34 @@ class TestApiRoutes(unittest.TestCase):
         self.assertAlmostEqual(rows[1].amount, 1.99, places=2)
         self.assertAlmostEqual(rows[1].change_pct or 0.0, 2.34, places=2)
 
+    def test_trade_dates_latest_route_returns_single_date(self) -> None:
+        from app.api.routes.trade_dates import get_latest_trade_date
+
+        with patch(
+            "app.api.routes.trade_dates.resolve_trade_dates",
+            return_value=["2026-03-20"],
+        ) as mocked_resolve:
+            row = get_latest_trade_date()
+
+        mocked_resolve.assert_called_once()
+        self.assertEqual(row.trade_date, "2026-03-20")
+
+    def test_trade_dates_recent_route_returns_window(self) -> None:
+        from app.api.routes.trade_dates import get_recent_trade_dates
+
+        with patch(
+            "app.api.routes.trade_dates.resolve_trade_dates",
+            return_value=["2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20"],
+        ) as mocked_resolve:
+            row = get_recent_trade_dates(days=4)
+
+        mocked_resolve.assert_called_once()
+        self.assertEqual(row.days, 4)
+        self.assertEqual(
+            row.trade_dates,
+            ["2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -71,6 +71,15 @@ class KlineDailyResponse(BaseModel):
     change_pct: float | None = None
 
 
+class LatestTradeDateResponse(BaseModel):
+    trade_date: str
+
+
+class RecentTradeDatesResponse(BaseModel):
+    days: int
+    trade_dates: list[str]
+
+
 class MarketReviewDailyResponse(BaseModel):
     trade_date: str
     run_id: str
