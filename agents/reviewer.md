@@ -33,7 +33,8 @@ model: claude-sonnet-4-6
   - 默认回退：`$HOME/.oh-my-superpowers`
 - skill-review 脚本：`${OMP_HOME}/skills/skill-review/scripts/consistency_check.py`
 - skill-review rubric：`${OMP_HOME}/skills/skill-review/references/rubric.md`
-- agent-review references：`${OMP_HOME}/skills/agent-review/references/`
+- agent-review agent-spec：`${OMP_HOME}/skills/agent-review/references/agent-spec.md`
+- agent-review rubric：`${OMP_HOME}/skills/agent-review/references/rubric.md`
 
 ---
 
