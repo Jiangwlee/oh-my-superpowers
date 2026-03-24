@@ -10,7 +10,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 
@@ -19,6 +18,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import convert  # type: ignore  # noqa: E402
+from inspect_input import InspectResult  # type: ignore  # noqa: E402
+from normalize_input import NormalizeResult  # type: ignore  # noqa: E402
 
 
 class ConvertCliTest(unittest.TestCase):
@@ -31,59 +32,55 @@ class ConvertCliTest(unittest.TestCase):
                 convert.main()
         return json.loads(stdout.getvalue().strip())
 
-    def test_report_png_stays_report_and_uses_report_png_renderer(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            md_path = Path(tmpdir) / "input.md"
-            md_path.write_text("# 报告\n\n正文", encoding="utf-8")
-            out_base = Path(tmpdir) / "out"
-
-            report_png_result = SimpleNamespace(markdown_engine="marked", warnings=["png warn"])
-            with mock.patch.object(convert, "_default_output_base", return_value=out_base):
-                with mock.patch.object(convert, "render_markdown_to_png", return_value=report_png_result) as render_png:
-                    with mock.patch.object(convert, "render_markdown_to_pdf") as render_pdf:
-                        manifest = self._run_main(
-                            [
-                                "convert.py",
-                                str(md_path),
-                                "--mode",
-                                "report",
-                                "--format",
-                                "png",
-                                "--stdout-manifest",
-                            ]
-                        )
-
-            self.assertEqual(manifest["mode"], "report")
-            self.assertEqual(manifest["format"], "png")
-            self.assertIn(str(out_base.with_name("out_report").with_suffix(".png")), manifest["files"])
-            render_png.assert_called_once()
-            render_pdf.assert_not_called()
-
     def test_auto_mode_without_format_defaults_to_report_pdf(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             md_path = Path(tmpdir) / "input.md"
-            md_path.write_text("# 短摘要", encoding="utf-8")
+            md_path.write_text("# 短摘要\n\n正文", encoding="utf-8")
             out_base = Path(tmpdir) / "out"
+            inspect_result = InspectResult(True, "markdown", "clean", {"has_heading": True}, "render_direct", [], [])
 
-            report_pdf_result = SimpleNamespace(markdown_engine="fallback", warnings=[])
-            with mock.patch.object(convert, "_default_output_base", return_value=out_base):
-                with mock.patch.object(convert, "render_markdown_to_pdf", return_value=report_pdf_result) as render_pdf:
-                    manifest = self._run_main(
-                        [
-                            "convert.py",
-                            str(md_path),
-                            "--stdout-manifest",
-                            "--pdf-backend",
-                            "html",
-                        ]
-                    )
+            with mock.patch.object(convert, "_check_dependencies", return_value=[]), \
+                 mock.patch.object(convert, "_resolve_output_base", return_value=out_base), \
+                 mock.patch.object(convert, "inspect_markdown_file", return_value=inspect_result), \
+                 mock.patch.object(convert, "_render_report", return_value=([str(out_base.with_name("out_report").with_suffix(".pdf"))], [], {"markdown_to_html": "pandoc", "html_to_pdf": "chromium", "html_to_png": "n/a"}, [])) as render_report:
+                manifest = self._run_main([
+                    "convert.py",
+                    str(md_path),
+                    "--stdout-manifest",
+                ])
 
+            self.assertTrue(manifest["ok"])
             self.assertEqual(manifest["mode"], "report")
             self.assertEqual(manifest["format"], "pdf")
             self.assertIn(str(out_base.with_name("out_report").with_suffix(".pdf")), manifest["files"])
-            render_pdf.assert_called_once()
+            render_report.assert_called_once()
 
-    def test_resolve_pdf_backend_auto_prefers_typst_when_installed(self) -> None:
+    def test_light_dirty_input_triggers_normalize(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "input.md"
+            md_path.write_text("前言\n```markdown\n# 标题\n```", encoding="utf-8")
+            out_base = Path(tmpdir) / "out"
+            clean_path = out_base.parent / "out.clean.md"
+            inspect_result = InspectResult(True, "markdown", "light_dirty", {"has_fenced_markdown": True}, "normalize_then_render", [], [])
+            normalize_result = NormalizeResult(True, str(md_path), str(clean_path), True, "# 标题\n", {"fenced_markdown": True}, ["extracted_fenced_markdown"], [], [])
+
+            with mock.patch.object(convert, "_check_dependencies", return_value=[]), \
+                 mock.patch.object(convert, "_resolve_output_base", return_value=out_base), \
+                 mock.patch.object(convert, "inspect_markdown_file", return_value=inspect_result), \
+                 mock.patch.object(convert, "normalize_markdown_file", return_value=normalize_result) as normalize, \
+                 mock.patch.object(convert, "_render_report", return_value=([str(out_base.with_name("out_report").with_suffix(".pdf"))], [], {"markdown_to_html": "pandoc", "html_to_pdf": "chromium", "html_to_png": "n/a"}, [])):
+                manifest = self._run_main([
+                    "convert.py",
+                    str(md_path),
+                    "--stdout-manifest",
+                    "--keep-clean",
+                ])
+
+            self.assertTrue(manifest["normalization"]["performed"])
+            self.assertEqual(manifest["normalization"]["clean_file"], str(clean_path))
+            normalize.assert_called_once()
+
+    def test_resolve_pdf_backend_auto_maps_to_html(self) -> None:
         self.assertEqual(convert._resolve_pdf_backend("auto"), "html")
         self.assertEqual(convert._resolve_pdf_backend("html"), "html")
 

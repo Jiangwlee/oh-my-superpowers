@@ -1,88 +1,129 @@
 ---
 name: markdown-to-anything
 description: >
-  Use when converting Markdown into shareable images or documents.
-  (1) "转成图片"/"转成PDF"/"图片报告"/"导出PNG"/"导出文件" 
-  (2) "高质量图片"/"卡片风格"/"海报"/"好看一点"/"设计感"/"自由风格"
+  Use when converting local Markdown files into publishable outputs.
+  (1) "转成PDF"/"导出PDF"/"转成图片"/"导出PNG"/"导出文件"
+  (2) "高质量图片"/"卡片风格"/"海报"/"好看一点"/"设计感"
 ---
 
 # Markdown To Anything
 
-通用 Markdown 渲染与导出 Skill。输入 Markdown，输出 PNG / PDF / HTML（调试）。
+把本地 Markdown 变成可交付产物的通用 Skill。
+SKILL.md 负责 SOP 与路径分发；`scripts/` 负责确定性执行。
 
-## Prerequisite check (required)
+## Iron Law
 
-**STOP and resolve before proceeding:**
+NO EXPORT WITHOUT CHOOSING THE PATH FIRST.
 
-1. **Node.js**: `node -v`
-2. **Puppeteer dependencies**: Ensure chrome is installed for puppeteer.
-3. **Python 3.10+**: `python3 --version`
+先判断两件事：
+1. 用户要的是 **标准导出**（PDF / 普通 PNG）还是 **高质量视觉图**
+2. 输入是 **clean**、**light dirty** 还是 **semantic dirty**
 
-## 路径分发（Iron Law）
+- 高质量图片 / 海报 / 卡片 / 设计感 -> 路径2（视觉图）
+- 其他导出请求 -> 路径1（标准程序化导出）
+- light dirty -> 先调用脚本清洗
+- semantic dirty -> 先由 Agent 提取 clean markdown，再调用脚本
 
-NO PNG output WITHOUT checking trigger words FIRST.
+## Preflight checks
 
-- 质量触发词（高质量/海报/卡片/好看/设计感/自由风格） -> 路径2（LLM SVG）
-- 其他触发词或无触发词 -> 路径1（程序化）
-- No exceptions. 默认情况也走路径1。
+开始前必须检查：
+- 输入文件存在且是本地 `.md`
+- 输出目标明确（pdf / png / html）
+- 依赖可用：`python3`、`node`、`chromium`，以及优先使用的 `pandoc`
+- 输入是否需要清洗：先运行 `scripts/inspect_input.py`
 
-## 路径1：程序化（MD -> HTML -> PNG/PDF）
+## 路径1：标准程序化导出
 
-适合“转成图片 / 转成PDF / 快速导出 / 图片报告 / PDF报告”。
-PNG 与 PDF 共用 HTML 生成路径，只有 Chrome CDP 命令不同。
+适合：
+- 转成 PDF
+- 转成图片 / 导出 PNG
+- 快速导出完整文档
 
-默认建议：
-- `report + png` 使用 `light` 主题（浅色科技风）
-- `report + pdf` 使用 `blue` 主题
-- `--mode auto` 无触发词信息时默认输出 PDF
+标准 SOP：
+1. 运行 `python scripts/inspect_input.py <input.md> --json`
+2. 若 `cleanliness=light_dirty`，运行 `python scripts/normalize_input.py <input.md> --output <clean.md> --json`
+3. 若 `cleanliness=semantic_dirty`，**停止脚本流程**，由 Agent 先整理正文
+4. 运行 `python scripts/convert.py <input.md> --mode report --format pdf|png|html --stdout-manifest`
+5. 查看 manifest 中的 `files / warnings / errors`
 
-命令示例：
-
-```bash
-python scripts/convert.py report.md --mode report --format png --theme light --stdout-manifest
-python scripts/convert.py report.md --mode report --format pdf --theme blue --stdout-manifest
-python scripts/convert.py report.md --mode auto --stdout-manifest
-```
-
-## 路径2：LLM SVG（LLM -> SVG -> PNG）
-
-适合“高质量图片 / 海报风格 / 卡片风格 / 好看一点 / 设计感”。
-LLM 自由创作 SVG，不使用模板，只保留最小约束：
-
-| 约束项 | 要求 |
-|---|---|
-| 画布 | 默认 `1080x1920`（全屏贴合可用 `1080x2340`） |
-| 根元素 | 必须带 `xmlns="http://www.w3.org/2000/svg"` |
-| 正文字号 | `>= 40px` |
-| meta 字号 | `>= 28px` |
-
-工作流：
+常用命令：
 
 ```bash
-# 1) LLM 生成 SVG（自由布局）
-# 2) SVG -> PNG
-node scripts/screenshot.js --png /tmp/card_llm.svg /tmp/card_llm.png 3 1080 0
-# 3) 可选校验
-python scripts/validator.py /tmp/card_llm.svg --json
+python scripts/convert.py report.md --mode report --format pdf --same-dir --stdout-manifest
+python scripts/convert.py report.md --mode report --format png --same-dir --stdout-manifest
+python scripts/convert.py report.md --mode report --format pdf --keep-html --keep-clean --stdout-manifest
 ```
 
-防重叠提示：
-- 行间距 >= 字号 x 1.5
-- CJK 字宽约等于字号 px；ASCII 约为字号 x 0.6
+## 路径2：高质量视觉图
 
-## 输出
+适合：
+- 高质量图片
+- 海报风格
+- 卡片风格
+- 好看一点 / 设计感
 
-主入口建议使用 `python scripts/convert.py <input.md> --stdout-manifest`。
+SOP：
+1. Agent 先阅读 Markdown，提炼成适合视觉表达的内容
+2. Agent 生成或整理 SVG / 视觉布局
+3. 再调用 `node scripts/screenshot.js --png <input.html_or_svg> <output.png> 3 1080 0`
+4. 可用 `python scripts/validate_output.py <output.png> --json` 做产物检查
 
-- `files`: 生成文件列表
-- `warnings`: 非致命警告（降级/布局/依赖）
-- `errors`: 致命错误（非空时命令非 0 退出）
+最小约束：
+- SVG 根元素必须带 `xmlns="http://www.w3.org/2000/svg"`
+- 默认画布 `1080x1920`
+- 正文字号建议 `>= 40px`
+- meta 字号建议 `>= 28px`
+
+## Dirty input handling
+
+把清洗分成两类：
+
+### Light dirty -> scripts
+适合脚本做：
+- fenced markdown 提取
+- assistant 前言剥离
+- BOM / 换行 / 首尾空白处理
+
+对应脚本：
+
+```bash
+python scripts/inspect_input.py input.md --json
+python scripts/normalize_input.py input.md --output input.clean.md --json
+```
+
+### Semantic dirty -> Agent first
+如果脚本无法可靠判断正文边界，Agent 必须先处理，例如：
+- 删除带语义歧义的解释段落
+- 重排正文结构
+- 从对话回答中提取真正要发布的 Markdown
+
+处理完成后，再把 clean markdown 交给 `scripts/convert.py`。
+
+## 输出规范
+
+优先使用：
+
+```bash
+python scripts/convert.py <input.md> --stdout-manifest
+```
+
+manifest 至少包含：
+- `files`: 最终产物
+- `intermediate_files`: 中间 HTML
+- `inspection`: 输入洁净度判断
+- `normalization`: 是否清洗、是否需要 Agent
+- `engine`: 使用的渲染引擎
+- `warnings` / `errors`
 
 ## 更多参考
 
-- CLI 完整参数：`references/cli-params.md`（需要调参数时读）
-- 调试命令：`references/debug-commands.md`（遇到渲染问题时读）
-- 字号规格：`references/font-spec.md`（需要调整字号时读）
-- 依赖与降级：`references/dependencies.md`（环境不完整时读）
-- 开发/测试：`references/dev-guide.md`（修改脚本时读）
-- Chrome CDP 细节：`references/chrome-cdp.md`（调 screenshot.js 时读）
+按需阅读：
+- CLI 参数：`references/cli-params.md`
+- 标准导出 SOP：`references/sop-standard-export.md`
+- 脏输入 SOP：`references/sop-dirty-input.md`
+- 视觉图 SOP：`references/sop-visual-card.md`
+- 调试命令：`references/debug-commands.md`
+- 依赖与降级：`references/dependencies.md`
+- 字号规格：`references/font-spec.md`
+- Chrome 导出细节：`references/chrome-cdp.md`
+- 开发说明：`references/dev-guide.md`

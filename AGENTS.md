@@ -1,6 +1,6 @@
 # AGENTS.md - OpenclawSkills 开发指南
 
-本项目开发了一系列满足 Openclaw 规范的 Skills（智能体技能），主要用于金融数据抓取、分析与研究。
+本项目开发了一系列满足 Openclaw 规范的 Skills（智能体技能），用于各种自动化和研究任务。
 
 ## IRON RULES
 
@@ -12,67 +12,33 @@
 ## 项目结构
 
 ```
-packages/
-└── ashare-data/               # A股数据采集基础设施包（pip install -e）
-    ├── ashare_data/
-    │   ├── core/              # config（路径）/ http_client / cache
-    │   ├── fetchers/          # 各数据源采集模块（broker/funding/news/taoguba…）
-    │   ├── collect.py         # 统一采集入口（ashare-collect CLI）
-    │   └── filter_to_markdown.py  # raw JSON → filtered Markdown
-    └── pyproject.toml
-
-apps/
-└── ashare-platform/           # A股平台应用（backend FastAPI）
-    └── backend/
-        ├── app/pipelines/     # 数据处理流水线
-        ├── app/services/      # 语义增强等服务
-        └── tests/
-
-skills/
-├── ashare-assistant/          # A股交易助手 Skill（LLM 工作流）
-│   ├── scripts/               # 交易分析脚本（依赖 ashare_data 包）
-│   │   ├── run_analysis.py    # 子代理流水线调度（5阶段）
-│   │   ├── trade_review.py    # 交易复盘（确定性）
-│   │   ├── holding_insight.py # 持仓洞察（确定性）
-│   │   ├── risk_check.py      # 风险检查
-│   │   ├── decision_logger.py # 决策日志写入
-│   │   ├── prompts/           # LLM prompt 模板
-│   │   └── core/shared.py     # Skill 内部共享工具
-│   ├── tests/
-│   ├── references/
-│   ├── evolution/
-│   ├── strategy/
-│   └── SKILL.md
-├── agent-roundtable/
-├── bb-browser/
-├── code-insight/
-├── explore-project/
-├── github-researcher/
-├── markdown-to-anything/
-├── openclaw-github-tracker/
-├── skill-review/
-└── unified-memory/
+skills/                        # Agent Skills（每个都是独立的）
+├── agent-roundtable/          # 多智能体协作框架
+├── bb-browser/                # 浏览器自动化工具
+├── code-insight/              # 代码分析与洞察
+├── explore-project/           # 项目探索工具
+├── github-researcher/         # GitHub 趋势研究
+├── markdown-to-anything/      # Markdown 转换工具
+├── openclaw-browser/          # Openclaw 浏览器集成
+├── openclaw-github-tracker/   # GitHub 项目情报
+├── skill-review/              # Skill 审查与审计
+├── unified-memory/            # 统一内存管理
+└── website-operator/          # 网站操作工具
 
 n8n/                           # n8n workflows
 github_cache/                  # 研究用第三方仓库缓存（含 INDEX.md）
 ```
 
-**层次关系**：`packages/ashare-data` 是纯基础设施（数据采集/格式转换），`skills/ashare-assistant` 是 LLM 工作流，二者通过固定默认目录 `~/.ashare-assistant` 共享数据目录，不存在代码依赖倒置。
+**原则**：每个 skill 在 `skills/` 下都是独立自治的，不依赖其他 skill。
 
 ## 如何运行项目
 
 ```bash
-# 激活虚拟环境（项目根目录的 uv 环境）
+# 激活虚拟环境
 source .venv/bin/activate
 
-# 安装 ashare-data 包（开发模式）
-uv pip install -e packages/ashare-data
-
-# 运行 ashare-assistant 测试
-python -m unittest discover -s skills/ashare-assistant/tests -p "test_*.py"
-
-# 运行 ashare-platform 测试
-python -m pytest apps/ashare-platform/backend/tests/
+# 运行特定 skill 的测试
+python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 
 # 语法检查单个文件
 python -m py_compile <file.py>
@@ -81,11 +47,8 @@ python -m py_compile <file.py>
 ## 构建与测试
 
 ```bash
-# 单元测试（ashare-assistant）
-python -m unittest discover -s skills/ashare-assistant/tests -p "test_*.py"
-
-# 单元测试（ashare-platform）
-python -m pytest apps/ashare-platform/backend/tests/ -v
+# 单元测试
+python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 
 # 语法检查
 python -m py_compile <file.py>
@@ -115,7 +78,6 @@ python -m py_compile <file.py>
 - [Skills Development Guide](Skills-Dev-Guide.md)：Skills开发经验，当发现一种有效的Skill编写模式时，可追加到此文件中。
 - [Claude Skill Development Guide](Claude-Skill-Dev-Guide.md)：Claude官方Skill开发手册。
 - [File Header Spec](File-Header-Spec.md)：文件头规范，要求前 20 行让 AI 理解文件全貌。所有 Markdown 和 Python 文件必须遵循。
-- [JVQuant 平台参考](docs/jvquant-reference.md)：JVQuant 券商交易接口文档，含 API 规格、计费标准、费用优化策略。
 
 ## 研究与参考
 
@@ -130,14 +92,8 @@ gh search repos "<关键词>" --language python --sort stars
 ## 技术栈
 
 - **语言**: Python 3.10+
-- **HTTP 客户端**: Scrapling Fetcher（基于 curl_cffi，TLS 指纹模拟）
-- **HTML 解析**: Scrapling Selector（CSS/XPath 选择器，lxml 后端）
+- **HTML 解析**: html.parser（禁止正则解析 HTML）
 - **测试**: unittest / pytest
-
-**Scrapling 用法**：
-- `Fetcher.get(url)` 返回 Response 对象（继承自 Selector）
-- Response 支持链式调用 `.css()/.xpath()/.re()` 提取结构化数据
-- 核心模块：`ashare_data.core.scraper` 封装 Scrapling API
 
 ## 代码风格
 
@@ -151,8 +107,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-import scrapling
-from ashare_data import fetchers
+import requests
 ```
 
 ### 2. 类型注解
@@ -169,11 +124,11 @@ Posts = list[Post]
 
 | 类型 | 规则 | 示例 |
 |------|------|------|
-| 模块 | 小写下划线 | `taoguba.py` |
-| 类 | 大驼峰 | `TaogubaFetchersTest` |
-| 函数 | 小写下划线 | `fetch_taoguba_hot()` |
-| 私有函数 | 前缀下划线 | `_fetch_detail()` |
-| 常量 | 全大写 | `_BASE_URL` |
+| 模块 | 小写下划线 | `my_module.py` |
+| 类 | 大驼峰 | `MyClass` |
+| 函数 | 小写下划线 | `my_function()` |
+| 私有函数 | 前缀下划线 | `_private_func()` |
+| 常量 | 全大写 | `MAX_COUNT` |
 
 ### 4. Docstring（Google 风格）
 
@@ -220,11 +175,10 @@ logger = logging.getLogger(__name__)
 
 ## 禁止事项
 
-1. 禁止正则解析 HTML——使用 Scrapling Selector
-2. 禁止手写 `urllib.request` 或 `html.parser`——使用 Scrapling
-3. 禁止硬编码敏感信息
-4. 禁止 rsync 部署，只用 `cp` / `scp`
-5. 禁止直接修改部署目录下的文件，只修改 `skills/<skill-name>/` 源码
+1. 禁止正则解析 HTML
+2. 禁止硬编码敏感信息
+3. 禁止 rsync 部署，只用 `cp` / `scp`
+4. 禁止直接修改部署目录下的文件，只修改 `skills/<skill-name>/` 源码
 
 ## Skills 目录结构与部署规则
 
@@ -233,4 +187,3 @@ logger = logging.getLogger(__name__)
 ```
 skills/<skill-name>/          ← 源码（在此修改）
 ```
-

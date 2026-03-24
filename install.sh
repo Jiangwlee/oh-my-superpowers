@@ -1,28 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Project-level installer for packages, apps, and skills.
+# Project-level installer for skills.
 # Supported installation modes:
-# - Python packages/apps via editable pip install into the repo virtualenv.
 # - Skills via copy into project-level or global .agents/skills.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_PYTHON="${ROOT_DIR}/.venv/bin/python"
 PROJECT_SKILLS_DIR="${ROOT_DIR}/.agents/skills"
 GLOBAL_SKILLS_DIR="${HOME}/.agents/skills"
 
-PACKAGE_ITEMS=(
-  "ashare-data:packages/ashare-data"
-  "task-runner:packages/task-runner"
-)
-
-APP_ITEMS=(
-  "ashare-platform:apps/ashare-platform/backend"
-)
-
 SKILL_ITEMS=(
   "agent-roundtable:skills/agent-roundtable"
-  "ashare-assistant:skills/ashare-assistant"
   "bb-browser:skills/bb-browser"
   "code-insight:skills/code-insight"
   "explore-project:skills/explore-project"
@@ -37,8 +25,6 @@ SKILL_ITEMS=(
 
 LIST_ONLY=0
 SKILL_DEST_MODE="project"
-INSTALL_PACKAGES=()
-INSTALL_APPS=()
 INSTALL_SKILLS=()
 ARG_COUNT=$#
 
@@ -48,12 +34,8 @@ Usage:
   bash install.sh [options]
 
 Options:
-  --list                  Show installable packages, apps, and skills.
-  --package NAMES         Install comma-separated packages.
-  --app NAMES             Install comma-separated apps.
+  --list                  Show installable skills.
   --skill NAMES           Install comma-separated skills.
-  --all-packages          Install all packages.
-  --all-apps              Install all apps.
   --all-skills            Install all skills.
   --project-skills        Install skills to ./.agents/skills (default).
   --global-skills         Install skills to ~/.agents/skills.
@@ -61,8 +43,7 @@ Options:
 
 Examples:
   bash install.sh --list
-  bash install.sh --package ashare-data --app ashare-platform
-  bash install.sh --skill ashare-assistant,unified-memory
+  bash install.sh --skill github-researcher,unified-memory
   bash install.sh --all-skills --global-skills
   bash install.sh         # interactive mode
 EOF
@@ -75,12 +56,6 @@ log() {
 fail() {
   printf '[install][error] %s\n' "$1" >&2
   exit 1
-}
-
-require_python_venv() {
-  if [[ ! -x "${VENV_PYTHON}" ]]; then
-    fail "missing project virtualenv python: ${VENV_PYTHON}"
-  fi
 }
 
 item_path() {
@@ -154,13 +129,11 @@ prompt_csv_selection() {
 }
 
 run_interactive_mode() {
-  [[ -t 0 ]] || fail "interactive mode requires a TTY; use flags like --skill/--app/--package instead"
+  [[ -t 0 ]] || fail "interactive mode requires a TTY; use flags like --skill instead"
 
   printf 'OpenclawSkills installer\n'
   printf 'Press Enter for none, or type all / comma-separated names.\n'
 
-  prompt_csv_selection "Select packages to install:" PACKAGE_ITEMS INSTALL_PACKAGES
-  prompt_csv_selection "Select apps to install:" APP_ITEMS INSTALL_APPS
   prompt_csv_selection "Select skills to install:" SKILL_ITEMS INSTALL_SKILLS
 
   if (( ${#INSTALL_SKILLS[@]} > 0 )); then
@@ -175,15 +148,6 @@ run_interactive_mode() {
       SKILL_DEST_MODE="project"
     fi
   fi
-}
-
-install_python_target() {
-  local name="$1"
-  local rel_path="$2"
-  local abs_path="${ROOT_DIR}/${rel_path}"
-  [[ -f "${abs_path}/pyproject.toml" ]] || fail "missing pyproject.toml for ${name}: ${abs_path}"
-  log "installing ${name} from ${rel_path}"
-  "${VENV_PYTHON}" -m pip install -e "${abs_path}"
 }
 
 install_skill_target() {
@@ -215,11 +179,7 @@ install_named_group() {
     [[ -n "${name}" ]] || continue
     local rel_path
     rel_path="$(item_path "${name}" "${items[@]}")" || fail "unknown ${kind}: ${name}"
-    if [[ "${kind}" == "skill" ]]; then
-      install_skill_target "${name}" "${rel_path}"
-    else
-      install_python_target "${name}" "${rel_path}"
-    fi
+    install_skill_target "${name}" "${rel_path}"
   done
 }
 
@@ -229,36 +189,10 @@ while [[ $# -gt 0 ]]; do
       LIST_ONLY=1
       shift
       ;;
-    --package)
-      [[ $# -ge 2 ]] || fail "--package requires a comma-separated value"
-      parse_csv "$2" INSTALL_PACKAGES
-      shift 2
-      ;;
-    --app)
-      [[ $# -ge 2 ]] || fail "--app requires a comma-separated value"
-      parse_csv "$2" INSTALL_APPS
-      shift 2
-      ;;
     --skill)
       [[ $# -ge 2 ]] || fail "--skill requires a comma-separated value"
       parse_csv "$2" INSTALL_SKILLS
       shift 2
-      ;;
-    --all-packages)
-      INSTALL_PACKAGES=()
-      item=""
-      for item in "${PACKAGE_ITEMS[@]}"; do
-        INSTALL_PACKAGES+=("${item%%:*}")
-      done
-      shift
-      ;;
-    --all-apps)
-      INSTALL_APPS=()
-      item=""
-      for item in "${APP_ITEMS[@]}"; do
-        INSTALL_APPS+=("${item%%:*}")
-      done
-      shift
       ;;
     --all-skills)
       INSTALL_SKILLS=()
@@ -291,31 +225,17 @@ if (( ARG_COUNT == 0 )); then
 fi
 
 if (( LIST_ONLY == 1 )); then
-  print_group "Packages:" "${PACKAGE_ITEMS[@]}"
-  print_group "Apps:" "${APP_ITEMS[@]}"
   print_group "Skills:" "${SKILL_ITEMS[@]}"
   exit 0
 fi
 
-if (( ${#INSTALL_PACKAGES[@]} == 0 && ${#INSTALL_APPS[@]} == 0 && ${#INSTALL_SKILLS[@]} == 0 )); then
+if (( ${#INSTALL_SKILLS[@]} == 0 )); then
   if (( ARG_COUNT == 0 )); then
     log "nothing selected; exiting"
     exit 0
   fi
   usage
   exit 1
-fi
-
-if (( ${#INSTALL_PACKAGES[@]} > 0 || ${#INSTALL_APPS[@]} > 0 )); then
-  require_python_venv
-fi
-
-if (( ${#INSTALL_PACKAGES[@]} > 0 )); then
-  install_named_group "package" INSTALL_PACKAGES "${PACKAGE_ITEMS[@]}"
-fi
-
-if (( ${#INSTALL_APPS[@]} > 0 )); then
-  install_named_group "app" INSTALL_APPS "${APP_ITEMS[@]}"
 fi
 
 if (( ${#INSTALL_SKILLS[@]} > 0 )); then
