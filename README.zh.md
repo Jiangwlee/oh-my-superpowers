@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Openclaw 智能体技能仓库</strong><br>
-  一系列专为金融数据抓取、分析与研究设计的 AI 智能体技能。
+  一系列专为自动化和研究任务设计的 AI 智能体技能。
 </p>
 
 <p align="center">
@@ -14,58 +14,35 @@
 
 ## 概述
 
-本仓库包含为 Openclaw 平台开发的**智能体技能（Agent Skills）**套件。每个技能都是一个独立的模块，使 AI 智能体能够执行专业任务，从金融市场分析到多智能体协作。
+本仓库包含为 Openclaw 平台开发的**智能体技能（Agent Skills）**套件。每个技能都是一个独立的模块，使 AI 智能体能够执行专业任务。
 
 所有技能遵循 [Agent Skills 规范](https://github.com/agentskills/agentskills)，并利用 Openclaw 的内置工具进行浏览器自动化、代码执行和数据处理。
 
 ## 仓库结构
 
 ```
-packages/                          # 共享基础设施包
-└── ashare-data/                   # A 股数据采集库（pip install -e）
-
 skills/                            # 智能体技能（各自独立自治）
-├── ashare-assistant/              # A 股交易助手
 ├── agent-roundtable/              # 多智能体协作框架
+├── bb-browser/                    # 浏览器自动化工具
+├── code-insight/                  # 代码分析与洞察
+├── explore-project/               # 项目探索工具
 ├── github-researcher/             # GitHub 趋势研究
 ├── markdown-to-anything/          # Markdown 转换工具
-└── openclaw-github-tracker/       # GitHub 项目情报
+├── openclaw-browser/              # Openclaw 浏览器集成
+├── openclaw-github-tracker/       # GitHub 项目情报
+├── skill-review/                  # Skill 审查与审计
+├── unified-memory/                # 统一内存管理
+└── website-operator/              # 网站操作工具
 
-deployment/                        # 部署文档和 Docker 配置
-├── README.md                     # ashare-platform 部署入口
-└── docker/
-    └── ashare-platform/
-        └── docker-compose.yml
+n8n/                               # n8n 工作流
+github_cache/                      # 研究用第三方仓库缓存
 ```
 
-`packages/` 存放 skill 共用的 Python 基础设施包；`skills/` 存放各 skill 本体，每个 skill 独立自治；`deployment/` 现在存放 `ashare-platform` 的部署入口文档和 Docker 配置。
+`skills/` 目录下的每个 skill 都是独立自治的，不依赖其他 skill。
 
 ---
 
 ## 可用技能
-
-### 📈 A股交易助手 (`ashare-assistant`)
-
-**用途**：每日 A 股收盘后的市场复盘与次日交易计划生成。
-
-**主要功能**：
-- 通过 `ashare-data` 包自动采集数据（新闻、资金流向、舆情、趋势扫描、券商账户）
-- 5 阶段 LLM 流水线：情绪分析 → 复盘报告 → 候选股 → 个股深研 → 交易计划
-- 风险检查与决策日志
-- 策略演进跟踪
-
-**触发关键词**：复盘、今日回顾、明日计划、选股、大盘分析、板块、涨停
-
-**架构分层**：
-
-| 层次 | 目录 | 职责 |
-|------|------|------|
-| 数据层 | `packages/ashare-data/` | 定时采集，写入 `raw/` + `filtered/` |
-| 分析层 | `skills/ashare-assistant/` | LLM 驱动的复盘、选股、交易计划 |
-
-数据流向：`ashare-data → ~/.ashare-assistant/data/{DATE}/filtered/ → ashare-assistant`
-
----
 
 ### 🔄 智能体圆桌讨论 (`agent-roundtable`)
 
@@ -107,6 +84,21 @@ deployment/                        # 部署文档和 Docker 配置
 
 ---
 
+### 🌐 其他技能
+
+| 技能 | 用途 |
+|------|------|
+| `bb-browser` | 浏览器自动化工具 |
+| `code-insight` | 代码分析与洞察 |
+| `explore-project` | 项目探索工具 |
+| `markdown-to-anything` | Markdown 转换工具 |
+| `openclaw-browser` | Openclaw 浏览器集成 |
+| `skill-review` | Skill 审查与审计 |
+| `unified-memory` | 统一内存管理 |
+| `website-operator` | 网站操作工具 |
+
+---
+
 ## 快速开始
 
 ### 环境要求
@@ -114,11 +106,20 @@ deployment/                        # 部署文档和 Docker 配置
 - Python 3.10+
 - Openclaw 平台或兼容的智能体运行时
 
-### 安装共享包
+### 项目安装器
+
+使用项目级安装器安装所需技能：
 
 ```bash
-pip install -e packages/ashare-data
+./install.sh --list
+./install.sh --skill agent-roundtable,unified-memory
+./install.sh --all-skills --project-skills
 ```
+
+技能安装目标：
+
+- `--project-skills`：安装到 `./.agents/skills/`（默认）
+- `--global-skills`：安装到 `~/.agents/skills/`
 
 ### 使用技能
 
@@ -131,8 +132,8 @@ cat skills/<skill-name>/SKILL.md
 ### 运行测试
 
 ```bash
-# 运行所有测试
-python -m unittest discover -s skills/ashare-assistant/tests -p "test_*.py"
+# 运行指定技能的测试
+python -m unittest discover -s skills/<skill-name>/tests -p "test_*.py"
 
 # 语法检查
 python -m py_compile <file.py>
@@ -163,11 +164,11 @@ python -m py_compile <file.py>
 3. 编写全面的测试
 4. 更新本 README
 
-### 添加新包
+---
 
-1. 在 `packages/<package-name>/` 下创建新目录
-2. 添加 `pyproject.toml`，若需要 CLI 则配置 `[project.scripts]`
-3. 通过 `pip install -e packages/<package-name>` 安装
+## 相关项目
+
+- **ashare-platform**: A股数据采集与平台服务（已迁移到 `~/Projects/ashare-data`）
 
 ---
 
@@ -195,7 +196,7 @@ cp -r skills/<skill-name>/ .claude/skills/<skill-name>/
 scp -r skills/<skill-name>/ root@tencent-vps:/path/to/skills/
 ```
 
-**注意**：始终只在 `skills/` 或 `packages/` 目录中修改源码，部署目录是只读副本。
+**注意**：始终只在 `skills/` 目录中修改源码，部署目录是只读副本。
 
 ---
 
@@ -204,7 +205,6 @@ scp -r skills/<skill-name>/ root@tencent-vps:/path/to/skills/
 - [Agent Skills 规范](https://github.com/agentskills/agentskills)
 - [Openclaw 工具文档](https://docs.openclaw.ai/tools/browser)
 - [技能开发指南](Skills-Dev-Guide.md)
-- [ashare-data 包文档](packages/ashare-data/README.md)
 
 ---
 
