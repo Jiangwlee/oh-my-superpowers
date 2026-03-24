@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+# omp — oh-my-superpowers CLI
+#
+# Manages local and global installation of Skills and Agents via symlinks.
+# Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
+#
+# Usage: omp <command> [args]
+# Run `omp help` for full usage.
+
+set -euo pipefail
+
+OMP_HOME="${HOME}/.oh-my-superpowers"
+SKILLS_SRC="${OMP_HOME}/skills"
+AGENTS_SRC="${OMP_HOME}/agents"
+
+log()  { printf '[omp] %s\n' "$1"; }
+warn() { printf '[omp] WARNING: %s\n' "$1"; }
+fail() { printf '[omp] ERROR: %s\n' "$1" >&2; exit 1; }
+
+[[ -e "${OMP_HOME}" ]] || fail "~/.oh-my-superpowers not found. Run install.sh first."
+
+# ── usage ─────────────────────────────────────────────────────────────────────
+
+usage() {
+  cat <<'EOF'
+omp — oh-my-superpowers CLI
+
+Usage:
+  omp install skill <name> [--global]   Install a skill (local or global)
+  omp install agent <name> [--global]   Install an agent (local or global)
+  omp remove  skill <name> [--global]   Remove a skill installation
+  omp remove  agent <name> [--global]   Remove an agent installation
+  omp list [--global]                   List installed skills and agents
+  omp test skill <name>                 Run T1 tests for a skill
+  omp help                              Show this help
+
+Targets:
+  Local  (default): $PWD/.agents/skills/  $PWD/.claude/skills/  $PWD/.pi/agents/
+  Global (--global): ~/.agents/skills/    ~/.claude/skills/      ~/.pi/agents/
+
+Examples:
+  omp install skill skill-review
+  omp install skill agent-brainstorming --global
+  omp remove  skill skill-review --global
+  omp list
+  omp list --global
+  omp test skill skill-review
+EOF
+}
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+symlink() {
+  local src="$1" dst="$2"
+  mkdir -p "$(dirname "${dst}")"
+  ln -sfn "${src}" "${dst}"
+  log "linked ${dst} -> ${src}"
+}
+
+remove_link() {
+  local dst="$1"
+  if [[ -L "${dst}" ]]; then
+    rm "${dst}"
+    log "removed ${dst}"
+  elif [[ -e "${dst}" ]]; then
+    fail "${dst} exists but is not a symlink. Remove manually."
+  else
+    warn "${dst} not found, nothing to remove."
+  fi
+}
+
+list_dir() {
+  local label="$1" dir="$2"
+  [[ -d "${dir}" ]] || return 0
+  local items
+  items=$(ls "${dir}" 2>/dev/null | sort) || return 0
+  [[ -n "${items}" ]] || return 0
+  printf '%s (%s):\n' "${label}" "${dir}"
+  while IFS= read -r item; do
+    if [[ -L "${dir}/${item}" ]]; then
+      printf '  %-30s -> %s\n' "${item}" "$(readlink "${dir}/${item}")"
+    else
+      printf '  %s\n' "${item}"
+    fi
+  done <<< "${items}"
+}
+
+# ── install ───────────────────────────────────────────────────────────────────
+
+cmd_install_skill() {
+  local name="$1" global="$2"
+  local src="${SKILLS_SRC}/${name}"
+  [[ -d "${src}" ]] || fail "skill '${name}' not found in ${SKILLS_SRC}"
+
+  if [[ "${global}" == "1" ]]; then
+    symlink "${src}" "${HOME}/.agents/skills/${name}"
+    symlink "${src}" "${HOME}/.claude/skills/${name}"
+  else
+    symlink "${src}" "${PWD}/.agents/skills/${name}"
+    symlink "${src}" "${PWD}/.claude/skills/${name}"
+  fi
+}
+
+cmd_install_agent() {
+  local name="$1" global="$2"
+  local base="${name%.md}"
+  local src="${AGENTS_SRC}/${base}.md"
+  [[ -f "${src}" ]] || fail "agent '${base}.md' not found in ${AGENTS_SRC}"
+
+  if [[ "${global}" == "1" ]]; then
+    symlink "${src}" "${HOME}/.pi/agents/${base}.md"
+  else
+    symlink "${src}" "${PWD}/.pi/agents/${base}.md"
+  fi
+}
+
+# ── remove ────────────────────────────────────────────────────────────────────
+
+cmd_remove_skill() {
+  local name="$1" global="$2"
+  if [[ "${global}" == "1" ]]; then
+    remove_link "${HOME}/.agents/skills/${name}"
+    remove_link "${HOME}/.claude/skills/${name}"
+  else
+    remove_link "${PWD}/.agents/skills/${name}"
+    remove_link "${PWD}/.claude/skills/${name}"
+  fi
+}
+
+cmd_remove_agent() {
+  local name="$1" global="$2"
+  local base="${name%.md}"
+  if [[ "${global}" == "1" ]]; then
+    remove_link "${HOME}/.pi/agents/${base}.md"
+  else
+    remove_link "${PWD}/.pi/agents/${base}.md"
+  fi
+}
+
+# ── list ──────────────────────────────────────────────────────────────────────
+
+cmd_list() {
+  local global="$1"
+  if [[ "${global}" == "1" ]]; then
+    list_dir "skills [Pi]"     "${HOME}/.agents/skills"
+    list_dir "skills [Claude]" "${HOME}/.claude/skills"
+    list_dir "agents"          "${HOME}/.pi/agents"
+  else
+    list_dir "skills [Pi]"     "${PWD}/.agents/skills"
+    list_dir "skills [Claude]" "${PWD}/.claude/skills"
+    list_dir "agents"          "${PWD}/.pi/agents"
+  fi
+}
+
+# ── test ──────────────────────────────────────────────────────────────────────
+
+cmd_test_skill() {
+  local name="$1"
+  local tests_dir="${SKILLS_SRC}/${name}/tests"
+  [[ -d "${tests_dir}" ]] || fail "no tests/ directory found for skill '${name}'"
+  log "running T1 tests for skill '${name}'..."
+  if command -v pytest &>/dev/null; then
+    pytest "${tests_dir}" -v
+  else
+    python -m unittest discover -s "${tests_dir}" -p "test_*.py" -v
+  fi
+}
+
+# ── dispatch ──────────────────────────────────────────────────────────────────
+
+[[ $# -ge 1 ]] || { usage; exit 0; }
+
+COMMAND="$1"; shift
+
+case "${COMMAND}" in
+  install|remove)
+    [[ $# -ge 2 ]] || fail "usage: omp ${COMMAND} <skill|agent> <name> [--global]"
+    SUBTYPE="$1"; shift
+    NAME="$1";    shift
+    GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
+
+    case "${SUBTYPE}" in
+      skill)
+        [[ "${COMMAND}" == "install" ]] && cmd_install_skill "${NAME}" "${GLOBAL}" \
+                                        || cmd_remove_skill  "${NAME}" "${GLOBAL}"
+        ;;
+      agent)
+        [[ "${COMMAND}" == "install" ]] && cmd_install_agent "${NAME}" "${GLOBAL}" \
+                                        || cmd_remove_agent  "${NAME}" "${GLOBAL}"
+        ;;
+      *) fail "unknown type '${SUBTYPE}': use 'skill' or 'agent'" ;;
+    esac
+    ;;
+
+  list)
+    GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
+    cmd_list "${GLOBAL}"
+    ;;
+
+  test)
+    [[ $# -ge 2 ]] || fail "usage: omp test <skill|agent> <name>"
+    SUBTYPE="$1"; shift
+    NAME="$1"
+    case "${SUBTYPE}" in
+      skill) cmd_test_skill "${NAME}" ;;
+      agent) fail "agent testing not yet implemented." ;;
+      *) fail "unknown type '${SUBTYPE}': use 'skill' or 'agent'" ;;
+    esac
+    ;;
+
+  help|--help|-h)
+    usage
+    ;;
+
+  *)
+    fail "unknown command '${COMMAND}'. Run 'omp help' for usage."
+    ;;
+esac
