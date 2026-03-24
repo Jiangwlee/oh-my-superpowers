@@ -1,7 +1,10 @@
 {
-  "skill-review": {
-    "agent": "@agents/skill-review.md",
+  "reviewer": {
+    "agent": "@agents/reviewer.md",
     "model": "litellm-local/qwen3.5-27b",
-    "skills": []
+    "skills": [
+      "@skills/skill-review/SKILL.md",
+      "@skills/agent-review/SKILL.md"
+    ]
   }
 }
