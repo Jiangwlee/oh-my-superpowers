@@ -1,7 +1,0 @@
-interface:
-  display_name: "OpenClaw GitHub 跟踪"
-  short_description: "热门项目简报、深度档案与增量跟踪"
-  default_prompt: "Use $openclaw-github-tracker to fetch GitHub trending, maintain a watchlist, generate project dossiers, and track key updates since the last snapshot."
-
-policy:
-  allow_implicit_invocation: true
