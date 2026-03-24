@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # omp — oh-my-superpowers CLI
 #
-# Manages local and global installation of Skills and Agents via symlinks.
+# Manages local and global installation of Skills, and runs Pi Agents directly.
 # Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
 #
 # Usage: omp <command> [args]
@@ -26,24 +26,28 @@ usage() {
 omp — oh-my-superpowers CLI
 
 Usage:
-  omp install skill <name> [--global]   Install a skill (local or global)
-  omp install agent <name> [--global]   Install an agent (local or global)
-  omp remove  skill <name> [--global]   Remove a skill installation
-  omp remove  agent <name> [--global]   Remove an agent installation
-  omp list [--global]                   List installed skills and agents
-  omp test skill <name>                 Run T1 tests for a skill
-  omp help                              Show this help
+  omp run   agent <name> [--model <model>] <prompt>  Run a Pi Agent
+  omp list  [--global]                              List skills and available agents
+  omp install skill <name> [--global]               Install a skill (local or global)
+  omp remove  skill <name> [--global]               Remove a skill installation
+  omp test skill <name>                             Run T1 tests for a skill
+  omp help                                          Show this help
 
-Targets:
-  Local  (default): $PWD/.agents/skills/  $PWD/.claude/skills/  $PWD/.pi/agents/
-  Global (--global): ~/.agents/skills/    ~/.claude/skills/      ~/.pi/agents/
+Agent notes:
+  Agents run directly from source (no install needed).
+  Default model: litellm-local/qwen3.5-27b. Override with --model.
+  Streaming output is always enabled.
+
+Skill install targets:
+  Local  (default): $PWD/.agents/skills/  $PWD/.claude/skills/
+  Global (--global): ~/.agents/skills/    ~/.claude/skills/
 
 Examples:
+  omp run agent skill-review --model litellm-local/qwen3.5-27b "review skills/skill-brainstorming"
+  omp list
   omp install skill skill-review
   omp install skill agent-brainstorming --global
   omp remove  skill skill-review --global
-  omp list
-  omp list --global
   omp test skill skill-review
 EOF
 }
@@ -85,6 +89,159 @@ list_dir() {
   done <<< "${items}"
 }
 
+list_available_agents() {
+  local agents_cfg="${AGENTS_SRC}/agents.json"
+  [[ -f "${agents_cfg}" ]] || return 0
+  printf 'available agents (%s):\n' "${agents_cfg}"
+  python3 -c "
+import json, os, sys
+
+omp_home = os.environ.get('OMP_HOME', os.path.expanduser('~/.oh-my-superpowers'))
+cfg = json.load(open('${agents_cfg}'))
+
+for name, entry in cfg.items():
+    model = entry.get('model', '')
+    agent_path = entry.get('agent', '')
+    if agent_path.startswith('@'):
+        agent_path = os.path.join(omp_home, agent_path[1:])
+    skills = entry.get('skills', [])
+    skills_count = f'{len(skills)} skills' if skills else 'no agent-specific skills'
+    print(f'  {name:<25} model={model}  agent={agent_path}  ({skills_count})')
+"
+}
+
+# ── verbose stream processor ──────────────────────────────────────────────────
+
+# Reads pi --mode json output from stdin, prints human-readable streaming text.
+_stream_verbose() {
+  python3 -c "
+import sys, json
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        obj = json.loads(line)
+        t = obj[\"type\"]
+
+        if t == \"message_update\":
+            evt = obj.get(\"assistantMessageEvent\", {})
+            if evt.get(\"type\") == \"text_delta\":
+                sys.stdout.write(evt.get(\"delta\", \"\"))
+                sys.stdout.flush()
+
+        elif t == \"tool_execution_start\":
+            name = obj.get(\"toolName\", \"tool\")
+            args = obj.get(\"args\", {})
+            # Show first value (usually the command/path) truncated
+            first_val = str(next(iter(args.values()), \"\"))
+            first_line = first_val.split(\"\\n\")[0][:100]
+            sys.stdout.write(\"\\n\\033[90m▶ [\" + name + \"] \" + first_line + \"\\033[0m\\n\")
+            sys.stdout.flush()
+
+        elif t == \"tool_execution_end\":
+            if obj.get(\"isError\", False):
+                sys.stdout.write(\"\\033[31m✗ tool error\\033[0m\\n\")
+            else:
+                lines = []
+                for item in obj.get(\"result\", {}).get(\"content\", []):
+                    if item.get(\"type\") == \"text\":
+                        lines = item[\"text\"].strip().split(\"\\n\")
+                        break
+                if lines and lines[0]:
+                    preview = lines[0][:100]
+                    more = \" (+\" + str(len(lines) - 1) + \" lines)\" if len(lines) > 1 else \"\"
+                    sys.stdout.write(\"\\033[90m◀ \" + preview + more + \"\\033[0m\\n\")
+            sys.stdout.flush()
+
+    except Exception:
+        pass
+
+sys.stdout.write(\"\\n\")
+sys.stdout.flush()
+"
+}
+
+# ── run agent ─────────────────────────────────────────────────────────────────
+
+cmd_run_agent() {
+  local name="$1" model_override="$2"
+  shift 2
+  local prompt="${*}"
+
+  [[ -n "${prompt}" ]] || fail "omp run agent: prompt is required"
+
+  local agents_cfg="${AGENTS_SRC}/agents.json"
+  [[ -f "${agents_cfg}" ]] || fail "agents.json not found in ${AGENTS_SRC}"
+
+  command -v pi &>/dev/null     || fail "pi command not found. Install pi first."
+  command -v python3 &>/dev/null || fail "python3 not found."
+
+  # Read agent file path and model from agents.json
+  local agent_path model
+  read -r agent_path model < <(python3 -c "
+import json, sys
+cfg = json.load(open('${agents_cfg}'))
+entry = cfg.get('${name}')
+if not entry:
+    print('', '', file=sys.stderr)
+    sys.exit(1)
+print(entry.get('agent', ''), entry.get('model', 'litellm-local/qwen3.5-27b'))
+") || fail "agent '${name}' not found in agents.json"
+
+  # Resolve @-prefixed path relative to OMP_HOME
+  if [[ "${agent_path}" == @* ]]; then
+    agent_path="${OMP_HOME}/${agent_path#@}"
+  fi
+  local agent_file="${agent_path}"
+  [[ -f "${agent_file}" ]] || fail "agent file '${agent_file}' not found"
+
+  # CLI --model overrides JSON config
+  [[ -n "${model_override}" ]] && model="${model_override}"
+
+  # Build --skill flags from agents.json skills array
+  # Paths starting with @ are relative to OMP_HOME; otherwise used as-is
+  local skill_flags=()
+  while IFS= read -r skill_path; do
+    [[ -z "${skill_path}" ]] && continue
+    if [[ "${skill_path}" == @* ]]; then
+      skill_path="${OMP_HOME}/${skill_path#@}"
+    fi
+    skill_flags+=(--skill "${skill_path}")
+  done < <(python3 -c "
+import json
+cfg = json.load(open('${agents_cfg}'))
+for s in cfg.get('${name}', {}).get('skills', []):
+    print(s)
+")
+
+  # Extract tools from frontmatter (default: bash,read)
+  local tools
+  tools=$(awk '/^---$/{c++; next} c==1 && /^tools:/{sub(/^tools:[[:space:]]*/,""); print; exit}' "${agent_file}")
+  tools="${tools:-bash,read}"
+  tools="${tools//[[:space:]]/}"
+
+  # Extract system prompt: body after second ---
+  local system_prompt
+  system_prompt=$(awk '/^---$/{c++; next} c>=2{print}' "${agent_file}")
+
+  local skills_display="${#skill_flags[@]} agent-specific skills"
+  [[ "${#skill_flags[@]}" -eq 0 ]] && skills_display="no agent-specific skills"
+  log "agent: ${name} | model: ${model} | tools: ${tools} | ${skills_display}"
+  printf '\n'
+
+  pi --mode json \
+     --no-session \
+     --model "${model}" \
+     --tools "${tools}" \
+     "${skill_flags[@]}" \
+     --system-prompt "${system_prompt}" \
+     -p "${prompt}" < /dev/null | _stream_verbose
+
+  return "${PIPESTATUS[0]}"
+}
+
 # ── install ───────────────────────────────────────────────────────────────────
 
 cmd_install_skill() {
@@ -101,19 +258,6 @@ cmd_install_skill() {
   fi
 }
 
-cmd_install_agent() {
-  local name="$1" global="$2"
-  local base="${name%.md}"
-  local src="${AGENTS_SRC}/${base}.md"
-  [[ -f "${src}" ]] || fail "agent '${base}.md' not found in ${AGENTS_SRC}"
-
-  if [[ "${global}" == "1" ]]; then
-    symlink "${src}" "${HOME}/.pi/agents/${base}.md"
-  else
-    symlink "${src}" "${PWD}/.pi/agents/${base}.md"
-  fi
-}
-
 # ── remove ────────────────────────────────────────────────────────────────────
 
 cmd_remove_skill() {
@@ -127,16 +271,6 @@ cmd_remove_skill() {
   fi
 }
 
-cmd_remove_agent() {
-  local name="$1" global="$2"
-  local base="${name%.md}"
-  if [[ "${global}" == "1" ]]; then
-    remove_link "${HOME}/.pi/agents/${base}.md"
-  else
-    remove_link "${PWD}/.pi/agents/${base}.md"
-  fi
-}
-
 # ── list ──────────────────────────────────────────────────────────────────────
 
 cmd_list() {
@@ -144,12 +278,11 @@ cmd_list() {
   if [[ "${global}" == "1" ]]; then
     list_dir "skills [Pi]"     "${HOME}/.agents/skills"
     list_dir "skills [Claude]" "${HOME}/.claude/skills"
-    list_dir "agents"          "${HOME}/.pi/agents"
   else
     list_dir "skills [Pi]"     "${PWD}/.agents/skills"
     list_dir "skills [Claude]" "${PWD}/.claude/skills"
-    list_dir "agents"          "${PWD}/.pi/agents"
   fi
+  list_available_agents
 }
 
 # ── test ──────────────────────────────────────────────────────────────────────
@@ -173,22 +306,48 @@ cmd_test_skill() {
 COMMAND="$1"; shift
 
 case "${COMMAND}" in
-  install|remove)
-    [[ $# -ge 2 ]] || fail "usage: omp ${COMMAND} <skill|agent> <name> [--global]"
+  run)
+    [[ $# -ge 1 ]] || fail "usage: omp run agent <name> --model <model> <prompt>"
+    SUBTYPE="$1"; shift
+    case "${SUBTYPE}" in
+      agent)
+        [[ $# -ge 1 ]] || fail "usage: omp run agent <name> --model <model> <prompt>"
+        NAME="$1"; shift
+        MODEL=""
+        ARGS=()
+        while [[ $# -gt 0 ]]; do
+          if [[ "$1" == "--model" && $# -ge 2 ]]; then
+            MODEL="$2"; shift 2
+          else
+            ARGS+=("$1"); shift
+          fi
+        done
+        MODEL="${MODEL:-litellm-local/qwen3.5-27b}"
+        cmd_run_agent "${NAME}" "${MODEL}" "${ARGS[@]}"
+        ;;
+      *) fail "unknown type '${SUBTYPE}': use 'agent'" ;;
+    esac
+    ;;
+
+  install)
+    [[ $# -ge 2 ]] || fail "usage: omp install skill <name> [--global]"
     SUBTYPE="$1"; shift
     NAME="$1";    shift
     GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
-
     case "${SUBTYPE}" in
-      skill)
-        [[ "${COMMAND}" == "install" ]] && cmd_install_skill "${NAME}" "${GLOBAL}" \
-                                        || cmd_remove_skill  "${NAME}" "${GLOBAL}"
-        ;;
-      agent)
-        [[ "${COMMAND}" == "install" ]] && cmd_install_agent "${NAME}" "${GLOBAL}" \
-                                        || cmd_remove_agent  "${NAME}" "${GLOBAL}"
-        ;;
-      *) fail "unknown type '${SUBTYPE}': use 'skill' or 'agent'" ;;
+      skill) cmd_install_skill "${NAME}" "${GLOBAL}" ;;
+      *) fail "unknown type '${SUBTYPE}': use 'skill'" ;;
+    esac
+    ;;
+
+  remove)
+    [[ $# -ge 2 ]] || fail "usage: omp remove skill <name> [--global]"
+    SUBTYPE="$1"; shift
+    NAME="$1";    shift
+    GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
+    case "${SUBTYPE}" in
+      skill) cmd_remove_skill "${NAME}" "${GLOBAL}" ;;
+      *) fail "unknown type '${SUBTYPE}': use 'skill'" ;;
     esac
     ;;
 
@@ -198,13 +357,12 @@ case "${COMMAND}" in
     ;;
 
   test)
-    [[ $# -ge 2 ]] || fail "usage: omp test <skill|agent> <name>"
+    [[ $# -ge 2 ]] || fail "usage: omp test skill <name>"
     SUBTYPE="$1"; shift
     NAME="$1"
     case "${SUBTYPE}" in
       skill) cmd_test_skill "${NAME}" ;;
-      agent) fail "agent testing not yet implemented." ;;
-      *) fail "unknown type '${SUBTYPE}': use 'skill' or 'agent'" ;;
+      *) fail "unknown type '${SUBTYPE}': use 'skill'" ;;
     esac
     ;;
 

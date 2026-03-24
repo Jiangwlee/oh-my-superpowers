@@ -31,7 +31,7 @@ skills/                       # Skill units (each independent)
 └── markdown-to-anything/     # Convert Markdown to PDF/PNG
 
 agents/                       # Pi Agent definitions
-└── <name>.md                 # Pi frontmatter + system prompt
+└── skill-review.md           # Skill Quality Auditor
 
 bin/
 └── omp                       # oh-my-superpowers CLI
@@ -88,19 +88,25 @@ omp list --global  # global
 | `skill-review` | Reviewer + Pipeline | Quality audit for Skill directories |
 | `markdown-to-anything` | Pipeline | Convert Markdown to PDF, PNG, and other formats |
 
+## Available Agents
+
+| Agent | Role | Purpose |
+|-------|------|---------|
+| `skill-review` | Skill Quality Auditor | Full audit of a Skill directory: spec compliance, design quality, evidence quality |
+
 ## omp CLI
 
 ```
-omp install skill <name> [--global]   Install a skill
-omp install agent <name> [--global]   Install an agent
-omp remove  skill <name> [--global]   Remove a skill installation
-omp remove  agent <name> [--global]   Remove an agent installation
-omp list [--global]                   List installed skills and agents
-omp test skill <name>                 Run T1 tests for a skill
-omp help                              Show help
+omp run   agent <name> --model <m> <prompt>   Run a Pi Agent (streaming)
+omp list  [--global]                          List skills and available agents
+omp install skill <name> [--global]           Install a skill (local or global)
+omp remove  skill <name> [--global]           Remove a skill installation
+omp test skill <name>                         Run T1 tests for a skill
+omp help                                      Show help
 ```
 
 Skills install as symlinks to both `.agents/skills/` (Pi) and `.claude/skills/` (Claude Code).
+Agents run directly from source — no install step needed.
 
 ## Architecture
 

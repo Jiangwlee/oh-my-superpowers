@@ -31,7 +31,7 @@ skills/                       # Skill 单元（各自独立）
 └── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
 
 agents/                       # Pi Agent 定义
-└── <name>.md                 # Pi frontmatter + system prompt
+└── skill-review.md           # Skill 质量审查官
 
 bin/
 └── omp                       # oh-my-superpowers CLI
@@ -88,19 +88,25 @@ omp list --global  # 全局
 | `skill-review` | Reviewer + Pipeline | Skill 目录质量审查 |
 | `markdown-to-anything` | Pipeline | Markdown 转 PDF、PNG 等格式 |
 
+## 可用 Agents
+
+| Agent | 角色 | 用途 |
+|-------|------|------|
+| `skill-review` | Skill 质量审查官 | 全面审计 Skill 目录：规范合规性、设计质量、证据质量 |
+
 ## omp 命令
 
 ```
-omp install skill <name> [--global]   安装 Skill
-omp install agent <name> [--global]   安装 Agent
-omp remove  skill <name> [--global]   卸载 Skill
-omp remove  agent <name> [--global]   卸载 Agent
-omp list [--global]                   列出已安装的 Skills 和 Agents
-omp test skill <name>                 运行 Skill 的 T1 测试
-omp help                              显示帮助
+omp run   agent <name> --model <m> <prompt>   运行 Pi Agent（实时流式输出）
+omp list  [--global]                          列出已安装 Skills 和可用 Agents
+omp install skill <name> [--global]           安装 Skill（局部或全局）
+omp remove  skill <name> [--global]           卸载 Skill
+omp test skill <name>                         运行 Skill 的 T1 测试
+omp help                                      显示帮助
 ```
 
 Skill 安装为 symlink，同时写入 `.agents/skills/`（Pi）和 `.claude/skills/`（Claude Code）。
+Agent 直接从源码运行，无需安装步骤。
 
 ## 架构
 
