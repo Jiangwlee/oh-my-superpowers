@@ -1,245 +1,54 @@
 #!/usr/bin/env bash
+# install.sh — Bootstrap oh-my-superpowers
+#
+# Installs the project to ~/.oh-my-superpowers/ (symlink) and registers
+# the omp CLI to ~/.local/bin/omp.
+#
+# Run once after cloning. Re-run to update the symlink after moving the repo.
+# After bootstrap, use `omp` to install individual skills and agents.
+
 set -euo pipefail
 
-# Project-level installer for skills.
-# Supported installation modes:
-# - Skills via copy into project-level or global .agents/skills.
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_SKILLS_DIR="${ROOT_DIR}/.agents/skills"
-GLOBAL_SKILLS_DIR="${HOME}/.agents/skills"
+INSTALL_DIR="${HOME}/.oh-my-superpowers"
+BIN_DIR="${HOME}/.local/bin"
+OMP_LINK="${BIN_DIR}/omp"
+OMP_BIN="${INSTALL_DIR}/bin/omp"
 
-SKILL_ITEMS=(
-  "agent-roundtable:skills/agent-roundtable"
-  "bb-browser:skills/bb-browser"
-  "code-insight:skills/code-insight"
-  "explore-project:skills/explore-project"
-  "github-researcher:skills/github-researcher"
-  "markdown-to-anything:skills/markdown-to-anything"
-  "openclaw-browser:skills/openclaw-browser"
-  "openclaw-github-tracker:skills/openclaw-github-tracker"
-  "skill-review:skills/skill-review"
-  "unified-memory:skills/unified-memory"
-  "website-operator:skills/website-operator"
-)
+log()  { printf '[install] %s\n' "$1"; }
+warn() { printf '[install] WARNING: %s\n' "$1"; }
+fail() { printf '[install] ERROR: %s\n' "$1" >&2; exit 1; }
 
-LIST_ONLY=0
-SKILL_DEST_MODE="project"
-INSTALL_SKILLS=()
-ARG_COUNT=$#
+# ── 1. Install to ~/.oh-my-superpowers ────────────────────────────────────────
 
-usage() {
-  cat <<'EOF'
-Usage:
-  bash install.sh [options]
-
-Options:
-  --list                  Show installable skills.
-  --skill NAMES           Install comma-separated skills.
-  --all-skills            Install all skills.
-  --project-skills        Install skills to ./.agents/skills (default).
-  --global-skills         Install skills to ~/.agents/skills.
-  -h, --help              Show this help.
-
-Examples:
-  bash install.sh --list
-  bash install.sh --skill github-researcher,unified-memory
-  bash install.sh --all-skills --global-skills
-  bash install.sh         # interactive mode
-EOF
-}
-
-log() {
-  printf '[install] %s\n' "$1"
-}
-
-fail() {
-  printf '[install][error] %s\n' "$1" >&2
-  exit 1
-}
-
-item_path() {
-  local target_name="$1"
-  shift
-  local item
-  for item in "$@"; do
-    local name="${item%%:*}"
-    local rel_path="${item#*:}"
-    if [[ "${name}" == "${target_name}" ]]; then
-      printf '%s\n' "${rel_path}"
-      return 0
-    fi
-  done
-  return 1
-}
-
-parse_csv() {
-  local raw="$1"
-  local -n out_ref="$2"
-  IFS=',' read -r -a out_ref <<<"${raw}"
-}
-
-print_group() {
-  local title="$1"
-  shift
-  printf '%s\n' "${title}"
-  local item
-  for item in "$@"; do
-    printf '  - %s\n' "${item%%:*}"
-  done
-}
-
-collect_names() {
-  local source_name="$1"
-  local target_name="$2"
-  local -n source_ref="${source_name}"
-  local -n target_ref="${target_name}"
-  target_ref=()
-  local item
-  for item in "${source_ref[@]}"; do
-    target_ref+=("${item%%:*}")
-  done
-}
-
-prompt_csv_selection() {
-  local label="$1"
-  local source_name="$2"
-  local target_name="$3"
-  local -n source_ref="${source_name}"
-  local -n target_ref="${target_name}"
-  local available=()
-  collect_names "${source_name}" available
-
-  printf '\n%s\n' "${label}"
-  printf '  options: %s\n' "$(IFS=', '; printf '%s' "${available[*]}")"
-  printf '  enter: all | none | comma-separated names\n'
-
-  local raw
-  read -r -p "> " raw
-  raw="${raw// /}"
-  if [[ -z "${raw}" || "${raw}" == "none" ]]; then
-    target_ref=()
-    return
-  fi
-  if [[ "${raw}" == "all" ]]; then
-    collect_names "${source_name}" "${target_name}"
-    return
-  fi
-  parse_csv "${raw}" target_ref
-}
-
-run_interactive_mode() {
-  [[ -t 0 ]] || fail "interactive mode requires a TTY; use flags like --skill instead"
-
-  printf 'OpenclawSkills installer\n'
-  printf 'Press Enter for none, or type all / comma-separated names.\n'
-
-  prompt_csv_selection "Select skills to install:" SKILL_ITEMS INSTALL_SKILLS
-
-  if (( ${#INSTALL_SKILLS[@]} > 0 )); then
-    local skill_dest
-    printf '\nInstall selected skills to which target?\n'
-    printf '  1) project (%s)\n' "${PROJECT_SKILLS_DIR}"
-    printf '  2) global  (%s)\n' "${GLOBAL_SKILLS_DIR}"
-    read -r -p "> " skill_dest
-    if [[ "${skill_dest}" == "2" ]]; then
-      SKILL_DEST_MODE="global"
-    else
-      SKILL_DEST_MODE="project"
-    fi
-  fi
-}
-
-install_skill_target() {
-  local name="$1"
-  local rel_path="$2"
-  local source_dir="${ROOT_DIR}/${rel_path}"
-  local dest_root
-  if [[ "${SKILL_DEST_MODE}" == "global" ]]; then
-    dest_root="${GLOBAL_SKILLS_DIR}"
-  else
-    dest_root="${PROJECT_SKILLS_DIR}"
-  fi
-  local dest_dir="${dest_root}/${name}"
-  [[ -f "${source_dir}/SKILL.md" ]] || fail "missing SKILL.md for ${name}: ${source_dir}"
-  mkdir -p "${dest_root}"
-  rm -rf "${dest_dir}"
-  cp -r "${source_dir}" "${dest_dir}"
-  log "installed skill ${name} -> ${dest_dir}"
-}
-
-install_named_group() {
-  local kind="$1"
-  shift
-  local -n requested_ref="$1"
-  shift
-  local items=("$@")
-  local name
-  for name in "${requested_ref[@]}"; do
-    [[ -n "${name}" ]] || continue
-    local rel_path
-    rel_path="$(item_path "${name}" "${items[@]}")" || fail "unknown ${kind}: ${name}"
-    install_skill_target "${name}" "${rel_path}"
-  done
-}
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --list)
-      LIST_ONLY=1
-      shift
-      ;;
-    --skill)
-      [[ $# -ge 2 ]] || fail "--skill requires a comma-separated value"
-      parse_csv "$2" INSTALL_SKILLS
-      shift 2
-      ;;
-    --all-skills)
-      INSTALL_SKILLS=()
-      item=""
-      for item in "${SKILL_ITEMS[@]}"; do
-        INSTALL_SKILLS+=("${item%%:*}")
-      done
-      shift
-      ;;
-    --project-skills)
-      SKILL_DEST_MODE="project"
-      shift
-      ;;
-    --global-skills)
-      SKILL_DEST_MODE="global"
-      shift
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      fail "unknown argument: $1"
-      ;;
-  esac
-done
-
-if (( ARG_COUNT == 0 )); then
-  run_interactive_mode
+if [[ -L "${INSTALL_DIR}" ]]; then
+  rm "${INSTALL_DIR}"
+elif [[ -e "${INSTALL_DIR}" ]]; then
+  fail "${INSTALL_DIR} exists and is not a symlink. Remove it manually before running this script."
 fi
 
-if (( LIST_ONLY == 1 )); then
-  print_group "Skills:" "${SKILL_ITEMS[@]}"
-  exit 0
+ln -s "${ROOT_DIR}" "${INSTALL_DIR}"
+log "linked ${INSTALL_DIR} -> ${ROOT_DIR}"
+
+# ── 2. Register omp to PATH ───────────────────────────────────────────────────
+
+mkdir -p "${BIN_DIR}"
+
+if [[ -f "${OMP_BIN}" ]]; then
+  ln -sf "${OMP_BIN}" "${OMP_LINK}"
+  log "linked ${OMP_LINK} -> ${OMP_BIN}"
+else
+  warn "bin/omp not found. The omp CLI is not yet available."
+  warn "Re-run this script after bin/omp is created."
 fi
 
-if (( ${#INSTALL_SKILLS[@]} == 0 )); then
-  if (( ARG_COUNT == 0 )); then
-    log "nothing selected; exiting"
-    exit 0
-  fi
-  usage
-  exit 1
+# ── 3. PATH check ─────────────────────────────────────────────────────────────
+
+if [[ ":${PATH}:" != *":${BIN_DIR}:"* ]]; then
+  warn "${BIN_DIR} is not in PATH."
+  log  "Add the following to your shell profile (~/.bashrc or ~/.zshrc):"
+  log  "  export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 
-if (( ${#INSTALL_SKILLS[@]} > 0 )); then
-  install_named_group "skill" INSTALL_SKILLS "${SKILL_ITEMS[@]}"
-fi
-
-log "all requested installs completed"
+log "Bootstrap complete."
+log "Next: use \`omp install skill <name>\` to install individual skills."

@@ -56,3 +56,6 @@ description: >-           # 触发描述，建议 1-3 句，明确 WHEN 和 boun
 | 设计或优化 Skill 的脚本 | [how-to-use-scripts-in-skills.md](how-to-use-scripts-in-skills.md) |
 | 优化 description 触发准确率 | [how-to-optimize-skill-descriptions.md](how-to-optimize-skill-descriptions.md) |
 | 建立 Skill 的评估体系 | [how-to-evaluate-skill-output-quality.md](how-to-evaluate-skill-output-quality.md) |
+| 项目内积累的 Skill 开发经验 | [skills-dev-guide.md](skills-dev-guide.md) |
+| Claude Code Skill 开发完整手册 | [claude-skill-dev-guide.md](claude-skill-dev-guide.md) |
+| 文件头规范（让 AI 快速理解文件） | [file-header-spec.md](file-header-spec.md) |
