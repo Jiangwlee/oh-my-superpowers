@@ -81,15 +81,25 @@ omp remove agent <name> --global
 ### list
 
 ```bash
-omp list                          # 列出已安装的 skills 和 agents（局部 + 全局）
+omp list                          # 列出已安装的 skills 和 agents（局部）
 omp list --global                 # 仅列出全局安装
+omp list --type skill             # 只列出 skills
+omp list --type agent             # 只列出 agents
 ```
 
 ### test
 
 ```bash
-omp test skill <name>             # 运行指定 skill 的 T1 测试
-omp test agent <name>             # 运行指定 agent 的 eval
+omp test <name>                   # 运行指定 skill 的 T1 测试
+```
+
+### run
+
+```bash
+omp run <name> [--model TEXT] [prompt...]
+# 示例：
+omp run media-editor 今天有什么 AI 动态
+omp run reviewer --model litellm-local/qwen3.5-27b review skills/foo
 ```
 
 ---
