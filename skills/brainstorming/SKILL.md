@@ -147,6 +147,8 @@ Save to: `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`
 
 The document MUST contain a table of contents so agents can navigate directly to any section without scanning the full file.
 
+For significant changes (architecture changes, interface changes, directory restructuring, adding/removing core modules), the action plan MUST include a **文档更新** task as the final task. Skip this for small iterative changes or bug fixes. The template includes a ready-made task for this — use it when applicable.
+
 **Document structure (both modes):**
 1. One-line summary
 2. Table of contents
