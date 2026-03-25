@@ -11,7 +11,12 @@ import base64
 import html
 import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from normalize_input import normalize_markdown_text  # type: ignore  # noqa: E402
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -138,18 +143,31 @@ def _md_fallback(md_path: Path) -> str:
 
 def markdown_to_html(md_path: Path) -> tuple[str, str]:
     """Markdown -> full HTML document. Returns (html, engine_used)."""
+    # Normalize markdown before rendering (fix list rendering, blank lines, etc.)
+    raw = md_path.read_text(encoding="utf-8")
+    normalized = normalize_markdown_text(raw)
+    normalized_content = normalized.text
+
     engine_used = "fallback"
     if shutil.which("pandoc"):
         try:
-            result = subprocess.run(
-                ["pandoc", "--from=markdown", "--to=html5", str(md_path)],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=30,
-            )
-            body = result.stdout
-            engine_used = "pandoc"
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".md", encoding="utf-8", delete=False
+            ) as tmp:
+                tmp.write(normalized_content)
+                tmp_path = Path(tmp.name)
+            try:
+                result = subprocess.run(
+                    ["pandoc", "--from=markdown", "--to=html5", str(tmp_path)],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30,
+                )
+                body = result.stdout
+                engine_used = "pandoc"
+            finally:
+                tmp_path.unlink(missing_ok=True)
         except Exception:
             body = _md_fallback(md_path)
     else:

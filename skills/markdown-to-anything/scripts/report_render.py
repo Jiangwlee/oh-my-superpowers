@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from report_html_render import markdown_to_html as report_markdown_to_html  # type: ignore  # noqa: E402
+from normalize_input import normalize_markdown_text  # type: ignore  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 VENDOR_MARKED = SCRIPT_DIR / "vendor" / "marked.min.js"
@@ -421,24 +422,34 @@ def render_markdown_to_html(
         Tuple of (engine_used, warnings).
     """
     warnings: list[str] = []
-    md_text = markdown_path.read_text(encoding="utf-8")
+    raw_text = markdown_path.read_text(encoding="utf-8")
+    normalized = normalize_markdown_text(raw_text)
+    md_text = normalized.text
     engine_used = "fallback"
     html_doc = ""
 
     pandoc_available = shutil.which("pandoc") is not None
     if prefer_engine in {"auto", "pandoc"} and pandoc_available:
         try:
-            proc = subprocess.run(
-                ["pandoc", "--from=markdown", "--to=html5", str(markdown_path)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=True,
-            )
-            html_doc = _build_static_html(
-                proc.stdout, theme, font_size, include_remote_fonts=include_remote_fonts
-            )
-            engine_used = "pandoc"
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".md", encoding="utf-8", delete=False
+            ) as _tmp:
+                _tmp.write(md_text)
+                _tmp_path = Path(_tmp.name)
+            try:
+                proc = subprocess.run(
+                    ["pandoc", "--from=markdown", "--to=html5", str(_tmp_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=True,
+                )
+                html_doc = _build_static_html(
+                    proc.stdout, theme, font_size, include_remote_fonts=include_remote_fonts
+                )
+                engine_used = "pandoc"
+            finally:
+                _tmp_path.unlink(missing_ok=True)
         except Exception as exc:
             warnings.append(f"pandoc failed, fallback used: {exc}")
             if prefer_engine == "pandoc":
