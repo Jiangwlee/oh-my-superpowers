@@ -121,18 +121,19 @@ def _font_link_html(enable_remote_fonts: bool = False) -> str:
     return f"<style>{_font_css_inline()}</style>"
 
 
-def _build_css(theme: str, font_size: str) -> str:
+def _build_css(theme: str, font_size: str, layout: str = "desktop") -> str:
     tokens = THEMES[theme]
     body = FONT_SIZE_PX[font_size]
     table = max(11, int(round(body * 0.87)))
     meta = max(10, int(round(body * 0.80)))
     line_height = "1.55"
+    body_width = "340px" if layout == "mobile" else "750px"
     return f"""
 * {{ box-sizing: border-box; }}
 html, body {{ margin: 0; padding: 0; }}
 body {{
-  width: 750px;
-  max-width: 750px;
+  width: {body_width};
+  max-width: {body_width};
   margin: 0 auto;
   padding: 0 4px;
   background: {tokens["bg"]};
@@ -351,7 +352,7 @@ def _simple_markdown_to_html(md_text: str) -> str:
 
 
 def _build_marked_shell(
-    md_text: str, theme: str, font_size: str, include_remote_fonts: bool = True
+    md_text: str, theme: str, font_size: str, include_remote_fonts: bool = True, layout: str = "desktop"
 ) -> str:
     md_source = _escape_html(md_text)
     js_source = (
@@ -359,7 +360,7 @@ def _build_marked_shell(
         if VENDOR_MARKED.exists()
         else "window.marked={parse:(s)=>'<pre>'+s+'</pre>'};"
     )
-    css = _build_css(theme, font_size)
+    css = _build_css(theme, font_size, layout)
     return f"""<!DOCTYPE html>
 <html lang=\"zh-CN\">
 <head>
@@ -386,9 +387,9 @@ def _build_marked_shell(
 
 
 def _build_static_html(
-    body_html: str, theme: str, font_size: str, include_remote_fonts: bool = True
+    body_html: str, theme: str, font_size: str, include_remote_fonts: bool = True, layout: str = "desktop"
 ) -> str:
-    css = _build_css(theme, font_size)
+    css = _build_css(theme, font_size, layout)
     return f"""<!DOCTYPE html>
 <html lang=\"zh-CN\">
 <head>
@@ -401,6 +402,15 @@ def _build_static_html(
 </html>"""
 
 
+# iPhone 17 standard: ~390 CSS px wide × ~844 CSS px tall
+# PDF page in inches at 96 dpi: 4.0" × 8.67"
+MOBILE_PDF_PARAMS: dict[str, int | float] = {
+    "viewport_width": 390,
+    "paper_width": 4.0,
+    "paper_height": 8.67,
+}
+
+
 def render_markdown_to_html(
     markdown_path: Path,
     output_html: Path,
@@ -408,6 +418,7 @@ def render_markdown_to_html(
     font_size: str = "medium",
     prefer_engine: str = "auto",
     include_remote_fonts: bool = True,
+    layout: str = "desktop",
 ) -> tuple[str, list[str]]:
     """Render Markdown file to HTML.
 
@@ -417,6 +428,8 @@ def render_markdown_to_html(
         theme: Theme token set.
         font_size: Font-size tier.
         prefer_engine: `auto`, `pandoc`, `marked`, or `fallback`.
+        include_remote_fonts: Whether to include remote font links.
+        layout: Layout profile — `desktop` (750px) or `mobile` (340px, iPhone 17).
 
     Returns:
         Tuple of (engine_used, warnings).
@@ -445,7 +458,8 @@ def render_markdown_to_html(
                     check=True,
                 )
                 html_doc = _build_static_html(
-                    proc.stdout, theme, font_size, include_remote_fonts=include_remote_fonts
+                    proc.stdout, theme, font_size,
+                    include_remote_fonts=include_remote_fonts, layout=layout,
                 )
                 engine_used = "pandoc"
             finally:
@@ -458,6 +472,7 @@ def render_markdown_to_html(
                     theme,
                     font_size,
                     include_remote_fonts=include_remote_fonts,
+                    layout=layout,
                 )
                 engine_used = "fallback"
 
@@ -468,6 +483,7 @@ def render_markdown_to_html(
                 theme,
                 font_size,
                 include_remote_fonts=include_remote_fonts,
+                layout=layout,
             )
             engine_used = "marked"
         else:
@@ -479,6 +495,7 @@ def render_markdown_to_html(
             theme,
             font_size,
             include_remote_fonts=include_remote_fonts,
+            layout=layout,
         )
         engine_used = "fallback"
 
@@ -488,9 +505,21 @@ def render_markdown_to_html(
 
 
 def render_html_to_pdf(
-    html_path: Path, output_pdf: Path, width: int = 750
+    html_path: Path,
+    output_pdf: Path,
+    width: int = 750,
+    paper_width: float = 8.27,
+    paper_height: float = 11.69,
 ) -> list[str]:
-    """Render HTML to PDF using `screenshot.js` backend."""
+    """Render HTML to PDF using `screenshot.js` backend.
+
+    Args:
+        html_path: Source HTML path.
+        output_pdf: Destination PDF path.
+        width: Viewport/CSS width in pixels (750 for desktop, 390 for mobile).
+        paper_width: PDF paper width in inches (8.27 for A4, 4.0 for iPhone 17).
+        paper_height: PDF paper height in inches (11.69 for A4, 8.67 for iPhone 17).
+    """
     warnings: list[str] = []
     node = shutil.which("node")
     if not node:
@@ -505,6 +534,8 @@ def render_html_to_pdf(
             str(html_path.resolve()),
             str(output_pdf.resolve()),
             str(width),
+            str(paper_width),
+            str(paper_height),
         ],
         capture_output=True,
         text=True,

@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from inspect_input import inspect_markdown_file  # type: ignore  # noqa: E402
 from normalize_input import normalize_markdown_file  # type: ignore  # noqa: E402
 from report_render import (  # type: ignore  # noqa: E402
+    MOBILE_PDF_PARAMS,
     render_html_to_pdf,
     render_html_to_png,
     render_markdown_to_html,
@@ -33,6 +34,7 @@ class ConvertManifest:
     input: str
     mode: str
     format: str
+    layout: str
     files: list[str]
     theme: str
     font_size: str
@@ -100,6 +102,7 @@ def _render_report(
     prefer_engine: str,
     keep_html: bool,
     file_suffix: str,
+    layout: str = "desktop",
 ) -> tuple[list[str], list[str], dict[str, str], list[str]]:
     files: list[str] = []
     intermediate_files: list[str] = []
@@ -114,14 +117,20 @@ def _render_report(
         font_size=font_size,
         prefer_engine=prefer_engine,
         include_remote_fonts=False,
+        layout=layout,
     )
     engine["markdown_to_html"] = markdown_engine
     warnings.extend(html_warnings)
     intermediate_files.append(str(html_path))
 
+    # Determine PDF page dimensions based on layout
+    pdf_width = int(MOBILE_PDF_PARAMS["viewport_width"]) if layout == "mobile" else 750
+    paper_w = float(MOBILE_PDF_PARAMS["paper_width"]) if layout == "mobile" else 8.27
+    paper_h = float(MOBILE_PDF_PARAMS["paper_height"]) if layout == "mobile" else 11.69
+
     if requested_format in {"pdf", "both"}:
         pdf_path = _derived_path(output_base, file_suffix, ".pdf")
-        warnings.extend(render_html_to_pdf(html_path, pdf_path))
+        warnings.extend(render_html_to_pdf(html_path, pdf_path, width=pdf_width, paper_width=paper_w, paper_height=paper_h))
         validate = validate_file(pdf_path)
         warnings.extend(validate.warnings)
         if validate.errors:
@@ -152,7 +161,10 @@ def main() -> None:
     parser.add_argument("--mode", choices=["auto", "report", "card"], default="auto")
     parser.add_argument("--format", choices=["png", "pdf", "html", "both"], help="Output format")
     parser.add_argument("--theme", choices=["dark", "blue", "light"])
-    parser.add_argument("--font-size", choices=["small", "medium", "large"], default="medium")
+    parser.add_argument("--font-size", choices=["small", "medium", "large"],
+                        help="Font size tier (default: large for mobile, medium for desktop)")
+    parser.add_argument("--layout", choices=["desktop", "mobile"], default="desktop",
+                        help="Layout profile: desktop (A4) or mobile (iPhone 17, 4.0×8.67in)")
     parser.add_argument("--output", help="Output file or base path")
     parser.add_argument("--same-dir", action="store_true", help="Write outputs next to input file")
     parser.add_argument("--keep-html", action="store_true", help="Keep intermediate HTML")
@@ -180,6 +192,9 @@ def main() -> None:
     actual_mode = "report" if args.mode in {"auto", "report"} else "card"
     if actual_mode == "card":
         raise SystemExit("card mode is not implemented in this CLI yet; use SVG workflow from SKILL.md")
+
+    # Default font-size: large for mobile layout, medium for desktop
+    effective_font_size = args.font_size or ("large" if args.layout == "mobile" else "medium")
 
     requested_format = args.format or "pdf"
     if requested_format == "html":
@@ -229,9 +244,10 @@ def main() -> None:
                 render_input,
                 html_path,
                 theme=resolved_theme,
-                font_size=args.font_size,
+                font_size=effective_font_size,
                 prefer_engine=args.engine,
                 include_remote_fonts=False,
+                layout=args.layout,
             )
             engine["markdown_to_html"] = markdown_engine
             warnings.extend(html_warnings)
@@ -243,10 +259,11 @@ def main() -> None:
                 output_base,
                 requested_format,
                 resolved_theme,
-                args.font_size,
+                effective_font_size,
                 args.engine,
                 args.keep_html,
                 "_report",
+                layout=args.layout,
             )
             warnings.extend(render_warnings)
 
@@ -266,9 +283,10 @@ def main() -> None:
         input=str(input_path),
         mode=actual_mode,
         format=requested_format,
+        layout=args.layout,
         files=files,
         theme=resolved_theme,
-        font_size=args.font_size,
+        font_size=effective_font_size,
         template_used=template_used,
         engine=engine,
         normalization=normalization,

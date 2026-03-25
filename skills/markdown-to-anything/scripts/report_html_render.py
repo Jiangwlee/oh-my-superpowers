@@ -141,8 +141,24 @@ def _md_fallback(md_path: Path) -> str:
     return f'<pre style="white-space:pre-wrap;font-size:14px;">{html.escape(content)}</pre>'
 
 
-def markdown_to_html(md_path: Path) -> tuple[str, str]:
-    """Markdown -> full HTML document. Returns (html, engine_used)."""
+_MOBILE_CSS_OVERRIDE = """
+body { max-width: 340px; font-size: 17px; }
+h1 { font-size: 27px; }
+h2 { font-size: 21px; }
+h3 { font-size: 18px; }
+table { font-size: 14px; }
+li { margin: 5px 0; }
+ul, ol { padding-left: 20px; }
+"""
+
+
+def markdown_to_html(md_path: Path, layout: str = "desktop") -> tuple[str, str]:
+    """Markdown -> full HTML document. Returns (html, engine_used).
+
+    Args:
+        md_path: Source Markdown path.
+        layout: Layout profile — `desktop` (750px) or `mobile` (340px, iPhone 17).
+    """
     # Normalize markdown before rendering (fix list rendering, blank lines, etc.)
     raw = md_path.read_text(encoding="utf-8")
     normalized = normalize_markdown_text(raw)
@@ -174,13 +190,14 @@ def markdown_to_html(md_path: Path) -> tuple[str, str]:
         body = _md_fallback(md_path)
 
     font_css = _font_css()
+    mobile_css = _MOBILE_CSS_OVERRIDE if layout == "mobile" else ""
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>{font_css}{_CSS}</style>
+<style>{font_css}{_CSS}{mobile_css}</style>
 </head>
 <body>{body}</body>
 </html>"""

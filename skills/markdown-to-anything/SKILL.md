@@ -49,7 +49,16 @@ NO EXPORT WITHOUT CHOOSING THE PATH FIRST.
 常用命令：
 
 ```bash
+# 桌面端 PDF（A4，默认）
 python scripts/convert.py report.md --mode report --format pdf --same-dir --stdout-manifest
+
+# 手机端 PDF（iPhone 17，4.0×8.67in，字号自动放大为 large）
+python scripts/convert.py report.md --mode report --format pdf --layout mobile --same-dir --stdout-manifest
+
+# 同时生成桌面 + 手机两个版本
+python scripts/convert.py report.md --mode report --format pdf --same-dir --output report_desktop
+python scripts/convert.py report.md --mode report --format pdf --layout mobile --output report_mobile
+
 python scripts/convert.py report.md --mode report --format png --same-dir --stdout-manifest
 python scripts/convert.py report.md --mode report --format pdf --keep-html --keep-clean --stdout-manifest
 ```

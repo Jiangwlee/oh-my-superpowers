@@ -215,7 +215,7 @@ async function capturePng(inputFile, outputPng, dpr = 3, cssWidth = 1080, maxPag
   }
 }
 
-async function printPdf(htmlFile, outputPdf, cssWidth = 750) {
+async function printPdf(htmlFile, outputPdf, cssWidth = 750, paperWidth = 8.27, paperHeight = 11.69) {
   const ctx = await openPage(htmlFile, cssWidth);
   const { cdp, proc } = ctx;
   try {
@@ -226,13 +226,15 @@ async function printPdf(htmlFile, outputPdf, cssWidth = 750) {
       timeout: 5000,
     }).catch(() => {});
     await sleep(300); // Brief wait for font rendering stabilization
+    // Use smaller margins for narrow/mobile page sizes
+    const margin = paperWidth < 6 ? 0.2 : 0.4;
     const result = await cdp.send('Page.printToPDF', {
-      paperWidth: 8.27,
-      paperHeight: 11.69,
-      marginTop: 0.4,
-      marginBottom: 0.4,
-      marginLeft: 0.4,
-      marginRight: 0.4,
+      paperWidth,
+      paperHeight,
+      marginTop: margin,
+      marginBottom: margin,
+      marginLeft: margin,
+      marginRight: margin,
       printBackground: true,
       preferCSSPageSize: false,
       transferMode: 'ReturnAsBase64',
@@ -297,9 +299,14 @@ async function validateSvgBBoxes(svgFile) {
 async function main() {
   const args = process.argv.slice(2);
   if (args[0] === '--pdf') {
-    const [, htmlFile, outputPdf, widthArg] = args;
-    if (!htmlFile || !outputPdf) throw new Error('Usage: --pdf <html_file> <output_pdf> [width=750]');
-    await printPdf(htmlFile, outputPdf, widthArg ? parseInt(widthArg, 10) : 750);
+    const [, htmlFile, outputPdf, widthArg, paperWidthArg, paperHeightArg] = args;
+    if (!htmlFile || !outputPdf) throw new Error('Usage: --pdf <html_file> <output_pdf> [width=750] [paperWidth=8.27] [paperHeight=11.69]');
+    await printPdf(
+      htmlFile, outputPdf,
+      widthArg ? parseInt(widthArg, 10) : 750,
+      paperWidthArg ? parseFloat(paperWidthArg) : 8.27,
+      paperHeightArg ? parseFloat(paperHeightArg) : 11.69,
+    );
     return;
   }
   if (args[0] === '--png') {
