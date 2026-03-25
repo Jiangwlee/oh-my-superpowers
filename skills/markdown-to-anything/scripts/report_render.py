@@ -42,7 +42,7 @@ THEMES: dict[str, dict[str, str]] = {
         "card": "#ffffff",
     },
 }
-FONT_SIZE_PX = {"small": 24, "medium": 28, "large": 32}
+FONT_SIZE_PX = {"small": 13, "medium": 15, "large": 18}
 
 
 @dataclass(slots=True)
@@ -123,9 +123,9 @@ def _font_link_html(enable_remote_fonts: bool = False) -> str:
 def _build_css(theme: str, font_size: str) -> str:
     tokens = THEMES[theme]
     body = FONT_SIZE_PX[font_size]
-    table = max(20, int(round(body * 0.82)))
-    meta = max(20, int(round(body * 0.79)))
-    line_height = "1.60" if font_size == "large" else "1.65"
+    table = max(11, int(round(body * 0.87)))
+    meta = max(10, int(round(body * 0.80)))
+    line_height = "1.55"
     return f"""
 * {{ box-sizing: border-box; }}
 html, body {{ margin: 0; padding: 0; }}
@@ -133,7 +133,7 @@ body {{
   width: 750px;
   max-width: 750px;
   margin: 0 auto;
-  padding: 24px 20px 40px;
+  padding: 0 4px;
   background: {tokens["bg"]};
   color: {tokens["text"]};
   font-family: {_font_family()};
@@ -142,26 +142,26 @@ body {{
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }}
-article {{ background: {tokens["card"]}; border-radius: 20px; padding: 28px 24px 36px; box-shadow: 0 8px 32px rgba(0,0,0,.08); }}
-h1,h2,h3 {{ line-height: 1.25; margin: 1.1em 0 .45em; }}
-h1 {{ font-size: calc({body}px * 1.75); color: {tokens["accent"]}; border-bottom: 2px solid rgba(25,118,210,.25); padding-bottom: .28em; }}
-h2 {{ font-size: calc({body}px * 1.42); color: {tokens["accent"]}; border-left: 4px solid {tokens["accent"]}; padding-left: .45em; }}
-h3 {{ font-size: calc({body}px * 1.21); color: {tokens["text"]}; }}
-p, ul, ol, pre, table, blockquote {{ margin: .5em 0; }}
-ul, ol {{ padding-left: 1.2em; }}
-li {{ margin: .25em 0; }}
+article {{ background: {tokens["card"]}; border-radius: 12px; padding: 20px 18px 28px; box-shadow: 0 4px 20px rgba(0,0,0,.06); }}
+h1,h2,h3 {{ line-height: 1.2; }}
+h1 {{ font-size: calc({body}px * 1.55); font-weight: 700; color: {tokens["accent"]}; border-bottom: 2px solid rgba(25,118,210,.3); padding-bottom: .22em; margin: 10px 0 8px; }}
+h2 {{ font-size: calc({body}px * 1.22); font-weight: 700; color: {tokens["accent"]}; border-left: 3px solid {tokens["accent"]}; padding-left: .5em; margin: 16px 0 6px; }}
+h3 {{ font-size: calc({body}px * 1.07); font-weight: 600; color: {tokens["text"]}; margin: 10px 0 4px; }}
+p, ul, ol, pre, table, blockquote {{ margin: .35em 0; }}
+ul, ol {{ padding-left: 1.15em; }}
+li {{ margin: .2em 0; }}
 a {{ color: {tokens["accent"]}; }}
-strong {{ font-weight: 700; }}
-code {{ background: rgba(127,127,127,.14); border-radius: 6px; padding: .08em .28em; font-size: {table}px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-pre {{ background: rgba(127,127,127,.14); padding: .7em .8em; border-radius: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }}
+strong {{ font-weight: 700; color: {tokens["accent"]}; }}
+code {{ background: rgba(127,127,127,.12); border-radius: 4px; padding: .06em .22em; font-size: {table}px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+pre {{ background: rgba(127,127,127,.12); padding: .5em .7em; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }}
 pre code {{ background: transparent; padding: 0; font-size: {table}px; }}
-table {{ border-collapse: collapse; width: 100%; font-size: {table}px; }}
-th, td {{ border: 1px solid rgba(127,127,127,.25); padding: .35em .45em; text-align: left; vertical-align: top; }}
-th {{ background: rgba(25,118,210,.10); }}
-blockquote {{ border-left: 4px solid {tokens["accent"]}; padding-left: .7em; color: {tokens["muted"]}; }}
-hr {{ border: none; border-top: 1px solid rgba(127,127,127,.25); margin: 1em 0; }}
+table {{ border-collapse: collapse; width: 100%; font-size: {table}px; table-layout: auto; margin: .4em 0; }}
+th {{ border: 1px solid rgba(25,118,210,.25); padding: 5px 7px; text-align: left; vertical-align: top; background: rgba(25,118,210,.08); font-weight: 700; white-space: nowrap; }}
+td {{ border: 1px solid rgba(127,127,127,.2); padding: 4px 7px; text-align: left; vertical-align: top; word-break: break-word; overflow-wrap: break-word; }}
+tr:nth-child(even) td {{ background: rgba(25,118,210,.03); }}
+blockquote {{ border-left: 3px solid {tokens["accent"]}; padding-left: .6em; color: {tokens["muted"]}; }}
+hr {{ border: none; border-top: 1px solid rgba(127,127,127,.2); margin: .8em 0; }}
 .meta {{ color: {tokens["muted"]}; font-size: {meta}px; }}
-/* Browser PDF exports may omit page backgrounds; force readable print contrast. */
 @media print {{
   html, body {{
     background: #ffffff !important;
@@ -191,14 +191,16 @@ hr {{ border: none; border-top: 1px solid rgba(127,127,127,.25); margin: 1em 0; 
     color: #111827 !important;
     font-family: {_font_family()} !important;
   }}
+  strong {{ color: #0f4c81 !important; }}
   code, pre {{
     color: #111827 !important;
   }}
   a {{
     color: #0f4c81 !important;
   }}
+  h2, h3 {{ page-break-after: avoid; }}
+  table {{ page-break-inside: avoid; }}
 }}
-@page {{ size: A4; margin: 0.4in; }}
 """
 
 
