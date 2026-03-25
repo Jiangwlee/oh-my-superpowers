@@ -1,450 +1,428 @@
-#!/usr/bin/env bash
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["typer", "rich"]
+# ///
+#
 # omp — oh-my-superpowers CLI
 #
-# Manages local and global installation of Skills, and runs Pi Agents directly.
-# Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
+# Commands:
+#   install <skill|agent> <name> [--global]   安装 skill 或 agent
+#   remove  <skill|agent> <name> [--global]   卸载 skill 或 agent
+#   list    [--type skill|agent] [--global]   列出已安装的 skills 和 agents
+#   run     <name> [--model TEXT] [prompt...]  运行 Pi Agent
+#   test    <name>                             运行 skill T1 测试
 #
-# Usage: omp <command> [args]
-# Run `omp help` for full usage.
+# Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
 
-set -euo pipefail
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional
 
-OMP_HOME="${HOME}/.oh-my-superpowers"
-SKILLS_SRC="${OMP_HOME}/skills"
-AGENTS_SRC="${OMP_HOME}/agents"
+import typer
+from rich.console import Console
+from typing_extensions import Annotated
 
-log()  { printf '[omp] %s\n' "$1"; }
-warn() { printf '[omp] WARNING: %s\n' "$1"; }
-fail() { printf '[omp] ERROR: %s\n' "$1" >&2; exit 1; }
+# ── constants ─────────────────────────────────────────────────────────────────
 
-[[ -e "${OMP_HOME}" ]] || fail "~/.oh-my-superpowers not found. Run install.sh first."
+OMP_HOME   = Path.home() / ".oh-my-superpowers"
+SKILLS_SRC = OMP_HOME / "skills"
+AGENTS_SRC = OMP_HOME / "agents"
+AGENTS_CFG = AGENTS_SRC / "agents.json"
 
-# ── usage ─────────────────────────────────────────────────────────────────────
+# ── app setup ─────────────────────────────────────────────────────────────────
 
-usage() {
-  cat <<'EOF'
-omp — oh-my-superpowers CLI
-
-Usage:
-  omp run   agent <name> [--model <model>] <prompt>  Run a Pi Agent
-  omp list  [agents|skills] [--global]              List skills and/or agents
-  omp install skill <name> [--global]               Install a skill (local or global)
-  omp remove  skill <name> [--global]               Remove a skill installation
-  omp test skill <name>                             Run T1 tests for a skill
-  omp help                                          Show this help
-
-Agent notes:
-  Agents run directly from source (no install needed).
-  Default model: litellm-local/qwen3.5-27b. Override with --model.
-  Streaming output is always enabled.
-
-Skill install targets:
-  Local  (default): $PWD/.agents/skills/  $PWD/.claude/skills/
-  Global (--global): ~/.agents/skills/    ~/.claude/skills/
-
-Examples:
-  omp run agent skill-review --model litellm-local/qwen3.5-27b "review skills/skill-brainstorming"
-  omp list
-  omp list agents
-  omp list skills --global
-  omp install skill skill-review
-  omp install skill agent-brainstorming --global
-  omp remove  skill skill-review --global
-  omp test skill skill-review
-EOF
-}
+console = Console(stderr=True)   # 日志输出到 stderr，Agent 输出到 stdout
+app = typer.Typer(
+    name="omp",
+    help="oh-my-superpowers CLI",
+    add_completion=False,
+    no_args_is_help=True,
+)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-symlink() {
-  local src="$1" dst="$2"
-  mkdir -p "$(dirname "${dst}")"
-  ln -sfn "${src}" "${dst}"
-  log "linked ${dst} -> ${src}"
-}
+def _check_home() -> None:
+    """检查 OMP_HOME 存在，否则 exit 1。"""
+    if not OMP_HOME.exists():
+        console.print("[red][omp] ERROR:[/red] ~/.oh-my-superpowers not found. Run install.sh first.")
+        raise typer.Exit(1)
 
-remove_link() {
-  local dst="$1"
-  if [[ -L "${dst}" ]]; then
-    rm "${dst}"
-    log "removed ${dst}"
-  elif [[ -e "${dst}" ]]; then
-    fail "${dst} exists but is not a symlink. Remove manually."
-  else
-    warn "${dst} not found, nothing to remove."
-  fi
-}
 
-list_dir() {
-  local label="$1" dir="$2"
-  [[ -d "${dir}" ]] || return 0
-  local items
-  items=$(ls "${dir}" 2>/dev/null | sort) || return 0
-  [[ -n "${items}" ]] || return 0
-  printf '%s (%s):\n' "${label}" "${dir}"
-  while IFS= read -r item; do
-    if [[ -L "${dir}/${item}" ]]; then
-      printf '  %-30s -> %s\n' "${item}" "$(readlink "${dir}/${item}")"
-    else
-      printf '  %s\n' "${item}"
-    fi
-  done <<< "${items}"
-}
+def _symlink(src: Path, dst: Path) -> None:
+    """创建或更新 symlink dst -> src。"""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.is_symlink():
+        dst.unlink()
+    elif dst.exists():
+        console.print(f"[red][omp] ERROR:[/red] {dst} exists and is not a symlink. Remove manually.")
+        raise typer.Exit(1)
+    dst.symlink_to(src)
+    console.print(f"[omp] linked [cyan]{dst}[/cyan] -> {src}")
 
-list_available_agents() {
-  local agents_cfg="${AGENTS_SRC}/agents.json"
-  [[ -f "${agents_cfg}" ]] || return 0
-  printf 'available agents (%s):\n' "${agents_cfg}"
-  python3 -c "
-import json, os, sys
 
-omp_home = os.environ.get('OMP_HOME', os.path.expanduser('~/.oh-my-superpowers'))
-cfg = json.load(open('${agents_cfg}'))
+def _remove_link(dst: Path) -> None:
+    """删除 symlink。"""
+    if dst.is_symlink():
+        dst.unlink()
+        console.print(f"[omp] removed [cyan]{dst}[/cyan]")
+    elif dst.exists():
+        console.print(f"[red][omp] ERROR:[/red] {dst} exists but is not a symlink. Remove manually.")
+        raise typer.Exit(1)
+    else:
+        console.print(f"[yellow][omp] WARNING:[/yellow] {dst} not found, nothing to remove.")
 
-for name, entry in cfg.items():
-    model = entry.get('model', '')
-    agent_path = entry.get('agent', '')
-    if agent_path.startswith('@'):
-        agent_path = os.path.join(omp_home, agent_path[1:])
-    skills = entry.get('skills', [])
-    skills_count = f'{len(skills)} skills' if skills else 'no agent-specific skills'
-    print(f'  {name:<25} model={model}  agent={agent_path}  ({skills_count})')
-"
-}
 
-# ── verbose stream processor ──────────────────────────────────────────────────
+def _list_dir(label: str, directory: Path) -> None:
+    """列出目录下所有条目，显示 symlink 目标。"""
+    if not directory.is_dir():
+        return
+    items = sorted(directory.iterdir())
+    if not items:
+        return
+    console.print(f"\n[bold]{label}[/bold] ({directory}):")
+    for item in items:
+        if item.is_symlink():
+            console.print(f"  {item.name:<30} -> {item.resolve()}")
+        else:
+            console.print(f"  {item.name}")
 
-# Reads pi --mode json output from stdin, prints human-readable streaming text.
-_stream_verbose() {
-  python3 -c "
-import sys, json
 
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    try:
-        obj = json.loads(line)
-        t = obj[\"type\"]
+def _read_agents_cfg() -> dict:
+    """读取 agents/agents.json。"""
+    if not AGENTS_CFG.exists():
+        return {}
+    return json.loads(AGENTS_CFG.read_text())
 
-        if t == \"message_update\":
-            evt = obj.get(\"assistantMessageEvent\", {})
-            if evt.get(\"type\") == \"text_delta\":
-                sys.stdout.write(evt.get(\"delta\", \"\"))
+
+def _resolve_path(path_str: str) -> Path:
+    """解析 @ 前缀路径（相对于 OMP_HOME）。"""
+    if path_str.startswith("@"):
+        return OMP_HOME / path_str[1:]
+    return Path(path_str)
+
+
+def _extract_frontmatter_field(path: Path, field: str) -> str:
+    """从 Pi frontmatter 提取指定字段值。
+
+    Args:
+        path: Agent 文件路径。
+        field: 要提取的字段名。
+
+    Returns:
+        字段值字符串，未找到时返回空字符串。
+    """
+    in_front = False
+    for line in path.read_text().splitlines():
+        if line == "---":
+            if not in_front:
+                in_front = True
+                continue
+            else:
+                break
+        if in_front and line.startswith(f"{field}:"):
+            return line[len(f"{field}:"):].strip()
+    return ""
+
+
+def _extract_system_prompt(path: Path) -> str:
+    """提取 Pi frontmatter 之后的 system prompt 内容。
+
+    Args:
+        path: Agent 文件路径。
+
+    Returns:
+        frontmatter 第二个 --- 之后的内容（去除首尾空白）。
+    """
+    lines = path.read_text().splitlines()
+    dash_count = 0
+    result = []
+    for line in lines:
+        if line == "---":
+            dash_count += 1
+            continue
+        if dash_count >= 2:
+            result.append(line)
+    return "\n".join(result).strip()
+
+
+def _read_skill_description(skill_md: Path) -> str:
+    """从 SKILL.md frontmatter 提取 description 字段。
+
+    Args:
+        skill_md: SKILL.md 文件路径。
+
+    Returns:
+        description 字段内容，未找到时返回空字符串。
+    """
+    if not skill_md.is_file():
+        return ""
+    in_front = False
+    in_desc = False
+    lines: list[str] = []
+    for raw in skill_md.read_text().splitlines():
+        line = raw.rstrip()
+        if line == "---":
+            if not in_front:
+                in_front = True
+                continue
+            else:
+                break
+        if in_front and line.startswith("description:"):
+            in_desc = True
+            val = line[len("description:"):].strip().lstrip(">-").strip()
+            if val:
+                lines.append(val)
+        elif in_front and in_desc and line.startswith("  "):
+            lines.append(line.strip())
+        elif in_front and in_desc:
+            break
+    max_desc = 120 - 33  # 2 spaces + name.ljust(30) + 1 space = 33 chars
+    full = " ".join(lines)
+    return full[:max_desc] + ("..." if len(full) > max_desc else "")
+
+
+def _list_not_installed_skills(install_dir: Path) -> None:
+    """列出 SKILLS_SRC 中有但 install_dir 中没有的 skill。
+
+    Args:
+        install_dir: 已安装 skills 的目录。
+    """
+    if not SKILLS_SRC.is_dir():
+        return
+    installed = {p.name for p in install_dir.iterdir()} if install_dir.is_dir() else set()
+    available = sorted(p.name for p in SKILLS_SRC.iterdir() if p.is_dir())
+    not_installed = [s for s in available if s not in installed]
+    if not not_installed:
+        return
+    console.print("\n[bold]not installed[/bold] (available in source):")
+    for skill in not_installed:
+        desc = _read_skill_description(SKILLS_SRC / skill / "SKILL.md")
+        console.print(f"  {skill:<30} {desc}")
+
+
+def _list_available_agents() -> None:
+    """读取 agents.json 并打印每个 agent 的信息。"""
+    cfg = _read_agents_cfg()
+    if not cfg:
+        return
+    console.print(f"\n[bold]available agents[/bold] ({AGENTS_CFG}):")
+    for name, entry in cfg.items():
+        model = entry.get("model", "")
+        agent_path = entry.get("agent", "")
+        resolved = str(_resolve_path(agent_path)) if agent_path else ""
+        skills = entry.get("skills", [])
+        skills_display = f"{len(skills)} skills" if skills else "no agent-specific skills"
+        console.print(f"  {name:<25} model={model}  agent={resolved}  ({skills_display})")
+
+
+def _stream_verbose(proc: subprocess.Popen) -> int:
+    """读取 pi --mode json 输出，打印人类可读的流式文本到 stdout。
+
+    Args:
+        proc: 已启动的 subprocess.Popen 对象（stdout=PIPE, text=True）。
+
+    Returns:
+        进程退出码。
+    """
+    for raw in proc.stdout:  # type: ignore
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            t = obj.get("type", "")
+
+            if t == "message_update":
+                evt = obj.get("assistantMessageEvent", {})
+                if evt.get("type") == "text_delta":
+                    sys.stdout.write(evt.get("delta", ""))
+                    sys.stdout.flush()
+
+            elif t == "tool_execution_start":
+                name = obj.get("toolName", "tool")
+                args = obj.get("args", {})
+                first_val = str(next(iter(args.values()), ""))
+                first_line = first_val.split("\n")[0][:100]
+                sys.stdout.write(f"\n\033[90m▶ [{name}] {first_line}\033[0m\n")
                 sys.stdout.flush()
 
-        elif t == \"tool_execution_start\":
-            name = obj.get(\"toolName\", \"tool\")
-            args = obj.get(\"args\", {})
-            # Show first value (usually the command/path) truncated
-            first_val = str(next(iter(args.values()), \"\"))
-            first_line = first_val.split(\"\\n\")[0][:100]
-            sys.stdout.write(\"\\n\\033[90m▶ [\" + name + \"] \" + first_line + \"\\033[0m\\n\")
-            sys.stdout.flush()
-
-        elif t == \"tool_execution_end\":
-            if obj.get(\"isError\", False):
-                sys.stdout.write(\"\\033[31m✗ tool error\\033[0m\\n\")
-            else:
-                lines = []
-                for item in obj.get(\"result\", {}).get(\"content\", []):
-                    if item.get(\"type\") == \"text\":
-                        lines = item[\"text\"].strip().split(\"\\n\")
-                        break
-                if lines and lines[0]:
-                    preview = lines[0][:100]
-                    more = \" (+\" + str(len(lines) - 1) + \" lines)\" if len(lines) > 1 else \"\"
-                    sys.stdout.write(\"\\033[90m◀ \" + preview + more + \"\\033[0m\\n\")
-            sys.stdout.flush()
-
-    except Exception:
-        pass
-
-sys.stdout.write(\"\\n\")
-sys.stdout.flush()
-"
-}
-
-# ── run agent ─────────────────────────────────────────────────────────────────
-
-cmd_run_agent() {
-  local name="$1" model_override="$2"
-  shift 2
-  local prompt="${*}"
-
-  [[ -n "${prompt}" ]] || fail "omp run agent: prompt is required"
-
-  local agents_cfg="${AGENTS_SRC}/agents.json"
-  [[ -f "${agents_cfg}" ]] || fail "agents.json not found in ${AGENTS_SRC}"
-
-  command -v pi &>/dev/null     || fail "pi command not found. Install pi first."
-  command -v python3 &>/dev/null || fail "python3 not found."
-
-  # Read agent file path and model from agents.json
-  local agent_path model
-  read -r agent_path model < <(python3 -c "
-import json, sys
-cfg = json.load(open('${agents_cfg}'))
-entry = cfg.get('${name}')
-if not entry:
-    print('', '', file=sys.stderr)
-    sys.exit(1)
-print(entry.get('agent', ''), entry.get('model', 'litellm-local/qwen3.5-27b'))
-") || fail "agent '${name}' not found in agents.json"
-
-  # Resolve @-prefixed path relative to OMP_HOME
-  if [[ "${agent_path}" == @* ]]; then
-    agent_path="${OMP_HOME}/${agent_path#@}"
-  fi
-  local agent_file="${agent_path}"
-  [[ -f "${agent_file}" ]] || fail "agent file '${agent_file}' not found"
-
-  # CLI --model overrides JSON config
-  [[ -n "${model_override}" ]] && model="${model_override}"
-
-  # Build --skill flags from agents.json skills array
-  # Paths starting with @ are relative to OMP_HOME; otherwise used as-is
-  local skill_flags=()
-  while IFS= read -r skill_path; do
-    [[ -z "${skill_path}" ]] && continue
-    if [[ "${skill_path}" == @* ]]; then
-      skill_path="${OMP_HOME}/${skill_path#@}"
-    fi
-    skill_flags+=(--skill "${skill_path}")
-  done < <(python3 -c "
-import json
-cfg = json.load(open('${agents_cfg}'))
-for s in cfg.get('${name}', {}).get('skills', []):
-    print(s)
-")
-
-  # Extract tools from frontmatter (default: bash,read)
-  local tools
-  tools=$(awk '/^---$/{c++; next} c==1 && /^tools:/{sub(/^tools:[[:space:]]*/,""); print; exit}' "${agent_file}")
-  tools="${tools:-bash,read}"
-  tools="${tools//[[:space:]]/}"
-
-  # Extract system prompt: body after second ---
-  local system_prompt
-  system_prompt=$(awk '/^---$/{c++; next} c>=2{print}' "${agent_file}")
-
-  local skills_display="${#skill_flags[@]} agent-specific skills"
-  [[ "${#skill_flags[@]}" -eq 0 ]] && skills_display="no agent-specific skills"
-  log "agent: ${name} | model: ${model} | tools: ${tools} | ${skills_display}"
-  printf '\n'
-
-  pi --mode json \
-     --no-session \
-     --model "${model}" \
-     --tools "${tools}" \
-     "${skill_flags[@]}" \
-     --system-prompt "${system_prompt}" \
-     -p "${prompt}" < /dev/null | _stream_verbose
-
-  return "${PIPESTATUS[0]}"
-}
-
-# ── install ───────────────────────────────────────────────────────────────────
-
-cmd_install_skill() {
-  local name="$1" global="$2"
-  local src="${SKILLS_SRC}/${name}"
-  [[ -d "${src}" ]] || fail "skill '${name}' not found in ${SKILLS_SRC}"
-
-  if [[ "${global}" == "1" ]]; then
-    symlink "${src}" "${HOME}/.agents/skills/${name}"
-    symlink "${src}" "${HOME}/.claude/skills/${name}"
-  else
-    symlink "${src}" "${PWD}/.agents/skills/${name}"
-    symlink "${src}" "${PWD}/.claude/skills/${name}"
-  fi
-}
-
-# ── remove ────────────────────────────────────────────────────────────────────
-
-cmd_remove_skill() {
-  local name="$1" global="$2"
-  if [[ "${global}" == "1" ]]; then
-    remove_link "${HOME}/.agents/skills/${name}"
-    remove_link "${HOME}/.claude/skills/${name}"
-  else
-    remove_link "${PWD}/.agents/skills/${name}"
-    remove_link "${PWD}/.claude/skills/${name}"
-  fi
-}
-
-# ── list ──────────────────────────────────────────────────────────────────────
-
-list_not_installed_skills() {
-  local install_dir="$1"
-  [[ -d "${SKILLS_SRC}" ]] || return 0
-  python3 -c "
-import os, sys
-
-skills_src = '${SKILLS_SRC}'
-install_dir = '${install_dir}'
-
-installed = set(os.listdir(install_dir)) if os.path.isdir(install_dir) else set()
-available = sorted(os.listdir(skills_src))
-not_installed = [s for s in available if s not in installed]
-
-if not not_installed:
-    sys.exit(0)
-
-print('not installed (available in source):')
-for skill in not_installed:
-    skill_md = os.path.join(skills_src, skill, 'SKILL.md')
-    desc = ''
-    if os.path.isfile(skill_md):
-        in_front = False
-        in_desc = False
-        lines = []
-        for line in open(skill_md):
-            line = line.rstrip()
-            if line == '---':
-                if not in_front:
-                    in_front = True
-                    continue
+            elif t == "tool_execution_end":
+                if obj.get("isError", False):
+                    sys.stdout.write("\033[31m✗ tool error\033[0m\n")
                 else:
-                    break
-            if in_front and line.startswith('description:'):
-                in_desc = True
-                val = line[len('description:'):].strip().lstrip('>-').strip()
-                if val:
-                    lines.append(val)
-            elif in_front and in_desc and line.startswith('  '):
-                lines.append(line.strip())
-            elif in_front and in_desc:
-                break
-        # Prefix: 2 spaces + name.ljust(30) + 1 space = 33 chars; cap total line at 120
-        max_desc = 120 - 33
-        full = ' '.join(lines)
-        desc = full[:max_desc] + ('…' if len(full) > max_desc else '')
-    print('  ' + skill.ljust(30) + ' ' + desc)
-"
-}
+                    lines: list[str] = []
+                    for item in obj.get("result", {}).get("content", []):
+                        if item.get("type") == "text":
+                            lines = item["text"].strip().split("\n")
+                            break
+                    if lines and lines[0]:
+                        preview = lines[0][:100]
+                        more = f" (+{len(lines) - 1} lines)" if len(lines) > 1 else ""
+                        sys.stdout.write(f"\033[90m◀ {preview}{more}\033[0m\n")
+                sys.stdout.flush()
+        except Exception:
+            pass
 
-cmd_list_skills() {
-  local global="$1"
-  local ref_dir
-  if [[ "${global}" == "1" ]]; then
-    ref_dir="${HOME}/.agents/skills"
-  else
-    ref_dir="${PWD}/.agents/skills"
-  fi
-  list_not_installed_skills "${ref_dir}"
-  if [[ "${global}" == "1" ]]; then
-    list_dir "skills [Pi]"     "${HOME}/.agents/skills"
-    list_dir "skills [Claude]" "${HOME}/.claude/skills"
-  else
-    list_dir "skills [Pi]"     "${PWD}/.agents/skills"
-    list_dir "skills [Claude]" "${PWD}/.claude/skills"
-  fi
-}
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    proc.wait()
+    return proc.returncode
 
-cmd_list() {
-  local subtype="$1" global="$2"
-  case "${subtype}" in
-    skills) cmd_list_skills "${global}" ;;
-    agents) list_available_agents ;;
-    *)      cmd_list_skills "${global}"; list_available_agents ;;
-  esac
-}
+# ── commands ──────────────────────────────────────────────────────────────────
 
-# ── test ──────────────────────────────────────────────────────────────────────
+@app.command()
+def install(
+    type_: Annotated[str, typer.Argument(metavar="skill|agent", help="skill 或 agent")],
+    name:  Annotated[str, typer.Argument(help="名称")],
+    global_: Annotated[bool, typer.Option("--global", "-g", help="全局安装（默认局部）")] = False,
+) -> None:
+    """安装 skill 或 agent。"""
+    _check_home()
+    t = type_.lower()
+    if t == "skill":
+        src = SKILLS_SRC / name
+        if not src.is_dir():
+            console.print(f"[red][omp] ERROR:[/red] skill '{name}' not found in {SKILLS_SRC}")
+            raise typer.Exit(1)
+        base = Path.home() if global_ else Path.cwd()
+        _symlink(src, base / ".agents" / "skills" / name)
+        _symlink(src, base / ".claude" / "skills" / name)
+    elif t == "agent":
+        src = AGENTS_SRC / f"{name}.md"
+        if not src.is_file():
+            console.print(f"[red][omp] ERROR:[/red] agent '{name}.md' not found in {AGENTS_SRC}")
+            raise typer.Exit(1)
+        base = Path.home() if global_ else Path.cwd()
+        _symlink(src, base / ".pi" / "agents" / f"{name}.md")
+    else:
+        console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
+        raise typer.Exit(1)
 
-cmd_test_skill() {
-  local name="$1"
-  local tests_dir="${SKILLS_SRC}/${name}/tests"
-  [[ -d "${tests_dir}" ]] || fail "no tests/ directory found for skill '${name}'"
-  log "running T1 tests for skill '${name}'..."
-  if command -v pytest &>/dev/null; then
-    pytest "${tests_dir}" -v
-  else
-    python -m unittest discover -s "${tests_dir}" -p "test_*.py" -v
-  fi
-}
 
-# ── dispatch ──────────────────────────────────────────────────────────────────
+@app.command()
+def remove(
+    type_: Annotated[str, typer.Argument(metavar="skill|agent", help="skill 或 agent")],
+    name:  Annotated[str, typer.Argument(help="名称")],
+    global_: Annotated[bool, typer.Option("--global", "-g", help="全局安装")] = False,
+) -> None:
+    """卸载 skill 或 agent。"""
+    _check_home()
+    t = type_.lower()
+    base = Path.home() if global_ else Path.cwd()
+    if t == "skill":
+        _remove_link(base / ".agents" / "skills" / name)
+        _remove_link(base / ".claude" / "skills" / name)
+    elif t == "agent":
+        _remove_link(base / ".pi" / "agents" / f"{name}.md")
+    else:
+        console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
+        raise typer.Exit(1)
 
-[[ $# -ge 1 ]] || { usage; exit 0; }
 
-COMMAND="$1"; shift
+@app.command(name="list")
+def list_cmd(
+    type_:   Annotated[Optional[str], typer.Option("--type", "-t", metavar="skill|agent", help="过滤类型")] = None,
+    global_: Annotated[bool, typer.Option("--global", "-g", help="显示全局安装")] = False,
+) -> None:
+    """列出已安装的 skills 和 agents。"""
+    _check_home()
+    base = Path.home() if global_ else Path.cwd()
 
-case "${COMMAND}" in
-  run)
-    [[ $# -ge 1 ]] || fail "usage: omp run agent <name> --model <model> <prompt>"
-    SUBTYPE="$1"; shift
-    case "${SUBTYPE}" in
-      agent)
-        [[ $# -ge 1 ]] || fail "usage: omp run agent <name> --model <model> <prompt>"
-        NAME="$1"; shift
-        MODEL=""
-        ARGS=()
-        while [[ $# -gt 0 ]]; do
-          if [[ "$1" == "--model" && $# -ge 2 ]]; then
-            MODEL="$2"; shift 2
-          else
-            ARGS+=("$1"); shift
-          fi
-        done
-        MODEL="${MODEL:-litellm-local/qwen3.5-27b}"
-        cmd_run_agent "${NAME}" "${MODEL}" "${ARGS[@]}"
-        ;;
-      *) fail "unknown type '${SUBTYPE}': use 'agent'" ;;
-    esac
-    ;;
+    show_skills = type_ is None or type_.lower() == "skill"
+    show_agents = type_ is None or type_.lower() == "agent"
 
-  install)
-    [[ $# -ge 2 ]] || fail "usage: omp install skill <name> [--global]"
-    SUBTYPE="$1"; shift
-    NAME="$1";    shift
-    GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
-    case "${SUBTYPE}" in
-      skill) cmd_install_skill "${NAME}" "${GLOBAL}" ;;
-      *) fail "unknown type '${SUBTYPE}': use 'skill'" ;;
-    esac
-    ;;
+    if show_skills:
+        _list_not_installed_skills(base / ".agents" / "skills")
+        _list_dir("skills [Pi]",     base / ".agents" / "skills")
+        _list_dir("skills [Claude]", base / ".claude" / "skills")
 
-  remove)
-    [[ $# -ge 2 ]] || fail "usage: omp remove skill <name> [--global]"
-    SUBTYPE="$1"; shift
-    NAME="$1";    shift
-    GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
-    case "${SUBTYPE}" in
-      skill) cmd_remove_skill "${NAME}" "${GLOBAL}" ;;
-      *) fail "unknown type '${SUBTYPE}': use 'skill'" ;;
-    esac
-    ;;
+    if show_agents:
+        _list_dir("agents [Pi]", base / ".pi" / "agents")
+        _list_available_agents()
 
-  list)
-    SUBTYPE=""
-    GLOBAL=0
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        agents|skills) SUBTYPE="$1"; shift ;;
-        --global)      GLOBAL=1;     shift ;;
-        *) fail "unknown argument '$1': usage: omp list [agents|skills] [--global]" ;;
-      esac
-    done
-    cmd_list "${SUBTYPE}" "${GLOBAL}"
-    ;;
 
-  test)
-    [[ $# -ge 2 ]] || fail "usage: omp test skill <name>"
-    SUBTYPE="$1"; shift
-    NAME="$1"
-    case "${SUBTYPE}" in
-      skill) cmd_test_skill "${NAME}" ;;
-      *) fail "unknown type '${SUBTYPE}': use 'skill'" ;;
-    esac
-    ;;
+@app.command()
+def run(
+    name:   Annotated[str, typer.Argument(help="Agent 名称")],
+    model:  Annotated[Optional[str], typer.Option("--model", "-m", help="LLM 模型（覆盖 agents.json）")] = None,
+    prompt: Annotated[Optional[list[str]], typer.Argument(help="提示词（多词无需引号）")] = None,
+) -> None:
+    """运行 Pi Agent（通过 pi CLI）。"""
+    _check_home()
+    prompt_str = " ".join(prompt or [])
+    if not prompt_str.strip():
+        console.print("[red][omp] ERROR:[/red] prompt is required")
+        raise typer.Exit(1)
 
-  help|--help|-h)
-    usage
-    ;;
+    cfg = _read_agents_cfg()
+    entry = cfg.get(name)
+    if not entry:
+        console.print(f"[red][omp] ERROR:[/red] agent '{name}' not found in agents.json")
+        raise typer.Exit(1)
 
-  *)
-    fail "unknown command '${COMMAND}'. Run 'omp help' for usage."
-    ;;
-esac
+    agent_path = _resolve_path(entry.get("agent", ""))
+    if not agent_path.is_file():
+        console.print(f"[red][omp] ERROR:[/red] agent file '{agent_path}' not found")
+        raise typer.Exit(1)
+
+    effective_model = model or entry.get("model", "litellm-local/qwen3.5-27b")
+
+    # 解析 skills
+    skill_flags: list[str] = []
+    for s in entry.get("skills", []):
+        p = _resolve_path(s)
+        skill_flags += ["--skill", str(p)]
+
+    # 从 frontmatter 提取 tools
+    tools = _extract_frontmatter_field(agent_path, "tools") or "bash,read"
+    tools = tools.replace(" ", "")
+
+    # 提取 system prompt（第二个 --- 之后的内容）
+    system_prompt = _extract_system_prompt(agent_path)
+
+    skills_display = f"{len(skill_flags) // 2} agent-specific skills" if skill_flags else "no agent-specific skills"
+    console.print(f"[omp] agent: [bold]{name}[/bold] | model: {effective_model} | tools: {tools} | {skills_display}")
+    console.print("")
+
+    cmd = [
+        "pi", "--mode", "json",
+        "--no-session",
+        "--model", effective_model,
+        "--tools", tools,
+        *skill_flags,
+        "--system-prompt", system_prompt,
+        "-p", prompt_str,
+    ]
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)
+    rc = _stream_verbose(proc)
+    raise typer.Exit(rc)
+
+
+@app.command()
+def test(
+    name: Annotated[str, typer.Argument(help="skill 名称")],
+) -> None:
+    """运行 skill T1 静态测试。"""
+    _check_home()
+    tests_dir = SKILLS_SRC / name / "tests"
+    if not tests_dir.is_dir():
+        console.print(f"[red][omp] ERROR:[/red] no tests/ directory found for skill '{name}'")
+        raise typer.Exit(1)
+    console.print(f"[omp] running T1 tests for skill '{name}'...")
+    if shutil.which("pytest"):
+        rc = subprocess.call(["pytest", str(tests_dir), "-v"])
+    else:
+        rc = subprocess.call(
+            ["python3", "-m", "unittest", "discover", "-s", str(tests_dir), "-p", "test_*.py", "-v"]
+        )
+    raise typer.Exit(rc)
+
+
+# ── entry point ───────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    app()
