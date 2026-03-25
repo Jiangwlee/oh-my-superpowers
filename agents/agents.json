@@ -6,5 +6,12 @@
       "@skills/skill-review/SKILL.md",
       "@skills/agent-review/SKILL.md"
     ]
+  },
+  "media-editor": {
+    "agent": "@agents/media-editor.md",
+    "model": "claude-sonnet-4-6",
+    "skills": [
+      "@skills/media-editor/SKILL.md"
+    ]
   }
 }

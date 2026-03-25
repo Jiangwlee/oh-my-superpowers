@@ -30,16 +30,20 @@ fi
 ln -s "${ROOT_DIR}" "${INSTALL_DIR}"
 log "linked ${INSTALL_DIR} -> ${ROOT_DIR}"
 
-# ── 2. Register omp to PATH ───────────────────────────────────────────────────
+# ── 2. Register all bin/ commands to PATH ────────────────────────────────────
 
 mkdir -p "${BIN_DIR}"
 
-if [[ -f "${OMP_BIN}" ]]; then
-  ln -sf "${OMP_BIN}" "${OMP_LINK}"
-  log "linked ${OMP_LINK} -> ${OMP_BIN}"
-else
-  warn "bin/omp not found. The omp CLI is not yet available."
-  warn "Re-run this script after bin/omp is created."
+count=0
+while IFS= read -r -d '' script; do
+  name="$(basename "${script}")"
+  ln -sf "${script}" "${BIN_DIR}/${name}"
+  log "linked ${BIN_DIR}/${name} -> ${script}"
+  (( count++ )) || true
+done < <(find "${INSTALL_DIR}/bin" -maxdepth 1 -type f -executable -print0 2>/dev/null)
+
+if [[ "${count}" -eq 0 ]]; then
+  warn "No executable files found in bin/. Re-run this script after adding commands."
 fi
 
 # ── 3. PATH check ─────────────────────────────────────────────────────────────
