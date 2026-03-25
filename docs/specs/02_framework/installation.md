@@ -13,18 +13,30 @@
 
 ## Bootstrap（一次性安装）
 
-将 oh-my-superpowers 本体安装到固定目录，并注册 omp 到 PATH：
+install.sh 自动检测调用方式，支持两种模式：
+
+**Local 模式（开发者）**：在仓库目录下直接运行，创建 symlink：
 
 ```bash
 ./install.sh
 ```
 
+**Remote 模式（首次安装）**：通过 curl 管道执行，自动 clone 仓库：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jiangwlee/oh-my-superpowers/main/install.sh | bash
+```
+
 **安装结果：**
 
 ```
-~/.oh-my-superpowers/        ← 项目副本（symlink 或 clone）
+~/.oh-my-superpowers/        ← 项目副本（local: symlink；remote: git clone）
 ~/.local/bin/omp             ← symlink → ~/.oh-my-superpowers/bin/omp
 ```
+
+**依赖要求：**
+- `uv`：两种模式均需要（omp CLI 使用 uv inline script 运行）
+- `git`：仅 remote 模式需要
 
 **为什么是 `~/.oh-my-superpowers/`：**
 - 与 `~/.oh-my-zsh/` 同一惯例，项目名直接映射
