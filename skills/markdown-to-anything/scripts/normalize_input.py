@@ -62,6 +62,81 @@ def _looks_like_assistant_preamble(text: str) -> bool:
     return any(token in head for token in ASSISTANT_PREAMBLE_PATTERNS)
 
 
+def _ensure_blank_line_before_list(text: str) -> tuple[str, bool]:
+    """Ensure blank line before list items for pandoc compatibility.
+
+    Pandoc requires a blank line before list items when they follow
+    non-list content (like bold headings). Without this, lists are
+    rendered as inline text instead of proper <ul>/<li> or <ol>/<li>
+    structures.
+
+    Args:
+        text: Markdown text to process.
+
+    Returns:
+        Tuple of (processed_text, was_modified).
+    """
+    lines = text.splitlines()
+    result: list[str] = []
+    modified = False
+
+    # Pattern for unordered list item: optional indent, then - or * followed by space
+    # Pattern for ordered list item: optional indent, then number followed by . and space
+    unordered_pattern = re.compile(r"^(\s*)[-*] ")
+    ordered_pattern = re.compile(r"^(\s*)(\d+)\. ")
+
+    for i, line in enumerate(lines):
+        unordered_match = unordered_pattern.match(line)
+        ordered_match = ordered_pattern.match(line)
+        match = unordered_match or ordered_match
+
+        if match:
+            # This is a list item (unordered or ordered)
+            current_indent = len(match.group(1))
+            is_ordered = ordered_match is not None
+
+            # Check if we need to insert a blank line before it
+            need_blank_line = False
+
+            if i == 0:
+                # First line, no need for blank line
+                pass
+            else:
+                prev_line = lines[i - 1]
+                prev_unordered = unordered_pattern.match(prev_line)
+                prev_ordered = ordered_pattern.match(prev_line)
+                prev_match = prev_unordered or prev_ordered
+
+                if prev_match:
+                    # Previous line is also a list item
+                    prev_indent = len(prev_match.group(1))
+                    prev_is_ordered = prev_ordered is not None
+
+                    # Check if switching between ordered and unordered
+                    if is_ordered != prev_is_ordered:
+                        # Switching list types, need blank line
+                        need_blank_line = True
+                    elif current_indent > prev_indent:
+                        # This is a nested list item, needs blank line before
+                        need_blank_line = True
+                    # else: same type, same or less indent, continuation of list
+                elif prev_line.strip() == "":
+                    # Previous line is already blank
+                    pass
+                else:
+                    # Previous line is non-list, non-blank content
+                    # Need blank line before list
+                    need_blank_line = True
+
+            if need_blank_line and result and result[-1].strip() != "":
+                result.append("")
+                modified = True
+
+        result.append(line)
+
+    return "\n".join(result), modified
+
+
 def normalize_markdown_text(text: str) -> NormalizeResult:
     original = text
     actions: list[str] = []
@@ -85,6 +160,10 @@ def normalize_markdown_text(text: str) -> NormalizeResult:
         text, trimmed = _trim_to_first_heading(text)
         if trimmed:
             actions.append("removed_assistant_preamble")
+
+    text, added_blank_lines = _ensure_blank_line_before_list(text)
+    if added_blank_lines:
+        actions.append("added_blank_lines_before_list")
 
     stripped = text.strip()
     if stripped != text:
