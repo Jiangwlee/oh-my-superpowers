@@ -373,16 +373,47 @@ def normalize_markdown_text(text: str) -> NormalizeResult:
     )
 
 
+def _read_text_robust(path: Path) -> tuple[str, list[str]]:
+    """Read text file with encoding fallback handling.
+
+    Tries UTF-8 first, then GBK/GB18030 for mixed-encoding files.
+
+    Returns:
+        Tuple of (text, warnings).
+    """
+    warnings: list[str] = []
+
+    # Try UTF-8 strict first
+    try:
+        return path.read_text(encoding="utf-8"), warnings
+    except UnicodeDecodeError:
+        pass
+
+    # Try GBK/GB18030 for Chinese Windows-generated files
+    try:
+        text = path.read_bytes().decode("gb18030")
+        warnings.append("file detected as GB18030 encoding, converted to UTF-8")
+        return text, warnings
+    except Exception:
+        pass
+
+    # Fallback: UTF-8 with replacement
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    warnings.append("file contains invalid UTF-8 sequences, replaced with �")
+    return text, warnings
+
+
 def normalize_markdown_file(input_path: Path, output_path: Path) -> NormalizeResult:
-    text = input_path.read_text(encoding="utf-8")
+    text, read_warnings = _read_text_robust(input_path)
     result = normalize_markdown_text(text)
+    result.warnings.extend(read_warnings)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(result.text, encoding="utf-8")
     return NormalizeResult(
         ok=result.ok,
         input=str(input_path),
         output=str(output_path),
-        changed=result.changed,
+        changed=result.changed or bool(read_warnings),
         text=result.text,
         detected=result.detected,
         actions=result.actions,

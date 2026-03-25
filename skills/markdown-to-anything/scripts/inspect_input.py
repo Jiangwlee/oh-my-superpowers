@@ -106,8 +106,56 @@ def inspect_markdown_text(text: str) -> InspectResult:
     )
 
 
+def _read_text_with_encoding_handling(path: Path) -> tuple[str, bool, list[str]]:
+    """Read text file with encoding error handling.
+
+    Tries UTF-8 first, then falls back to GBK/GB18030 for mixed-encoding files.
+
+    Returns:
+        Tuple of (text, had_encoding_issues, warnings).
+    """
+    warnings: list[str] = []
+
+    # Try UTF-8 strict first
+    try:
+        return path.read_text(encoding="utf-8"), False, warnings
+    except UnicodeDecodeError:
+        pass
+
+    # Try UTF-8 with replacement
+    try:
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        warnings.append("file contains invalid UTF-8 sequences, replaced with �")
+        return text, True, warnings
+    except Exception:
+        pass
+
+    # Try GBK/GB18030 for Chinese Windows-generated files
+    try:
+        text = path.read_bytes().decode("gb18030")
+        warnings.append("file detected as GB18030 encoding, converted to UTF-8")
+        return text, True, warnings
+    except Exception:
+        pass
+
+    # Last resort: read with replace and warn
+    text = path.read_bytes().decode("utf-8", errors="replace")
+    warnings.append("file has severe encoding issues, some content may be corrupted")
+    return text, True, warnings
+
+
 def inspect_markdown_file(path: Path) -> InspectResult:
-    return inspect_markdown_text(path.read_text(encoding="utf-8"))
+    text, had_issues, encoding_warnings = _read_text_with_encoding_handling(path)
+    result = inspect_markdown_text(text)
+
+    if had_issues:
+        result.warnings.extend(encoding_warnings)
+        # Mark as light_dirty if encoding issues detected
+        if result.cleanliness == "clean":
+            result.cleanliness = "light_dirty"
+            result.recommended_path = "normalize_then_render"
+
+    return result
 
 
 def main() -> None:
