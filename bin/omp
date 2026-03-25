@@ -27,7 +27,7 @@ omp — oh-my-superpowers CLI
 
 Usage:
   omp run   agent <name> [--model <model>] <prompt>  Run a Pi Agent
-  omp list  [--global]                              List skills and available agents
+  omp list  [agents|skills] [--global]              List skills and/or agents
   omp install skill <name> [--global]               Install a skill (local or global)
   omp remove  skill <name> [--global]               Remove a skill installation
   omp test skill <name>                             Run T1 tests for a skill
@@ -45,6 +45,8 @@ Skill install targets:
 Examples:
   omp run agent skill-review --model litellm-local/qwen3.5-27b "review skills/skill-brainstorming"
   omp list
+  omp list agents
+  omp list skills --global
   omp install skill skill-review
   omp install skill agent-brainstorming --global
   omp remove  skill skill-review --global
@@ -273,8 +275,64 @@ cmd_remove_skill() {
 
 # ── list ──────────────────────────────────────────────────────────────────────
 
-cmd_list() {
+list_not_installed_skills() {
+  local install_dir="$1"
+  [[ -d "${SKILLS_SRC}" ]] || return 0
+  python3 -c "
+import os, sys
+
+skills_src = '${SKILLS_SRC}'
+install_dir = '${install_dir}'
+
+installed = set(os.listdir(install_dir)) if os.path.isdir(install_dir) else set()
+available = sorted(os.listdir(skills_src))
+not_installed = [s for s in available if s not in installed]
+
+if not not_installed:
+    sys.exit(0)
+
+print('not installed (available in source):')
+for skill in not_installed:
+    skill_md = os.path.join(skills_src, skill, 'SKILL.md')
+    desc = ''
+    if os.path.isfile(skill_md):
+        in_front = False
+        in_desc = False
+        lines = []
+        for line in open(skill_md):
+            line = line.rstrip()
+            if line == '---':
+                if not in_front:
+                    in_front = True
+                    continue
+                else:
+                    break
+            if in_front and line.startswith('description:'):
+                in_desc = True
+                val = line[len('description:'):].strip().lstrip('>-').strip()
+                if val:
+                    lines.append(val)
+            elif in_front and in_desc and line.startswith('  '):
+                lines.append(line.strip())
+            elif in_front and in_desc:
+                break
+        # Prefix: 2 spaces + name.ljust(30) + 1 space = 33 chars; cap total line at 120
+        max_desc = 120 - 33
+        full = ' '.join(lines)
+        desc = full[:max_desc] + ('…' if len(full) > max_desc else '')
+    print('  ' + skill.ljust(30) + ' ' + desc)
+"
+}
+
+cmd_list_skills() {
   local global="$1"
+  local ref_dir
+  if [[ "${global}" == "1" ]]; then
+    ref_dir="${HOME}/.agents/skills"
+  else
+    ref_dir="${PWD}/.agents/skills"
+  fi
+  list_not_installed_skills "${ref_dir}"
   if [[ "${global}" == "1" ]]; then
     list_dir "skills [Pi]"     "${HOME}/.agents/skills"
     list_dir "skills [Claude]" "${HOME}/.claude/skills"
@@ -282,7 +340,15 @@ cmd_list() {
     list_dir "skills [Pi]"     "${PWD}/.agents/skills"
     list_dir "skills [Claude]" "${PWD}/.claude/skills"
   fi
-  list_available_agents
+}
+
+cmd_list() {
+  local subtype="$1" global="$2"
+  case "${subtype}" in
+    skills) cmd_list_skills "${global}" ;;
+    agents) list_available_agents ;;
+    *)      cmd_list_skills "${global}"; list_available_agents ;;
+  esac
 }
 
 # ── test ──────────────────────────────────────────────────────────────────────
@@ -352,8 +418,16 @@ case "${COMMAND}" in
     ;;
 
   list)
-    GLOBAL=0; [[ "${1:-}" == "--global" ]] && GLOBAL=1
-    cmd_list "${GLOBAL}"
+    SUBTYPE=""
+    GLOBAL=0
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        agents|skills) SUBTYPE="$1"; shift ;;
+        --global)      GLOBAL=1;     shift ;;
+        *) fail "unknown argument '$1': usage: omp list [agents|skills] [--global]" ;;
+      esac
+    done
+    cmd_list "${SUBTYPE}" "${GLOBAL}"
     ;;
 
   test)
