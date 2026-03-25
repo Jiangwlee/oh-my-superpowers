@@ -1,8 +1,8 @@
 ---
 name: agent-brainstorming
 description: >-
-  Agent 设计工作流。在设计新 Agent 之前必须使用。通过身份审问和逐步追问，
-  将模糊的 Agent 想法转化为可执行的设计规格文档。
+  Agent 设计工作流。在设计新 Agent 之前必须使用。通过身份审问识别并拒绝伪 Agent 需求，
+  将通过检验的想法转化为种子上下文，然后移交 brainstorming skill 完成完整设计流程。
   Use when: user wants to design a new agent, says "设计一个 agent"、"我需要一个 agent"、
   "新建 agent"、"agent brainstorm"。
   Do NOT use for Skill 设计（使用 skill-brainstorming）或直接的代码实现任务。
@@ -10,18 +10,24 @@ description: >-
 
 # Agent Brainstorming
 
-将模糊的 Agent 想法转化为完整的设计规格，通过身份审问识别并拒绝伪 Agent 需求。
+<!--
+  用途：agent 设计前置检验，生成种子上下文后移交 brainstorming skill
+  流程：加载知识 → Phase 0 身份审问 → 构造种子 → 移交 brainstorming
+  关键引用：
+    - references/agent-fundamentals.md   身份标准和判断规则
+-->
 
-**核心工作方式：Phase 0 收集用户输入 → 模型主动分析判断 → Phase 1 起后模型提草案 → 用户只需确认或纠正。**
+agent-specific 前置检验器。只做 brainstorming 无法替代的一件事：**身份审问**。
+通过后构造种子，移交 brainstorming skill 完成完整设计流程。
 
 <HARD-GATE>
 不得跳过身份审问（Phase 0）直接进入设计。身份审问是硬性前置条件，失败则终止流程。
-不得在用户批准设计规格之前生成任何文件或调用 writing-plans。
+不得在移交 brainstorming 之前生成任何设计文档或代码文件。
 </HARD-GATE>
 
 ## 准备：加载基础知识
 
-在开始前读取 `references/agent-fundamentals.md`，以其中的身份标准和判断规则为依据。
+开始前读取 `references/agent-fundamentals.md`，以其中的身份标准和判断规则为依据。
 
 ## Phase 0：身份审问（Hard Gate）
 
@@ -50,96 +56,32 @@ description: >-
 > Agency：[有/无语义判断] — [简评]
 > Ownership：[有/无结果所有权] — [简评]
 >
-> [通过] 继续 Phase 1。
+> [通过] 继续构造种子。
 > [失败] 根据身份审问，这个需求无法映射到明确的 Agent 角色。[具体原因]
 > 建议降级为 Skill，使用 skill-brainstorming 重新设计。
 
-## Phase 1：角色定义
+## 移交 brainstorming
 
-基于 Phase 0 的答案，**模型主动起草**角色定义，请用户确认：
-
-> 根据身份审问，我对这个 Agent 的角色定义如下：
->
-> - **角色名**：[职业描述]
-> - **专业领域**：[知识边界]
-> - **核心判断点**：[无法脚本化的判断，来自 Q2]
-> - **签名输出**：[Agent 完成后交付什么，谁用它做决策]
->
-> 这个定义准确吗？
-
-## Phase 2：Skill 依赖映射
-
-基于角色定义，**模型主动推断**所需外部能力并列出草案，请用户确认：
-
-> 要完成「[角色名]」的任务，我推断需要以下能力：
->
-> | 能力 | 对应 Skill | 状态 |
-> |------|-----------|------|
-> | [能力描述] | [skill-name 或"待开发"] | ✅ 已有 / ⚠️ 缺口 |
->
-> [如有缺口] 有 N 个缺口需要先开发 Skill，但不阻塞本次设计，规格中会显式标注。
->
-> 这个能力列表完整吗？有遗漏或多余的吗？
-
-## Phase 3：推理循环设计
-
-基于角色类型，**模型主动判断**迭代模式，请用户确认：
-
-> 根据「[角色名]」的工作性质，我判断推理循环如下：
->
-> - **类型**：[线性 / 迭代] — 理由：[一句话]
-> - [迭代型] **最少迭代**：N 轮 — 理由：[一句话]
-> - **停止条件**：[描述]
->
-> 这个设计合理吗？
-
-## Phase 4：输出规格设计
-
-基于前面所有信息，**模型主动起草**输出规格，请用户确认：
-
-> 这个 Agent 的输出规格草案：
->
-> - **形态**：[报告 / 裁决 / 结构化数据 / ...]
-> - **结构**：
->   ```
->   [输出模板草稿，用占位符]
->   ```
->
-> 同时，Pi frontmatter 草稿：
-> ```yaml
-> ---
-> name: [agent-name]
-> description: >-
->   Use when [触发场景].
->   Do NOT use when [排除场景].
-> tools: [最小工具集]
-> model: claude-sonnet-4-6
-> ---
-> ```
->
-> 这个输出规格和 frontmatter 准确吗？
-
-## Phase 5：规格生成
-
-加载 `assets/agent-design-template.md`，按模板填写各节内容后写入：
+判定通过后，构造种子并启动 brainstorming skill：
 
 ```
-docs/design/YYYY-MM-DD-<agent-name>-design.md
+我已完成 agent-brainstorming 前置检验，结果如下：
+- 身份审问：通过。
+- Role：[一句话描述角色]
+- Agency：[一句话描述核心语义判断]
+- Ownership：[一句话描述交付物和使用者]
+- 专业背景：[Q4 答案摘要]
+请基于以上上下文继续 brainstorming 流程。
 ```
 
-写完后：
-
-> 设计规格已写入 `<path>`，请确认无误后我们继续制定实现计划。
-
-等待用户确认，然后调用 **writing-plans** skill。
+**重要：** brainstorming 接手后，澄清问题阶段应充分利用身份审问的结论，
+直接聚焦 agent 设计的具体细节（所需 Skills、推理循环、输出规格、Pi frontmatter 等），
+不重复身份审问的 4 个问题。
 
 ---
 
 ## 关键原则
 
 - **Phase 0 必须逐题收集** — Agent 身份信息只有用户知道，无法推断；但收到答案后立即分析
-- **Phase 1 起模型主导** — 所有草案由模型基于 Phase 0 答案起草，用户只确认或纠正
-- **一次一件事** — 每轮只问一个确认，不堆叠
+- **一次一件事** — 每轮只问一个问题，不堆叠
 - **身份审问不可跳过** — 任意一维（Role / Agency / Ownership）为零即失败
-- **缺口不阻塞设计** — 标记 Skill 缺口，继续推进
-- **规格优先于实现** — 设计文档批准前不生成任何代码文件
