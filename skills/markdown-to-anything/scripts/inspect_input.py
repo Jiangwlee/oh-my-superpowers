@@ -28,6 +28,41 @@ class InspectResult:
     errors: list[str]
 
 
+def _has_nested_table(text: str) -> bool:
+    """Check if text has tables nested inside list items.
+
+    Pandoc cannot parse markdown tables when they are indented (nested).
+    These need to be converted to HTML tables during normalization.
+    """
+    lines = text.splitlines()
+    table_row_pattern = re.compile(r"^(\s+)\|.*\|\s*$")
+
+    for i, line in enumerate(lines):
+        match = table_row_pattern.match(line)
+        if not match:
+            continue
+
+        # Check if this indented table row is inside a list item
+        indent = len(match.group(1))
+        if indent < 2:
+            continue
+
+        # Look backwards to find if we're inside a list
+        for j in range(i - 1, -1, -1):
+            prev_line = lines[j]
+            if prev_line.strip() == "":
+                break
+
+            prev_indent = len(prev_line) - len(prev_line.lstrip())
+            if prev_indent < indent:
+                # Check if this is a list item
+                if re.match(r"^\s*[-*]\s+", prev_line) or re.match(r"^\s*\d+\.\s+", prev_line):
+                    return True
+                break
+
+    return False
+
+
 def inspect_markdown_text(text: str) -> InspectResult:
     stripped = text.strip()
     if not stripped:
@@ -38,6 +73,7 @@ def inspect_markdown_text(text: str) -> InspectResult:
     has_assistant_preamble = any(token in head for token in ASSISTANT_PREAMBLE_PATTERNS)
     has_heading = any(line.lstrip().startswith("#") for line in text.splitlines())
     has_markdown_signals = has_heading or "|" in text or "- " in text or "```" in text
+    has_nested_tables = _has_nested_table(text)
 
     needs_agent_cleanup = False
     if has_assistant_preamble and not has_heading and not has_fenced_markdown:
@@ -46,7 +82,7 @@ def inspect_markdown_text(text: str) -> InspectResult:
     if needs_agent_cleanup:
         cleanliness = "semantic_dirty"
         recommended_path = "agent_cleanup_first"
-    elif has_fenced_markdown or has_assistant_preamble:
+    elif has_fenced_markdown or has_assistant_preamble or has_nested_tables:
         cleanliness = "light_dirty"
         recommended_path = "normalize_then_render"
     else:
@@ -62,6 +98,7 @@ def inspect_markdown_text(text: str) -> InspectResult:
             "has_assistant_preamble": has_assistant_preamble,
             "has_heading": has_heading,
             "needs_agent_cleanup": needs_agent_cleanup,
+            "has_nested_tables": has_nested_tables,
         },
         recommended_path=recommended_path,
         warnings=[] if has_markdown_signals else ["input has weak markdown signals"],

@@ -137,6 +137,184 @@ def _ensure_blank_line_before_list(text: str) -> tuple[str, bool]:
     return "\n".join(result), modified
 
 
+def _is_inside_list_item(lines: list[str], index: int) -> bool:
+    """Check if current line is inside a list item context.
+
+    A line is considered inside a list item if:
+    1. It's indented (starts with 2+ spaces)
+    2. There's a preceding list item marker at a lower indent level
+    3. No blank line between the list item and this line
+
+    Args:
+        lines: All lines of the document.
+        index: Current line index.
+
+    Returns:
+        True if inside a list item context.
+    """
+    if index == 0:
+        return False
+
+    current_line = lines[index]
+    # Must be indented to be nested content
+    if not re.match(r"^\s{2,}", current_line):
+        return False
+
+    current_indent = len(current_line) - len(current_line.lstrip())
+
+    # Look backwards for a list item marker
+    for i in range(index - 1, -1, -1):
+        prev_line = lines[i]
+
+        # Blank line breaks list context
+        if prev_line.strip() == "":
+            return False
+
+        prev_indent = len(prev_line) - len(prev_line.lstrip())
+
+        # Found a list item marker at lower indent - we're inside it
+        if prev_indent < current_indent:
+            if re.match(r"^\s*[-*]\s+", prev_line) or re.match(r"^\s*\d+\.\s+", prev_line):
+                return True
+            # Found non-list content at lower indent, stop searching
+            return False
+
+    return False
+
+
+def _parse_markdown_table(table_lines: list[str]) -> list[list[str]]:
+    """Parse markdown table lines into cell data.
+
+    Args:
+        table_lines: Lines forming the table (including header and separator).
+
+    Returns:
+        List of rows, each row is a list of cell strings.
+    """
+    rows: list[list[str]] = []
+
+    for line in table_lines:
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+
+        # Split by | and strip whitespace
+        cells = [cell.strip() for cell in line.split("|")]
+        # Remove empty first/last cells from leading/trailing |
+        # But keep empty cells in the middle (they represent actual empty cells)
+        while cells and cells[0] == "":
+            cells.pop(0)
+        while cells and cells[-1] == "":
+            cells.pop()
+        if cells:
+            rows.append(cells)
+
+    return rows
+
+
+def _convert_table_to_html(table_lines: list[str]) -> str:
+    """Convert markdown table lines to HTML table.
+
+    Args:
+        table_lines: Lines forming the markdown table.
+
+    Returns:
+        HTML table string.
+    """
+    rows = _parse_markdown_table(table_lines)
+    if len(rows) < 2:
+        return "\n".join(table_lines)
+
+    # First row is header, second is separator (|---|), rest are data
+    header = rows[0]
+    data_rows = rows[2:] if len(rows) > 2 else []
+
+    html_parts = ["<table>"]
+
+    # Header
+    html_parts.append("  <thead>")
+    html_parts.append("    <tr>")
+    for cell in header:
+        html_parts.append(f"      <th>{cell}</th>")
+    html_parts.append("    </tr>")
+    html_parts.append("  </thead>")
+
+    # Body
+    if data_rows:
+        html_parts.append("  <tbody>")
+        for row in data_rows:
+            html_parts.append("    <tr>")
+            for i, cell in enumerate(row):
+                # Handle case where data row has fewer cells than header
+                if i < len(header):
+                    html_parts.append(f"      <td>{cell}</td>")
+            html_parts.append("    </tr>")
+        html_parts.append("  </tbody>")
+
+    html_parts.append("</table>")
+
+    return "\n".join(html_parts)
+
+
+def _convert_nested_tables_to_html(text: str) -> tuple[str, bool]:
+    """Convert indented tables inside list items to raw HTML tables.
+
+    Pandoc cannot parse Markdown tables when they are indented (nested in list items).
+    This converts them to HTML tables that render correctly in all engines.
+
+    Args:
+        text: Markdown text to process.
+
+    Returns:
+        Tuple of (processed_text, was_modified).
+    """
+    lines = text.splitlines()
+    result: list[str] = []
+    modified = False
+    i = 0
+
+    # Pattern for table row: optional indent, then |...
+    table_row_pattern = re.compile(r"^(\s*)\|.*\|\s*$")
+
+    while i < len(lines):
+        line = lines[i]
+        match = table_row_pattern.match(line)
+
+        if match and _is_inside_list_item(lines, i):
+            # Found start of a nested table
+            base_indent = len(match.group(1))
+
+            # Collect all consecutive table rows
+            table_lines: list[str] = []
+            j = i
+            while j < len(lines):
+                row_line = lines[j]
+                row_match = table_row_pattern.match(row_line)
+                if not row_match:
+                    break
+
+                row_indent = len(row_match.group(1))
+                # Allow same indent level, but must still be inside list context
+                if row_indent < base_indent:
+                    break
+
+                table_lines.append(row_line)
+                j += 1
+
+            # Convert to HTML table
+            if len(table_lines) >= 2:  # Need at least header + separator
+                html_table = _convert_table_to_html(table_lines)
+                result.append(html_table)
+                modified = True
+                i = j
+                continue
+
+        result.append(line)
+        i += 1
+
+    return "\n".join(result), modified
+
+
 def normalize_markdown_text(text: str) -> NormalizeResult:
     original = text
     actions: list[str] = []
@@ -164,6 +342,10 @@ def normalize_markdown_text(text: str) -> NormalizeResult:
     text, added_blank_lines = _ensure_blank_line_before_list(text)
     if added_blank_lines:
         actions.append("added_blank_lines_before_list")
+
+    text, converted_tables = _convert_nested_tables_to_html(text)
+    if converted_tables:
+        actions.append("converted_nested_tables_to_html")
 
     stripped = text.strip()
     if stripped != text:
