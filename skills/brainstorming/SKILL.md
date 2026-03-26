@@ -41,15 +41,16 @@ Create a task for each item and complete them in order:
 1. **Explore project context** — check files, docs, recent commits
 2. **Offer visual companion** (if topic will involve visual questions) — own message, no other content
 3. **Ask clarifying questions** — one at a time; purpose, constraints, success criteria
-4. **Judge mode** — after clarifying questions, assess complexity and select Normal or Fast; announce Fast mode if chosen
-5. **Propose approaches** — Normal: 2-3 options with trade-offs and recommendation; Fast: give recommendation directly
-6. **Present design** — section by section, get user approval after each
-7. **Write unified doc** — use the appropriate template, save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`, commit
-8. **Spec review loop** — (Normal only) dispatch spec-document-reviewer subagent; max 3 iterations, then surface to human
-9. **User reviews doc** — ask user to confirm before proceeding (both modes)
-10. **Recommend development mode** — propose Subagent or Inline execution; wait for user to confirm, then execute immediately
+4. **Challenge Gate** — before proposing any solution, raise the strongest objection to the core premise (see below); hold the position unless given a substantive counter-argument
+5. **Judge mode** — after Challenge Gate, assess complexity and select Normal or Fast; announce Fast mode if chosen
+6. **Propose approaches** — Normal: 2-3 options with trade-offs and recommendation; Fast: give recommendation directly
+7. **Present design** — section by section, get user approval after each
+8. **Write unified doc** — use the appropriate template, save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`, commit
+9. **Spec review loop** — (Normal only) dispatch spec-document-reviewer subagent; max 3 iterations, then surface to human
+10. **User reviews doc** — ask user to confirm before proceeding (both modes)
+11. **Recommend development mode** — propose Subagent or Inline execution; wait for user to confirm, then execute immediately
 
-**Fast mode skips step 8. All other steps run in both modes.**
+**Fast mode: abbreviated Challenge Gate (root cause only, 1-2 points); skips step 9. All other steps run in both modes.**
 
 ## Process Flow
 
@@ -77,7 +78,8 @@ digraph brainstorming {
     "Visual questions?" -> "Offer Visual Companion" [label="yes"];
     "Visual questions?" -> "Clarifying questions" [label="no"];
     "Offer Visual Companion" -> "Clarifying questions";
-    "Clarifying questions" -> "Judge mode";
+    "Clarifying questions" -> "Challenge Gate";
+    "Challenge Gate" -> "Judge mode";
     "Judge mode" -> "Announce Fast mode" [label="Fast"];
     "Judge mode" -> "Propose approaches\n(2-3 options)" [label="Normal"];
     "Announce Fast mode" -> "Give recommendation\ndirectly";
@@ -106,6 +108,25 @@ digraph brainstorming {
 - Ask questions one at a time — if a topic needs more exploration, break into multiple messages
 - Prefer multiple choice questions when possible
 - Focus on: purpose, constraints, success criteria
+
+### Challenge Gate
+
+This step runs BEFORE proposing any solution. Its purpose is to surface the strongest objection to the user's premise — not to be contrarian, but to catch wrong-direction decisions before implementation begins.
+
+**Three mandatory checks (Normal mode):**
+
+1. **Root cause test** — Is the user solving the actual problem, or patching a symptom? State clearly if the proposed solution is treating the wrong layer (e.g., "this is a workaround for a prompt constraint issue, not a real architectural need").
+
+2. **Project standards test** — Apply the project's own evaluation criteria against the proposal. For agents, use Role × Agency × Ownership. For skills, check CLI-ability and autonomy rules. Cite the specific standard and explain why the proposal may fail it.
+
+3. **Fragile assumptions test** — List the 2-3 assumptions the idea depends on that are most likely to be wrong. Make each assumption explicit and falsifiable.
+
+**Rules:**
+- Present the challenge in its own message before moving to mode judgment.
+- Do NOT walk back the challenge when the user defends their idea. Either accept the defense if it addresses the challenge substantively, or maintain the challenge and note it as unresolved: *"挑战未解决，但你选择继续。"*
+- Generic objections ("this might not work") are forbidden. Every challenge must cite a specific reason, principle, or project constraint.
+
+**Fast mode:** root cause test only (1-2 points); skip project standards and fragile assumptions tests.
 
 ### Judging the mode
 
