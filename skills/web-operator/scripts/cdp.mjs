@@ -770,6 +770,7 @@ Usage: cdp <command> [args]
                                     e.g. evalraw <t> "DOM.getDocument" '{}'
   open  [url]                       Open a new tab (default: about:blank)
                                     Note: each new tab triggers a fresh "Allow debugging?" prompt
+  close <target>                    Close a tab (stops daemon and removes from browser)
   stop  [target]                    Stop daemon(s)
 
 <target> is a unique targetId prefix from "cdp list". If a prefix is ambiguous,
@@ -844,6 +845,37 @@ async function main() {
     writeFileSync(PAGES_CACHE, JSON.stringify(pages), { mode: 0o600 });
     console.log(`Opened new tab: ${targetId.slice(0, 8)}  ${url}`);
     console.log('Note: this tab will need "Allow debugging?" approval on first access.');
+    return;
+  }
+
+  // Close tab
+  if (cmd === 'close') {
+    const targetPrefix = args[0];
+    if (!targetPrefix) {
+      console.error('Error: target ID required. Run "cdp list" first.');
+      process.exit(1);
+    }
+    if (!existsSync(PAGES_CACHE)) {
+      console.error('No page list cached. Run "cdp list" first.');
+      process.exit(1);
+    }
+    const pages = JSON.parse(readFileSync(PAGES_CACHE, 'utf8'));
+    const targetId = resolvePrefix(targetPrefix, pages.map(p => p.targetId), 'target', 'Run "cdp list".');
+    // Stop daemon first if running
+    const sp = sockPath(targetId);
+    try {
+      const conn = await connectToSocket(sp);
+      await sendCommand(conn, { cmd: 'stop' });
+    } catch {}
+    // Close the tab via browser-level CDP
+    const cdp = new CDP();
+    await cdp.connect(await getWsUrl());
+    await cdp.send('Target.closeTarget', { targetId });
+    cdp.close();
+    // Update cache
+    const updated = pages.filter(p => p.targetId !== targetId);
+    writeFileSync(PAGES_CACHE, JSON.stringify(updated), { mode: 0o600 });
+    console.log(`Closed tab: ${targetId.slice(0, 8)}`);
     return;
   }
 

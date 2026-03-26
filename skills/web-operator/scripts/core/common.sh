@@ -86,6 +86,13 @@ create_tab() {
   printf '%s\n' "$target"
 }
 
+# Close a tab by target ID
+# Usage: close_tab <target>
+close_tab() {
+  local target="$1"
+  [[ -n "$target" ]] && cdp close "$target" >/dev/null 2>&1 || true
+}
+
 # Find existing tab for a specific domain
 # Usage: find_existing_tab <domain> [homepage_url]
 #   domain: domain name for URL matching, e.g.: "baidu.com"

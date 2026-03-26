@@ -64,12 +64,16 @@ esac
 
 # --- tier 2 & 3: generic path -----------------------------------------------
 
-# Find or create a tab for this domain
-TARGET="$(find_or_create_tab "$URL" "$domain")"
+# Create a dedicated tab for reading (will be closed after extraction)
+TARGET="$(create_tab "about:blank")"
 if [[ -z "$TARGET" ]]; then
-  echo "error: failed to get a browser tab" >&2
+  echo "error: failed to create a browser tab" >&2
   exit 1
 fi
+
+# Ensure tab is closed on exit
+cleanup_tab() { close_tab "$TARGET"; }
+trap 'cleanup_tab' EXIT
 
 # Navigate to URL (waits for load)
 cdp_nav "$TARGET" "$URL"
@@ -90,7 +94,7 @@ truncate_output() {
 # Tier 2: CDP html → defuddle (if available)
 if command -v defuddle >/dev/null 2>&1; then
   TMPHTML="$(mktemp /tmp/read-url-XXXXXX.html)"
-  trap 'rm -f "$TMPHTML"' EXIT
+  trap 'rm -f "$TMPHTML"; cleanup_tab' EXIT
 
   cdp html "$TARGET" > "$TMPHTML" 2>/dev/null
 
