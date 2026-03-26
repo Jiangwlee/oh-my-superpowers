@@ -30,6 +30,45 @@
 - 包含数据、案例、技术细节
 - 是多个来源反复提到的关键节点
 
+## Multi-Language Search
+
+同一主题必须用中文和英文各搜至少一次。不同语言社区的信息差异往往很大。
+
+规则：
+- 英文 query 优先用 Google + Reddit + DuckDuckGo
+- 中文 query 优先用 Baidu + 微信搜狗
+- 如果主题涉及特定语言社区（日文、韩文等），也要覆盖
+- 不要只用一种语言就停下来——即使搜到了足够多的结果
+
+## Platform Selection Matrix
+
+根据主题类型选择互补平台组合：
+
+| 主题类型 | 推荐平台组合 |
+|---------|-------------|
+| 技术/开源 | Google + Reddit + DuckDuckGo |
+| 中文财经 | Baidu + 雪球 + 淘股吧 |
+| 中文时事/政策 | Baidu + 微信搜狗 |
+| 社交舆论 | X + Reddit |
+| 通用研究 | Google + Baidu + DuckDuckGo |
+
+不确定时，至少选一个英文平台 + 一个中文平台。
+
+## Prefer search-multi
+
+每轮搜索优先使用 `omp-web-operator search-multi` 一次覆盖 2-3 个互补平台，而不是逐个平台串行搜索。
+
+```bash
+# 示例：技术主题
+omp-web-operator search-multi \
+  --google "Claude Code memory" \
+  --baidu "Claude Code 记忆机制" \
+  --reddit "Claude Code memory" \
+  --limit 5
+```
+
+只在需要对单个平台做精确搜索（翻页、特殊参数）时才用单平台 search。
+
 ## Cross-Source Validation
 
 结论写入报告前，优先检查：

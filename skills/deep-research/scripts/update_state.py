@@ -66,6 +66,24 @@ def main() -> None:
     if next_step:
         state.setdefault("next_steps", []).append(next_step)
 
+    complete_next_step = payload.get("complete_next_step")
+    if complete_next_step:
+        for step in state.get("next_steps", []):
+            if step.get("action") == complete_next_step:
+                step["status"] = "done"
+                break
+
+    update_hypothesis = payload.get("update_hypothesis")
+    if update_hypothesis:
+        claim = update_hypothesis["claim"]
+        for hyp in state.get("hypotheses", []):
+            if hyp.get("claim") == claim:
+                if "status" in update_hypothesis:
+                    hyp["status"] = update_hypothesis["status"]
+                if "confidence" in update_hypothesis:
+                    hyp["confidence"] = update_hypothesis["confidence"]
+                break
+
     status = payload.get("status")
     if status:
         state["status"] = status

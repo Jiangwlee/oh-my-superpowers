@@ -80,6 +80,7 @@ Load site references for website-specific workflows:
 
 When a supported site appears in the task, start from these commands before considering any generic HTTP fallback:
 
+- **Multi-platform**: `omp-web-operator search-multi --<site> "<query>" [...] --limit N` (preferred for research tasks needing breadth)
 - Google: `omp-web-operator search google <query> [limit]`
 - Baidu: `omp-web-operator search baidu <query> [limit]`
 - Weixin-Sogou: `omp-web-operator search weixin-sogou <query> [limit]`
@@ -138,6 +139,26 @@ wait
 All browser actions route through `omp-web-operator`. The underlying CDP engine is `scripts/cdp.mjs`.
 
 ## Available Commands
+
+### Multi-Platform Parallel Search
+
+- `omp-web-operator search-multi --<platform> "<query>" [...] [--limit N]`
+  Run searches on multiple platforms in parallel and return merged results.
+  Supported platforms: `baidu`, `google`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, `taoguba`, `duckduckgo`.
+  Max 5 concurrent searches (CDP connection limit).
+
+  Example:
+  ```bash
+  omp-web-operator search-multi --google "AI agents" --baidu "AI 智能体" --reddit "AI agents" --limit 5
+  ```
+
+  Output format:
+  ```json
+  [
+    { "platform": "google", "query": "AI agents", "results": [{ "title": "...", "snippet": "...", "url": "..." }] },
+    { "platform": "baidu", "query": "AI 智能体", "results": [{ "title": "...", "snippet": "...", "url": "..." }] }
+  ]
+  ```
 
 ### Baidu
 

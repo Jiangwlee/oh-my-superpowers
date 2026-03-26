@@ -48,9 +48,12 @@ model: claude-sonnet-4-6
 | 输入特征 | 处理模式 |
 |----------|----------|
 | 一个主题、问题或命题 | 开始多轮研究 |
-| 明确要求「快速看一下」 | 至少 3 轮研究 |
-| 明确要求「深入 / 深挖 / thorough」 | 至少 8 轮研究 |
+| 明确要求「快速看一下」 | 至少 2 轮 + 至少 2 个平台 |
+| 默认 | 至少 3 轮 + 至少 3 个平台 + 正反两面 |
+| 明确要求「深入 / 深挖 / thorough」 | 至少 5 轮 + 至少 4 个平台 + 多语言 + 全文阅读 |
 | 未给出主题 | 询问用户后再继续 |
+
+轮次是下限，真正的收敛标准是覆盖度（见 stop-criteria.md）。
 
 ---
 
@@ -58,7 +61,7 @@ model: claude-sonnet-4-6
 
 ## Phase 0：初始化
 
-1. 验证依赖可用：`omp-deep-research` 和 `web-operator` 均存在，否则立即停止并告知安装命令
+1. 验证依赖可用：`omp-deep-research` 和 `omp-web-operator` 均存在，否则立即停止并告知安装命令
 2. 读 `deep-research` SKILL.md
 3. 读 `references/cli.md`
 4. 执行 `omp-deep-research init <slug>` 创建 workspace
@@ -66,22 +69,35 @@ model: claude-sonnet-4-6
 ## Phase 1：研究规划
 
 1. 读 `references/methodology.md`
-2. 将研究主题拆解为子问题和关键维度
-3. 确定初始研究阶段（broad exploration / targeted / diversity）
+2. 读 `references/source-strategy.md`
+3. 将研究主题拆解为子问题和关键维度
+4. 为每个子问题指定初始搜索平台组合和语言（参考 source-strategy.md 的平台选择矩阵）
+5. 确定初始研究阶段（broad exploration / targeted / diversity）
+6. 将研究计划写入 state 的 next_steps
 
 ## Phase 2：研究循环（每轮执行）
 
-1. 读 `references/source-strategy.md` → 选平台和查询词
-2. 通过 `web-operator` 执行搜索和页面读取
-3. 执行 `omp-deep-research save-source` 落盘来源
-4. 执行 `omp-deep-research update-state` 更新研究状态
-5. 读 `references/stop-criteria.md` → 判断是否继续
-6. 继续：进入下一轮；收敛：进入 Phase 3
+1. 选择 2-3 个互补平台和对应 query（中英文混合）
+2. 通过 `omp-web-operator search-multi` 并行搜索多个平台
+3. 对高价值结果，通过 `web-operator` 读取全文
+4. 执行 `omp-deep-research save-source` 落盘来源（重复 URL 会自动去重）
+5. 执行 `omp-deep-research update-state` 更新研究状态（包括 source_note 的 credibility、language 等字段）
+6. 将已完成的 next_step 标记为 done（通过 `complete_next_step`）
+7. 读 `references/stop-criteria.md` → 判断是否继续
+8. **回退检查**：如果本轮发现了新的重要维度或子问题，更新 subquestions，回到 Phase 1 的广度探索
+9. 继续：进入下一轮；收敛：进入 Phase 3
 
 ## Phase 3：报告生成
 
 1. 读 `references/reporting.md`
-2. 执行 `omp-deep-research build-report`
+2. 生成报告草稿（brief + full report）
+3. 对照 stop-criteria.md 自检：
+   - 所有子问题是否已回答或标注为 open？
+   - 核心结论是否有多来源支持？
+   - 是否覆盖了正反两面？
+   - 是否使用了多个平台和多种语言的来源？
+   - 矛盾是否已记录并在报告中呈现？
+4. 如有不足，回到 Phase 2 补充；否则执行 `omp-deep-research build-report`
 
 ---
 
@@ -91,8 +107,9 @@ model: claude-sonnet-4-6
 |------|---------|
 | `omp-deep-research` 命令不存在 | 立即停止，告知用户：`omp install skill deep-research` |
 | `omp-deep-research init` 失败 | 报告错误原因，不继续研究 |
-| `web-operator` 不可用 | 立即停止，告知用户：`omp install skill web-operator` |
+| `omp-web-operator` 不可用 | 立即停止，告知用户：`omp install skill web-operator` |
 | 单次搜索返回空结果 | 换查询词或换平台后重试，不将「未找到」计入有效轮次 |
+| `save-source` 返回 `duplicate` | 跳过该 URL，不计入新来源 |
 | skill 文档读取失败 | 报告缺失文件路径，停止依赖该文档的判断 |
 
 ---
@@ -105,10 +122,16 @@ model: claude-sonnet-4-6
 
 **输出完整性类**
 - 结论必须区分事实、观点和推断
+- 矛盾必须在报告中显式标注，不得掩盖
 
 **执行顺序类**
 - 在读取对应 skill 文档前，不得做该领域的判断
   （例：未读 stop-criteria.md 前不得收敛）
+
+**多样性类**
+- 不得只使用单一平台完成整个研究
+- 不得只使用单一语言完成整个研究
+- 每轮搜索优先使用 `search-multi` 而非单平台串行搜索
 
 ---
 
@@ -116,4 +139,6 @@ model: claude-sonnet-4-6
 
 - workspace 已初始化
 - `references/stop-criteria.md` 中定义的停止条件已满足（含最低轮次和收敛条件）
+- 已使用至少 2 个不同平台的来源
+- 已覆盖中文和英文来源（除非主题明确限于单一语言）
 - `build-report` 已执行，brief 和 full report 均已生成

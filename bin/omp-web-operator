@@ -26,6 +26,10 @@ Search (returns JSON array):
   search taoguba     <query> [limit] [target]
   search duckduckgo  <query> [limit] [target]
 
+Multi-platform parallel search:
+  search-multi --<platform> "<query>" [...] [--limit N]
+    e.g. search-multi --google "AI agents" --baidu "AI 智能体" --limit 5
+
 Open post (returns JSON object):
   open-post reddit  <url> [comment_limit] [target]
   open-post x       <url> [target]
@@ -65,6 +69,10 @@ shift || true
 case "$cmd" in
   cdp)
     exec node "${SKILL}/scripts/cdp.mjs" "$@"
+    ;;
+
+  search-multi)
+    exec bash "${SKILL}/scripts/search-multi.sh" "$@"
     ;;
 
   search)

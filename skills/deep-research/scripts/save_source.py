@@ -45,6 +45,11 @@ def main() -> None:
     paths = ensure_workspace_dirs(workspace)
     state = load_json(paths.state_file, default={})
 
+    existing_urls = {s["url"] for s in state.get("source_index", [])}
+    if args.url in existing_urls:
+        print(json.dumps({"status": "duplicate", "url": args.url}, ensure_ascii=False))
+        return
+
     source_id = next_source_id(state)
     content = load_content(args)
 
