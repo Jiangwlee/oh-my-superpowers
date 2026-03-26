@@ -9,8 +9,6 @@ from pathlib import Path
 
 SCRIPT_MAP = {
     "init": "init.py",
-    "save-source": "save_source.py",
-    "update-state": "update_state.py",
     "build-report": "build_report.py",
 }
 
@@ -26,10 +24,8 @@ def main() -> int:
                     "usage: omp-deep-research <subcommand> [args]",
                     "",
                     "subcommands:",
-                    "  init",
-                    "  save-source",
-                    "  update-state",
-                    "  build-report",
+                    "  init          Create a new research workspace",
+                    "  build-report  Write reports and persist sources to workspace",
                 ]
             )
         )

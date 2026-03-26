@@ -9,7 +9,7 @@ description: >-
 
 # deep-research Skill
 
-深度研究工作流。核心目标是把“搜一搜”升级为：
+深度研究工作流。核心目标是把"搜一搜"升级为：
 - 先拆研究目标
 - 再做 broad exploration
 - 再做 targeted deep dive
@@ -24,11 +24,9 @@ description: >-
 omp-deep-research <subcommand> [args]
 ```
 
-主入口支持四类动作：
-- `init`
-- `save-source`
-- `update-state`
-- `build-report`
+两个命令：
+- `init` — 创建 workspace
+- `build-report` — 写入报告并持久化 sources 列表
 
 详细参数不要硬记，按需读取 `references/cli.md`。
 
@@ -41,9 +39,7 @@ omp-deep-research <subcommand> [args]
 3. 对关键维度做 deep dive，读关键全文而不是只看 snippet
 4. 主动补齐不同类型的证据和反方/限制信息
 5. 每轮结束做 synthesis check，判断是否继续
-6. 最终生成两层产物
-   - `brief`
-   - `full report`
+6. 最终生成两层产物：`brief` + `full report`
 
 如果研究还没有覆盖多个角度、缺乏关键来源、或缺少反方/限制信息，就不应过早结束。
 
@@ -65,5 +61,5 @@ omp-deep-research <subcommand> [args]
 - 停止条件：`references/stop-criteria.md`
 - 报告格式与审计要求：`references/reporting.md`
 - CLI 详细参数：`references/cli.md`
-- workspace 结构与文件命名：`references/workspace.md`
-- research state / payload 结构：`references/state-schema.md`
+- state.json 结构：`references/state-schema.md`
+- workspace 目录结构：`references/workspace.md`

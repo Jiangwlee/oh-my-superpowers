@@ -6,7 +6,7 @@
 # Example:
 #   search-multi --google "AI agents" --baidu "AI 智能体" --limit 5
 #
-# Supported platforms: baidu, google, reddit, weixin-sogou, x, xueqiu,
+# Supported platforms: baidu, google, github, reddit, weixin-sogou, x, xueqiu,
 #                      taoguba, duckduckgo
 #
 # Different-site searches run safely in parallel (isolated browser tabs).
@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --limit)
       LIMIT="${2:-}"; shift 2 ;;
-    --baidu|--google|--reddit|--weixin-sogou|--x|--xueqiu|--taoguba|--duckduckgo)
+    --baidu|--google|--github|--reddit|--weixin-sogou|--x|--xueqiu|--taoguba|--duckduckgo)
       platform="${1#--}"
       query="${2:-}"
       if [[ -z "$query" ]]; then

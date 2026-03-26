@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime
-from pathlib import Path
 
 from common import data_dir, dump_json, ensure_workspace_dirs, slugify, timestamp_prefix
 
@@ -47,15 +46,9 @@ def main() -> None:
         "workspace": str(workspace),
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "status": "initialized",
-        "subquestions": [],
-        "source_index": [],
-        "source_notes": [],
-        "hypotheses": [],
-        "next_steps": [],
         "report_files": {"brief": None, "full_report": None},
     }
     dump_json(paths.state_file, state)
-    paths.rounds_file.touch()
 
     print(
         json.dumps(
@@ -63,7 +56,6 @@ def main() -> None:
                 "status": "ok",
                 "workspace": str(workspace),
                 "state_file": str(paths.state_file),
-                "round_log_file": str(paths.rounds_file),
                 "reports_dir": str(paths.reports_dir),
             },
             ensure_ascii=False,

@@ -18,6 +18,7 @@ CDP primitives:
 
 Search (returns JSON array):
   search baidu       <query> [limit] [target]
+  search github      <query> [limit]
   search google      <query> [limit] [target]
   search reddit      <query> [limit] [target]
   search weixin-sogou <query> [limit] [target]
@@ -86,6 +87,7 @@ case "$cmd" in
     site="${1:-}"; shift || true
     case "$site" in
       baidu)        exec bash "${SKILL}/scripts/sites/baidu/search.sh" "$@" ;;
+      github)       exec bash "${SKILL}/scripts/sites/github/search.sh" "$@" ;;
       google)       exec bash "${SKILL}/scripts/sites/google/search.sh" "$@" ;;
       reddit)       exec bash "${SKILL}/scripts/sites/reddit/search.sh" "$@" ;;
       weixin-sogou) exec bash "${SKILL}/scripts/sites/weixin-sogou/search.sh" "$@" ;;

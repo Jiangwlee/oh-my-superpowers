@@ -43,7 +43,7 @@ omp-web-operator read-url <url> --limit 15000
 同一主题必须用中文和英文各搜至少一次。不同语言社区的信息差异往往很大。
 
 规则：
-- 英文 query 优先用 Google + Reddit + DuckDuckGo
+- 英文 query 优先用 Google + GitHub + Reddit + X
 - 中文 query 优先用 Baidu + 微信搜狗
 - 如果主题涉及特定语言社区（日文、韩文等），也要覆盖
 - 不要只用一种语言就停下来——即使搜到了足够多的结果
@@ -54,7 +54,7 @@ omp-web-operator read-url <url> --limit 15000
 
 | 主题类型 | 推荐平台组合 |
 |---------|-------------|
-| 技术/开源 | Google + Reddit + DuckDuckGo |
+| 技术/开源 | Google + GitHub + Reddit + X |
 | 中文财经 | Baidu + 雪球 + 淘股吧 |
 | 中文时事/政策 | Baidu + 微信搜狗 |
 | 社交舆论 | X + Reddit |
@@ -70,8 +70,9 @@ omp-web-operator read-url <url> --limit 15000
 # 示例：技术主题
 omp-web-operator search-multi \
   --google "Claude Code memory" \
-  --baidu "Claude Code 记忆机制" \
+  --github "Claude Code memory" \
   --reddit "Claude Code memory" \
+  --x "Claude Code memory" \
   --limit 5
 ```
 

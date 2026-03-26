@@ -17,8 +17,6 @@ REQUIRED_SCRIPTS = [
     "cli.py",
     "common.py",
     "init.py",
-    "save_source.py",
-    "update_state.py",
     "build_report.py",
 ]
 REQUIRED_REFERENCES = [

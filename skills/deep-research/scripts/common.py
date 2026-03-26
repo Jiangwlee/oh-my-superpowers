@@ -18,11 +18,8 @@ class WorkspacePaths:
     """Resolved workspace file paths."""
 
     workspace: Path
-    raw_dir: Path
-    notes_dir: Path
     reports_dir: Path
     state_file: Path
-    rounds_file: Path
 
 
 def data_dir() -> Path:
@@ -52,11 +49,8 @@ def workspace_paths(workspace: Path) -> WorkspacePaths:
 
     return WorkspacePaths(
         workspace=workspace,
-        raw_dir=workspace / "raw",
-        notes_dir=workspace / "notes",
         reports_dir=workspace / "reports",
         state_file=workspace / "state.json",
-        rounds_file=workspace / "rounds.jsonl",
     )
 
 
@@ -64,8 +58,6 @@ def ensure_workspace_dirs(workspace: Path) -> WorkspacePaths:
     """Create required workspace directories and return canonical paths."""
 
     paths = workspace_paths(workspace)
-    paths.raw_dir.mkdir(parents=True, exist_ok=True)
-    paths.notes_dir.mkdir(parents=True, exist_ok=True)
     paths.reports_dir.mkdir(parents=True, exist_ok=True)
     return paths
 
@@ -82,20 +74,6 @@ def dump_json(path: Path, payload: Any) -> None:
     """Write JSON to disk with stable formatting."""
 
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def next_source_id(state: dict[str, Any]) -> str:
-    """Allocate the next source id from the current state."""
-
-    items = state.get("source_index", [])
-    return f"S{len(items) + 1:03d}"
-
-
-def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    """Append one JSON object line to a JSONL file."""
-
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 def resolve_workspace(path_str: str) -> Path:

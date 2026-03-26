@@ -6,21 +6,11 @@
 
 ```text
 YYYY-MM-DDTHH-mm-<slug>/
-├── raw/
-│   ├── S001.txt
-│   └── S001.meta.json
-├── notes/
-│   └── S001.md
 ├── reports/
 │   ├── brief.md
 │   └── full-report.md
-├── state.json
-└── rounds.jsonl
+└── state.json
 ```
 
-约束：
-- `raw/` 保存原始网页内容和元信息
-- `notes/` 保存 source-level note
-- `reports/` 保存最终输出
-- `state.json` 是当前压缩研究状态
-- `rounds.jsonl` 是逐轮审计日志
+- `reports/` 保存最终输出（brief + full report）
+- `state.json` 保存研究元数据和 sources 列表

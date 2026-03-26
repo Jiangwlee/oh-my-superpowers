@@ -162,7 +162,7 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
 - `omp-web-operator search-multi --<platform> "<query>" [...] [--limit N]`
   Run searches on multiple platforms in parallel and return merged results.
-  Supported platforms: `baidu`, `google`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, `taoguba`, `duckduckgo`.
+  Supported platforms: `baidu`, `google`, `github`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, `taoguba`, `duckduckgo`.
   Max 5 concurrent searches (CDP connection limit).
 
   Example:
@@ -182,6 +182,11 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
 - `omp-web-operator search baidu <query> [limit] [target]`
   Search `baidu.com` and extract up to 20 organic result summaries (title, snippet, url).
+
+### GitHub
+
+- `omp-web-operator search github <query> [limit]`
+  Search GitHub repos, issues, and discussions via `gh` CLI. Returns up to 60 results with type, title, summary, url, stars/labels. No browser needed.
 
 ### Google
 

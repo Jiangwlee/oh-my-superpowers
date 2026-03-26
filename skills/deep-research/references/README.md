@@ -9,5 +9,5 @@
 | 需要判断何时停止 research | [stop-criteria.md](stop-criteria.md) |
 | 需要生成 `brief` / `full report` | [reporting.md](reporting.md) |
 | 需要查看 CLI 子命令和参数 | [cli.md](cli.md) |
+| 需要了解 state.json 结构 | [state-schema.md](state-schema.md) |
 | 需要了解 workspace 目录结构 | [workspace.md](workspace.md) |
-| 需要写 `update-state` payload | [state-schema.md](state-schema.md) |
