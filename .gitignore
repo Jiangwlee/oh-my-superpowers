@@ -1,6 +1,7 @@
 github
 .skills/
 .agents/
+.claude/worktrees/
 .memory/
 .memsearch/
 
