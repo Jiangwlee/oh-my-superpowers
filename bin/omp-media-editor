@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# omp-media-editor — unified CLI for the media-editor skill.
+# Input:  a subcommand and its arguments (see usage below).
+# Output: JSON results from the underlying Python scripts.
+
+set -euo pipefail
+
+SKILL="${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/media-editor"
+
+usage() {
+  cat >&2 <<'EOF'
+usage: omp-media-editor <command> [args...]
+
+Commands:
+  init                             Initialize data directory and SQLite schema (idempotent)
+  save --json '<item_json>'        Save one media item to daily archive and SQLite index
+  query [--l1 <cat>] [--date <YYYY-MM-DD>] [--source <src>] [--limit <n>]
+                                   Query the archive (returns JSON array)
+  promote --url <url>              Promote an item from daily archive to root-archive
+EOF
+  exit 1
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  init)    exec python3 "${SKILL}/scripts/init.py" "$@" ;;
+  save)    exec python3 "${SKILL}/scripts/save.py" "$@" ;;
+  query)   exec python3 "${SKILL}/scripts/query.py" "$@" ;;
+  promote) exec python3 "${SKILL}/scripts/promote.py" "$@" ;;
+  help|--help|-h) usage ;;
+  *) echo "error: unknown command: '$cmd'" >&2; usage ;;
+esac

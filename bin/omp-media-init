@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-exec python3 "${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/media-editor/scripts/init.py" "$@"

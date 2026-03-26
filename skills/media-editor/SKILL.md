@@ -13,24 +13,24 @@ description: >-
 
 ## CLI 命令
 
-### omp-media-init
+### init
 
 初始化数据目录和 SQLite schema。首次使用前必须运行。
 
 ```
-omp-media-init
+omp-media-editor init
 ```
 
 幂等操作，重复运行安全。
 
 ---
 
-### omp-media-save
+### save
 
 保存一条媒体条目到 daily archive、SQLite 索引和 markdown card。
 
 ```
-omp-media-save --json '<item_json>'
+omp-media-editor save --json '<item_json>'
 ```
 
 `item_json` 字段：
@@ -50,12 +50,12 @@ omp-media-save --json '<item_json>'
 
 ---
 
-### omp-media-query
+### query
 
 结构化查询存档（SQLite）。
 
 ```
-omp-media-query [--l1 <category>] [--date <YYYY-MM-DD>] [--source <x.com|reddit.com>] [--limit <n>]
+omp-media-editor query [--l1 <category>] [--date <YYYY-MM-DD>] [--source <x.com|reddit.com>] [--limit <n>]
 ```
 
 参数：
@@ -71,12 +71,12 @@ omp-media-query [--l1 <category>] [--date <YYYY-MM-DD>] [--source <x.com|reddit.
 
 ---
 
-### omp-media-promote
+### promote
 
 将 daily archive 中的条目晋升至 root-archive，并更新用户偏好。
 
 ```
-omp-media-promote --url <url>
+omp-media-editor promote --url <url>
 ```
 
 输出：`{"status": "ok"}` 或 `{"status": "duplicate"}` 或 `{"status": "not_found"}`
