@@ -34,16 +34,15 @@ model: claude-sonnet-4-6
 
 ```
 DATA_DIR: ~/.local/share/oh-my-superpowers/media-editor
-WEB_OPERATOR_DIR: ~/.agents/skills/web-operator
 TAXONOMY_FILE: $DATA_DIR/taxonomy.json
 PREFERENCES_FILE: $DATA_DIR/preferences.json
 ```
 
 首次运行时初始化数据目录：
 ```bash
-omp-media-init
+omp-media-editor init
 ```
-如果 `omp-media-init` 命令不存在，提示用户：「请先安装 media-editor skill：`omp install skill media-editor`」
+如果 `omp-media-editor` 命令不存在，提示用户：「请先安装 media-editor skill：`omp install skill media-editor`」
 
 检查 qmd 是否可用：`qmd --version 2>/dev/null || echo "not_found"`
 如果 qmd 不存在，在需要语义检索时告知用户：`npm install -g qmd`
@@ -77,34 +76,15 @@ cat ~/.local/share/oh-my-superpowers/media-editor/preferences.json
 
 根据 6 个 L1 分类（LLM / AI Agent / Claude Code / CodeX / Vibe Coding / AI Application）和 `preferences.json` 中的 `user_profile`，自主推导 7 个搜索关键词。要求：每个 L1 至少覆盖一次，跨圈层多样性优先，避免关键词语义重叠。
 
-X.com 搜索（7 个关键词，每个最多 30 条）：
-```bash
-bash ~/.agents/skills/web-operator/scripts/sites/x/search.sh "<自选关键词>" 30
-```
-
-Reddit 搜索（同等 7 个关键词，每个最多 20 条）：
-```bash
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选关键词>" 20
-```
+用 web-operator skill 搜索 X.com（7 个关键词，每个最多 30 条）和 Reddit（同等 7 个关键词，每个最多 20 条）。
 
 **Step 3：读取推荐流**
 
-X.com For You 推荐流（实时个性化推荐，最多 50 条）：
-```bash
-bash ~/.agents/skills/web-operator/scripts/sites/x/for-you.sh 50
-```
+用 web-operator skill 读取 X.com For You 推荐流（最多 50 条）。
 
 Reddit 各板块热帖（共 100 条，5 个板块各 20 条）：
 
-根据当前 L1 分类（LLM / AI Agent / Claude Code / CodeX / Vibe Coding / AI Application）和 `preferences.json` 中的 `user_profile`，自主选择覆盖面最广、信息茧房风险最低的 5 个 Reddit 板块。避免重复覆盖同一话题圈层。
-
-```bash
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块1>" 20
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块2>" 20
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块3>" 20
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块4>" 20
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块5>" 20
-```
+根据当前 L1 分类（LLM / AI Agent / Claude Code / CodeX / Vibe Coding / AI Application）和 `preferences.json` 中的 `user_profile`，自主选择覆盖面最广、信息茧房风险最低的 5 个 Reddit 板块，避免重复覆盖同一话题圈层，用 web-operator skill 搜索。
 
 **Step 4：编辑筛选（核心语义判断）**
 
@@ -121,7 +101,7 @@ bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块
 
 对每条选中内容：
 ```bash
-omp-media-save --json '{"url":"...","title":"...","source":"x.com","fetch_time":"2026-03-25T14:30:00Z","tags":{"L1":"Claude Code","L2":""},"engagement":{"retweets":0,"comments":0},"summary":"20字以内摘要","selected":true}'
+omp-media-editor save --json '{"url":"...","title":"...","source":"x.com","fetch_time":"2026-03-25T14:30:00Z","tags":{"L1":"Claude Code","L2":""},"engagement":{"retweets":0,"comments":0},"summary":"20字以内摘要","selected":true}'
 ```
 
 如遇新 L2 话题，读取并更新 taxonomy.json：
@@ -152,16 +132,12 @@ cat ~/.local/share/oh-my-superpowers/media-editor/taxonomy.json
 ## article-summary
 
 **Step 1：读取文章内容**
-```bash
-# X.com 链接
-bash ~/.agents/skills/web-operator/scripts/sites/x/open-post.sh "<url>"
-# 返回 JSON 含 external_links 字段（t.co 短链列表）
-# 若 external_links 非空，继续 Step 1b 获取目标页面内容
 
-# Reddit 链接
-bash ~/.agents/skills/web-operator/scripts/sites/reddit/open-post.sh "<url>"
+用 web-operator skill 读取文章内容：
+- X.com 链接：返回 JSON 含 external_links 字段（t.co 短链列表），若 external_links 非空继续 Step 1b
+- Reddit 链接：提取正文和评论
 
-# 其他链接或 Step 1b（跟随 external_links）：
+Step 1b（跟随 external_links）：
 # Step 1b-1：解析最终 URL（跟随 t.co 等重定向）
 python3 -c "
 import urllib.request, sys
@@ -188,7 +164,7 @@ print(c.strip()[:15000])
 
 **Step 3：晋升至 root-archive + 偏好更新**
 ```bash
-omp-media-promote --url "<url>"
+omp-media-editor promote --url "<url>"
 ```
 
 读取 preferences.json，在 `user_profile` 中追加从本文提炼的关键词/人物，用 write 工具写回。
@@ -204,12 +180,12 @@ qmd search "<topic>" --dir ~/.local/share/oh-my-superpowers/media-editor/cards/ 
 
 **Step 2：结构化查询**
 ```bash
-omp-media-query --l1 "<L1 category>" --limit 30
+omp-media-editor query --l1 "<L1 category>" --limit 30
 ```
 
 **Step 3：补充实时搜索**
 
-聚焦该话题，执行 daily-brief Step 2-3 的搜索流程（关键词聚焦话题词）。
+聚焦该话题，用 web-operator skill 执行 daily-brief Step 2-3 的搜索流程（关键词聚焦话题词）。
 
 **Step 4：生成话题分析报告**
 
