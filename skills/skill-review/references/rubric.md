@@ -158,20 +158,29 @@ Check:
 
 **Labels**
 - `BEST_PRACTICE`
+- `PROJECT_POLICY`
 
 **Criteria**
 
-When scripts exist, check:
-- the skill gives a default script path rather than a menu of equal options
-- scripts are introduced by relative path
-- complex shell logic is pushed into scripts instead of copied inline
-- prerequisites are stated clearly
-- script usage in `SKILL.md` matches how the script is meant to be invoked
+When `scripts/` directory exists, check these hard constraints first:
+
+**Hard constraints (PROJECT_POLICY):**
+- The skill has exactly one CLI entry point named `omp-<skill-name>` under `scripts/`
+- `SKILL.md` invokes the CLI by name (`omp-<skill-name> ...`), not by relative path (`bash scripts/...` or `python scripts/...`)
+- There are no additional standalone scripts that bypass the CLI
+
+**Design quality (BEST_PRACTICE):**
+- Complex shell logic is pushed into the CLI rather than inlined in SKILL.md
+- Prerequisites (runtime version, PATH requirements) are stated clearly
+- CLI usage shown in SKILL.md matches the actual CLI interface (`--help` output)
 
 Use `references/how-to-use-scripts-in-skills.md` when script design is in scope.
 
 **Severity**
-- WARNING when script usage is likely to confuse the agent or drift from reality
+- CRITICAL when `scripts/` exists but no `omp-<skill-name>` CLI is present
+- CRITICAL when `SKILL.md` invokes scripts via relative path (`bash scripts/` or `python scripts/`)
+- CRITICAL when more than one CLI entry point exists under `scripts/`
+- WARNING when CLI prerequisites are unstated or CLI usage drifts from `--help`
 - SUGGESTION when script usage is correct but not well-calibrated
 
 ### B6. Output Contract Quality

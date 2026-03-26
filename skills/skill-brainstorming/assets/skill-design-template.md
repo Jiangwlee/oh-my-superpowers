@@ -13,9 +13,12 @@
 ## 目录结构
 <根据模式生成>
 
-## CLI 化方案（如适用）
-- 命令接口：`<command> <args>` → `<output format>`
-- 暴露方式：<omp 注册 / 独立 CLI>
+## CLI 化方案（有 scripts/ 则必须）
+
+- CLI 名称：`omp-<skill-name>`（文件路径：`scripts/omp-<skill-name>`）
+- 命令接口：`omp-<skill-name> <args>` → `<output format>`
+- 子命令/参数：<列出主要 flags>
+- 禁止：SKILL.md 中不得出现 `bash scripts/` 或 `python scripts/` 调用
 
 ## SKILL.md Frontmatter 草稿
 ```yaml

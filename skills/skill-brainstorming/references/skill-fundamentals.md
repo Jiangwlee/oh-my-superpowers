@@ -73,7 +73,42 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 
 ---
 
-## 5. 常见设计错误
+## 5. 脚本 CLI 化规则（强制）
+
+**凡是 skill 有 `scripts/` 目录，必须将所有脚本封装为一个统一 CLI。**
+
+### 规则
+
+1. **一个 Skill，只能有一个 CLI**
+   - 入口唯一，不允许多个并列脚本供调用方随意选择
+
+2. **命名规范：`omp-<skill-name>`**
+   - 例：skill 名为 `skill-review` → CLI 命名为 `omp-skill-review`
+   - CLI 文件放在 `scripts/omp-<skill-name>`（无扩展名），由 `omp install` 安装到 PATH
+
+3. **SKILL.md 中只引用 CLI 名称，不写相对路径**
+   ```
+   # 错误 — 相对路径调用
+   python scripts/check.py --skill-dir <path>
+
+   # 正确 — CLI 调用
+   omp-skill-review --skill-dir <path>
+   ```
+
+### 为什么这样设计
+
+- 相对路径调用绑死了运行位置，Skill 复制到其他地方就失效
+- 多个脚本入口让调用方需要理解内部结构，破坏封装
+- CLI 化后 `omp install` 可以直接将 CLI 安装到全局 PATH，Skill 完全自治
+
+### 自治检验补充项
+
+- [ ] scripts/ 下的所有脚本是否已合并进一个 `omp-<skill-name>` CLI？
+- [ ] SKILL.md 中是否没有任何 `bash scripts/` 或 `python scripts/` 调用？
+
+---
+
+## 6. 常见设计错误
 
 **错误 1：把项目文档路径写进 SKILL.md**
 ```

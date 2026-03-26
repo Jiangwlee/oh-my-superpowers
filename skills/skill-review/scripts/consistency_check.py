@@ -333,6 +333,61 @@ def detect_legacy_pollution(scripts_dir: Path) -> list[dict]:
     return findings
 
 
+def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
+    """Verify CLI-ization rules when scripts/ directory exists.
+
+    Rules:
+    - If scripts/ exists: exactly one file named omp-{skill_name} must be present.
+    - SKILL.md must not invoke scripts via relative path (bash scripts/ or python scripts/).
+
+    Returns list of dicts: {type, reason, detail}.
+    """
+    findings: list[dict] = []
+    scripts_dir = skill_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return findings
+
+    scripts_files = [f for f in scripts_dir.iterdir() if f.is_file()]
+    if not scripts_files:
+        return findings
+
+    expected_cli = f"omp-{skill_name}"
+    cli_files = [f for f in scripts_files if f.name == expected_cli]
+
+    if not cli_files:
+        findings.append({
+            "type": "cli",
+            "reason": "missing_cli",
+            "detail": f"scripts/ exists but no '{expected_cli}' CLI found. "
+                      f"All scripts must be consolidated into scripts/{expected_cli}.",
+        })
+    elif len(cli_files) > 1:
+        findings.append({
+            "type": "cli",
+            "reason": "multiple_cli",
+            "detail": f"Found {len(cli_files)} files named '{expected_cli}'. "
+                      "A skill must have exactly one CLI entry point.",
+        })
+
+    skill_md = skill_dir / "SKILL.md"
+    if skill_md.exists():
+        content = skill_md.read_text(encoding="utf-8")
+        direct_invocation_pattern = re.compile(
+            r"(?:python3?|bash)\s+scripts/[\w.\-/]+",
+        )
+        for i, line in enumerate(content.splitlines(), 1):
+            if direct_invocation_pattern.search(line.strip()):
+                findings.append({
+                    "type": "cli",
+                    "reason": "direct_script_invocation",
+                    "line": i,
+                    "detail": f"Direct script invocation found: '{line.strip()}'. "
+                              f"Use '{expected_cli}' CLI instead.",
+                })
+
+    return findings
+
+
 def run_checks(skill_dir: Path) -> dict:
     """Run all consistency checks against the skill directory.
 
@@ -354,6 +409,7 @@ def run_checks(skill_dir: Path) -> dict:
         "path_style_violations": [],
         "orphaned_references": [],
         "legacy_pollution": [],
+        "cli_violations": [],
     }
 
     spec_violations, frontmatter_warnings, name_mismatch = validate_frontmatter(
@@ -408,6 +464,11 @@ def run_checks(skill_dir: Path) -> dict:
 
     # Detect legacy pollution in scripts/
     issues["legacy_pollution"] = detect_legacy_pollution(skill_dir / "scripts")
+
+    # Check CLI-ization requirement
+    fm = parse_frontmatter(content)
+    skill_name = (fm or {}).get("name", "") or skill_dir.name
+    issues["cli_violations"] = check_cli_requirement(skill_dir, skill_name)
 
     return issues
 
