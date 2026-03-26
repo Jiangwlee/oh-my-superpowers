@@ -333,11 +333,26 @@ def detect_legacy_pollution(scripts_dir: Path) -> list[dict]:
     return findings
 
 
+def _find_project_bin(skill_dir: Path) -> Path | None:
+    """Walk up from skill_dir to find a bin/ directory (project root indicator)."""
+    current = skill_dir.resolve()
+    for _ in range(6):  # max 6 levels up
+        candidate = current / "bin"
+        if candidate.is_dir():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
 def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
     """Verify CLI-ization rules when scripts/ directory exists.
 
     Rules:
-    - If scripts/ exists: exactly one file named omp-{skill_name} must be present.
+    - If scripts/ exists: exactly one file named omp-{skill_name} must exist in
+      the project's bin/ directory (found by walking up from skill_dir).
     - SKILL.md must not invoke scripts via relative path (bash scripts/ or python scripts/).
 
     Returns list of dicts: {type, reason, detail}.
@@ -352,20 +367,22 @@ def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
         return findings
 
     expected_cli = f"omp-{skill_name}"
-    cli_files = [f for f in scripts_files if f.name == expected_cli]
+    bin_dir = _find_project_bin(skill_dir)
+    cli_files = [f for f in bin_dir.iterdir() if f.name == expected_cli] if bin_dir else []
 
     if not cli_files:
+        bin_hint = str(bin_dir) if bin_dir else "bin/"
         findings.append({
             "type": "cli",
             "reason": "missing_cli",
-            "detail": f"scripts/ exists but no '{expected_cli}' CLI found. "
-                      f"All scripts must be consolidated into scripts/{expected_cli}.",
+            "detail": f"scripts/ exists but no '{expected_cli}' CLI found in {bin_hint}. "
+                      f"Create bin/{expected_cli} as the unified CLI entry point.",
         })
     elif len(cli_files) > 1:
         findings.append({
             "type": "cli",
             "reason": "multiple_cli",
-            "detail": f"Found {len(cli_files)} files named '{expected_cli}'. "
+            "detail": f"Found {len(cli_files)} files named '{expected_cli}' in bin/. "
                       "A skill must have exactly one CLI entry point.",
         })
 

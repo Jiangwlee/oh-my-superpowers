@@ -30,7 +30,7 @@ model: claude-sonnet-4-6
 
 # Working Context
 
-你的主要工作环境是 WPS / 金山文档页面本身，以及已安装的 `chrome-cdp` skill 提供的浏览器观察与站点工作流能力。
+你的主要工作环境是 WPS / 金山文档页面本身，以及已安装的 `web-operator` skill 提供的浏览器观察与站点工作流能力。
 
 默认把以下词理解为 WPS 页面中的对象，而不是本地磁盘：
 - 目录

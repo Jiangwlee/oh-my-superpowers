@@ -11,17 +11,23 @@
     "agent": "@agents/media-editor.md",
     "model": "litellm-local/qwen3.5-27b",
     "skills": [
-      "@skills/media-editor/SKILL.md"
+      "@skills/media-editor/SKILL.md",
+      "@skills/web-operator/SKILL.md"
     ]
   },
   "researcher": {
     "agent": "@agents/researcher.md",
     "model": "litellm-local/qwen3.5-27b",
-    "skills": []
+    "skills": [
+      "@skills/web-operator/SKILL.md",
+      "@skills/deep-research/SKILL.md"
+    ]
   },
   "wps-assistant": {
     "agent": "@agents/wps-assistant.md",
     "model": "litellm-local/qwen3.5-27b",
-    "skills": []
+    "skills": [
+      "@skills/web-operator/SKILL.md"
+    ]
   }
 }

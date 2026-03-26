@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# omp-web-operator — unified CLI for the web-operator skill.
+# Input:  a subcommand and its arguments (see usage below).
+# Output: JSON results or plain text from the underlying scripts.
+# Requires Node.js 22+ (for cdp and test commands) and jq (for site scripts).
+
+set -euo pipefail
+
+SKILL="${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/web-operator"
+
+usage() {
+  cat >&2 <<'EOF'
+usage: omp-web-operator <command> [args...]
+
+CDP primitives:
+  cdp <cdp_command> [args...]          Raw CDP command (list, nav, eval, snap,
+                                       shot, html, click, type, open, stop...)
+
+Search (returns JSON array):
+  search baidu       <query> [limit] [target]
+  search google      <query> [limit] [target]
+  search reddit      <query> [limit] [target]
+  search weixin-sogou <query> [limit] [target]
+  search x           <query> [limit] [target]
+  search xueqiu      <query> [limit] [target]
+  search taoguba     <query> [limit] [target]
+  search duckduckgo  <query> [limit] [target]
+
+Open post (returns JSON object):
+  open-post reddit  <url> [comment_limit] [target]
+  open-post x       <url> [target]
+  open-post xueqiu  <url> [comment_limit] [target]
+  open-post taoguba <url> [target]
+
+Taoguba workflows:
+  taoguba jinghua   [hours] [limit] [target]
+  taoguba following [hours] [limit] [target]
+
+KDocs (365.kdocs.cn) workflows:
+  kdocs search      <query> [limit] [target]
+  kdocs open-doc    <file_key> [main_target]
+  kdocs find-in-doc <keyword> [target]
+  kdocs ask-ai      <question> [target]
+  kdocs close-doc   [target]
+
+Xueqiu workflows:
+  xueqiu hot        [limit] [target]
+  xueqiu stock-info <symbol_or_url> [limit] [target]
+
+X (x.com) workflows:
+  x for-you         [limit] [target]
+
+Tests:
+  test list
+  test core
+  test site <site_name>
+  test all
+EOF
+  exit 1
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  cdp)
+    exec node "${SKILL}/scripts/cdp.mjs" "$@"
+    ;;
+
+  search)
+    site="${1:-}"; shift || true
+    case "$site" in
+      baidu)        exec bash "${SKILL}/scripts/sites/baidu/search.sh" "$@" ;;
+      google)       exec bash "${SKILL}/scripts/sites/google/search.sh" "$@" ;;
+      reddit)       exec bash "${SKILL}/scripts/sites/reddit/search.sh" "$@" ;;
+      weixin-sogou) exec bash "${SKILL}/scripts/sites/weixin-sogou/search.sh" "$@" ;;
+      x)            exec bash "${SKILL}/scripts/sites/x/search.sh" "$@" ;;
+      xueqiu)       exec bash "${SKILL}/scripts/sites/xueqiu/search.sh" "$@" ;;
+      taoguba)      exec bash "${SKILL}/scripts/sites/taoguba/search.sh" "$@" ;;
+      duckduckgo)   exec bash "${SKILL}/scripts/sites/duckduckgo/search.sh" "$@" ;;
+      *) echo "error: unknown search site: '$site'" >&2; usage ;;
+    esac
+    ;;
+
+  open-post)
+    site="${1:-}"; shift || true
+    case "$site" in
+      reddit)  exec bash "${SKILL}/scripts/sites/reddit/open-post.sh" "$@" ;;
+      x)       exec bash "${SKILL}/scripts/sites/x/open-post.sh" "$@" ;;
+      xueqiu)  exec bash "${SKILL}/scripts/sites/xueqiu/open-post.sh" "$@" ;;
+      taoguba) exec bash "${SKILL}/scripts/sites/taoguba/open-post.sh" "$@" ;;
+      *) echo "error: unknown open-post site: '$site'" >&2; usage ;;
+    esac
+    ;;
+
+  taoguba)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      jinghua)   exec bash "${SKILL}/scripts/sites/taoguba/jinghua.sh" "$@" ;;
+      following) exec bash "${SKILL}/scripts/sites/taoguba/following.sh" "$@" ;;
+      *) echo "error: unknown taoguba subcommand: '$sub'" >&2; usage ;;
+    esac
+    ;;
+
+  kdocs)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      search)      exec bash "${SKILL}/scripts/sites/kdocs/search.sh" "$@" ;;
+      open-doc)    exec bash "${SKILL}/scripts/sites/kdocs/open-doc.sh" "$@" ;;
+      find-in-doc) exec bash "${SKILL}/scripts/sites/kdocs/find-in-doc.sh" "$@" ;;
+      ask-ai)      exec bash "${SKILL}/scripts/sites/kdocs/ask-ai.sh" "$@" ;;
+      close-doc)   exec bash "${SKILL}/scripts/sites/kdocs/close-doc.sh" "$@" ;;
+      *) echo "error: unknown kdocs subcommand: '$sub'" >&2; usage ;;
+    esac
+    ;;
+
+  xueqiu)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      hot)        exec bash "${SKILL}/scripts/sites/xueqiu/hot.sh" "$@" ;;
+      stock-info) exec bash "${SKILL}/scripts/sites/xueqiu/stock-info.sh" "$@" ;;
+      *) echo "error: unknown xueqiu subcommand: '$sub'" >&2; usage ;;
+    esac
+    ;;
+
+  x)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      for-you) exec bash "${SKILL}/scripts/sites/x/for-you.sh" "$@" ;;
+      *) echo "error: unknown x subcommand: '$sub'" >&2; usage ;;
+    esac
+    ;;
+
+  test)
+    exec node "${SKILL}/scripts/test.mjs" "$@"
+    ;;
+
+  help|--help|-h)
+    usage
+    ;;
+
+  *)
+    echo "error: unknown command: '$cmd'" >&2
+    usage
+    ;;
+esac

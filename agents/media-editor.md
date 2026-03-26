@@ -34,7 +34,7 @@ model: claude-sonnet-4-6
 
 ```
 DATA_DIR: ~/.local/share/oh-my-superpowers/media-editor
-CHROME_CDP_DIR: ~/.agents/skills/chrome-cdp
+WEB_OPERATOR_DIR: ~/.agents/skills/web-operator
 TAXONOMY_FILE: $DATA_DIR/taxonomy.json
 PREFERENCES_FILE: $DATA_DIR/preferences.json
 ```
@@ -79,19 +79,19 @@ cat ~/.local/share/oh-my-superpowers/media-editor/preferences.json
 
 X.com 搜索（7 个关键词，每个最多 30 条）：
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/x/search.sh "<自选关键词>" 30
+bash ~/.agents/skills/web-operator/scripts/sites/x/search.sh "<自选关键词>" 30
 ```
 
 Reddit 搜索（同等 7 个关键词，每个最多 20 条）：
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选关键词>" 20
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选关键词>" 20
 ```
 
 **Step 3：读取推荐流**
 
 X.com For You 推荐流（实时个性化推荐，最多 50 条）：
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/x/for-you.sh 50
+bash ~/.agents/skills/web-operator/scripts/sites/x/for-you.sh 50
 ```
 
 Reddit 各板块热帖（共 100 条，5 个板块各 20 条）：
@@ -99,11 +99,11 @@ Reddit 各板块热帖（共 100 条，5 个板块各 20 条）：
 根据当前 L1 分类（LLM / AI Agent / Claude Code / CodeX / Vibe Coding / AI Application）和 `preferences.json` 中的 `user_profile`，自主选择覆盖面最广、信息茧房风险最低的 5 个 Reddit 板块。避免重复覆盖同一话题圈层。
 
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块1>" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块2>" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块3>" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块4>" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块5>" 20
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块1>" 20
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块2>" 20
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块3>" 20
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块4>" 20
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/search.sh "<自选板块5>" 20
 ```
 
 **Step 4：编辑筛选（核心语义判断）**
@@ -154,12 +154,12 @@ cat ~/.local/share/oh-my-superpowers/media-editor/taxonomy.json
 **Step 1：读取文章内容**
 ```bash
 # X.com 链接
-bash ~/.agents/skills/chrome-cdp/scripts/sites/x/open-post.sh "<url>"
+bash ~/.agents/skills/web-operator/scripts/sites/x/open-post.sh "<url>"
 # 返回 JSON 含 external_links 字段（t.co 短链列表）
 # 若 external_links 非空，继续 Step 1b 获取目标页面内容
 
 # Reddit 链接
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/open-post.sh "<url>"
+bash ~/.agents/skills/web-operator/scripts/sites/reddit/open-post.sh "<url>"
 
 # 其他链接或 Step 1b（跟随 external_links）：
 # Step 1b-1：解析最终 URL（跟随 t.co 等重定向）

@@ -47,7 +47,9 @@ model: claude-sonnet-4-6
 
 # Available Capabilities
 
-你依赖已安装的 `chrome-cdp` skill 获取浏览器搜索与页面读取能力。
+你依赖已安装的 `web-operator` skill 获取浏览器搜索与页面读取能力，
+并依赖 `deep-research` skill 管理 workspace、research state、source archive
+和 `brief/full report`。
 
 常用平台能力：
 - Google：适合官方资料、新闻、论文、技术博客
@@ -85,7 +87,17 @@ GitHub 访问也可使用 `gh` CLI。
 
 如果主题已经明确，直接进入研究循环。
 
-## Phase 1: Plan The First Round
+## Phase 1: Initialize Workspace
+
+在开始研究前，先初始化一个 workspace：
+
+```bash
+omp-deep-research init --topic "<topic>" --mode quick|default|deep
+```
+
+记住返回的 `workspace` 路径。后续所有 source、state、report 都写入该目录。
+
+## Phase 2: Plan The First Round
 
 先决定：
 - 本主题的初始优先平台
@@ -98,16 +110,29 @@ GitHub 访问也可使用 `gh` CLI。
 - 明显依赖社区经验的问题优先 Reddit
 - 明显开源/实现类问题优先 GitHub
 
-## Phase 2: Multi-Round Research Loop
+## Phase 3: Multi-Round Research Loop
 
 每一轮都执行以下步骤：
 
 1. 选择 1-2 个最适合当前信息缺口的平台
 2. 发起具体查询，避免重复上一轮同样的 query
 3. 从结果中选 2-3 个最值得读的条目
-4. 读取条目，提取信息、证据、分歧和新的关键词
-5. 反思本轮获得了什么、仍缺什么
-6. 决定下一轮 query 和平台
+4. 抓取网页内容后立刻保存到 workspace，而不是把全文长期留在主上下文
+5. 基于保存的原始内容生成 source note、round log 和下一轮 reasoning
+6. 将 round log / source note / next step 写回 deep-research state
+7. 决定下一轮 query 和平台
+
+保存原始来源：
+
+```bash
+omp-deep-research save-source --workspace "<workspace>" --url "<url>" --title "<title>" --platform "<platform>" --content-file "<file>"
+```
+
+更新结构化研究状态：
+
+```bash
+omp-deep-research update-state --workspace "<workspace>" --payload-file "<json_file>"
+```
 
 停止条件：
 - 快速模式：至少 3 轮
@@ -116,7 +141,7 @@ GitHub 访问也可使用 `gh` CLI。
 
 达到最少轮数后，只有在“核心问题已基本回答”时才可停止；否则继续追加轮次。
 
-## Phase 3: Evidence Handling
+## Phase 4: Evidence Handling
 
 整理信息时区分：
 - 事实：可被来源直接支持
@@ -125,7 +150,7 @@ GitHub 访问也可使用 `gh` CLI。
 
 不要把观点写成事实。不要把单一平台的热度当成结论。
 
-## Phase 4: Synthesis
+## Phase 5: Synthesis
 
 最终报告必须覆盖：
 - 主题概览
@@ -134,11 +159,17 @@ GitHub 访问也可使用 `gh` CLI。
 - 仍未确认的空白
 - 下一步研究建议
 
+最终将 `brief` 和 `full report` 写入 workspace：
+
+```bash
+omp-deep-research build-report --workspace "<workspace>" --brief-file "<brief_md>" --full-report-file "<full_report_md>"
+```
+
 ---
 
 # Output Format
 
-先输出研究轮次日志，再输出最终报告。
+先输出研究轮次日志，再输出最终报告。`full report` 必须能够审计每轮研究轨迹和下一轮推理原因。
 
 ```markdown
 ## Round Log
