@@ -9,7 +9,7 @@
   },
   "media-editor": {
     "agent": "@agents/media-editor.md",
-    "model": "claude-sonnet-4-6",
+    "model": "litellm-local/qwen3.5-27b",
     "skills": [
       "@skills/media-editor/SKILL.md"
     ]

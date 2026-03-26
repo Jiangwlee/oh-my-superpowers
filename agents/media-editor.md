@@ -75,38 +75,35 @@ cat ~/.local/share/oh-my-superpowers/media-editor/preferences.json
 
 **Step 2：多轮搜索（覆盖所有 L1 分类）**
 
-X.com 搜索（每个关键词最多 10 条）：
+根据 6 个 L1 分类（LLM / AI Agent / Claude Code / CodeX / Vibe Coding / AI Application）和 `preferences.json` 中的 `user_profile`，自主推导 7 个搜索关键词。要求：每个 L1 至少覆盖一次，跨圈层多样性优先，避免关键词语义重叠。
+
+X.com 搜索（7 个关键词，每个最多 30 条）：
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/x/search.sh "<keyword>" 10
+bash ~/.agents/skills/chrome-cdp/scripts/sites/x/search.sh "<自选关键词>" 30
 ```
 
-搜索关键词策略（至少覆盖以下，可根据 preferences.json 中的 user_profile 扩展）：
-- "Claude Code"
-- "AI Agent" OR "MCP"
-- "Vibe Coding"
-- "local LLM" OR "Ollama" OR "llama.cpp"
-- "Anthropic" OR "OpenAI" OR "Andrej Karpathy"
-- "CodeX" OR "OpenAI Codex"
-- "LLM training" OR "fine-tuning"
-
-Reddit 搜索（同等关键词）：
+Reddit 搜索（同等 7 个关键词，每个最多 20 条）：
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<keyword>" 10
+bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选关键词>" 20
 ```
 
 **Step 3：读取推荐流**
 
-X.com 热门（近似实现，通过多个热门关键词覆盖）：
+X.com For You 推荐流（实时个性化推荐，最多 50 条）：
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/x/search.sh "AI" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/x/search.sh "LLM" 20
+bash ~/.agents/skills/chrome-cdp/scripts/sites/x/for-you.sh 50
 ```
 
-Reddit 各板块热帖：
+Reddit 各板块热帖（共 100 条，5 个板块各 20 条）：
+
+根据当前 L1 分类（LLM / AI Agent / Claude Code / CodeX / Vibe Coding / AI Application）和 `preferences.json` 中的 `user_profile`，自主选择覆盖面最广、信息茧房风险最低的 5 个 Reddit 板块。避免重复覆盖同一话题圈层。
+
 ```bash
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "MachineLearning" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "LocalLLaMA" 20
-bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "artificial" 20
+bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块1>" 20
+bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块2>" 20
+bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块3>" 20
+bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块4>" 20
+bash ~/.agents/skills/chrome-cdp/scripts/sites/reddit/search.sh "<自选板块5>" 20
 ```
 
 **Step 4：编辑筛选（核心语义判断）**
