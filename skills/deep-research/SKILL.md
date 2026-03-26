@@ -24,9 +24,6 @@ description: >-
 omp-deep-research <subcommand> [args]
 ```
 
-统一 CLI 只是这个 skill 的执行支撑层，不是 skill 本体。
-skill 本体是研究 SOP；CLI 用来帮助落盘与审计。
-
 主入口支持四类动作：
 - `init`
 - `save-source`
@@ -59,6 +56,8 @@ skill 本体是研究 SOP；CLI 用来帮助落盘与审计。
 可通过环境变量 `DEEP_RESEARCH_DATA_DIR` 覆盖。
 
 ## 何时加载详细文档
+
+详细文档索引：`references/README.md`
 
 只在需要时加载：
 - 研究流程与阶段目标：`references/methodology.md`

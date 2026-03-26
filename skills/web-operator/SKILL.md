@@ -25,6 +25,7 @@ This repository uses a `core + sites + tests` layout.
 ## Quick Start
 
 - Confirm Chrome remote debugging is enabled at `chrome://inspect/#remote-debugging`.
+- For bundled sites, start from `omp-web-operator` site commands first. Do not start with `curl` if a matching site workflow already exists.
 - Use `omp-web-operator cdp list` to identify the target tab prefix.
 - Prefer stable URL navigation when a workflow can avoid brittle click paths.
 - Load the relevant core or site reference before running a non-trivial workflow.
@@ -71,6 +72,22 @@ Load site references for website-specific workflows:
 - Use `type` instead of `eval` for text entry in cross-origin iframes.
 - Expect one Chrome "Allow debugging" prompt per tab daemon on first access.
 - Keep browser primitives in the core layer. Do not bury general CDP logic inside a site-specific workflow unless the behavior is truly site-bound.
+- For bundled sites with dedicated workflows, prefer the site workflow over raw HTTP fetching. Do not use `curl` to read main content from `reddit.com`, `x.com`, `xueqiu.com`, `tgb.cn` / `taoguba.com.cn`, or `365.kdocs.cn`; these sites rely on dynamic rendering, login state, or anti-bot defenses, and raw HTTP usually returns shell HTML or incomplete content.
+- Treat `google.com` and `weixin.sogou.com` the same way for search tasks: prefer `omp-web-operator search ...` over `curl`, because the browser workflow is far more reliable for rendered results, anti-bot handling, and stable extraction.
+- For `365.kdocs.cn`, prefer `omp-web-operator kdocs ask-ai` when the task is question answering, summarization, document lookup, or cross-document synthesis. Use `kdocs search`, `open-doc`, and `find-in-doc` when the task explicitly needs direct document inspection or keyword verification.
+
+## Preferred Command Map
+
+When a supported site appears in the task, start from these commands before considering any generic HTTP fallback:
+
+- Google: `omp-web-operator search google <query> [limit]`
+- Baidu: `omp-web-operator search baidu <query> [limit]`
+- Weixin-Sogou: `omp-web-operator search weixin-sogou <query> [limit]`
+- Reddit: `omp-web-operator search reddit <query> [limit]` then `omp-web-operator open-post reddit <url> [comment_limit]`
+- X: `omp-web-operator search x <query> [limit]` then `omp-web-operator open-post x <url>`
+- Xueqiu: `omp-web-operator search xueqiu <query> [limit]`, `omp-web-operator xueqiu hot [limit]`, or `omp-web-operator open-post xueqiu <url> [comment_limit]`
+- Taoguba: `omp-web-operator taoguba jinghua [hours] [limit]`, `omp-web-operator taoguba following [hours] [limit]`, or `omp-web-operator open-post taoguba <url>`
+- KDocs: `omp-web-operator kdocs ask-ai <question>`, or `kdocs search/open-doc/find-in-doc` for direct verification
 
 ## ✅ Automatic Tab Management
 
@@ -150,6 +167,7 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
 ### WPS 365 (365.kdocs.cn)
 
+- Prefer `omp-web-operator kdocs ask-ai <question> [target]` for document Q&A, summaries, fuzzy lookup, and multi-doc questions.
 - `omp-web-operator kdocs search <query> [limit] [target]`
   Search WPS 365 documents; returns snippets and version ranking.
 - `omp-web-operator kdocs open-doc <file_key> [main_target]`

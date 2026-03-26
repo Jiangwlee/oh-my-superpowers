@@ -10,6 +10,7 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 REFERENCES_DIR = SKILL_DIR / "references"
+EVALS_DIR = SKILL_DIR / "evals"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 
 REQUIRED_SCRIPTS = [
@@ -55,6 +56,14 @@ class TestSkillLayout(unittest.TestCase):
     def test_required_scripts_exist(self) -> None:
         for name in REQUIRED_SCRIPTS:
             self.assertTrue((SCRIPTS_DIR / name).exists(), f"missing script: {name}")
+
+    def test_evals_exist(self) -> None:
+        self.assertTrue((EVALS_DIR / "trigger-cases" / "README.md").exists())
+        self.assertTrue((EVALS_DIR / "output-quality" / "README.md").exists())
+
+    def test_trigger_case_samples_exist(self) -> None:
+        self.assertTrue((EVALS_DIR / "trigger-cases" / "should-trigger" / "01-deep-dive.txt").exists())
+        self.assertTrue((EVALS_DIR / "trigger-cases" / "should-not-trigger" / "01-single-fact.txt").exists())
 
 
 class TestSkillMd(unittest.TestCase):
