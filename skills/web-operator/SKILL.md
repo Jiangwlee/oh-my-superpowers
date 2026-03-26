@@ -80,6 +80,7 @@ Load site references for website-specific workflows:
 
 When a supported site appears in the task, start from these commands before considering any generic HTTP fallback:
 
+- **Any URL content**: `omp-web-operator read-url <url> [--limit N]` (preferred for reading article/page content)
 - **Multi-platform**: `omp-web-operator search-multi --<site> "<query>" [...] --limit N` (preferred for research tasks needing breadth)
 - Google: `omp-web-operator search google <query> [limit]`
 - Baidu: `omp-web-operator search baidu <query> [limit]`
@@ -137,6 +138,23 @@ wait
 ## Main Entrypoint
 
 All browser actions route through `omp-web-operator`. The underlying CDP engine is `scripts/cdp.mjs`.
+
+### Read URL Content
+
+- `omp-web-operator read-url <url> [--limit N]`
+  Read the main text content of any URL. Returns Markdown (when defuddle is available) or plain text.
+  Three-tier strategy:
+  1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to `open-post` for structured extraction
+  2. **Generic** → opens page in browser, extracts HTML via CDP, converts to Markdown via defuddle
+  3. **Fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
+
+  ```bash
+  # Read an article
+  omp-web-operator read-url "https://www.paulgraham.com/writes.html"
+
+  # Read with character limit
+  omp-web-operator read-url "https://arxiv.org/html/2603.23013v1" --limit 15000
+  ```
 
 ## Available Commands
 

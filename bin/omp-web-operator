@@ -30,6 +30,9 @@ Multi-platform parallel search:
   search-multi --<platform> "<query>" [...] [--limit N]
     e.g. search-multi --google "AI agents" --baidu "AI 智能体" --limit 5
 
+Read URL content (returns Markdown or plain text):
+  read-url <url> [--limit N]
+
 Open post (returns JSON object):
   open-post reddit  <url> [comment_limit] [target]
   open-post x       <url> [target]
@@ -73,6 +76,10 @@ case "$cmd" in
 
   search-multi)
     exec bash "${SKILL}/scripts/search-multi.sh" "$@"
+    ;;
+
+  read-url)
+    exec bash "${SKILL}/scripts/read-url.sh" "$@"
     ;;
 
   search)
