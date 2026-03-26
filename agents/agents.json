@@ -13,5 +13,15 @@
     "skills": [
       "@skills/media-editor/SKILL.md"
     ]
+  },
+  "researcher": {
+    "agent": "@agents/researcher.md",
+    "model": "litellm-local/qwen3.5-27b",
+    "skills": []
+  },
+  "wps-assistant": {
+    "agent": "@agents/wps-assistant.md",
+    "model": "litellm-local/qwen3.5-27b",
+    "skills": []
   }
 }
