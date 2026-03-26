@@ -30,6 +30,14 @@
 - 包含数据、案例、技术细节
 - 是多个来源反复提到的关键节点
 
+读全文统一使用：
+
+```bash
+omp-web-operator read-url <url> --limit 15000
+```
+
+该命令自动处理动态渲染页面，已适配站点（reddit/x/xueqiu/taoguba）走专用提取路径。不要手动拼凑 cdp 命令或使用 curl 读取页面。
+
 ## Multi-Language Search
 
 同一主题必须用中文和英文各搜至少一次。不同语言社区的信息差异往往很大。

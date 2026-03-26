@@ -79,7 +79,7 @@ model: claude-sonnet-4-6
 
 1. 选择 2-3 个互补平台和对应 query（中英文混合）
 2. 通过 `omp-web-operator search-multi` 并行搜索多个平台
-3. 对高价值结果，通过 `web-operator` 读取全文
+3. 对高价值结果，通过 `omp-web-operator read-url <url> [--limit N]` 读取全文
 4. 执行 `omp-deep-research save-source` 落盘来源（重复 URL 会自动去重）
 5. 执行 `omp-deep-research update-state` 更新研究状态（包括 source_note 的 credibility、language 等字段）
 6. 将已完成的 next_step 标记为 done（通过 `complete_next_step`）
