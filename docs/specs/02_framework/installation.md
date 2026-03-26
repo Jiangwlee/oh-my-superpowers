@@ -108,11 +108,21 @@ omp test <name>                   # 运行指定 skill 的 T1 测试
 ### run
 
 ```bash
-omp run <name> [--model TEXT] [prompt...]
+omp run <name> [--mode text|stream|json|interactive] [--model TEXT] [prompt...]
 # 示例：
 omp run media-editor 今天有什么 AI 动态
+omp run reviewer --mode stream review skills/foo
+omp run reviewer --mode json review skills/foo
+omp run reviewer --mode interactive 继续检查 skill 设计
 omp run reviewer --model litellm-local/qwen3.5-27b review skills/foo
 ```
+
+**模式语义：**
+
+- `text`（默认）：只输出最终 assistant 文本，适合 shell 管道和默认 CLI 调用
+- `stream`：输出彩色流式文本，包含 agent 文本增量、单行 tool 摘要、最终 usage 汇总；assistant 正文保留原始换行，message/tool 之间压缩为紧凑单换行
+- `json`：原样透传 `pi --mode json` 的 JSON lines，适合 Web 或其他宿主自己消费
+- `interactive`：直接打开 Pi TUI，可选 prompt 会作为首条消息自动发出
 
 ---
 

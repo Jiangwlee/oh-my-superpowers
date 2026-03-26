@@ -6,11 +6,11 @@
 # omp — oh-my-superpowers CLI
 #
 # Commands:
-#   install <skill|agent> <name> [--global]   安装 skill 或 agent
-#   remove  <skill|agent> <name> [--global]   卸载 skill 或 agent
-#   list    [--type skill|agent] [--global]   列出已安装的 skills 和 agents
-#   run     <name> [--model TEXT] [prompt...]  运行 Pi Agent
-#   test    <name>                             运行 skill T1 测试
+#   install <skill|agent> <name> [--global]                  安装 skill 或 agent
+#   remove  <skill|agent> <name> [--global]                  卸载 skill 或 agent
+#   list    [--type skill|agent] [--global]                  列出已安装的 skills 和 agents
+#   run     <name> [--mode text|stream|json|interactive]     运行 Pi Agent
+#   test    <name>                                           运行 skill T1 测试
 #
 # Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
 
@@ -18,23 +18,24 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
-from typing import Annotated
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
-OMP_HOME   = Path.home() / ".oh-my-superpowers"
+OMP_HOME = Path.home() / ".oh-my-superpowers"
 SKILLS_SRC = OMP_HOME / "skills"
 AGENTS_SRC = OMP_HOME / "agents"
 AGENTS_CFG = AGENTS_SRC / "agents.json"
+RUN_MODES = {"text", "stream", "json", "interactive"}
 
 # ── app setup ─────────────────────────────────────────────────────────────────
 
-console = Console(stderr=True)   # 日志输出到 stderr，Agent 输出到 stdout
+console = Console(stderr=True)
 app = typer.Typer(
     name="omp",
     help="oh-my-superpowers CLI",
@@ -43,6 +44,7 @@ app = typer.Typer(
 )
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _check_home() -> None:
     """检查 OMP_HOME 存在，否则 exit 1。"""
@@ -105,40 +107,24 @@ def _resolve_path(path_str: str) -> Path:
 
 
 def _extract_frontmatter_field(path: Path, field: str) -> str:
-    """从 Pi frontmatter 提取指定字段值。
-
-    Args:
-        path: Agent 文件路径。
-        field: 要提取的字段名。
-
-    Returns:
-        字段值字符串，未找到时返回空字符串。
-    """
+    """从 Pi frontmatter 提取指定字段值。"""
     in_front = False
     for line in path.read_text().splitlines():
         if line == "---":
             if not in_front:
                 in_front = True
                 continue
-            else:
-                break
+            break
         if in_front and line.startswith(f"{field}:"):
-            return line[len(f"{field}:"):].strip()
+            return line[len(f"{field}:") :].strip()
     return ""
 
 
 def _extract_system_prompt(path: Path) -> str:
-    """提取 Pi frontmatter 之后的 system prompt 内容。
-
-    Args:
-        path: Agent 文件路径。
-
-    Returns:
-        frontmatter 第二个 --- 之后的内容（去除首尾空白）。
-    """
+    """提取 Pi frontmatter 之后的 system prompt 内容。"""
     lines = path.read_text().splitlines()
     dash_count = 0
-    result = []
+    result: list[str] = []
     for line in lines:
         if line == "---":
             dash_count += 1
@@ -149,14 +135,7 @@ def _extract_system_prompt(path: Path) -> str:
 
 
 def _read_skill_description(skill_md: Path) -> str:
-    """从 SKILL.md frontmatter 提取 description 字段。
-
-    Args:
-        skill_md: SKILL.md 文件路径。
-
-    Returns:
-        description 字段内容，未找到时返回空字符串。
-    """
+    """从 SKILL.md frontmatter 提取 description 字段。"""
     if not skill_md.is_file():
         return ""
     in_front = False
@@ -168,33 +147,28 @@ def _read_skill_description(skill_md: Path) -> str:
             if not in_front:
                 in_front = True
                 continue
-            else:
-                break
+            break
         if in_front and line.startswith("description:"):
             in_desc = True
-            val = line[len("description:"):].strip().lstrip(">-").strip()
+            val = line[len("description:") :].strip().lstrip(">-").strip()
             if val:
                 lines.append(val)
         elif in_front and in_desc and line.startswith("  "):
             lines.append(line.strip())
         elif in_front and in_desc:
             break
-    max_desc = 120 - 33  # 2 spaces + name.ljust(30) + 1 space = 33 chars
+    max_desc = 120 - 33
     full = " ".join(lines)
     return full[:max_desc] + ("..." if len(full) > max_desc else "")
 
 
 def _list_not_installed_skills(install_dir: Path) -> None:
-    """列出 SKILLS_SRC 中有但 install_dir 中没有的 skill。
-
-    Args:
-        install_dir: 已安装 skills 的目录。
-    """
+    """列出 SKILLS_SRC 中有但 install_dir 中没有的 skill。"""
     if not SKILLS_SRC.is_dir():
         return
     installed = {p.name for p in install_dir.iterdir()} if install_dir.is_dir() else set()
     available = sorted(p.name for p in SKILLS_SRC.iterdir() if p.is_dir())
-    not_installed = [s for s in available if s not in installed]
+    not_installed = [skill for skill in available if skill not in installed]
     if not not_installed:
         return
     console.print("\n[bold]not installed[/bold] (available in source):")
@@ -218,65 +192,320 @@ def _list_available_agents() -> None:
         console.print(f"  {name:<25} model={model}  agent={resolved}  ({skills_display})")
 
 
-def _stream_verbose(proc: subprocess.Popen) -> int:
-    """读取 pi --mode json 输出，打印人类可读的流式文本到 stdout。
+def _supports_color() -> bool:
+    """是否为当前 stdout 启用 ANSI 颜色。"""
+    return sys.stdout.isatty()
 
-    Args:
-        proc: 已启动的 subprocess.Popen 对象（stdout=PIPE, text=True）。
 
-    Returns:
-        进程退出码。
-    """
-    for raw in proc.stdout:  # type: ignore
+def _ansi(text: str, code: str) -> str:
+    """按需应用 ANSI 颜色。"""
+    if not _supports_color():
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+def _write_stdout(text: str) -> None:
+    """写入 stdout 并立即 flush。"""
+    sys.stdout.write(text)
+    sys.stdout.flush()
+
+
+def _truncate(value: str, limit: int = 120) -> str:
+    """截断长文本用于单行摘要。"""
+    compact = " ".join(value.strip().split())
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[:limit - 3]}..."
+
+
+def _summarize_content(result: dict) -> str:
+    """从 tool result 中提取首选文本摘要。"""
+    for item in result.get("content", []):
+        if item.get("type") == "text":
+            text = item.get("text", "").strip()
+            if not text:
+                continue
+            lines = text.splitlines()
+            first_line = _truncate(lines[0], 100)
+            if len(lines) > 1:
+                return f"{first_line} (+{len(lines) - 1} lines)"
+            return first_line
+    return "no text output"
+
+
+def _summarize_args(args: dict) -> str:
+    """将工具参数压缩为单行摘要。"""
+    if not args:
+        return "-"
+    parts: list[str] = []
+    for key, value in args.items():
+        rendered = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        parts.append(f"{key}={_truncate(str(rendered), 80)}")
+    return " ".join(parts)
+
+
+def _extract_usage(message: dict) -> dict[str, int]:
+    """从 assistant message 中提取 usage。"""
+    usage = message.get("usage", {})
+    return {
+        "input": int(usage.get("input", 0) or 0),
+        "output": int(usage.get("output", 0) or 0),
+        "cacheRead": int(usage.get("cacheRead", 0) or 0),
+        "cacheWrite": int(usage.get("cacheWrite", 0) or 0),
+        "totalTokens": int(usage.get("totalTokens", 0) or 0),
+    }
+
+
+def _build_run_context(name: str, model: Optional[str]) -> dict:
+    """解析 agent 配置并构造统一的 run 上下文。"""
+    cfg = _read_agents_cfg()
+    entry = cfg.get(name)
+    if not entry:
+        console.print(f"[red][omp] ERROR:[/red] agent '{name}' not found in agents.json")
+        raise typer.Exit(1)
+
+    agent_path = _resolve_path(entry.get("agent", ""))
+    if not agent_path.is_file():
+        console.print(f"[red][omp] ERROR:[/red] agent file '{agent_path}' not found")
+        raise typer.Exit(1)
+
+    effective_model = model or entry.get("model", "litellm-local/qwen3.5-27b")
+    skill_flags: list[str] = []
+    for skill in entry.get("skills", []):
+        path = _resolve_path(skill)
+        skill_flags += ["--skill", str(path)]
+
+    tools = _extract_frontmatter_field(agent_path, "tools") or "bash,read"
+    tools = tools.replace(" ", "")
+    system_prompt = _extract_system_prompt(agent_path)
+    return {
+        "name": name,
+        "agent_path": agent_path,
+        "model": effective_model,
+        "skill_flags": skill_flags,
+        "tools": tools,
+        "system_prompt": system_prompt,
+    }
+
+
+def _build_pi_cmd(run_ctx: dict, mode: str, prompt_str: str) -> list[str]:
+    """根据 mode 构建对应的 pi 命令。"""
+    base = [
+        "pi",
+        "--no-session",
+        "--model",
+        run_ctx["model"],
+        "--tools",
+        run_ctx["tools"],
+        *run_ctx["skill_flags"],
+        "--system-prompt",
+        run_ctx["system_prompt"],
+    ]
+
+    if mode == "text":
+        return [*base, "--print", prompt_str]
+    if mode == "json":
+        return [*base, "--mode", "json", "--print", prompt_str]
+    if mode == "stream":
+        return [*base, "--mode", "json", "--print", prompt_str]
+    if mode == "interactive":
+        if prompt_str:
+            return [*base, prompt_str]
+        return base
+
+    raise ValueError(f"unsupported mode: {mode}")
+
+
+def _run_passthrough(cmd: list[str]) -> int:
+    """以继承 stdio 的方式运行子进程。"""
+    return subprocess.call(cmd)
+
+
+def _run_stream(cmd: list[str], run_ctx: dict) -> int:
+    """消费 pi JSON 事件并渲染为彩色流式文本。"""
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        stderr=None,
+        text=True,
+    )
+
+    start_ts = time.time()
+    in_text_stream = False
+    line_open = False
+    pending_trailing_newlines = ""
+    assistant_stream_open = False
+    tools_started = 0
+    tool_errors = 0
+    pending_tools: dict[str, dict] = {}
+    seen_usage_keys: set[str] = set()
+    usage_totals = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0}
+
+    header = (
+        f"{_ansi(f'[{time.strftime('%H:%M:%S')}]', '90')} "
+        f"agent={_ansi(run_ctx['name'], '1;36')} "
+        f"model={_ansi(run_ctx['model'], '90')} "
+        f"tools={_ansi(run_ctx['tools'], '90')} "
+        f"cwd={_ansi(str(Path.cwd()), '90')} "
+        f"session={_ansi('off', '90')}\n\n"
+    )
+    _write_stdout(header)
+    line_open = False
+
+    def ensure_line_closed() -> None:
+        nonlocal in_text_stream, line_open, pending_trailing_newlines, assistant_stream_open
+        if pending_trailing_newlines:
+            _write_stdout("\n")
+            pending_trailing_newlines = ""
+            line_open = False
+        if line_open:
+            _write_stdout("\n")
+            line_open = False
+        in_text_stream = False
+        assistant_stream_open = False
+
+    def flush_trailing_newlines(compact: bool) -> None:
+        nonlocal pending_trailing_newlines, line_open
+        if not pending_trailing_newlines:
+            return
+        if compact:
+            _write_stdout("\n")
+            line_open = False
+        else:
+            _write_stdout(pending_trailing_newlines)
+            line_open = pending_trailing_newlines[-1] != "\n"
+        pending_trailing_newlines = ""
+
+    def split_visible_and_trailing(delta: str) -> tuple[str, str]:
+        stripped = delta.rstrip("\n")
+        trailing = delta[len(stripped) :]
+        return stripped, trailing
+
+    def render_tool_line(status: str, tool_name: str, args_summary: str, summary: str) -> None:
+        """渲染单行 tool 摘要，使用灰阶纵线分隔。"""
+        status_display = "✓" if status == "done" else "✗"
+        status_color = "32" if status == "done" else "31"
+        line = (
+            f"  {_ansi(status_display, status_color)} "
+            f"{_ansi(tool_name, '37')}  "
+            f"{_ansi(args_summary, '90')}"
+        )
+        if summary:
+            line += f"  {_ansi(summary, '90')}"
+        _write_stdout(f"{line}\n")
+
+    for raw in proc.stdout or []:
         line = raw.strip()
         if not line:
             continue
+
         try:
             obj = json.loads(line)
-            t = obj.get("type", "")
+        except json.JSONDecodeError:
+            if in_text_stream:
+                _write_stdout("\n")
+                in_text_stream = False
+            _write_stdout(f"{line}\n")
+            continue
 
-            if t == "message_update":
-                evt = obj.get("assistantMessageEvent", {})
-                if evt.get("type") == "text_delta":
-                    sys.stdout.write(evt.get("delta", ""))
-                    sys.stdout.flush()
+        event_type = obj.get("type", "")
+        if event_type == "message_update":
+            evt = obj.get("assistantMessageEvent", {})
+            evt_type = evt.get("type", "")
+            if evt_type == "text_delta":
+                flush_trailing_newlines(compact=not assistant_stream_open)
+                if not in_text_stream:
+                    prefix = f"{_ansi(f'[{run_ctx['name']}]', '1;34')} "
+                    _write_stdout(prefix)
+                    in_text_stream = True
+                    line_open = True
+                assistant_stream_open = True
+                visible, trailing = split_visible_and_trailing(evt.get("delta", ""))
+                if visible:
+                    _write_stdout(visible)
+                    line_open = True
+                if trailing:
+                    pending_trailing_newlines += trailing
+            elif evt_type == "text_end" and in_text_stream:
+                in_text_stream = False
+                assistant_stream_open = False
 
-            elif t == "tool_execution_start":
-                name = obj.get("toolName", "tool")
-                args = obj.get("args", {})
-                first_val = str(next(iter(args.values()), ""))
-                first_line = first_val.split("\n")[0][:100]
-                sys.stdout.write(f"\n\033[90m▶ [{name}] {first_line}\033[0m\n")
-                sys.stdout.flush()
+        elif event_type == "tool_execution_start":
+            flush_trailing_newlines(compact=True)
+            ensure_line_closed()
+            tools_started += 1
+            tool_call_id = str(obj.get("toolCallId", ""))
+            pending_tools[tool_call_id] = {
+                "name": obj.get("toolName", "tool"),
+                "args_summary": _summarize_args(obj.get("args", {})),
+            }
 
-            elif t == "tool_execution_end":
-                if obj.get("isError", False):
-                    sys.stdout.write("\033[31m✗ tool error\033[0m\n")
-                else:
-                    lines: list[str] = []
-                    for item in obj.get("result", {}).get("content", []):
-                        if item.get("type") == "text":
-                            lines = item["text"].strip().split("\n")
-                            break
-                    if lines and lines[0]:
-                        preview = lines[0][:100]
-                        more = f" (+{len(lines) - 1} lines)" if len(lines) > 1 else ""
-                        sys.stdout.write(f"\033[90m◀ {preview}{more}\033[0m\n")
-                sys.stdout.flush()
-        except Exception:
-            pass
+        elif event_type == "tool_execution_end":
+            flush_trailing_newlines(compact=True)
+            ensure_line_closed()
+            tool_call_id = str(obj.get("toolCallId", ""))
+            tool_info = pending_tools.pop(tool_call_id, {})
+            tool_name = tool_info.get("name", obj.get("toolName", "tool"))
+            args_summary = tool_info.get("args_summary", _summarize_args(obj.get("args", {})))
+            summary = _summarize_content(obj.get("result", {}))
+            if obj.get("isError", False):
+                tool_errors += 1
+                render_tool_line("error", tool_name, args_summary, summary)
+            else:
+                render_tool_line("done", tool_name, args_summary, summary)
 
-    sys.stdout.write("\n")
-    sys.stdout.flush()
+        elif event_type == "message_end":
+            message = obj.get("message", {})
+            if message.get("role") == "assistant":
+                assistant_stream_open = False
+                usage_key = str(message.get("responseId") or message.get("timestamp") or id(message))
+                if usage_key not in seen_usage_keys:
+                    seen_usage_keys.add(usage_key)
+                    usage = _extract_usage(message)
+                    for key, value in usage.items():
+                        usage_totals[key] += value
+
+    ensure_line_closed()
+
     proc.wait()
+    duration = time.time() - start_ts
+    status_label = "done" if proc.returncode == 0 else "error"
+    status_code = "32" if proc.returncode == 0 else "31"
+    footer = (
+        "\n"
+        f"{_ansi(f'[{status_label}]', status_code)} "
+        f"{duration:.1f}s  "
+        f"tools={tools_started}  "
+        f"errors={tool_errors}  "
+        f"tokens=in:{usage_totals['input']} "
+        f"out:{usage_totals['output']} "
+        f"total:{usage_totals['totalTokens']} "
+        f"cache_r:{usage_totals['cacheRead']} "
+        f"cache_w:{usage_totals['cacheWrite']}\n"
+    )
+    _write_stdout(footer)
     return proc.returncode
 
+
+def _validate_run_mode(mode: str) -> str:
+    """校验 run mode。"""
+    normalized = mode.strip().lower()
+    if normalized not in RUN_MODES:
+        console.print(
+            f"[red][omp] ERROR:[/red] unknown mode '{mode}': use one of {', '.join(sorted(RUN_MODES))}"
+        )
+        raise typer.Exit(1)
+    return normalized
+
+
 # ── commands ──────────────────────────────────────────────────────────────────
+
 
 @app.command()
 def install(
     type_: Annotated[str, typer.Argument(metavar="skill|agent", help="skill 或 agent")],
-    name:  Annotated[str, typer.Argument(help="名称")],
+    name: Annotated[str, typer.Argument(help="名称")],
     global_: Annotated[bool, typer.Option("--global", "-g", help="全局安装（默认局部）")] = False,
 ) -> None:
     """安装 skill 或 agent。"""
@@ -305,7 +534,7 @@ def install(
 @app.command()
 def remove(
     type_: Annotated[str, typer.Argument(metavar="skill|agent", help="skill 或 agent")],
-    name:  Annotated[str, typer.Argument(help="名称")],
+    name: Annotated[str, typer.Argument(help="名称")],
     global_: Annotated[bool, typer.Option("--global", "-g", help="全局安装")] = False,
 ) -> None:
     """卸载 skill 或 agent。"""
@@ -324,7 +553,7 @@ def remove(
 
 @app.command(name="list")
 def list_cmd(
-    type_:   Annotated[Optional[str], typer.Option("--type", "-t", metavar="skill|agent", help="过滤类型")] = None,
+    type_: Annotated[Optional[str], typer.Option("--type", "-t", metavar="skill|agent", help="过滤类型")] = None,
     global_: Annotated[bool, typer.Option("--global", "-g", help="显示全局安装")] = False,
 ) -> None:
     """列出已安装的 skills 和 agents。"""
@@ -336,7 +565,7 @@ def list_cmd(
 
     if show_skills:
         _list_not_installed_skills(base / ".agents" / "skills")
-        _list_dir("skills [Pi]",     base / ".agents" / "skills")
+        _list_dir("skills [Pi]", base / ".agents" / "skills")
         _list_dir("skills [Claude]", base / ".claude" / "skills")
 
     if show_agents:
@@ -346,59 +575,39 @@ def list_cmd(
 
 @app.command()
 def run(
-    name:   Annotated[str, typer.Argument(help="Agent 名称")],
-    model:  Annotated[Optional[str], typer.Option("--model", "-m", help="LLM 模型（覆盖 agents.json）")] = None,
+    name: Annotated[str, typer.Argument(help="Agent 名称")],
+    mode: Annotated[
+        str,
+        typer.Option(
+            "--mode",
+            help="运行模式：text（默认最终文本）/ stream（彩色流式文本）/ json（原始事件流）/ interactive（Pi TUI）",
+        ),
+    ] = "text",
+    model: Annotated[Optional[str], typer.Option("--model", "-m", help="LLM 模型（覆盖 agents.json）")] = None,
     prompt: Annotated[Optional[list[str]], typer.Argument(help="提示词（多词无需引号）")] = None,
 ) -> None:
-    """运行 Pi Agent（通过 pi CLI）。"""
+    """运行 Pi Agent。"""
     _check_home()
-    prompt_str = " ".join(prompt or [])
-    if not prompt_str.strip():
-        console.print("[red][omp] ERROR:[/red] prompt is required")
+    run_mode = _validate_run_mode(mode)
+    prompt_str = " ".join(prompt or []).strip()
+    if run_mode != "interactive" and not prompt_str:
+        console.print(f"[red][omp] ERROR:[/red] prompt is required in {run_mode} mode")
         raise typer.Exit(1)
 
-    cfg = _read_agents_cfg()
-    entry = cfg.get(name)
-    if not entry:
-        console.print(f"[red][omp] ERROR:[/red] agent '{name}' not found in agents.json")
-        raise typer.Exit(1)
-
-    agent_path = _resolve_path(entry.get("agent", ""))
-    if not agent_path.is_file():
-        console.print(f"[red][omp] ERROR:[/red] agent file '{agent_path}' not found")
-        raise typer.Exit(1)
-
-    effective_model = model or entry.get("model", "litellm-local/qwen3.5-27b")
-
-    # 解析 skills
-    skill_flags: list[str] = []
-    for s in entry.get("skills", []):
-        p = _resolve_path(s)
-        skill_flags += ["--skill", str(p)]
-
-    # 从 frontmatter 提取 tools
-    tools = _extract_frontmatter_field(agent_path, "tools") or "bash,read"
-    tools = tools.replace(" ", "")
-
-    # 提取 system prompt（第二个 --- 之后的内容）
-    system_prompt = _extract_system_prompt(agent_path)
-
-    skills_display = f"{len(skill_flags) // 2} agent-specific skills" if skill_flags else "no agent-specific skills"
-    console.print(f"[omp] agent: [bold]{name}[/bold] | model: {effective_model} | tools: {tools} | {skills_display}")
+    run_ctx = _build_run_context(name, model)
+    skills_count = len(run_ctx["skill_flags"]) // 2
+    skills_display = f"{skills_count} agent-specific skills" if skills_count else "no agent-specific skills"
+    console.print(
+        f"[omp] agent: [bold]{name}[/bold] | mode: {run_mode} | model: {run_ctx['model']} | "
+        f"tools: {run_ctx['tools']} | {skills_display}"
+    )
     console.print("")
 
-    cmd = [
-        "pi", "--mode", "json",
-        "--no-session",
-        "--model", effective_model,
-        "--tools", tools,
-        *skill_flags,
-        "--system-prompt", system_prompt,
-        "-p", prompt_str,
-    ]
-
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)
-    rc = _stream_verbose(proc)
+    cmd = _build_pi_cmd(run_ctx, run_mode, prompt_str)
+    if run_mode == "stream":
+        rc = _run_stream(cmd, run_ctx)
+    else:
+        rc = _run_passthrough(cmd)
     raise typer.Exit(rc)
 
 
@@ -421,8 +630,6 @@ def test(
         )
     raise typer.Exit(rc)
 
-
-# ── entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     app()
