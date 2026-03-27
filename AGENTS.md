@@ -207,3 +207,17 @@ exec bash "${SCRIPT_DIR}/../skills/web-operator/scripts/..."
 - [Skills 规范](docs/specs/00_skills/README.md)：Skills 开发核心原则 + 详细文档索引
 - [Pi Agents 规范](docs/specs/01_agents/README.md)：Agent 身份审问 + Pi 框架索引
 - [Framework 规范](docs/specs/02_framework/README.md)：架构、安装设计索引
+
+## 开源项目参考
+
+- [SkillsIndex](~/Github/SkillsIndex.md)：当用户需要一个新的skills，首先看看优秀开源项目中是否已经存在？再跟客户讨论需求是否已经被开源项目满足
+- [Pi Coding Agent](~/Github/pi-mono): Pi coding agent的官方代码仓库
+- [Obsidian](~/Obsidian/): 用户的`Obsidian`笔记，经常看看笔记目录
+
+## Deep Research
+
+如果一个问题需要网络搜索/社交媒体等更多出道的输入，请使用`omp run researcher`命令，比如：
+
+```bash
+omp run researcher -m litellm-local/qwen3.5-27b --mode stream "请快速研究下Claude Code的记忆机制"
+```

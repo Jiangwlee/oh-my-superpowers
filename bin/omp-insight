@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# omp-insight — Insight 经验洞察 CLI
+#
+# 从 Claude Code/Codex/Pi 对话中提取高质量经验洞察（behavioral delta），
+# 替代 ECC instinct 系统。
+#
+# 子命令:
+#   extract [--runtime RUNTIME] [--since DATE] [--dry-run]  从会话中提取 insight
+#   search QUERY [--scope SCOPE] [--top-k N]                检索相关 insight
+#   list [--scope SCOPE] [--sort FIELD] [--limit N]         列出已有 insight
+#   show INSIGHT_ID                                         查看 insight 详情
+#   promote INSIGHT_ID                                      提升到 user 级
+#   stats                                                   统计信息
+#
+# 环境变量:
+#   OMP_HOME  oh-my-superpowers 安装路径（默认 ~/.oh-my-superpowers）
+
+set -euo pipefail
+
+SKILL="${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/insight"
+
+exec python3 "$SKILL/scripts/cli.py" "$@"
