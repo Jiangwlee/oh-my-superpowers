@@ -11,6 +11,8 @@
 #   post-message <role> <file> [opts]  追加消息
 #   spawn <round-number>               并行启动参与者
 #   end [--output-dir <path>]          结束讨论，生成文档
+#   watch [round] [-f] [-n lines]      实时查看参与者输出
+#   attach                             连接 tmux session
 #
 # 环境变量:
 #   ROUND_TABLE_SESSION  指定 session-id（未设置则用最新的）
@@ -49,6 +51,14 @@ case "${1:-}" in
     shift
     exec bash "$SKILL/scripts/session.sh" status "$@"
     ;;
+  watch)
+    shift
+    exec bash "$SKILL/scripts/session.sh" watch "$@"
+    ;;
+  attach)
+    shift
+    exec bash "$SKILL/scripts/session.sh" attach "$@"
+    ;;
   --help|-h|help)
     echo "Usage: omp-round-table <command> [args]"
     echo ""
@@ -60,6 +70,8 @@ case "${1:-}" in
     echo "  spawn <round-number>               并行启动所有参与者"
     echo "  end [--output-dir <path>]          结束讨论，生成最终文档"
     echo "  status                             查看当前 session 状态"
+    echo "  watch [round] [-f] [-n lines]      实时查看参与者输出"
+    echo "  attach                             连接 tmux session（直接观看）"
     echo ""
     echo "Environment:"
     echo "  ROUND_TABLE_SESSION  指定 session-id（默认使用最新）"

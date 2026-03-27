@@ -48,22 +48,23 @@ _build_runtime_cmd() {
   local output_file="$4"
 
   if [[ "$RT_MOCK_RUNTIME" == "1" ]]; then
-    echo "echo 'mock response' > '$output_file'"
+    echo "echo 'mock response' | tee '$output_file'"
     return
   fi
 
+  # 使用 tee 同时输出到文件和 tmux 窗口，实现实时可观测
   case "$runtime" in
     claude)
-      echo "cat '$prompt_file' | claude -p --model '$model' > '$output_file' 2>&1"
+      echo "cat '$prompt_file' | claude -p --model '$model' 2>&1 | tee '$output_file'"
       ;;
     codex)
-      echo "codex exec \"\$(cat '$prompt_file')\" > '$output_file' 2>&1"
+      echo "codex exec \"\$(cat '$prompt_file')\" 2>&1 | tee '$output_file'"
       ;;
     pi)
-      echo "pi -p \"\$(cat '$prompt_file')\" --model '$model' > '$output_file' 2>&1"
+      echo "pi -p \"\$(cat '$prompt_file')\" --model '$model' 2>&1 | tee '$output_file'"
       ;;
     *)
-      echo "echo '错误：未知 runtime: $runtime' > '$output_file'"
+      echo "echo '错误：未知 runtime: $runtime' | tee '$output_file'"
       ;;
   esac
 }
@@ -124,6 +125,13 @@ main() {
   local sid
   sid=$(jq -r '.session_id' "$meta")
   local tmux_session="rt-${sid}"
+
+  # 更新 current_round
+  local current
+  current=$(jq -r '.current_round' "$meta")
+  if [[ "$round" -gt "$current" ]]; then
+    jq --argjson r "$round" '.current_round = $r' "$meta" > "$meta.tmp" && mv "$meta.tmp" "$meta"
+  fi
 
   # 创建 tmux session（如果不存在）
   if ! tmux has-session -t "$tmux_session" 2>/dev/null; then
@@ -193,6 +201,8 @@ main() {
   # 等待所有参与者完成
   echo ""
   echo "等待所有参与者完成（超时: ${RT_TIMEOUT}s）..."
+  echo "提示：运行 omp-round-table watch 实时查看输出，或 omp-round-table attach 进入 tmux"
+  echo ""
 
   local elapsed=0
   local check_interval=5
@@ -218,7 +228,39 @@ main() {
 
     sleep "$check_interval"
     elapsed=$((elapsed + check_interval))
-    echo "  ... 已等待 ${elapsed}s，剩余 ${active_windows} 个参与者"
+
+    # 显示每个参与者的实时状态
+    local status_line=""
+    for i in $(seq 0 $((participant_count - 1))); do
+      local rid rname
+      rid=$(jq -r ".participants[$i].id" "$meta")
+      rname=$(jq -r ".participants[$i].name" "$meta")
+      local ofile="$responses_dir/round-${round}-${rid}.md"
+
+      # 检查 tmux window 是否还在运行
+      local is_active=false
+      if _list_participant_windows "$tmux_session" | grep -qx "$rid" 2>/dev/null; then
+        is_active=true
+      fi
+
+      if [[ -f "$ofile" ]] && [[ -s "$ofile" ]]; then
+        local wc_chars
+        wc_chars=$(wc -c < "$ofile")
+        if $is_active; then
+          status_line+="  ✍️  ${rname} 思考中（${wc_chars} 字节）"
+        else
+          status_line+="  ✅ ${rname} 完成（${wc_chars} 字节）"
+        fi
+      elif $is_active; then
+        status_line+="  ⏳ ${rname} 等待模型响应..."
+      else
+        status_line+="  ❌ ${rname} 异常退出"
+      fi
+      status_line+=$'\n'
+    done
+
+    echo "[${elapsed}s/${RT_TIMEOUT}s] 剩余 ${active_windows} 个参与者"
+    echo "$status_line"
   done
 
   # 收集结果

@@ -390,6 +390,116 @@ cmd_status() {
   jq -r '"Session:      \(.session_id)\nTopic:        \(.topic)\nStatus:       \(.status)\nRound:        \(.current_round)\nParticipants: \(.participants | length)\nCreated:      \(.created_at)"' "$meta"
 }
 
+cmd_watch() {
+  local session_dir
+  session_dir=$(_session_dir)
+  local meta="$session_dir/meta.json"
+  local responses_dir="$session_dir/responses"
+
+  local sid
+  sid=$(jq -r '.session_id' "$meta")
+  local current_round
+  current_round=$(jq -r '.current_round' "$meta")
+  local topic
+  topic=$(jq -r '.topic' "$meta")
+  local tmux_session="rt-${sid}"
+
+  # 解析参数
+  local round="$current_round"
+  local follow=false
+  local tail_lines=20
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--follow) follow=true; shift ;;
+      -n)          tail_lines="$2"; shift 2 ;;
+      [0-9]*)      round="$1"; shift ;;
+      *)           shift ;;
+    esac
+  done
+
+  echo "╔══════════════════════════════════════════════════════════╗"
+  echo "║  🎙️  Round Table Watch — Round ${round}"
+  echo "║  📋 ${topic}"
+  echo "╚══════════════════════════════════════════════════════════╝"
+  echo ""
+
+  # 显示每个参与者的当前输出
+  local participant_count
+  participant_count=$(jq '.participants | length' "$meta")
+
+  local has_output=false
+  local active_files=()
+
+  for i in $(seq 0 $((participant_count - 1))); do
+    local role_id name runtime model
+    role_id=$(jq -r ".participants[$i].id" "$meta")
+    name=$(jq -r ".participants[$i].name" "$meta")
+    runtime=$(jq -r ".participants[$i].runtime" "$meta")
+    model=$(jq -r ".participants[$i].model" "$meta")
+    local ofile="$responses_dir/round-${round}-${role_id}.md"
+
+    # 检查 tmux window 是否活跃
+    local status_icon="❌"
+    if tmux has-session -t "$tmux_session" 2>/dev/null; then
+      if tmux list-windows -t "$tmux_session" -F '#{window_name}' 2>/dev/null | grep -qx "$role_id"; then
+        status_icon="✍️"
+      elif [[ -f "$ofile" ]] && [[ -s "$ofile" ]]; then
+        status_icon="✅"
+      fi
+    elif [[ -f "$ofile" ]] && [[ -s "$ofile" ]]; then
+      status_icon="✅"
+    fi
+
+    echo "┌─ ${status_icon} ${name} (${runtime}/${model})"
+    echo "│"
+
+    if [[ -f "$ofile" ]] && [[ -s "$ofile" ]]; then
+      has_output=true
+      # 显示尾部内容，带缩进
+      tail -n "$tail_lines" "$ofile" | sed 's/^/│  /'
+      local wc_chars
+      wc_chars=$(wc -c < "$ofile")
+      echo "│"
+      echo "│  [${wc_chars} 字节]"
+      active_files+=("$ofile")
+    else
+      echo "│  （尚无输出）"
+    fi
+
+    echo "└──────────────────────────────────────"
+    echo ""
+  done
+
+  # follow 模式：持续监听输出变化
+  if $follow && [[ ${#active_files[@]} -gt 0 ]]; then
+    echo "━━━ 实时流（Ctrl+C 退出）━━━"
+    echo ""
+    # 用 tail -f 追踪所有输出文件
+    tail -f "${active_files[@]}" 2>/dev/null
+  elif $follow; then
+    echo "暂无输出文件可追踪。参与者可能尚未启动。"
+  fi
+}
+
+cmd_attach() {
+  local session_dir
+  session_dir=$(_session_dir)
+  local meta="$session_dir/meta.json"
+  local sid
+  sid=$(jq -r '.session_id' "$meta")
+  local tmux_session="rt-${sid}"
+
+  if ! tmux has-session -t "$tmux_session" 2>/dev/null; then
+    echo "错误：tmux session '$tmux_session' 不存在（参与者可能已全部完成）。" >&2
+    echo "提示：使用 omp-round-table watch 查看已完成的输出。" >&2
+    exit 1
+  fi
+
+  echo "正在连接 tmux session: $tmux_session"
+  echo "提示：Ctrl+B D 退出（不终止参与者）"
+  exec tmux attach -t "$tmux_session"
+}
+
 # --- 主入口 ---
 
 cmd="${1:-}"
@@ -402,8 +512,10 @@ case "$cmd" in
   post-message) cmd_post_message "$@" ;;
   end)          cmd_end "$@" ;;
   status)       cmd_status "$@" ;;
+  watch)        cmd_watch "$@" ;;
+  attach)       cmd_attach "$@" ;;
   *)
-    echo "用法：session.sh <init|get-context|get-messages|post-message|end|status> [args]" >&2
+    echo "用法：session.sh <init|get-context|get-messages|post-message|end|status|watch|attach> [args]" >&2
     exit 1
     ;;
 esac

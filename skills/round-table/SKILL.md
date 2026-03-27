@@ -32,6 +32,8 @@ omp-round-table post-message <role> <file> [opts]   # 追加消息
 omp-round-table spawn <round-number>                # 并行启动参与者
 omp-round-table end [--output-dir <path>]           # 结束，生成文档
 omp-round-table status                              # 查看 session 状态
+omp-round-table watch [round] [-f] [-n lines]       # 实时查看参与者输出
+omp-round-table attach                              # 连接 tmux session 直接观看
 ```
 
 ## Orchestrator SOP
