@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# omp-round-table — Round Table 圆桌讨论 CLI
+#
+# 多 AI runtime 圆桌讨论工具。通过 claude/codex/pi 并行运行不同模型，
+# 以历史名人身份进行多轮结构化辩论。
+#
+# 子命令:
+#   start <topic>                      创建 session
+#   get-context <brief|detail>         获取背景上下文
+#   get-messages [msg-id]              获取消息（无参数: 摘要+最近一轮; 有参数: 指定消息详情）
+#   post-message <role> <file> [opts]  追加消息
+#   spawn <round-number>               并行启动参与者
+#   end [--output-dir <path>]          结束讨论，生成文档
+#
+# 环境变量:
+#   ROUND_TABLE_SESSION  指定 session-id（未设置则用最新的）
+#   OMP_HOME             oh-my-superpowers 安装路径（默认 ~/.oh-my-superpowers）
+
+set -euo pipefail
+
+SKILL="${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/round-table"
+
+case "${1:-}" in
+  start)
+    shift
+    exec bash "$SKILL/scripts/session.sh" init "$@"
+    ;;
+  get-context)
+    shift
+    exec bash "$SKILL/scripts/session.sh" get-context "$@"
+    ;;
+  get-messages)
+    shift
+    exec bash "$SKILL/scripts/session.sh" get-messages "$@"
+    ;;
+  post-message)
+    shift
+    exec bash "$SKILL/scripts/session.sh" post-message "$@"
+    ;;
+  spawn)
+    shift
+    exec bash "$SKILL/scripts/spawn.sh" "$@"
+    ;;
+  end)
+    shift
+    exec bash "$SKILL/scripts/session.sh" end "$@"
+    ;;
+  status)
+    shift
+    exec bash "$SKILL/scripts/session.sh" status "$@"
+    ;;
+  --help|-h|help)
+    echo "Usage: omp-round-table <command> [args]"
+    echo ""
+    echo "Commands:"
+    echo "  start <topic>                      创建新的圆桌讨论 session"
+    echo "  get-context <brief|detail>         获取讨论背景上下文"
+    echo "  get-messages [msg-id]              获取消息记录"
+    echo "  post-message <role> <file> [opts]  追加消息到 session"
+    echo "  spawn <round-number>               并行启动所有参与者"
+    echo "  end [--output-dir <path>]          结束讨论，生成最终文档"
+    echo "  status                             查看当前 session 状态"
+    echo ""
+    echo "Environment:"
+    echo "  ROUND_TABLE_SESSION  指定 session-id（默认使用最新）"
+    ;;
+  *)
+    echo "omp-round-table: unknown command '${1:-}'" >&2
+    echo "Run 'omp-round-table --help' for usage." >&2
+    exit 1
+    ;;
+esac

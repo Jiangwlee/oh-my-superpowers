@@ -29,6 +29,7 @@ CLI            ← omp 命令（安装/卸载/测试）
 ```
 skills/                   # Skill 单元（每个独立）
 ├── markdown-to-anything/ # Markdown 转 PDF/PNG 等格式
+├── round-table/          # 多 AI runtime 圆桌讨论（claude/codex/pi 并行）
 └── <skill-name>/
     ├── SKILL.md          # 元数据 + CLI 命令文档（不写相对路径）
     ├── scripts/          # 脚本（CLI 封装的实现，不直接被模型调用）
