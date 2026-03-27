@@ -15,6 +15,7 @@ set -euo pipefail
 
 # --- 常量与路径 ---
 RT_DATA_DIR="${RT_DATA_DIR:-$HOME/.local/share/oh-my-superpowers/round-table}"
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # 检查 jq 依赖
 if ! command -v jq &>/dev/null; then
@@ -53,17 +54,21 @@ _next_msg_id() {
 cmd_init() {
   local topic="${1:-}"
   if [[ -z "$topic" ]]; then
-    echo "用法：session.sh init <topic> [--participants <json>]" >&2
-    echo "示例：session.sh init '是否需要独立 Agent 框架'" >&2
+    echo "用法：session.sh init <topic> [--roles <id1,id2,...>] [--participants <json>] [--context <text|file>]" >&2
+    echo "示例：session.sh init '是否需要独立 Agent 框架' --roles linus-torvalds,alan-kay,elon-musk" >&2
     exit 1
   fi
 
   # 解析可选参数
   local participants='[]'
+  local roles=""
+  local context_input=""
   shift
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --participants) participants="$2"; shift 2 ;;
+      --roles)        roles="$2"; shift 2 ;;
+      --context)      context_input="$2"; shift 2 ;;
       *) echo "未知参数: $1" >&2; exit 1 ;;
     esac
   done
@@ -74,6 +79,70 @@ cmd_init() {
 
   local session_dir="$RT_DATA_DIR/$session_id"
   mkdir -p "$session_dir"/{participants,responses}
+
+  # --- 内置角色查找表 ---
+  if [[ -n "$roles" ]]; then
+    declare -A _ROLE_NAME=(
+      [steve-jobs]="Steve Jobs"
+      [elon-musk]="Elon Musk"
+      [linus-torvalds]="Linus Torvalds"
+      [alan-kay]="Alan Kay"
+      [andrej-karpathy]="Andrej Karpathy"
+      [richard-stallman]="Richard Stallman"
+    )
+    declare -A _ROLE_LABEL=(
+      [steve-jobs]="产品视觉家"
+      [elon-musk]="第一性原理工程"
+      [linus-torvalds]="务实开发者"
+      [alan-kay]="系统思想家"
+      [andrej-karpathy]="AI 架构师"
+      [richard-stallman]="魔鬼代言人"
+    )
+    declare -A _ROLE_RUNTIME=(
+      [steve-jobs]="claude"
+      [elon-musk]="codex"
+      [linus-torvalds]="pi"
+      [alan-kay]="claude"
+      [andrej-karpathy]="claude"
+      [richard-stallman]="codex"
+    )
+    declare -A _ROLE_MODEL=(
+      [steve-jobs]="opus"
+      [elon-musk]="gpt-5.4"
+      [linus-torvalds]="qwen3.5-27b"
+      [alan-kay]="sonnet"
+      [andrej-karpathy]="sonnet"
+      [richard-stallman]="gpt-5.4"
+    )
+
+    participants='[]'
+    IFS=',' read -ra role_list <<< "$roles"
+    for role_id in "${role_list[@]}"; do
+      role_id=$(echo "$role_id" | xargs)  # trim whitespace
+      local name="${_ROLE_NAME[$role_id]:-}"
+      if [[ -z "$name" ]]; then
+        echo "警告：未知内置角色 '$role_id'，跳过。可用角色: ${!_ROLE_NAME[*]}" >&2
+        continue
+      fi
+
+      # 构建 participant JSON
+      participants=$(echo "$participants" | jq \
+        --arg id "$role_id" \
+        --arg name "$name" \
+        --arg role "${_ROLE_LABEL[$role_id]}" \
+        --arg runtime "${_ROLE_RUNTIME[$role_id]}" \
+        --arg model "${_ROLE_MODEL[$role_id]}" \
+        '. + [{id: $id, name: $name, role: $role, runtime: $runtime, model: $model}]')
+
+      # 拷贝预置 prompt 文件
+      local prompt_src="$SKILL_DIR/references/prompts/${role_id}.md"
+      if [[ -f "$prompt_src" ]]; then
+        cp "$prompt_src" "$session_dir/participants/${role_id}.md"
+      else
+        echo "警告：预置 prompt 不存在: $prompt_src（需要手动创建 participants/${role_id}.md）" >&2
+      fi
+    done
+  fi
 
   # 写入 meta.json
   jq -n \
@@ -95,6 +164,17 @@ cmd_init() {
   echo "# 讨论背景" > "$session_dir/context.md"
   echo "" >> "$session_dir/context.md"
   echo "**议题**：$topic" >> "$session_dir/context.md"
+
+  # 写入额外 context
+  if [[ -n "$context_input" ]]; then
+    echo "" >> "$session_dir/context.md"
+    if [[ -f "$context_input" ]]; then
+      cat "$context_input" >> "$session_dir/context.md"
+    else
+      echo "$context_input" >> "$session_dir/context.md"
+    fi
+  fi
+
   echo "# 讨论计划" > "$session_dir/plan.md"
 
   # 输出 session-id（供 orchestrator 捕获）

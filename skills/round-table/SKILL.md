@@ -1,13 +1,9 @@
 ---
 name: round-table
 description: >-
-  Use when a software design, AI agent architecture, or technical strategy
-  topic needs structured multi-perspective debate from multiple AI runtimes
-  (claude/codex/pi) running different models in parallel. Orchestrates a real
-  multi-agent roundtable with historical figure personas, shared context
-  management, and iterative user participation.
-  Do NOT use for quick Q&A, single-perspective analysis, code generation,
-  or topics that don't benefit from adversarial multi-viewpoint debate.
+  Multi-perspective roundtable debate using multiple AI runtimes (claude/codex/pi)
+  with historical figure personas. Use when a topic benefits from adversarial
+  multi-viewpoint discussion.
 ---
 
 ## Usage
@@ -25,15 +21,21 @@ Assistant: [启动 round-table，选取相关角色进行多视角辩论]
 ## CLI
 
 ```bash
-omp-round-table start <topic>                      # 创建 session
-omp-round-table get-context <brief|detail>          # 获取背景上下文
-omp-round-table get-messages [msg-id]               # 获取消息记录
-omp-round-table post-message <role> <file> [opts]   # 追加消息
-omp-round-table spawn <round-number>                # 并行启动参与者
-omp-round-table end [--output-dir <path>]           # 结束，生成文档
-omp-round-table status                              # 查看 session 状态
-omp-round-table watch [round] [-f] [-n lines]       # 实时查看参与者输出
-omp-round-table attach                              # 连接 tmux session 直接观看
+# session 子命令
+omp-round-table session init <topic>               # 创建 session
+omp-round-table session end [--output-dir <path>]  # 结束，生成文档
+omp-round-table session status                     # 查看 session 状态
+omp-round-table session context <brief|detail>     # 获取背景上下文
+omp-round-table session messages [msg-id]          # 获取消息记录
+
+# round 子命令
+omp-round-table round spawn [round-number]         # 并行启动参与者（轮次可省略，自动推断）
+omp-round-table round collect                      # 收集参与者回复并写入 session
+omp-round-table round watch [round] [-f] [-n lines] # 实时查看参与者输出
+omp-round-table round attach                       # 连接 tmux session 直接观看
+
+# 通用
+omp-round-table post-message <role> <file> [opts]  # 追加消息
 ```
 
 ## Orchestrator SOP
@@ -48,7 +50,7 @@ omp-round-table attach                              # 连接 tmux session 直接
 
 ```bash
 # 创建 session（输出 session-id）
-export ROUND_TABLE_SESSION=$(omp-round-table start "<topic>")
+export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>")
 ```
 
 - 根据议题从角色库选 3-5 人
@@ -61,22 +63,12 @@ export ROUND_TABLE_SESSION=$(omp-round-table start "<topic>")
 
 > 详细流程见 `references/discussion-flow.md`
 
-**a. 构建 prompt**（见 `references/prompt-templates.md`）
-
-四层拼接：角色身份 + 讨论背景 + 对话历史 + 本轮指令
-
-**b. 启动参与者**
+**a. 启动并收集**
 
 ```bash
-omp-round-table spawn <round-number>
-```
-
-**c. 收集回复**
-
-```bash
-# 对每个参与者的 response 文件
-omp-round-table post-message <role-id> <response-file> \
-  --round N --name "人物名" --action "行动标签" --summary "一句话"
+omp-round-table round run
+# 自动完成：构建四层 prompt → 并行启动参与者 → 等待完成 → 解析 response → post-message
+# 返回 JSON：每个参与者的 action 和 summary
 ```
 
 **d. 综述**
@@ -112,7 +104,7 @@ omp-round-table post-message user <user-input-file> \
 ### 4. 结束
 
 ```bash
-omp-round-table end --output-dir "$(pwd)/docs/round-table"
+omp-round-table session end --output-dir "$(pwd)/docs/round-table"
 ```
 
 生成最终文档，包含：背景、各轮讨论记录、最终结论、未解决问题、行动建议。

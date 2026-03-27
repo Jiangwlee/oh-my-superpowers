@@ -1,84 +1,89 @@
 #!/usr/bin/env bash
 # omp-round-table — Round Table 圆桌讨论 CLI
 #
-# 多 AI runtime 圆桌讨论工具。通过 claude/codex/pi 并行运行不同模型，
-# 以历史名人身份进行多轮结构化辩论。
-#
-# 子命令:
-#   start <topic>                      创建 session
-#   get-context <brief|detail>         获取背景上下文
-#   get-messages [msg-id]              获取消息（无参数: 摘要+最近一轮; 有参数: 指定消息详情）
-#   post-message <role> <file> [opts]  追加消息
-#   spawn <round-number>               并行启动参与者
-#   end [--output-dir <path>]          结束讨论，生成文档
-#   watch [round] [-f] [-n lines]      实时查看参与者输出
-#   attach                             连接 tmux session
-#
-# 环境变量:
-#   ROUND_TABLE_SESSION  指定 session-id（未设置则用最新的）
-#   OMP_HOME             oh-my-superpowers 安装路径（默认 ~/.oh-my-superpowers）
+# 两层命名空间:
+#   session <cmd>  — session 生命周期管理
+#   round <cmd>    — round 级操作（自动取 current_round）
 
 set -euo pipefail
 
 SKILL="${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/round-table"
 
-case "${1:-}" in
-  start)
-    shift
-    exec bash "$SKILL/scripts/session.sh" init "$@"
+usage() {
+  cat >&2 <<'EOF'
+用法：omp-round-table <命名空间> <子命令> [参数...]
+
+Session 生命周期:
+  session init <topic> --roles <id1,id2,...> [--context <text|file>]
+  session status
+  session context [brief|detail]
+  session messages [msg-id]
+  session end --output-dir <path>
+
+Round 操作（自动取当前轮次）:
+  round spawn          并行启动参与者（current_round + 1）
+  round collect        收集并解析当前轮 response，自动 post-message
+  round run            spawn + wait + collect 一步完成
+  round watch [-f]     实时查看参与者输出
+  round attach         连接 tmux session
+
+环境变量:
+  ROUND_TABLE_SESSION  指定 session-id（默认使用最新）
+  OMP_HOME             oh-my-superpowers 安装路径（默认 ~/.oh-my-superpowers）
+
+已废弃命令（兼容旧版，建议迁移到两层命名空间）:
+  start       →  session init
+  get-context →  session context
+  get-messages → session messages
+  post-message   session.sh post-message（直接转发）
+  spawn       →  round spawn
+  end         →  session end
+  status      →  session status
+  watch       →  round watch
+  attach      →  round attach
+EOF
+  exit 1
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  session)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      init)     exec bash "$SKILL/scripts/session.sh" init "$@" ;;
+      status)   exec bash "$SKILL/scripts/session.sh" status "$@" ;;
+      context)  exec bash "$SKILL/scripts/session.sh" get-context "$@" ;;
+      messages) exec bash "$SKILL/scripts/session.sh" get-messages "$@" ;;
+      end)      exec bash "$SKILL/scripts/session.sh" end "$@" ;;
+      *) echo "错误：未知 session 子命令 '${sub:-}'" >&2; usage ;;
+    esac
     ;;
-  get-context)
-    shift
-    exec bash "$SKILL/scripts/session.sh" get-context "$@"
+
+  round)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      spawn)   exec bash "$SKILL/scripts/round.sh" spawn "$@" ;;
+      collect) exec bash "$SKILL/scripts/round.sh" collect "$@" ;;
+      run)     exec bash "$SKILL/scripts/round.sh" run "$@" ;;
+      watch)   exec bash "$SKILL/scripts/round.sh" watch "$@" ;;
+      attach)  exec bash "$SKILL/scripts/round.sh" attach "$@" ;;
+      *) echo "错误：未知 round 子命令 '${sub:-}'" >&2; usage ;;
+    esac
     ;;
-  get-messages)
-    shift
-    exec bash "$SKILL/scripts/session.sh" get-messages "$@"
-    ;;
-  post-message)
-    shift
-    exec bash "$SKILL/scripts/session.sh" post-message "$@"
-    ;;
-  spawn)
-    shift
-    exec bash "$SKILL/scripts/spawn.sh" "$@"
-    ;;
-  end)
-    shift
-    exec bash "$SKILL/scripts/session.sh" end "$@"
-    ;;
-  status)
-    shift
-    exec bash "$SKILL/scripts/session.sh" status "$@"
-    ;;
-  watch)
-    shift
-    exec bash "$SKILL/scripts/session.sh" watch "$@"
-    ;;
-  attach)
-    shift
-    exec bash "$SKILL/scripts/session.sh" attach "$@"
-    ;;
-  --help|-h|help)
-    echo "Usage: omp-round-table <command> [args]"
-    echo ""
-    echo "Commands:"
-    echo "  start <topic>                      创建新的圆桌讨论 session"
-    echo "  get-context <brief|detail>         获取讨论背景上下文"
-    echo "  get-messages [msg-id]              获取消息记录"
-    echo "  post-message <role> <file> [opts]  追加消息到 session"
-    echo "  spawn <round-number>               并行启动所有参与者"
-    echo "  end [--output-dir <path>]          结束讨论，生成最终文档"
-    echo "  status                             查看当前 session 状态"
-    echo "  watch [round] [-f] [-n lines]      实时查看参与者输出"
-    echo "  attach                             连接 tmux session（直接观看）"
-    echo ""
-    echo "Environment:"
-    echo "  ROUND_TABLE_SESSION  指定 session-id（默认使用最新）"
-    ;;
-  *)
-    echo "omp-round-table: unknown command '${1:-}'" >&2
-    echo "Run 'omp-round-table --help' for usage." >&2
-    exit 1
-    ;;
+
+  # --- 旧命令兼容（deprecated） ---
+  start)        exec bash "$SKILL/scripts/session.sh" init "$@" ;;
+  get-context)  exec bash "$SKILL/scripts/session.sh" get-context "$@" ;;
+  get-messages) exec bash "$SKILL/scripts/session.sh" get-messages "$@" ;;
+  post-message) exec bash "$SKILL/scripts/session.sh" post-message "$@" ;;
+  spawn)        exec bash "$SKILL/scripts/spawn.sh" "$@" ;;
+  end)          exec bash "$SKILL/scripts/session.sh" end "$@" ;;
+  status)       exec bash "$SKILL/scripts/session.sh" status "$@" ;;
+  watch)        exec bash "$SKILL/scripts/session.sh" watch "$@" ;;
+  attach)       exec bash "$SKILL/scripts/session.sh" attach "$@" ;;
+
+  help|--help|-h) usage ;;
+  *) echo "错误：未知命令 '${cmd:-}'" >&2; usage ;;
 esac

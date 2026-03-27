@@ -8,7 +8,7 @@
 ### Step 1: 创建 Session
 
 ```bash
-export ROUND_TABLE_SESSION=$(omp-round-table start "<topic>")
+export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>")
 ```
 
 ### Step 2: 选择参与者
@@ -59,24 +59,22 @@ export ROUND_TABLE_SESSION=$(omp-round-table start "<topic>")
 ### Step 3: 启动参与者
 
 ```bash
-omp-round-table spawn <round-number>
+omp-round-table round spawn
 ```
 
 spawn 会：
 1. 在 tmux 中并行启动所有参与者
 2. 等待所有进程完成（超时 5 分钟）
 3. 返回 JSON 结果（completed/failed 列表）
+4. 轮次号可省略，自动推断为 current_round + 1
 
 ### Step 4: 收集回复
 
-对每个完成的参与者：
-
 ```bash
-omp-round-table post-message <role-id> <response-file> \
-  --round N --name "人物名" --action "行动标签" --summary "一句话"
+omp-round-table round collect
 ```
 
-注意：orchestrator 需要阅读每个 response 文件，提取行动标签和摘要，然后调用 post-message。
+collect 会自动读取各参与者 response 文件，提取行动标签和摘要，批量调用 post-message 写入 session。
 
 ### Step 5: 综述
 
@@ -141,7 +139,7 @@ Orchestrator 做最终综述：
 ### Step 2: 生成文档
 
 ```bash
-omp-round-table end --output-dir "$(pwd)/docs/round-table"
+omp-round-table session end --output-dir "$(pwd)/docs/round-table"
 ```
 
 `end` 命令生成基础文档框架，但 orchestrator 应该补充：

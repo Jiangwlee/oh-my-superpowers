@@ -10,7 +10,7 @@
 ```
 ┌─────────────────────────────┐
 │ Layer 1: 角色身份            │ ← participants/<role-id>.md
-│ Layer 2: 讨论背景            │ ← omp-round-table get-context brief
+│ Layer 2: 讨论背景            │ ← omp-round-table session context detail
 │ Layer 3: 对话历史            │ ← omp-round-table get-messages
 │ Layer 4: 本轮指令            │ ← orchestrator 动态生成
 └─────────────────────────────┘
@@ -31,20 +31,20 @@
 
 ## Layer 2: 讨论背景
 
-来源：`omp-round-table get-context brief`
+来源：`omp-round-table session context detail`
 
 ```bash
-context=$(omp-round-table get-context brief)
+context=$(omp-round-table session context detail)
 ```
 
-brief 模式控制 token 消耗，只包含议题和核心约束。如果参与者需要更多背景，可在 prompt 中提示使用 `omp-round-table get-context detail`。
+detail 模式包含完整背景（议题、约束条件、讨论目标）。如需 token 精简可改用 `omp-round-table session context brief`，只包含议题和核心约束。
 
 ## Layer 3: 对话历史
 
-来源：`omp-round-table get-messages`
+来源：`omp-round-table session messages`
 
 ```bash
-messages=$(omp-round-table get-messages)
+messages=$(omp-round-table session messages)
 ```
 
 输出包含：
@@ -96,7 +96,7 @@ messages=$(omp-round-table get-messages)
 ## 讨论背景
 **议题**：是否需要独立的 Agent 框架
 **约束**：团队 3 人，3 个月交付...
-（来自 get-context brief）
+（来自 session context detail）
 
 ## 对话历史
 === 历史摘要 ===
@@ -105,7 +105,7 @@ messages=$(omp-round-table get-messages)
 === Round 2（最近一轮）===
 [msg-005] 【Elon Musk】【质疑】：为什么不直接用 API...
 [msg-006] 【Linus Torvalds】【反驳】：框架带来的抽象成本...
-（来自 get-messages）
+（来自 session messages）
 
 ## 本轮任务
 **引导问题：** 如果不建框架，最大的风险是什么？

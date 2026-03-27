@@ -33,7 +33,7 @@ _session_dir() {
   if [[ -z "$sid" ]]; then
     sid=$(ls -1 "$RT_DATA_DIR" 2>/dev/null | sort -r | head -1)
     if [[ -z "$sid" ]]; then
-      echo "错误：没有活跃的 session。请先运行: omp-round-table start <topic>" >&2
+      echo "错误：没有活跃的 session。请先运行: omp-round-table session init <topic>" >&2
       exit 1
     fi
   fi
@@ -93,9 +93,16 @@ _count_participant_windows() {
 
 main() {
   local round="${1:-}"
+
   if [[ -z "$round" ]]; then
-    echo "用法：spawn.sh <round-number>" >&2
-    exit 1
+    # 自动检测：current_round + 1
+    local session_dir
+    session_dir=$(_session_dir)
+    local meta="$session_dir/meta.json"
+    local current
+    current=$(jq -r '.current_round' "$meta")
+    round=$((current + 1))
+    echo "自动检测轮次：round ${round}（current_round=${current}）" >&2
   fi
 
   local session_dir
@@ -117,8 +124,8 @@ main() {
   local messages_history=""
   local omp_rt="omp-round-table"
   if command -v "$omp_rt" &>/dev/null; then
-    context_brief=$($omp_rt get-context detail 2>/dev/null || true)
-    messages_history=$($omp_rt get-messages 2>/dev/null || true)
+    context_brief=$($omp_rt session context detail 2>/dev/null || true)
+    messages_history=$($omp_rt session messages 2>/dev/null || true)
   fi
 
   # tmux session 名
@@ -201,7 +208,7 @@ main() {
   # 等待所有参与者完成
   echo ""
   echo "等待所有参与者完成（超时: ${RT_TIMEOUT}s）..."
-  echo "提示：运行 omp-round-table watch 实时查看输出，或 omp-round-table attach 进入 tmux"
+  echo "提示：运行 omp-round-table round watch 实时查看输出，或 omp-round-table round attach 进入 tmux"
   echo ""
 
   local elapsed=0
