@@ -194,19 +194,7 @@ def cmd_capture(args: argparse.Namespace) -> int:
         print("没有找到会话", file=sys.stderr)
         return 0
 
-    # 过滤已处理的 session（增量）
-    processed_ids = store.get_processed_session_ids()
-    if not args.force:
-        before = len(sessions)
-        sessions = [s for s in sessions if s.session_id not in processed_ids]
-        skipped_processed = before - len(sessions)
-        if skipped_processed > 0:
-            print(
-                f"跳过 {skipped_processed} 个已处理 session",
-                file=sys.stderr,
-            )
-
-    # 过滤消息数过少的 session
+    # 过滤消息数过少的 session（按 session 总消息数初筛）
     min_msgs = args.min_messages
     if min_msgs > 0:
         before = len(sessions)
@@ -240,7 +228,7 @@ def cmd_capture(args: argparse.Namespace) -> int:
 
         reader = reader_cls()
         try:
-            messages = reader.read_session(session.file_path)
+            all_messages = reader.read_session(session.file_path)
         except Exception as e:
             print(
                 f"  [{session.runtime.value}] {session.session_id[:20]}... "
@@ -249,26 +237,44 @@ def cmd_capture(args: argparse.Namespace) -> int:
             )
             continue
 
-        if not messages:
+        if not all_messages:
             continue
 
-        conversation = format_conversation(messages)
+        # 获取游标，只处理新消息
+        cursor = store.get_session_cursor(session.session_id) if not args.force else -1
+
+        # 游标越界保护：cursor 超过实际消息数（如异常写入），自动重置并告警
+        if cursor >= len(all_messages):
+            print(
+                f"  [{session.runtime.value}] {session.session_id[:20]}... "
+                f"游标越界（cursor={cursor} >= {len(all_messages)}），重置为 -1",
+                file=sys.stderr,
+            )
+            cursor = -1
+
+        new_messages = all_messages[cursor + 1:]
+
+        if not new_messages:
+            print(
+                f"  [{session.runtime.value}] {session.session_id[:20]}... "
+                f"无新消息（cursor={cursor}）",
+                file=sys.stderr,
+            )
+            continue
+
+        conversation = format_conversation(new_messages)
         prompt = CAPTURE_PROMPT.format(conversation=conversation)
-
-        if args.dry_run:
-            print(f"\n--- session {session.session_id[:20]}... ---", file=sys.stderr)
-            print(f"Messages: {len(messages)}", file=sys.stderr)
-            print(f"Prompt length: {len(prompt)}", file=sys.stderr)
-            continue
 
         # 调用 LLM
         print(
             f"  [{session.runtime.value}] {session.session_id[:20]}... "
-            f"({len(messages)} msgs) ",
+            f"({len(new_messages)} 条新消息，共 {len(all_messages)} 条) ",
             end="",
             file=sys.stderr,
             flush=True,
         )
+        if args.dry_run:
+            print(f"[prompt {len(prompt)} chars]", file=sys.stderr)
 
         items = call_llm_array(prompt, args.model)
         if not items:
@@ -309,14 +315,21 @@ def cmd_capture(args: argparse.Namespace) -> int:
                 confidence=float(item.get("confidence", 0.5)),
                 tags=item.get("tags", []),
             )
-            store.store_memory(memory)
-            existing_contents.add(content)
+            if args.dry_run:
+                print(f"  [+] [{kind.value}] {content}", file=sys.stderr)
+            else:
+                store.store_memory(memory)
+                existing_contents.add(content)
             session_created += 1
 
-        total_created += session_created
-        total_skipped += session_skipped
-        store.mark_session_processed(session.session_id, session_created)
-        print(f"+{session_created} -{session_skipped}", file=sys.stderr)
+        if not args.dry_run:
+            total_created += session_created
+            total_skipped += session_skipped
+            new_cursor = cursor + len(new_messages)
+            store.update_session_cursor(session.session_id, new_cursor, session_created)
+            print(f"+{session_created} -{session_skipped} (cursor {cursor}→{new_cursor})", file=sys.stderr)
+        else:
+            print(f"  [会写入 {session_created} 条，跳过 {session_skipped} 条]", file=sys.stderr)
 
     if args.dry_run:
         print(f"\n[dry-run] 不写入任何数据", file=sys.stderr)

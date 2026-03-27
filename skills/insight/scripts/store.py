@@ -92,11 +92,13 @@ class InsightStore:
                 CREATE INDEX IF NOT EXISTS idx_hit_timestamp
                     ON hit_logs(timestamp);
 
-                CREATE TABLE IF NOT EXISTS processed_sessions (
+                CREATE TABLE IF NOT EXISTS session_progress (
                     session_id TEXT PRIMARY KEY,
+                    last_processed_index INTEGER NOT NULL DEFAULT -1,
                     processed_at INTEGER NOT NULL,
                     memory_count INTEGER NOT NULL DEFAULT 0
                 );
+
             """)
 
     @contextmanager
@@ -514,53 +516,55 @@ class InsightStore:
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     # ------------------------------------------------------------------
-    # Session tracking（增量 capture）
+    # Session tracking（增量 capture，message index 游标）
     # ------------------------------------------------------------------
 
-    def is_session_processed(self, session_id: str) -> bool:
-        """检查 session 是否已处理过。
+    def get_session_cursor(self, session_id: str) -> int:
+        """获取 session 上次处理到的消息索引。
 
         Args:
             session_id: Session ID。
 
         Returns:
-            是否已处理。
+            last_processed_index，-1 表示从未处理过。
         """
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT 1 FROM processed_sessions WHERE session_id = ?",
+                "SELECT last_processed_index FROM session_progress WHERE session_id = ?",
                 (session_id,),
             ).fetchone()
-            return row is not None
+            return row[0] if row else -1
 
-    def mark_session_processed(
-        self, session_id: str, memory_count: int = 0
+    def update_session_cursor(
+        self,
+        session_id: str,
+        last_processed_index: int,
+        memory_count: int = 0,
     ) -> None:
-        """标记 session 为已处理。
+        """更新 session 的消息游标。
 
         Args:
             session_id: Session ID。
-            memory_count: 本次提取的 memory 数量。
+            last_processed_index: 本次处理到的最后一条消息索引（从 0 起）。
+            memory_count: 本次累计提取的 memory 总数。
         """
         with self._connect() as conn:
             conn.execute(
-                """INSERT OR REPLACE INTO processed_sessions
-                   (session_id, processed_at, memory_count)
-                   VALUES (?, ?, ?)""",
-                (session_id, int(datetime.now().timestamp()), memory_count),
+                """INSERT INTO session_progress
+                       (session_id, last_processed_index, processed_at, memory_count)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(session_id) DO UPDATE SET
+                       last_processed_index = excluded.last_processed_index,
+                       processed_at = excluded.processed_at,
+                       memory_count = session_progress.memory_count + excluded.memory_count
+                """,
+                (
+                    session_id,
+                    last_processed_index,
+                    int(datetime.now().timestamp()),
+                    memory_count,
+                ),
             )
-
-    def get_processed_session_ids(self) -> set[str]:
-        """获取所有已处理的 session ID 集合。
-
-        Returns:
-            已处理的 session ID 集合。
-        """
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT session_id FROM processed_sessions"
-            ).fetchall()
-            return {row[0] for row in rows}
 
     # ------------------------------------------------------------------
     # Promote / Degrade

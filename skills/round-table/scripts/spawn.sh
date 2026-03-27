@@ -61,7 +61,7 @@ _build_runtime_cmd() {
       echo "codex exec \"\$(cat '$prompt_file')\" 2>&1 | tee '$output_file'"
       ;;
     pi)
-      echo "pi -p \"\$(cat '$prompt_file')\" --model '$model' 2>&1 | tee '$output_file'"
+      echo "pi --no-session -p \"\$(cat '$prompt_file')\" --model '$model' 2>&1 | tee '$output_file'"
       ;;
     *)
       echo "echo '错误：未知 runtime: $runtime' | tee '$output_file'"
@@ -117,7 +117,7 @@ main() {
   local messages_history=""
   local omp_rt="omp-round-table"
   if command -v "$omp_rt" &>/dev/null; then
-    context_brief=$($omp_rt get-context brief 2>/dev/null || true)
+    context_brief=$($omp_rt get-context detail 2>/dev/null || true)
     messages_history=$($omp_rt get-messages 2>/dev/null || true)
   fi
 
