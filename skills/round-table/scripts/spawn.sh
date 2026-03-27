@@ -68,6 +68,26 @@ _build_runtime_cmd() {
   esac
 }
 
+_list_window_names() {
+  local tmux_session="$1"
+  awk 'NF { print }' < <(tmux list-windows -t "$tmux_session" -F '#{window_name}' 2>/dev/null || true)
+}
+
+_count_windows() {
+  local tmux_session="$1"
+  awk 'END { print NR + 0 }' < <(_list_window_names "$tmux_session")
+}
+
+_list_participant_windows() {
+  local tmux_session="$1"
+  awk '$0 != "control" { print }' < <(_list_window_names "$tmux_session")
+}
+
+_count_participant_windows() {
+  local tmux_session="$1"
+  awk 'END { print NR + 0 }' < <(_list_participant_windows "$tmux_session")
+}
+
 # --- 主逻辑 ---
 
 main() {
@@ -180,9 +200,7 @@ main() {
   while true; do
     # 检查是否还有活跃的参与者 window
     local active_windows
-    active_windows=$(tmux list-windows -t "$tmux_session" 2>/dev/null \
-      | grep -v "control" \
-      | wc -l || echo "0")
+    active_windows=$(_count_participant_windows "$tmux_session")
 
     if [[ "$active_windows" -eq 0 ]]; then
       break
@@ -191,7 +209,7 @@ main() {
     if [[ "$elapsed" -ge "$RT_TIMEOUT" ]]; then
       echo "警告：超时，终止剩余参与者..." >&2
       # kill 剩余 windows
-      for win in $(tmux list-windows -t "$tmux_session" -F '#{window_name}' 2>/dev/null | grep -v "control"); do
+      for win in $(_list_participant_windows "$tmux_session"); do
         tmux kill-window -t "$tmux_session:$win" 2>/dev/null || true
         failed+=("$win")
       done
@@ -228,7 +246,7 @@ main() {
 
   # 清理 tmux session（如果所有 window 都结束了）
   local remaining
-  remaining=$(tmux list-windows -t "$tmux_session" 2>/dev/null | wc -l || echo "0")
+  remaining=$(_count_windows "$tmux_session")
   if [[ "$remaining" -le 1 ]]; then
     tmux kill-session -t "$tmux_session" 2>/dev/null || true
   fi

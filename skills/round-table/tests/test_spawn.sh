@@ -41,6 +41,15 @@ assert_contains() {
   else echo "  FAIL: $msg — not found: $needle"; return 1; fi
 }
 
+assert_not_contains() {
+  local haystack="$1" needle="$2" msg="${3:-}"
+  if echo "$haystack" | grep -qF "$needle"; then
+    echo "  FAIL: $msg — unexpected content: $needle"
+    return 1
+  fi
+  return 0
+}
+
 run_test() {
   local name="$1"
   TESTS_RUN=$((TESTS_RUN + 1))
@@ -97,6 +106,31 @@ test_spawn_creates_response_files() {
   return 0
 }
 
+test_spawn_exits_without_pipefail_count_bug() {
+  local participants='[
+    {"id":"solo","name":"Solo","role":"测试","runtime":"claude","model":"opus"}
+  ]'
+  local session_id
+  session_id=$(bash "$SESSION_SCRIPT" init "spawn计数修复测试" --participants "$participants")
+  export ROUND_TABLE_SESSION="$session_id"
+
+  local session_dir="$TEST_DATA_DIR/$session_id"
+  mkdir -p "$session_dir/participants"
+  echo "你是 Solo。" > "$session_dir/participants/solo.md"
+
+  local start_ts end_ts elapsed result
+  start_ts=$(date +%s)
+  result=$(RT_TIMEOUT=6 bash "$SPAWN_SCRIPT" 1 2>&1) || true
+  end_ts=$(date +%s)
+  elapsed=$((end_ts - start_ts))
+
+  assert_not_contains "$result" "syntax error in expression" "不应出现 shell 算术比较错误" || return 1
+  if [[ "$elapsed" -ge 8 ]]; then
+    echo "  FAIL: spawn 应在参与者结束后及时退出，而不是等到超时 (elapsed=${elapsed}s)"
+    return 1
+  fi
+}
+
 # --- 执行 ---
 
 echo "=== Round Table spawn.sh 测试 ==="
@@ -104,6 +138,7 @@ echo ""
 
 run_test test_spawn_reads_participants
 run_test test_spawn_creates_response_files
+run_test test_spawn_exits_without_pipefail_count_bug
 
 echo ""
 echo "=== 结果：$TESTS_PASSED/$TESTS_RUN 通过，$TESTS_FAILED 失败 ==="
