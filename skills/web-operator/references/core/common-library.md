@@ -94,6 +94,28 @@ Evaluates a JavaScript expression in the specified tab.
 - `target` - Target ID prefix
 - `expression` - JavaScript expression to evaluate
 
+### `acquire_worker_tab`
+
+Gets a persistent worker tab for stateless reads (used by `read-url`). Finds an existing idle `about:blank` tab or creates one. Uses directory-based locking to prevent concurrent access to the same worker tab.
+
+**Returns:**
+- Target ID of the worker tab
+
+**Example:**
+```bash
+TARGET=$(acquire_worker_tab)
+trap 'release_worker_tab "$TARGET"' EXIT
+cdp_nav "$TARGET" "$URL"
+# ... extract content ...
+```
+
+### `release_worker_tab <target>`
+
+Releases a worker tab back to the pool. Resets tab state via `cdp reset` (clears storage for the current origin, navigates to `about:blank#read-worker` to preserve the worker marker) and removes the lock.
+
+**Parameters:**
+- `target` - Target ID of the worker tab
+
 ### `require_cmd <command>`
 
 Checks if a required command exists, exits with error if not found.

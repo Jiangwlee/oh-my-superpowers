@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# read-url — read the main text content of any URL via browser.
+# read-url — read the main text content of any URL.
 # Input:  <url> [--limit N]
 # Output: Markdown text (via defuddle) or plain text (fallback).
 #
-# Three-tier strategy:
+# Four-tier strategy:
 #   1. Known sites (reddit, x, xueqiu, taoguba) → delegate to open-post
-#   2. Generic: CDP html → defuddle parse --markdown
-#   3. Fallback: CDP eval innerText (if defuddle unavailable)
+#   2. HTTP-first: defuddle parse <URL> --markdown (no browser needed, ~200ms)
+#   3. CDP + defuddle: worker tab → navigate → html → defuddle parse
+#   4. CDP fallback: worker tab → eval innerText (if defuddle unavailable)
+#
+# Tier 2 is the fast path for static content (blogs, docs, papers).
+# Tier 3-4 use a persistent worker tab to avoid 15s CDP authorization per call.
 
 set -euo pipefail
 
@@ -62,26 +66,7 @@ case "$domain" in
     exec bash "${SKILL}/scripts/sites/taoguba/open-post.sh" "$URL" ;;
 esac
 
-# --- tier 2 & 3: generic path -----------------------------------------------
-
-# Create a dedicated tab for reading (will be closed after extraction)
-TARGET="$(create_tab "about:blank")"
-if [[ -z "$TARGET" ]]; then
-  echo "error: failed to create a browser tab" >&2
-  exit 1
-fi
-
-# Ensure tab is closed on exit
-cleanup_tab() { close_tab "$TARGET"; }
-trap 'cleanup_tab' EXIT
-
-# Navigate to URL (waits for load)
-cdp_nav "$TARGET" "$URL"
-
-# Extra wait for dynamic content (SPA pages may need JS execution time)
-sleep 2
-
-# --- extract content ---------------------------------------------------------
+# --- output helper -----------------------------------------------------------
 
 truncate_output() {
   if [[ -n "$LIMIT" ]]; then
@@ -91,10 +76,46 @@ truncate_output() {
   fi
 }
 
-# Tier 2: CDP html → defuddle (if available)
+# --- tier 2: HTTP-first (defuddle parse URL directly, no browser) -----------
+
+if command -v defuddle >/dev/null 2>&1; then
+  if output="$(defuddle parse "$URL" --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
+    # Quality gate: content must have meaningful text (>100 chars after trimming)
+    text_len=$(printf '%s' "$output" | wc -c)
+    if [[ "$text_len" -gt 100 ]]; then
+      printf '%s\n' "$output" | truncate_output
+      exit 0
+    fi
+    # Quality too low — fall through to CDP path
+  fi
+fi
+
+# --- tier 3 & 4: CDP path (worker tab) -------------------------------------
+
+# Acquire a persistent worker tab (reused across calls, no 15s auth overhead)
+TARGET="$(acquire_worker_tab)"
+if [[ -z "$TARGET" ]]; then
+  echo "error: failed to acquire a worker tab" >&2
+  exit 1
+fi
+
+# Cleanup function for worker tab and temp files
+TMPHTML=""
+cleanup() {
+  [[ -n "$TMPHTML" ]] && rm -f "$TMPHTML"
+  release_worker_tab "$TARGET"
+}
+trap cleanup EXIT
+
+# Navigate to URL (waits for load)
+cdp_nav "$TARGET" "$URL"
+
+# Extra wait for dynamic content (SPA pages may need JS execution time)
+sleep 2
+
+# Tier 3: CDP html → defuddle (if available)
 if command -v defuddle >/dev/null 2>&1; then
   TMPHTML="$(mktemp /tmp/read-url-XXXXXX.html)"
-  trap 'rm -f "$TMPHTML"; cleanup_tab' EXIT
 
   cdp html "$TARGET" > "$TMPHTML" 2>/dev/null
 
@@ -102,10 +123,10 @@ if command -v defuddle >/dev/null 2>&1; then
     printf '%s\n' "$output" | truncate_output
     exit 0
   fi
-  # defuddle failed on this page, fall through to tier 3
+  # defuddle failed on this page, fall through to tier 4
 fi
 
-# Tier 3: CDP eval innerText (strip nav/header/footer/aside)
+# Tier 4: CDP eval innerText (strip nav/header/footer/aside)
 read -r -d '' EXTRACT_JS <<'JSEOF' || true
 (() => {
   const remove = ['nav', 'header', 'footer', 'aside', '[role="navigation"]',

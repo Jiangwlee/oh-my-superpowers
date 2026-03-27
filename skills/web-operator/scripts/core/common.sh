@@ -93,6 +93,72 @@ close_tab() {
   [[ -n "$target" ]] && cdp close "$target" >/dev/null 2>&1 || true
 }
 
+# --- Worker tab management (for read-url) ---
+# Worker tabs are long-lived tabs reused across read-url calls.
+# Identified by about:blank URL or a special marker in the page list.
+# This avoids the 15-second CDP authorization cost on every read-url call.
+
+WORKER_TAB_LOCKDIR="${XDG_RUNTIME_DIR:-$HOME/.cache}/cdp/worker-locks"
+
+# Find or create a persistent worker tab for stateless reads.
+# Usage: acquire_worker_tab
+#   Finds an existing about:blank tab or creates one.
+#   Returns target ID. Does NOT close on exit.
+acquire_worker_tab() {
+  mkdir -p "$WORKER_TAB_LOCKDIR"
+  local target
+
+  # Clean up stale locks (from crashed processes)
+  if [[ -d "$WORKER_TAB_LOCKDIR" ]]; then
+    for lockdir in "$WORKER_TAB_LOCKDIR"/*/; do
+      [[ -d "$lockdir" ]] || continue
+      local lock_tid
+      lock_tid="$(basename "$lockdir")"
+      # If lock is older than 5 minutes, assume the process crashed
+      if [[ "$(find "$lockdir" -maxdepth 0 -mmin +5 2>/dev/null)" ]]; then
+        rmdir "$lockdir" 2>/dev/null || true
+      fi
+    done
+  fi
+
+  # Look for an existing idle worker tab (only about:blank#read-worker, not plain about:blank)
+  local pages
+  pages="$(cdp_list_raw 2>/dev/null)" || pages="[]"
+  target=$(printf '%s' "$pages" | jq -r '
+    map(select(.type == "page" and .url == "about:blank#read-worker"))
+    | .[].targetId
+  ' 2>/dev/null | while IFS= read -r tid; do
+    # Try to acquire lock for this tab
+    if mkdir "$WORKER_TAB_LOCKDIR/$tid" 2>/dev/null; then
+      printf '%s\n' "$tid"
+      break
+    fi
+  done)
+
+  if [[ -n "$target" ]]; then
+    printf '%s\n' "$target"
+    return 0
+  fi
+
+  # No idle worker tab found — create one
+  target=$(cdp open "about:blank#read-worker" 2>/dev/null | grep -oE '[A-F0-9]{8,}' | head -1)
+  [[ -n "$target" ]] || { printf 'failed to create worker tab\n' >&2; return 1; }
+  sleep 2  # Wait for initial CDP authorization
+  mkdir -p "$WORKER_TAB_LOCKDIR/$target" 2>/dev/null || true
+  printf '%s\n' "$target"
+}
+
+# Release a worker tab back to the pool (remove lock, reset state).
+# Usage: release_worker_tab <target>
+release_worker_tab() {
+  local target="$1"
+  [[ -z "$target" ]] && return 0
+  # Reset tab state (clear storage + navigate to about:blank)
+  cdp reset "$target" >/dev/null 2>&1 || true
+  # Release lock
+  rmdir "$WORKER_TAB_LOCKDIR/$target" 2>/dev/null || true
+}
+
 # Find existing tab for a specific domain
 # Usage: find_existing_tab <domain> [homepage_url]
 #   domain: domain name for URL matching, e.g.: "baidu.com"

@@ -3,7 +3,7 @@
 // Input: a CLI command plus an optional target prefix, URL, selector, or JS expr.
 // Output: page lists, extracted text/HTML, screenshots, or command status text.
 // Public interface: list, snap, eval, shot, html, nav, net, click, clickxy,
-// type, loadall, evalraw, open, and stop.
+// type, loadall, evalraw, reset, open, and stop.
 //
 // The script connects directly to a Chrome-family browser over raw WebSocket.
 // It avoids Puppeteer and keeps one daemon per tab to reuse approval state.
@@ -420,6 +420,36 @@ async function navStr(cdp, sid, url) {
   return `Navigated to ${url}`;
 }
 
+// Reset tab state: clear storage for the current origin, then navigate to about:blank#read-worker.
+// Used by read-url worker tab to avoid state pollution between reads.
+// Optional origin arg; if omitted, clears the current page's origin.
+async function resetStr(cdp, sid, origin) {
+  // Get current origin if not provided
+  if (!origin) {
+    try {
+      origin = await evalStr(cdp, sid, 'location.origin');
+    } catch { origin = ''; }
+  }
+  // Clear storage for the origin (cookies, localStorage, indexedDB, cacheStorage, etc.)
+  if (origin && origin !== 'null' && origin !== 'about://blank') {
+    try {
+      await cdp.send('Storage.clearDataForOrigin', {
+        origin,
+        storageTypes: 'cookies,local_storage,indexeddb,cache_storage,service_workers',
+      }, sid);
+    } catch {}  // Non-critical: some origins may not have storage
+  }
+  // Disable cache for clean subsequent loads
+  try { await cdp.send('Network.enable', {}, sid); } catch {}
+  try { await cdp.send('Network.setCacheDisabled', { cacheDisabled: true }, sid); } catch {}
+  // Navigate to about:blank#read-worker to reset DOM state (preserves worker tab marker)
+  await cdp.send('Page.enable', {}, sid);
+  await cdp.send('Page.navigate', { url: 'about:blank#read-worker' }, sid);
+  // Re-enable cache for next navigation
+  try { await cdp.send('Network.setCacheDisabled', { cacheDisabled: false }, sid); } catch {}
+  return 'Tab reset to about:blank#read-worker';
+}
+
 async function netStr(cdp, sid) {
   const raw = await evalStr(cdp, sid, `JSON.stringify(performance.getEntriesByType('resource').map(e => ({
     name: e.name.substring(0, 120), type: e.initiatorType,
@@ -588,6 +618,7 @@ async function runDaemon(targetId) {
         case 'type': result = await typeStr(cdp, sessionId, args[0]); break;
         case 'loadall': result = await loadAllStr(cdp, sessionId, args[0], args[1] ? parseInt(args[1]) : 1500); break;
         case 'evalraw': result = await evalRawStr(cdp, sessionId, args[0], args[1]); break;
+        case 'reset': result = await resetStr(cdp, sessionId, args[0]); break;
         case 'stop': return { ok: true, result: '', stopAfter: true };
         default: return { ok: false, error: `Unknown command: ${cmd}` };
       }
@@ -768,6 +799,9 @@ Usage: cdp <command> [args]
                                     Optional interval in ms between clicks (default 1500)
   evalraw <target> <method> [json]  Send a raw CDP command; returns JSON result
                                     e.g. evalraw <t> "DOM.getDocument" '{}'
+  reset <target> [origin]           Clear storage and navigate to about:blank#read-worker
+                                    Resets cookies, localStorage, indexedDB, cacheStorage, service workers
+                                    Used by read-url worker tab for state cleanup between reads
   open  [url]                       Open a new tab (default: about:blank)
                                     Note: each new tab triggers a fresh "Allow debugging?" prompt
   close <target>                    Close a tab (stops daemon and removes from browser)
@@ -800,13 +834,13 @@ DAEMON IPC (for advanced use / scripting)
     Response: {"id":<number>, "ok":true,  "result":"<string>"}
            or {"id":<number>, "ok":false, "error":"<message>"}
   Commands mirror the CLI: snap, eval, shot, html, nav, net, click, clickxy,
-  type, loadall, evalraw, stop. Use evalraw to send arbitrary CDP methods.
+  type, loadall, evalraw, reset, stop. Use evalraw to send arbitrary CDP methods.
   The socket disappears after 20 min of inactivity or when the tab closes.
 `;
 
 const NEEDS_TARGET = new Set([
   'snap','snapshot','eval','shot','screenshot','html','nav','navigate',
-  'net','network','click','clickxy','type','loadall','evalraw',
+  'net','network','click','clickxy','type','loadall','evalraw','reset',
 ]);
 
 async function main() {

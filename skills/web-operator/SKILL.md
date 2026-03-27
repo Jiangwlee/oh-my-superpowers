@@ -16,7 +16,7 @@ Treat this skill as three layers:
 - `core`
   Chrome connection, tab targeting, navigation, extraction primitives, and SOP development guidance.
 - `core/common.sh`
-  Shared shell helpers for all site workflows: tab lifecycle management (`find_or_create_tab`), URL encoding, and CDP wrappers.
+  Shared shell helpers for all site workflows: tab lifecycle management (`find_or_create_tab`), worker tab pool (`acquire_worker_tab` / `release_worker_tab`), URL encoding, and CDP wrappers.
 - `sites`
   Repeatable workflows for specific websites such as `reddit.com`, `tgb.cn`, and `x.com`. Each site uses `core/common.sh` for tab management.
 
@@ -112,8 +112,10 @@ omp-web-operator search weixin-sogou "query" 5 # Uses/creates sogou tab
 
 All site scripts source the shared helpers from `scripts/core/common.sh`:
 
-- `find_or_create_tab <homepage_url> [domain]` - Find existing tab or create new one
+- `find_or_create_tab <homepage_url> [domain]` - Find existing site tab or create new one (for search workflows)
 - `create_tab <homepage_url>` - Create and navigate to a new tab
+- `acquire_worker_tab` - Get a persistent worker tab for stateless reads (for read-url)
+- `release_worker_tab <target>` - Reset state and release worker tab back to pool
 - `url_encode <string>` - URL encode strings
 - `cdp_eval <target> <expression>` - Evaluate JavaScript in tab
 
@@ -143,13 +145,16 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
 - `omp-web-operator read-url <url> [--limit N]`
   Read the main text content of any URL. Returns Markdown (when defuddle is available) or plain text.
-  Three-tier strategy:
+  Four-tier strategy (HTTP-first + CDP fallback):
   1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to `open-post` for structured extraction
-  2. **Generic** → opens page in browser, extracts HTML via CDP, converts to Markdown via defuddle
-  3. **Fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
+  2. **HTTP-first** → `defuddle parse <URL> --markdown` directly fetches and parses (~200ms, no browser needed). Covers ~80% of static content (blogs, docs, papers)
+  3. **CDP + defuddle** → navigates worker tab to URL, extracts HTML, converts via defuddle. For JS-heavy/SPA pages where HTTP-first fails quality gate
+  4. **CDP fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
+
+  Tier 3-4 use **persistent worker tabs** (created once, reused across calls) to avoid the ~15s CDP authorization cost per new tab. Worker tabs are automatically reset between reads (`Storage.clearDataForOrigin` + navigate to `about:blank`).
 
   ```bash
-  # Read an article
+  # Read an article (usually hits tier 2, ~200ms)
   omp-web-operator read-url "https://www.paulgraham.com/writes.html"
 
   # Read with character limit
