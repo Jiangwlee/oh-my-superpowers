@@ -18,3 +18,5 @@ deployment/docker/ashare-platform/data/
 # Environment files
 .env
 **/.env
+
+.claude/settings.json

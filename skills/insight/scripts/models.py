@@ -2,18 +2,22 @@
 
 定义三层架构的核心数据结构：
 - Session 层：UnifiedMessage（统一多 runtime 消息格式）
-- Memory 层：CorrectionTrajectory（纠正轨迹）
-- Insight 层：Insight（跨会话行为差分）
+- Memory 层：Memory（被动记录的事实）
+- Insight 层：Insight（主动提炼的模式）
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
+import logging
+import secrets
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class Runtime(str, Enum):
@@ -22,6 +26,7 @@ class Runtime(str, Enum):
     CLAUDE = "claude"
     CODEX = "codex"
     PI = "pi"
+    OPENCLAW = "openclaw"
 
 
 class MessageRole(str, Enum):
@@ -33,8 +38,18 @@ class MessageRole(str, Enum):
     TOOL_RESULT = "tool_result"
 
 
-class InsightScope(str, Enum):
-    """Insight 作用域。"""
+class MemoryKind(str, Enum):
+    """Memory 的类别。"""
+
+    CORRECTION = "correction"
+    PREFERENCE = "preference"
+    WORKFLOW = "workflow"
+    DECISION = "decision"
+    FACT = "fact"
+
+
+class Scope(str, Enum):
+    """作用域。"""
 
     PROJECT = "project"
     USER = "user"
@@ -101,30 +116,63 @@ class SessionInfo:
 
 
 @dataclass
-class CorrectionExample:
-    """单次纠正的上下文快照。"""
+class Memory:
+    """一条记忆。被动记录的事实，创建后不可变。"""
 
-    session_id: str
-    before: str  # 助手的错误行为
-    after: str  # 纠正后的正确行为
-    context: str  # 触发纠正的上下文
-    user_feedback: str = ""  # 用户的原始纠正话语
+    id: str  # mem_{hex_timestamp}_{random4}
+    kind: MemoryKind
+    content: str  # 一句话描述
+    context: str  # 触发场景
+    scope: Scope
+    source_session_id: str
+    created_at: datetime
+    hit_count: int = 0
+    confidence: float = 0.5
+    tags: list[str] = field(default_factory=list)
 
+    def to_markdown(self) -> str:
+        """序列化为 YAML frontmatter markdown 格式。"""
+        lines = [
+            "---",
+            f"id: {self.id}",
+            f"kind: {self.kind.value}",
+            f"content: {_yaml_quote(self.content)}",
+            f"context: {_yaml_quote(self.context)}",
+            f"scope: {self.scope.value}",
+            f"source_session_id: {_yaml_quote(self.source_session_id)}",
+            f"created_at: {_yaml_quote(self.created_at.isoformat())}",
+            f"hit_count: {self.hit_count}",
+            f"confidence: {self.confidence}",
+            f"tags: {json.dumps(self.tags, ensure_ascii=False)}",
+            "---",
+            "",
+        ]
+        return "\n".join(lines)
 
-@dataclass
-class CorrectionTrajectory:
-    """纠正轨迹——用户多次纠正→最终收敛的完整路径。
+    @classmethod
+    def from_frontmatter(cls, text: str) -> Memory:
+        """从 YAML frontmatter markdown 反序列化。"""
+        data = _parse_frontmatter(text, "memory")
 
-    这是从 Session 到 Insight 的中间产物。
-    """
+        # 解析 JSON 数组字段
+        if "tags" in data and isinstance(data["tags"], str):
+            try:
+                data["tags"] = json.loads(data["tags"])
+            except json.JSONDecodeError:
+                data["tags"] = []
 
-    trigger: str  # 什么情况下触发了错误
-    wrong_behavior: str  # 助手的错误默认行为
-    corrected_behavior: str  # 最终正确的行为
-    messages: list[UnifiedMessage] = field(default_factory=list)
-    correction_count: int = 1
-    session_id: str = ""
-    runtime: Runtime = Runtime.CLAUDE
+        return cls(
+            id=data.get("id", ""),
+            kind=_parse_enum(MemoryKind, data.get("kind", "fact"), MemoryKind.FACT),
+            content=data.get("content", ""),
+            context=data.get("context", ""),
+            scope=_parse_enum(Scope, data.get("scope", "project"), Scope.PROJECT),
+            source_session_id=data.get("source_session_id", ""),
+            created_at=_parse_datetime(data.get("created_at", "")),
+            hit_count=int(data.get("hit_count", 0)),
+            confidence=float(data.get("confidence", 0.5)),
+            tags=data.get("tags", []),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -134,104 +182,45 @@ class CorrectionTrajectory:
 
 @dataclass
 class Insight:
-    """跨会话行为差分——系统的核心价值单元。
+    """一条洞察。主动提炼的模式。"""
 
-    Schema 来自圆桌讨论融合版：behavioral delta 为核心，
-    记录 trigger → wrong_default → corrected_behavior 的 diff。
-    """
-
-    id: str
-    trigger: str
-    wrong_default: str
-    corrected_behavior: str
-    examples: list[CorrectionExample] = field(default_factory=list)
+    id: str  # ins_{hex_timestamp}_{random4}
+    pattern: str  # 一句话描述模式
+    action: str  # Agent 应该怎么做
+    evidence: list[str]  # 关联的 memory IDs
+    scope: Scope
+    created_at: datetime
+    last_validated_at: datetime
+    evidence_count: int = 0
+    confidence: float = 0.6
     tags: list[str] = field(default_factory=list)
-    correction_count: int = 1
-    confidence: float = 0.5
-    first_seen: datetime = field(default_factory=datetime.now)
-    last_confirmed: datetime = field(default_factory=datetime.now)
-    scope: InsightScope = InsightScope.PROJECT
-    why: str = ""
-    source_session_ids: list[str] = field(default_factory=list)
-    reframes: list[str] = field(default_factory=list)  # memory_ids
-
-    @staticmethod
-    def generate_id(trigger: str, wrong_default: str) -> str:
-        """基于内容生成稳定 ID（SHA256 前 12 位）。"""
-        content = f"{trigger}::{wrong_default}"
-        return hashlib.sha256(content.encode()).hexdigest()[:12]
 
     def to_markdown(self) -> str:
-        """序列化为 YAML frontmatter + markdown 格式（QMD 索引用）。"""
+        """序列化为 YAML frontmatter markdown 格式。"""
         lines = [
             "---",
             f"id: {self.id}",
-            f"trigger: {_yaml_quote(self.trigger)}",
-            f"wrong_default: {_yaml_quote(self.wrong_default)}",
-            f"corrected_behavior: {_yaml_quote(self.corrected_behavior)}",
-            f"tags: {json.dumps(self.tags, ensure_ascii=False)}",
-            f"correction_count: {self.correction_count}",
-            f"confidence: {self.confidence}",
-            f"first_seen: {self.first_seen.isoformat()}",
-            f"last_confirmed: {self.last_confirmed.isoformat()}",
+            f"pattern: {_yaml_quote(self.pattern)}",
+            f"action: {_yaml_quote(self.action)}",
+            f"evidence: {json.dumps(self.evidence, ensure_ascii=False)}",
             f"scope: {self.scope.value}",
-            f"source_session_ids: {json.dumps(self.source_session_ids)}",
+            f"created_at: {_yaml_quote(self.created_at.isoformat())}",
+            f"last_validated_at: {_yaml_quote(self.last_validated_at.isoformat())}",
+            f"evidence_count: {self.evidence_count}",
+            f"confidence: {self.confidence}",
+            f"tags: {json.dumps(self.tags, ensure_ascii=False)}",
             "---",
             "",
-            f"# {self.trigger}",
-            "",
-            "## Wrong Default",
-            "",
-            self.wrong_default,
-            "",
-            "## Corrected Behavior",
-            "",
-            self.corrected_behavior,
-            "",
         ]
-
-        if self.why:
-            lines.extend(["## Why", "", self.why, ""])
-
-        if self.examples:
-            lines.append("## Examples")
-            lines.append("")
-            for i, ex in enumerate(self.examples, 1):
-                lines.append(f"### Example {i} (session: {ex.session_id})")
-                lines.append("")
-                lines.append(f"**Before:** {ex.before}")
-                lines.append("")
-                lines.append(f"**After:** {ex.after}")
-                lines.append("")
-                if ex.context:
-                    lines.append(f"**Context:** {ex.context}")
-                    lines.append("")
-
         return "\n".join(lines)
 
     @classmethod
     def from_frontmatter(cls, text: str) -> Insight:
-        """从 YAML frontmatter + markdown 反序列化。"""
-        if not text.startswith("---"):
-            raise ValueError("Invalid insight markdown: missing frontmatter")
-
-        end = text.index("---", 3)
-        frontmatter = text[3:end].strip()
-
-        data: dict[str, Any] = {}
-        for line in frontmatter.split("\n"):
-            if ":" not in line:
-                continue
-            key, _, value = line.partition(":")
-            key = key.strip()
-            value = value.strip()
-            # 去掉 YAML 引号
-            if value.startswith('"') and value.endswith('"'):
-                value = value[1:-1].replace('\\"', '"')
-            data[key] = value
+        """从 YAML frontmatter markdown 反序列化。"""
+        data = _parse_frontmatter(text, "insight")
 
         # 解析 JSON 数组字段
-        for arr_field in ("tags", "source_session_ids"):
+        for arr_field in ("evidence", "tags"):
             if arr_field in data and isinstance(data[arr_field], str):
                 try:
                     data[arr_field] = json.loads(data[arr_field])
@@ -240,17 +229,15 @@ class Insight:
 
         return cls(
             id=data.get("id", ""),
-            trigger=data.get("trigger", ""),
-            wrong_default=data.get("wrong_default", ""),
-            corrected_behavior=data.get("corrected_behavior", ""),
+            pattern=data.get("pattern", ""),
+            action=data.get("action", ""),
+            evidence=data.get("evidence", []),
+            scope=_parse_enum(Scope, data.get("scope", "project"), Scope.PROJECT),
+            created_at=_parse_datetime(data.get("created_at", "")),
+            last_validated_at=_parse_datetime(data.get("last_validated_at", "")),
+            evidence_count=int(data.get("evidence_count", 0)),
+            confidence=float(data.get("confidence", 0.6)),
             tags=data.get("tags", []),
-            correction_count=int(data.get("correction_count", 1)),
-            confidence=float(data.get("confidence", 0.5)),
-            first_seen=_parse_datetime(data.get("first_seen", "")),
-            last_confirmed=_parse_datetime(data.get("last_confirmed", "")),
-            scope=InsightScope(data.get("scope", "project")),
-            source_session_ids=data.get("source_session_ids", []),
-            # examples 和 reframes 不在 frontmatter 中完整存储
         )
 
 
@@ -270,19 +257,105 @@ class ProjectInfo:
 
 
 # ---------------------------------------------------------------------------
+# ID 生成
+# ---------------------------------------------------------------------------
+
+
+def generate_id(prefix: str) -> str:
+    """生成 ID: {prefix}_{hex_timestamp}_{random8}。
+
+    Args:
+        prefix: ID 前缀，如 'mem' 或 'ins'。
+
+    Returns:
+        格式为 {prefix}_{hex_timestamp}_{random8} 的唯一 ID。
+    """
+    hex_ts = format(int(time.time() * 1000), "x")
+    rand8 = secrets.token_hex(4)
+    return f"{prefix}_{hex_ts}_{rand8}"
+
+
+# ---------------------------------------------------------------------------
 # 工具函数
 # ---------------------------------------------------------------------------
 
 
+def _parse_frontmatter(text: str, label: str = "document") -> dict[str, Any]:
+    """解析 YAML frontmatter 块为字典。
+
+    Args:
+        text: 完整的 markdown 文本（以 --- 开头）。
+        label: 用于错误消息的标签。
+
+    Returns:
+        解析后的键值字典。
+
+    Raises:
+        ValueError: frontmatter 格式无效。
+    """
+    if not text.startswith("---"):
+        raise ValueError(f"Invalid {label} markdown: missing frontmatter")
+
+    # 查找独立行上的 closing ---
+    import re
+    match = re.search(r"\n---(?:\n|$)", text[3:])
+    if not match:
+        raise ValueError(f"Invalid {label} markdown: missing closing ---")
+    end = 3 + match.start()
+    frontmatter = text[3:end].strip()
+
+    data: dict[str, Any] = {}
+    for line in frontmatter.split("\n"):
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if value.startswith('"') and value.endswith('"'):
+            value = _yaml_unescape(value[1:-1])
+        data[key] = value
+
+    return data
+
+
+def _yaml_unescape(s: str) -> str:
+    """反转义 YAML 双引号标量中的转义序列。"""
+    return (
+        s.replace("\\n", "\n")
+        .replace("\\r", "\r")
+        .replace("\\t", "\t")
+        .replace('\\"', '"')
+        .replace("\\\\", "\\")
+    )
+
+
+def _parse_enum(enum_cls: type, value: str, default: Any) -> Any:
+    """安全解析枚举值，无效时返回默认值。"""
+    try:
+        return enum_cls(value)
+    except ValueError:
+        logger.warning(
+            "Unknown %s value %r, falling back to %s",
+            enum_cls.__name__, value, default,
+        )
+        return default
+
+
 def _yaml_quote(s: str) -> str:
-    """安全 YAML 字符串引用。"""
+    """安全 YAML 字符串引用。
+
+    对所有字符串使用双引号包裹，正确转义特殊字符。
+    """
     if not s:
         return '""'
-    # 包含特殊字符时用双引号包裹
-    if any(c in s for c in ':{}\n"\'[]&*?|>!%@`'):
-        escaped = s.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
-    return f'"{s}"'
+    escaped = (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return f'"{escaped}"'
 
 
 def _parse_datetime(s: str) -> datetime:

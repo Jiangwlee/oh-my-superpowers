@@ -200,7 +200,8 @@ def _extract_content(raw_content: str | list[dict[str, Any]]) -> str:
                 if block.get("type") == "text":
                     parts.append(block.get("text", ""))
                 elif block.get("type") == "tool_result":
-                    parts.append(block.get("content", ""))
+                    inner = block.get("content", "")
+                    parts.append(_extract_content(inner))
             elif isinstance(block, str):
                 parts.append(block)
         return "\n".join(parts)

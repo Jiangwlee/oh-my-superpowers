@@ -1,6 +1,6 @@
 """跨 runtime session 发现。
 
-给定项目路径，自动在 Claude Code / Codex / Pi 三个 runtime 中
+给定项目路径，自动在 Claude Code / Codex / Pi / OpenClaw 四个 runtime 中
 查找该项目的所有 session 文件。
 """
 
@@ -15,6 +15,7 @@ from .claude_reader import ClaudeReader
 from .claude_reader import find_project_sessions as find_claude_sessions
 from .codex_reader import CodexReader
 from .codex_reader import find_project_sessions as find_codex_sessions
+from .openclaw_reader import OpenClawReader, find_all_sessions as find_openclaw_sessions
 from .pi_reader import PiReader
 from .pi_reader import find_project_sessions as find_pi_sessions
 
@@ -39,7 +40,7 @@ def discover_sessions(
         按时间倒序排列的 SessionInfo 列表。
     """
     if runtimes is None:
-        runtimes = [Runtime.CLAUDE, Runtime.CODEX, Runtime.PI]
+        runtimes = [Runtime.CLAUDE, Runtime.CODEX, Runtime.PI, Runtime.OPENCLAW]
 
     project_path = str(Path(project_path).resolve())
     all_sessions: list[SessionInfo] = []
@@ -57,6 +58,11 @@ def discover_sessions(
     if Runtime.PI in runtimes:
         all_sessions.extend(
             _discover_pi(project_path, since)
+        )
+
+    if Runtime.OPENCLAW in runtimes:
+        all_sessions.extend(
+            _discover_openclaw(since)
         )
 
     # 按开始时间倒序
@@ -125,4 +131,20 @@ def _discover_pi(
             sessions.append(info)
 
     logger.debug("Found %d Pi sessions", len(sessions))
+    return sessions
+
+
+def _discover_openclaw(
+    since: datetime | None,
+) -> list[SessionInfo]:
+    """发现 OpenClaw session（扫描所有 agent）。"""
+    reader = OpenClawReader()
+    sessions: list[SessionInfo] = []
+
+    for path in find_openclaw_sessions(since):
+        info = reader.get_session_info(path)
+        if info is not None:
+            sessions.append(info)
+
+    logger.debug("Found %d OpenClaw sessions", len(sessions))
     return sessions

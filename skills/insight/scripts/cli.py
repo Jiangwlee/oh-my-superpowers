@@ -1,98 +1,699 @@
 #!/usr/bin/env python3
-"""Insight skill CLI。
+"""Insight skill CLI v2。
 
-从 AI 对话中提取高质量经验洞察（behavioral delta），
-替代 ECC instinct 系统。
+从 AI 对话中提取 Memory，提炼 Insight，支持召回与管理。
 
 用法：
-    cli.py extract [--runtime RUNTIME] [--since DATE] [--dry-run] [--json]
-    cli.py search QUERY [--scope SCOPE] [--top-k N] [--json]
-    cli.py list [--scope SCOPE] [--sort FIELD] [--limit N] [--json]
-    cli.py show INSIGHT_ID
-    cli.py promote INSIGHT_ID
-    cli.py stats [--json]
+    cli.py capture  --source <dir> [--session <id>] [--dry-run] [--model sonnet]
+    cli.py recall   --source <dir> [--format json|md] [--budget 4096] [--dry-run]
+    cli.py evaluate --source <dir> [--dry-run] [--prompt-file <path>]
+    cli.py list     --source <dir> [--type memory|insight]
+    cli.py promote  <id> [--reason <text>] [--source <dir>]
+    cli.py degrade  <id> [--reason <text>] [--source <dir>]
+    cli.py delete   <id> [--source <dir>]
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import logging
+import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # 确保 scripts 包可导入
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.extractor import detect_correction_patterns, generate_insights
-from scripts.models import Insight, InsightScope, Runtime
+from scripts.extractor import call_llm_array, format_conversation
+from scripts.models import (
+    Insight,
+    Memory,
+    MemoryKind,
+    Runtime,
+    Scope,
+    generate_id,
+)
 from scripts.project import detect_project
-from scripts.readers import ClaudeReader, CodexReader, PiReader, discover_sessions
-from scripts.store import InsightStore, search_all
+from scripts.readers import (
+    ClaudeReader,
+    CodexReader,
+    OpenClawReader,
+    PiReader,
+    discover_sessions,
+)
+from scripts.store import InsightStore
 
 logger = logging.getLogger(__name__)
 
-RUNTIME_MAP = {
-    "claude": Runtime.CLAUDE,
-    "codex": Runtime.CODEX,
-    "pi": Runtime.PI,
-}
+# ---------------------------------------------------------------------------
+# Reader 映射
+# ---------------------------------------------------------------------------
 
 READER_MAP = {
     Runtime.CLAUDE: ClaudeReader,
     Runtime.CODEX: CodexReader,
     Runtime.PI: PiReader,
+    Runtime.OPENCLAW: OpenClawReader,
 }
+
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
+
+CAPTURE_PROMPT = """你是一个经验提取专家。分析以下对话，提取有价值的记忆（memory）。
+
+记忆有 5 种类型：
+- correction: 用户纠正了错误行为
+- preference: 用户偏好（代码风格、工具选择、沟通方式等）
+- workflow: 工作流程/协作方式
+- decision: 技术/产品决策
+- fact: 项目/环境事实
+
+对话内容：
+{conversation}
+
+请以 JSON 数组格式输出，每条记忆包含：
+- kind: "correction" | "preference" | "workflow" | "decision" | "fact"
+- content: 一句话描述（不超过 100 字）
+- context: 触发场景（不超过 200 字）
+- scope: "project"（仅限此项目）或 "user"（通用经验）
+- confidence: 置信度（0.0-1.0）
+- tags: 标签列表
+- is_valid: 是否有价值（true/false）
+
+只输出 JSON 数组，不要其他文本。只保留真正有价值的记忆，不要水分。"""
+
+EVALUATE_PROMPT = """你是一个经验聚合专家。分析以下 memory 集合，提炼出高价值的 insight。
+
+Insight 是跨 session 反复出现的模式，值得 Agent 在每个 session 开始时优先加载。
+Insight 应该极少（一屏以内），只保留真正高价值的模式。
+
+Memories:
+{memories}
+
+对每条候选 insight 输出：
+- pattern: 一句话描述这个模式
+- action: Agent 应该怎么做
+- evidence: 哪些 memory ID 支撑这个 insight
+- confidence: 置信度（0.0-1.0）
+- tags: 标签列表
+- is_valid: 是否值得成为 insight（true/false）
+
+只输出 JSON 数组。极其审慎，只有真正跨 session、反复验证的模式才值得成为 insight。"""
+
+
+# ---------------------------------------------------------------------------
+# Store 解析
+# ---------------------------------------------------------------------------
+
+
+def _resolve_store(source: str | None) -> InsightStore:
+    """从 --source 参数解析 InsightStore。
+
+    Args:
+        source: 项目目录路径，None 时使用当前目录。
+
+    Returns:
+        对应项目的 InsightStore 实例。
+
+    Raises:
+        SystemExit: 无法检测到项目时退出。
+    """
+    path = source or os.getcwd()
+    project = detect_project(path)
+    if not project.root:
+        print(f"错误: {path} 不是有效的项目目录", file=sys.stderr)
+        sys.exit(1)
+    return InsightStore(project.id)
+
+
+def _resolve_project_id(source: str | None) -> str:
+    """从 --source 参数解析项目 ID。
+
+    Args:
+        source: 项目目录路径，None 时使用当前目录。
+
+    Returns:
+        项目 ID 字符串。
+
+    Raises:
+        SystemExit: 无法检测到项目时退出。
+    """
+    path = source or os.getcwd()
+    project = detect_project(path)
+    if not project.root:
+        print(f"错误: {path} 不是有效的项目目录", file=sys.stderr)
+        sys.exit(1)
+    return project.id
+
+
+# ---------------------------------------------------------------------------
+# 命令实现
+# ---------------------------------------------------------------------------
+
+
+def cmd_capture(args: argparse.Namespace) -> int:
+    """从对话中提取 memory。
+
+    流程：
+    1. detect_project 检测项目
+    2. discover_sessions 发现 sessions
+    3. 对每个 session 用 reader 读取 messages
+    4. 用 LLM 分析对话提取 Memory
+    5. 去重 + 存入 store
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    path = args.source or os.getcwd()
+    project = detect_project(path)
+    if not project.root:
+        print(f"错误: {path} 不是有效的项目目录", file=sys.stderr)
+        return 1
+
+    print(f"项目: {project.name} ({project.id})", file=sys.stderr)
+
+    store = InsightStore(project.id)
+
+    # 解析 --since
+    since: datetime | None = None
+    if args.since:
+        days = int(args.since.rstrip("d"))
+        since = datetime.now(tz=timezone.utc) - timedelta(days=days)
+
+    # 发现 sessions
+    sessions = discover_sessions(project.root, since=since)
+    if args.session:
+        sessions = [s for s in sessions if s.session_id == args.session]
+
+    if not sessions:
+        print("没有找到会话", file=sys.stderr)
+        return 0
+
+    # 过滤已处理的 session（增量）
+    processed_ids = store.get_processed_session_ids()
+    if not args.force:
+        before = len(sessions)
+        sessions = [s for s in sessions if s.session_id not in processed_ids]
+        skipped_processed = before - len(sessions)
+        if skipped_processed > 0:
+            print(
+                f"跳过 {skipped_processed} 个已处理 session",
+                file=sys.stderr,
+            )
+
+    # 过滤消息数过少的 session
+    min_msgs = args.min_messages
+    if min_msgs > 0:
+        before = len(sessions)
+        sessions = [s for s in sessions if s.message_count >= min_msgs]
+        skipped_short = before - len(sessions)
+        if skipped_short > 0:
+            print(
+                f"跳过 {skipped_short} 个短 session（<{min_msgs} 条消息）",
+                file=sys.stderr,
+            )
+
+    if not sessions:
+        print("没有需要处理的会话", file=sys.stderr)
+        return 0
+
+    print(f"待处理 {len(sessions)} 个 session", file=sys.stderr)
+
+    # 已有 memory 的 content 集合（用于去重）
+    existing_contents: set[str] = {
+        m.content for m in store.list_memories(limit=500)
+    }
+
+    total_created = 0
+    total_skipped = 0
+
+    for session in sessions:
+        reader_cls = READER_MAP.get(session.runtime)
+        if reader_cls is None:
+            logger.debug("No reader for runtime %s", session.runtime)
+            continue
+
+        reader = reader_cls()
+        try:
+            messages = reader.read_session(session.file_path)
+        except Exception as e:
+            print(
+                f"  [{session.runtime.value}] {session.session_id[:20]}... "
+                f"读取失败: {e}",
+                file=sys.stderr,
+            )
+            continue
+
+        if not messages:
+            continue
+
+        conversation = format_conversation(messages)
+        prompt = CAPTURE_PROMPT.format(conversation=conversation)
+
+        if args.dry_run:
+            print(f"\n--- session {session.session_id[:20]}... ---", file=sys.stderr)
+            print(f"Messages: {len(messages)}", file=sys.stderr)
+            print(f"Prompt length: {len(prompt)}", file=sys.stderr)
+            continue
+
+        # 调用 LLM
+        print(
+            f"  [{session.runtime.value}] {session.session_id[:20]}... "
+            f"({len(messages)} msgs) ",
+            end="",
+            file=sys.stderr,
+            flush=True,
+        )
+
+        items = call_llm_array(prompt, args.model)
+        if not items:
+            print("LLM 调用失败或无结果", file=sys.stderr)
+            continue
+
+        session_created = 0
+        session_skipped = 0
+
+        for item in items:
+            if not item.get("is_valid", False):
+                session_skipped += 1
+                continue
+
+            content = item.get("content", "")
+            if content in existing_contents:
+                session_skipped += 1
+                continue
+
+            try:
+                kind = MemoryKind(item.get("kind", "fact"))
+            except ValueError:
+                kind = MemoryKind.FACT
+
+            try:
+                scope = Scope(item.get("scope", "project"))
+            except ValueError:
+                scope = Scope.PROJECT
+
+            memory = Memory(
+                id=generate_id("mem"),
+                kind=kind,
+                content=content,
+                context=item.get("context", ""),
+                scope=scope,
+                source_session_id=session.session_id,
+                created_at=datetime.now(),
+                confidence=float(item.get("confidence", 0.5)),
+                tags=item.get("tags", []),
+            )
+            store.store_memory(memory)
+            existing_contents.add(content)
+            session_created += 1
+
+        total_created += session_created
+        total_skipped += session_skipped
+        store.mark_session_processed(session.session_id, session_created)
+        print(f"+{session_created} -{session_skipped}", file=sys.stderr)
+
+    if args.dry_run:
+        print(f"\n[dry-run] 不写入任何数据", file=sys.stderr)
+    else:
+        print(
+            f"\n共创建 {total_created} 条 memory，跳过 {total_skipped} 条",
+            file=sys.stderr,
+        )
+
+    return 0
+
+
+def cmd_recall(args: argparse.Namespace) -> int:
+    """召回记忆和洞察。
+
+    --dry-run 时不记录 hit_logs，手动组装输出。
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    store = _resolve_store(args.source)
+
+    if args.dry_run:
+        # 手动实现 recall 逻辑，不记录 hit_logs
+        used_tokens = 0
+        recalled_insights: list[Insight] = []
+        recalled_memories: list[Memory] = []
+
+        for ins in store.list_insights(sort="confidence", limit=100):
+            text = ins.to_markdown()
+            tokens = len(text) // 4
+            if used_tokens + tokens > args.budget:
+                break
+            recalled_insights.append(ins)
+            used_tokens += tokens
+
+        all_memories = store.list_memories(sort="hit_count", limit=200)
+        all_memories.sort(
+            key=lambda m: m.hit_count * m.confidence,
+            reverse=True,
+        )
+        for mem in all_memories:
+            text = mem.to_markdown()
+            tokens = len(text) // 4
+            if used_tokens + tokens > args.budget:
+                break
+            recalled_memories.append(mem)
+            used_tokens += tokens
+
+        output = store.format_recall(recalled_insights, recalled_memories, format=args.format)
+
+        print(output)
+        print(f"[dry-run] 未记录 hit_logs", file=sys.stderr)
+    else:
+        output = store.recall(budget=args.budget, format=args.format)
+        print(output)
+
+    return 0
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    """从 memory 中提炼 insight 候选。
+
+    流程：
+    1. 加载所有 memory
+    2. 按 kind 分组
+    3. 调用 LLM 提炼 insight
+    4. --dry-run 只输出候选不写入
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    store = _resolve_store(args.source)
+    memories = store.list_memories(sort="confidence", limit=200)
+
+    if not memories:
+        print("没有 memory 可供评估", file=sys.stderr)
+        return 0
+
+    print(f"加载 {len(memories)} 条 memory", file=sys.stderr)
+
+    # 格式化 memory 列表
+    mem_lines: list[str] = []
+    for mem in memories:
+        mem_lines.append(
+            f"- [{mem.id}] ({mem.kind.value}) {mem.content} "
+            f"| context: {mem.context} | confidence: {mem.confidence} "
+            f"| tags: {mem.tags}"
+        )
+    memories_text = "\n".join(mem_lines)
+
+    # 加载 prompt 模板
+    if args.prompt_file:
+        prompt_path = Path(args.prompt_file)
+        if not prompt_path.exists():
+            print(f"错误: prompt 文件不存在: {args.prompt_file}", file=sys.stderr)
+            return 1
+        template = prompt_path.read_text(encoding="utf-8")
+    else:
+        template = EVALUATE_PROMPT
+
+    prompt = template.format(memories=memories_text)
+
+    if args.dry_run:
+        print(f"[dry-run] Prompt 长度: {len(prompt)}", file=sys.stderr)
+        print(f"[dry-run] Memory 数量: {len(memories)}", file=sys.stderr)
+        # 按 kind 分组统计
+        kind_counts: dict[str, int] = {}
+        for mem in memories:
+            kind_counts[mem.kind.value] = kind_counts.get(mem.kind.value, 0) + 1
+        for kind, count in sorted(kind_counts.items()):
+            print(f"  {kind}: {count}", file=sys.stderr)
+        return 0
+
+    # 调用 LLM
+    print("调用 LLM 提炼 insight...", file=sys.stderr)
+    items = call_llm_array(prompt, "sonnet")
+    if not items:
+        print("LLM 调用失败或无结果", file=sys.stderr)
+        return 1
+
+    created = 0
+    for item in items:
+        if not item.get("is_valid", False):
+            continue
+
+        now = datetime.now()
+        evidence_ids = item.get("evidence", [])
+
+        insight = Insight(
+            id=generate_id("ins"),
+            pattern=item.get("pattern", ""),
+            action=item.get("action", ""),
+            evidence=evidence_ids,
+            scope=Scope.PROJECT,
+            created_at=now,
+            last_validated_at=now,
+            evidence_count=len(evidence_ids),
+            confidence=float(item.get("confidence", 0.6)),
+            tags=item.get("tags", []),
+        )
+        store.store_insight(insight)
+
+        # 建立 evidence links
+        for mem_id in evidence_ids:
+            store.link_evidence(insight.id, mem_id)
+
+        created += 1
+        print(
+            f"  + {insight.id}: {insight.pattern[:60]}",
+            file=sys.stderr,
+        )
+
+    print(f"\n共创建 {created} 条 insight", file=sys.stderr)
+    return 0
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    """列出 memory 和/或 insight。
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    store = _resolve_store(args.source)
+
+    show_memories = args.type in (None, "memory")
+    show_insights = args.type in (None, "insight")
+
+    if show_insights:
+        insights = store.list_insights(sort="confidence", limit=50)
+        if insights:
+            print("## Insights\n")
+            for ins in insights:
+                tags = ", ".join(ins.tags) if ins.tags else "-"
+                print(
+                    f"  [{ins.id}] conf={ins.confidence:.2f} "
+                    f"| {ins.pattern[:60]} | tags: {tags}"
+                )
+            print()
+        elif args.type == "insight":
+            print("没有 insight")
+
+    if show_memories:
+        memories = store.list_memories(sort="confidence", limit=50)
+        if memories:
+            print("## Memories\n")
+            for mem in memories:
+                tags = ", ".join(mem.tags) if mem.tags else "-"
+                print(
+                    f"  [{mem.id}] ({mem.kind.value}) conf={mem.confidence:.2f} "
+                    f"hits={mem.hit_count} | {mem.content[:60]} | tags: {tags}"
+                )
+            print()
+        elif args.type == "memory":
+            print("没有 memory")
+
+    return 0
+
+
+def cmd_promote(args: argparse.Namespace) -> int:
+    """将 memory 提升为 insight。
+
+    在 project store 和 global store 中查找 memory。
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    project_id = _resolve_project_id(args.source)
+
+    # 在 project store 和 global store 中查找
+    for store_id in [project_id, "global"]:
+        store = InsightStore(store_id)
+        result = store.promote(args.id, reason=args.reason or "")
+        if result is not None:
+            print(f"已提升 {args.id} -> {result.id}")
+            print(f"  pattern: {result.pattern}")
+            print(f"  action: {result.action}")
+            return 0
+
+    print(f"错误: memory {args.id} 不存在", file=sys.stderr)
+    return 1
+
+
+def cmd_degrade(args: argparse.Namespace) -> int:
+    """降级 insight。
+
+    在 project store 和 global store 中查找 insight。
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    project_id = _resolve_project_id(args.source)
+
+    for store_id in [project_id, "global"]:
+        store = InsightStore(store_id)
+        if store.degrade(args.id, reason=args.reason or ""):
+            print(f"已降级 {args.id}")
+            return 0
+
+    print(f"错误: insight {args.id} 不存在", file=sys.stderr)
+    return 1
+
+
+def cmd_delete(args: argparse.Namespace) -> int:
+    """删除 memory 或 insight。
+
+    根据 ID 前缀（mem_ / ins_）决定删除类型。
+
+    Args:
+        args: 命令行参数。
+
+    Returns:
+        退出码。
+    """
+    project_id = _resolve_project_id(args.source)
+    item_id: str = args.id
+
+    if item_id.startswith("mem_"):
+        for store_id in [project_id, "global"]:
+            store = InsightStore(store_id)
+            if store.delete_memory(item_id):
+                print(f"已删除 memory {item_id}")
+                return 0
+        print(f"错误: memory {item_id} 不存在", file=sys.stderr)
+        return 1
+
+    elif item_id.startswith("ins_"):
+        for store_id in [project_id, "global"]:
+            store = InsightStore(store_id)
+            if store.delete_insight(item_id):
+                print(f"已删除 insight {item_id}")
+                return 0
+        print(f"错误: insight {item_id} 不存在", file=sys.stderr)
+        return 1
+
+    else:
+        print(
+            f"错误: 无法识别 ID 类型 '{item_id}'（需要 mem_ 或 ins_ 前缀）",
+            file=sys.stderr,
+        )
+        return 1
+
+
+# ---------------------------------------------------------------------------
+# CLI 入口
+# ---------------------------------------------------------------------------
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI 主入口。
+
+    Args:
+        argv: 命令行参数列表，None 时使用 sys.argv。
+
+    Returns:
+        退出码。
+    """
     parser = argparse.ArgumentParser(
         prog="omp-insight",
-        description="从 AI 对话中提取高质量经验洞察",
+        description="从 AI 对话中提取 Memory，提炼 Insight",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # --- extract ---
-    p_extract = sub.add_parser("extract", help="从当前项目会话中提取 insight")
-    p_extract.add_argument(
-        "--runtime",
-        choices=["claude", "codex", "pi", "all"],
-        default="all",
-        help="指定 runtime（默认全部）",
+    # --- capture ---
+    p_capture = sub.add_parser("capture", help="从对话中提取 memory")
+    p_capture.add_argument("--source", default=None, help="项目目录（默认当前目录）")
+    p_capture.add_argument("--session", default=None, help="仅处理指定 session ID")
+    p_capture.add_argument("--since", default=None, help="只处理最近 N 天的 session（如 7d）")
+    p_capture.add_argument(
+        "--min-messages", type=int, default=10,
+        help="最少消息数，低于此值跳过（默认 10）",
     )
-    p_extract.add_argument("--since", help="只处理此日期之后的 session（YYYY-MM-DD）")
-    p_extract.add_argument("--dry-run", action="store_true", help="仅检测纠正模式，不调用 LLM")
-    p_extract.add_argument("--json", action="store_true", dest="json_output", help="JSON 格式输出")
-    p_extract.add_argument("--limit", type=int, default=20, help="最多处理的 session 数")
-    p_extract.add_argument("--model", default="sonnet", help="LLM 模型（默认 sonnet）")
+    p_capture.add_argument("--force", action="store_true", help="忽略已处理标记，强制重新处理")
+    p_capture.add_argument("--dry-run", action="store_true", help="仅分析不写入")
+    p_capture.add_argument("--model", default="sonnet", help="LLM 模型（默认 sonnet）")
 
-    # --- search ---
-    p_search = sub.add_parser("search", help="检索相关 insight")
-    p_search.add_argument("query", help="搜索查询")
-    p_search.add_argument("--scope", choices=["project", "user", "all"], default="all")
-    p_search.add_argument("--top-k", type=int, default=5)
-    p_search.add_argument("--json", action="store_true", dest="json_output")
+    # --- recall ---
+    p_recall = sub.add_parser("recall", help="召回记忆和洞察")
+    p_recall.add_argument("--source", default=None, help="项目目录（默认当前目录）")
+    p_recall.add_argument(
+        "--format", choices=["json", "md"], default="md", help="输出格式（默认 md）"
+    )
+    p_recall.add_argument(
+        "--budget", type=int, default=4096, help="Token 预算（默认 4096）"
+    )
+    p_recall.add_argument(
+        "--dry-run", action="store_true", help="不记录 hit_logs"
+    )
+
+    # --- evaluate ---
+    p_evaluate = sub.add_parser("evaluate", help="从 memory 中提炼 insight")
+    p_evaluate.add_argument("--source", default=None, help="项目目录（默认当前目录）")
+    p_evaluate.add_argument("--dry-run", action="store_true", help="仅输出候选不写入")
+    p_evaluate.add_argument(
+        "--prompt-file", default=None, help="外部 prompt 模板文件"
+    )
 
     # --- list ---
-    p_list = sub.add_parser("list", help="列出已有 insight")
-    p_list.add_argument("--scope", choices=["project", "user"], default="project")
-    p_list.add_argument("--sort", choices=["confidence", "date"], default="confidence")
-    p_list.add_argument("--limit", type=int, default=20)
-    p_list.add_argument("--json", action="store_true", dest="json_output")
-
-    # --- show ---
-    p_show = sub.add_parser("show", help="查看 insight 详情")
-    p_show.add_argument("insight_id", help="Insight ID")
+    p_list = sub.add_parser("list", help="列出 memory 和 insight")
+    p_list.add_argument("--source", default=None, help="项目目录（默认当前目录）")
+    p_list.add_argument(
+        "--type", choices=["memory", "insight"], default=None,
+        help="只列出指定类型（默认两者都列）",
+    )
 
     # --- promote ---
-    p_promote = sub.add_parser("promote", help="提升 insight 到 user 级")
-    p_promote.add_argument("insight_id", help="Insight ID")
+    p_promote = sub.add_parser("promote", help="将 memory 提升为 insight")
+    p_promote.add_argument("id", help="Memory ID（mem_ 前缀）")
+    p_promote.add_argument("--reason", default=None, help="提升原因")
+    p_promote.add_argument("--source", default=None, help="项目目录（默认当前目录）")
 
-    # --- stats ---
-    p_stats = sub.add_parser("stats", help="统计信息")
-    p_stats.add_argument("--json", action="store_true", dest="json_output")
+    # --- degrade ---
+    p_degrade = sub.add_parser("degrade", help="降级 insight")
+    p_degrade.add_argument("id", help="Insight ID（ins_ 前缀）")
+    p_degrade.add_argument("--reason", default=None, help="降级原因")
+    p_degrade.add_argument("--source", default=None, help="项目目录（默认当前目录）")
+
+    # --- delete ---
+    p_delete = sub.add_parser("delete", help="删除 memory 或 insight")
+    p_delete.add_argument("id", help="ID（mem_ 或 ins_ 前缀）")
+    p_delete.add_argument("--source", default=None, help="项目目录（默认当前目录）")
 
     args = parser.parse_args(argv)
 
@@ -102,225 +703,15 @@ def main(argv: list[str] | None = None) -> int:
         logging.basicConfig(level=logging.WARNING)
 
     handlers = {
-        "extract": cmd_extract,
-        "search": cmd_search,
+        "capture": cmd_capture,
+        "recall": cmd_recall,
+        "evaluate": cmd_evaluate,
         "list": cmd_list,
-        "show": cmd_show,
         "promote": cmd_promote,
-        "stats": cmd_stats,
+        "degrade": cmd_degrade,
+        "delete": cmd_delete,
     }
     return handlers[args.command](args)
-
-
-# ---------------------------------------------------------------------------
-# 命令实现
-# ---------------------------------------------------------------------------
-
-
-def cmd_extract(args: argparse.Namespace) -> int:
-    """提取 insight。"""
-    project = detect_project()
-    print(f"项目: {project.name} ({project.id})", file=sys.stderr)
-
-    # 解析 runtime
-    if args.runtime == "all":
-        runtimes = [Runtime.CLAUDE, Runtime.CODEX, Runtime.PI]
-    else:
-        runtimes = [RUNTIME_MAP[args.runtime]]
-
-    # 解析 since
-    since = None
-    if args.since:
-        since = datetime.strptime(args.since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-
-    # 发现 session
-    sessions = discover_sessions(
-        project.root,
-        runtimes=runtimes,
-        since=since,
-        limit=args.limit,
-    )
-    print(f"发现 {len(sessions)} 个 session", file=sys.stderr)
-
-    if not sessions:
-        print("没有找到会话，退出", file=sys.stderr)
-        return 0
-
-    # 逐 session 提取纠正模式
-    all_trajectories = []
-    for session in sessions:
-        reader_cls = READER_MAP.get(session.runtime)
-        if reader_cls is None:
-            continue
-        reader = reader_cls()
-        messages = reader.read_session(session.file_path)
-        trajectories = detect_correction_patterns(messages)
-        if trajectories:
-            all_trajectories.extend(trajectories)
-            print(
-                f"  [{session.runtime.value}] {session.session_id[:20]}... "
-                f"→ {len(trajectories)} 个纠正模式",
-                file=sys.stderr,
-            )
-
-    print(f"\n共检测到 {len(all_trajectories)} 个纠正模式", file=sys.stderr)
-
-    if not all_trajectories:
-        print("没有检测到纠正模式", file=sys.stderr)
-        return 0
-
-    # 生成 insight
-    insights = generate_insights(
-        all_trajectories,
-        model=args.model,
-        dry_run=args.dry_run,
-    )
-    print(f"生成了 {len(insights)} 个 insight", file=sys.stderr)
-
-    # 存储
-    store = InsightStore(project.id)
-    for insight in insights:
-        store.store(insight)
-
-    # 输出
-    if args.json_output:
-        _print_json([_insight_to_dict(i) for i in insights])
-    else:
-        for i in insights:
-            print(f"\n{'='*60}")
-            print(f"ID: {i.id}")
-            print(f"Trigger: {i.trigger[:100]}")
-            print(f"Wrong: {i.wrong_default[:100]}")
-            print(f"Corrected: {i.corrected_behavior[:100]}")
-            print(f"Confidence: {i.confidence}")
-            print(f"Tags: {i.tags}")
-
-    return 0
-
-
-def cmd_search(args: argparse.Namespace) -> int:
-    """检索 insight。"""
-    project = detect_project()
-
-    if args.scope == "all":
-        results = search_all(args.query, project.id, args.top_k)
-    elif args.scope == "user":
-        store = InsightStore("global")
-        results = store.search(args.query, args.top_k)
-    else:
-        store = InsightStore(project.id)
-        results = store.search(args.query, args.top_k)
-
-    if args.json_output:
-        _print_json([_insight_to_dict(i) for i in results])
-    else:
-        if not results:
-            print("没有找到相关 insight")
-            return 0
-        for i, ins in enumerate(results, 1):
-            print(f"\n{i}. [{ins.id}] (conf: {ins.confidence})")
-            print(f"   Trigger: {ins.trigger[:80]}")
-            print(f"   Wrong: {ins.wrong_default[:80]}")
-            print(f"   Correct: {ins.corrected_behavior[:80]}")
-
-    return 0
-
-
-def cmd_list(args: argparse.Namespace) -> int:
-    """列出 insight。"""
-    project = detect_project()
-    store_id = "global" if args.scope == "user" else project.id
-    store = InsightStore(store_id)
-
-    insights = store.list_insights(sort=args.sort, limit=args.limit)
-
-    if args.json_output:
-        _print_json([_insight_to_dict(i) for i in insights])
-    else:
-        if not insights:
-            print("没有 insight")
-            return 0
-        for ins in insights:
-            tags = ", ".join(ins.tags) if ins.tags else "-"
-            print(f"  [{ins.id}] conf={ins.confidence:.2f} | {ins.trigger[:50]} | tags: {tags}")
-
-    return 0
-
-
-def cmd_show(args: argparse.Namespace) -> int:
-    """查看 insight 详情。"""
-    project = detect_project()
-
-    # 先在项目级找，再在全局找
-    for store_id in [project.id, "global"]:
-        store = InsightStore(store_id)
-        insight = store.get(args.insight_id)
-        if insight:
-            print(insight.to_markdown())
-            return 0
-
-    print(f"Insight {args.insight_id} 不存在", file=sys.stderr)
-    return 1
-
-
-def cmd_promote(args: argparse.Namespace) -> int:
-    """提升 insight 作用域。"""
-    project = detect_project()
-    store = InsightStore(project.id)
-
-    if store.promote(args.insight_id):
-        print(f"已提升 {args.insight_id} 到 user 级")
-        return 0
-    else:
-        print(f"提升失败：{args.insight_id} 不存在或已是 user 级", file=sys.stderr)
-        return 1
-
-
-def cmd_stats(args: argparse.Namespace) -> int:
-    """统计信息。"""
-    project = detect_project()
-
-    project_stats = InsightStore(project.id).stats()
-    global_stats = InsightStore("global").stats()
-
-    if args.json_output:
-        _print_json({"project": project_stats, "global": global_stats})
-    else:
-        print(f"项目: {project.name} ({project.id})")
-        print(f"  Insights: {project_stats['total_insights']}")
-        print(f"  平均置信度: {project_stats['avg_confidence']}")
-        print(f"  消费次数: {project_stats['total_consumptions']}")
-        print(f"  采用率: {project_stats['adoption_rate']}")
-        print(f"  QMD: {'可用' if project_stats['qmd_available'] else '不可用（FTS5 降级）'}")
-        print(f"\n全局 (user 级):")
-        print(f"  Insights: {global_stats['total_insights']}")
-        print(f"  平均置信度: {global_stats['avg_confidence']}")
-
-    return 0
-
-
-# ---------------------------------------------------------------------------
-# 工具函数
-# ---------------------------------------------------------------------------
-
-
-def _insight_to_dict(insight: Insight) -> dict:
-    return {
-        "id": insight.id,
-        "trigger": insight.trigger,
-        "wrong_default": insight.wrong_default,
-        "corrected_behavior": insight.corrected_behavior,
-        "tags": insight.tags,
-        "confidence": insight.confidence,
-        "scope": insight.scope.value,
-        "correction_count": insight.correction_count,
-        "first_seen": insight.first_seen.isoformat(),
-        "last_confirmed": insight.last_confirmed.isoformat(),
-    }
-
-
-def _print_json(data: dict | list) -> None:
-    print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
