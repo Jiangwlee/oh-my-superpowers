@@ -112,12 +112,7 @@ digraph brainstorming {
 
 Only applies when the user wants to design a **Skill** or **Agent**. General brainstorming skips to Step 3.
 
-After exploring context, detect topic by user wording and exploration signals:
-- **Skill signals**: "封装"、"工具"、"CLI"、specific script/spec dependencies
-- **Agent signals**: "角色"、"审查官"、"分析师"、semantic judgment needed
-- **General**: everything else → skip to Step 3
-
-If signals conflict with user's stated topic, challenge proactively.
+After exploring context, detect topic: only activate when the user **explicitly mentions** "skill" or "agent" (e.g. "设计一个 skill"、"新建 agent"、"skill brainstorm"), or when conversation context makes it unambiguous that the design target is a Skill or Agent. Otherwise skip to Step 3.
 
 **Path A — Skill Gate:** Read `references/skill-fundamentals.md` and `references/design-patterns.md`. Run capability check (真实性/必要性/自治性) and pattern selection per those docs. Pass → proceed with `assets/skill-design-template.md`. Fail → terminate or adjust.
 
