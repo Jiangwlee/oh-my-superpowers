@@ -42,7 +42,7 @@ from scripts.readers import (
     PiReader,
     discover_sessions,
 )
-from scripts.store import InsightStore
+from scripts.store import InsightStore, _decay_score
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +169,16 @@ def cmd_capture(args: argparse.Namespace) -> int:
     Returns:
         退出码。
     """
+    # --if-no-compact: 检查 PostCompact 是否已执行过
+    if args.if_no_compact:
+        lock_dir = Path(os.environ.get("TMPDIR", "/tmp"))
+        session_env = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+        if session_env:
+            lock_file = lock_dir / f"omp-insight-compact-{session_env}.lock"
+            if lock_file.exists():
+                print("PostCompact 已执行过，跳过 Stop 兜底 capture", file=sys.stderr)
+                return 0
+
     path = args.source or os.getcwd()
     project = detect_project(path)
     if not project.root:
@@ -338,6 +348,12 @@ def cmd_capture(args: argparse.Namespace) -> int:
             f"\n共创建 {total_created} 条 memory，跳过 {total_skipped} 条",
             file=sys.stderr,
         )
+        # 标记 PostCompact 已执行（用于 --if-no-compact 判断）
+        session_env = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+        if session_env and not args.if_no_compact:
+            lock_dir = Path(os.environ.get("TMPDIR", "/tmp"))
+            lock_file = lock_dir / f"omp-insight-compact-{session_env}.lock"
+            lock_file.touch()
 
     return 0
 
@@ -361,7 +377,16 @@ def cmd_recall(args: argparse.Namespace) -> int:
         recalled_insights: list[Insight] = []
         recalled_memories: list[Memory] = []
 
-        for ins in store.list_insights(sort="confidence", limit=100):
+        all_insights = store.list_insights(sort="confidence", limit=100)
+        all_insights.sort(
+            key=lambda i: _decay_score(
+                i.evidence_count,
+                i.confidence,
+                store.get_last_hit_at(i.id) or i.created_at,
+            ),
+            reverse=True,
+        )
+        for ins in all_insights:
             text = ins.to_markdown()
             tokens = len(text) // 4
             if used_tokens + tokens > args.budget:
@@ -371,7 +396,11 @@ def cmd_recall(args: argparse.Namespace) -> int:
 
         all_memories = store.list_memories(sort="hit_count", limit=200)
         all_memories.sort(
-            key=lambda m: m.hit_count * m.confidence,
+            key=lambda m: _decay_score(
+                m.hit_count,
+                m.confidence,
+                store.get_last_hit_at(m.id) or m.created_at,
+            ),
             reverse=True,
         )
         for mem in all_memories:
@@ -388,7 +417,20 @@ def cmd_recall(args: argparse.Namespace) -> int:
         print(f"[dry-run] 未记录 hit_logs", file=sys.stderr)
     else:
         output = store.recall(budget=args.budget, format=args.format)
-        print(output)
+
+        if args.hook:
+            # Hook 模式：输出 hookSpecificOutput JSON
+            import json as json_mod
+
+            hook_output = {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": f"## Insight Memory\n\n{output}",
+                }
+            }
+            print(json_mod.dumps(hook_output, ensure_ascii=False))
+        else:
+            print(output)
 
     return 0
 
@@ -661,6 +703,10 @@ def main(argv: list[str] | None = None) -> int:
     p_capture.add_argument("--force", action="store_true", help="忽略已处理标记，强制重新处理")
     p_capture.add_argument("--dry-run", action="store_true", help="仅分析不写入")
     p_capture.add_argument("--model", default="sonnet", help="LLM 模型（默认 sonnet）")
+    p_capture.add_argument(
+        "--if-no-compact", action="store_true",
+        help="仅在本次会话未触发 PostCompact 时执行（Stop hook 兜底用）",
+    )
 
     # --- recall ---
     p_recall = sub.add_parser("recall", help="召回记忆和洞察")
@@ -673,6 +719,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_recall.add_argument(
         "--dry-run", action="store_true", help="不记录 hit_logs"
+    )
+    p_recall.add_argument(
+        "--hook", action="store_true", help="Hook 模式：输出 hookSpecificOutput JSON"
     )
 
     # --- evaluate ---

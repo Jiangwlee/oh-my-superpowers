@@ -31,6 +31,30 @@ from .models import Insight, Memory, Scope, generate_id
 
 logger = logging.getLogger(__name__)
 
+DECAY_GRACE_MONTHS = 3   # 宽限期：此期间内无衰减
+DECAY_RATE = 0.5         # 每超出宽限期 1 个月的惩罚值
+
+
+def _decay_score(hit_count: int, confidence: float, last_hit_at: datetime) -> float:
+    """计算含 time decay 的排序分数。
+
+    基于 last_hit_at（最后命中时间）而非 created_at，
+    因为持续被引用的记忆不应衰减。
+
+    Args:
+        hit_count: 命中次数。
+        confidence: 置信度。
+        last_hit_at: 最后命中时间。
+
+    Returns:
+        排序分数，越高越优先。
+    """
+    now = datetime.now()
+    months = (now.year - last_hit_at.year) * 12 + (now.month - last_hit_at.month)
+    age_penalty = max(0.0, (months - DECAY_GRACE_MONTHS) * DECAY_RATE)
+    return hit_count * confidence - age_penalty
+
+
 BASE_DIR = Path.home() / ".local" / "share" / "oh-my-superpowers" / "insight"
 
 
@@ -362,6 +386,24 @@ class InsightStore:
             ).fetchone()
             return row[0] if row else 0
 
+    def get_last_hit_at(self, item_id: str) -> datetime | None:
+        """获取某条记录的最后命中时间。
+
+        Args:
+            item_id: Memory 或 Insight 的 ID。
+
+        Returns:
+            最后命中时间，无记录时返回 None。
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(timestamp) FROM hit_logs WHERE item_id = ?",
+                (item_id,),
+            ).fetchone()
+            if row and row[0] is not None:
+                return datetime.fromtimestamp(row[0])
+            return None
+
     # ------------------------------------------------------------------
     # Recall（核心）
     # ------------------------------------------------------------------
@@ -386,8 +428,16 @@ class InsightStore:
         recalled_insights: list[Insight] = []
         recalled_memories: list[Memory] = []
 
-        # 1. 全量加载 insight
+        # 1. 加载 insight（按 decay score 排序）
         all_insights = self.list_insights(sort="confidence", limit=100)
+        all_insights.sort(
+            key=lambda i: _decay_score(
+                i.evidence_count,
+                i.confidence,
+                self.get_last_hit_at(i.id) or i.created_at,
+            ),
+            reverse=True,
+        )
         for ins in all_insights:
             text = ins.to_markdown()
             tokens = len(text) // 4
@@ -396,10 +446,14 @@ class InsightStore:
             recalled_insights.append(ins)
             used_tokens += tokens
 
-        # 2. 剩余预算填充 memory（按 hit_count * confidence 排序）
+        # 2. 剩余预算填充 memory（按 decay score 排序）
         all_memories = self.list_memories(sort="hit_count", limit=200)
         all_memories.sort(
-            key=lambda m: m.hit_count * m.confidence,
+            key=lambda m: _decay_score(
+                m.hit_count,
+                m.confidence,
+                self.get_last_hit_at(m.id) or m.created_at,
+            ),
             reverse=True,
         )
         for mem in all_memories:
@@ -449,6 +503,22 @@ class InsightStore:
             return self._recall_json(insights, memories)
         return self._recall_md(insights, memories)
 
+    @staticmethod
+    def _age_str(created_at: datetime) -> str:
+        """计算距今月数的可读字符串。
+
+        Args:
+            created_at: 创建时间。
+
+        Returns:
+            如 '<1mo'、'3mo' 等。
+        """
+        now = datetime.now()
+        age_months = (now.year - created_at.year) * 12 + (now.month - created_at.month)
+        if age_months < 1:
+            return "<1mo"
+        return f"{age_months}mo"
+
     def _recall_md(
         self,
         insights: list[Insight],
@@ -460,18 +530,20 @@ class InsightStore:
         if insights:
             parts.append("## Insights\n")
             for ins in insights:
+                age = self._age_str(ins.created_at)
                 parts.append(
                     f"- **{ins.pattern}** → {ins.action} "
-                    f"(confidence: {ins.confidence}, evidence: {ins.evidence_count})"
+                    f"[confidence:{ins.confidence} | age:{age} | evidence:{ins.evidence_count}]"
                 )
             parts.append("")
 
         if memories:
             parts.append("## Memories\n")
             for mem in memories:
+                age = self._age_str(mem.created_at)
                 parts.append(
                     f"- [{mem.kind.value}] {mem.content} "
-                    f"(hits: {mem.hit_count}, confidence: {mem.confidence})"
+                    f"[confidence:{mem.confidence} | age:{age} | hits:{mem.hit_count}]"
                 )
             parts.append("")
 

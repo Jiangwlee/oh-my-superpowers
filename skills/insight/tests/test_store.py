@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -20,7 +21,7 @@ from scripts.models import (
     Scope,
     generate_id,
 )
-from scripts.store import InsightStore
+from scripts.store import InsightStore, _decay_score, DECAY_GRACE_MONTHS, DECAY_RATE
 
 
 # ---------------------------------------------------------------------------
@@ -618,3 +619,83 @@ class TestStats:
 
         store.delete_memory(mem.id)
         assert store.stats()["total_memories"] == 0
+
+
+# ---------------------------------------------------------------------------
+# _decay_score + recall time decay
+# ---------------------------------------------------------------------------
+
+
+class TestDecayScore:
+    """_decay_score 和 recall 排序中的 time decay 测试。"""
+
+    def test_no_penalty_within_grace_period(self):
+        """DECAY_GRACE_MONTHS 内 score = hit_count * confidence。"""
+        now = datetime(2026, 6, 1)
+        last_hit = datetime(2026, 5, 1)  # 1 月前
+        with patch("scripts.store.datetime") as mock_dt:
+            mock_dt.now.return_value = now
+            mock_dt.fromtimestamp = datetime.fromtimestamp
+            score = _decay_score(5, 0.8, last_hit)
+        assert score == pytest.approx(5 * 0.8)
+
+    def test_linear_penalty_after_grace(self):
+        """6 个月时 penalty = (6 - 3) * 0.5 = 1.5。"""
+        now = datetime(2026, 6, 1)
+        last_hit = datetime(2025, 12, 1)  # 6 个月前
+        with patch("scripts.store.datetime") as mock_dt:
+            mock_dt.now.return_value = now
+            mock_dt.fromtimestamp = datetime.fromtimestamp
+            score = _decay_score(2, 0.6, last_hit)
+        expected = 2 * 0.6 - (6 - DECAY_GRACE_MONTHS) * DECAY_RATE
+        assert score == pytest.approx(expected)
+
+    def test_high_frequency_resists_decay(self):
+        """高频条目即使 12 个月仍有正分。"""
+        now = datetime(2026, 12, 1)
+        last_hit = datetime(2026, 1, 1)  # 11 个月前
+        with patch("scripts.store.datetime") as mock_dt:
+            mock_dt.now.return_value = now
+            mock_dt.fromtimestamp = datetime.fromtimestamp
+            score = _decay_score(10, 0.9, last_hit)
+        # 10 * 0.9 - (11 - 3) * 0.5 = 9.0 - 4.0 = 5.0
+        assert score > 0
+
+    def test_uses_last_hit_at_not_created_at(self):
+        """验证衰减基于 last_hit_at：相同 created_at 不同 last_hit_at 应有不同 score。"""
+        now = datetime(2026, 6, 1)
+        recent_hit = datetime(2026, 5, 1)   # 1 月前
+        old_hit = datetime(2025, 6, 1)      # 12 个月前
+        with patch("scripts.store.datetime") as mock_dt:
+            mock_dt.now.return_value = now
+            mock_dt.fromtimestamp = datetime.fromtimestamp
+            score_recent = _decay_score(5, 0.8, recent_hit)
+            score_old = _decay_score(5, 0.8, old_hit)
+        assert score_recent > score_old
+
+    def test_negative_score_sorts_last(self):
+        """低频老旧条目产生负分。"""
+        now = datetime(2026, 12, 1)
+        last_hit = datetime(2025, 6, 1)  # 18 个月前
+        with patch("scripts.store.datetime") as mock_dt:
+            mock_dt.now.return_value = now
+            mock_dt.fromtimestamp = datetime.fromtimestamp
+            score = _decay_score(1, 0.5, last_hit)
+        # 1 * 0.5 - (18 - 3) * 0.5 = 0.5 - 7.5 = -7.0
+        assert score < 0
+
+    def test_recall_order_with_decay(self, store):
+        """recall 输出中高 decay score 的条目排在前面。"""
+        # 创建两条 memory：一条最近命中高频，一条古老低频
+        mem_fresh = _make_memory(content="新鲜记忆", hit_count=5, confidence=0.9)
+        mem_stale = _make_memory(content="陈旧记忆", hit_count=1, confidence=0.5)
+        store.store_memory(mem_fresh)
+        store.store_memory(mem_stale)
+
+        # 为 fresh memory 记录近期 hit
+        store.log_hit(mem_fresh.id, "memory")
+
+        result = store.recall(format="md")
+        # 新鲜记忆应该排在前面
+        if "新鲜记忆" in result and "陈旧记忆" in result:
+            assert result.index("新鲜记忆") < result.index("陈旧记忆")
