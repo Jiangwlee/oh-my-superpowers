@@ -110,83 +110,18 @@ digraph brainstorming {
 
 ## Topic-specific Gate (Step 2)
 
-After exploring project context (Step 1), detect whether the user's request is a **Skill design**, **Agent design**, or **general brainstorming**. This gate only applies to Skill/Agent design — general brainstorming skips directly to Step 3.
+Only applies when the user wants to design a **Skill** or **Agent**. General brainstorming skips to Step 3.
 
-### Topic Detection
+After exploring context, detect topic by user wording and exploration signals:
+- **Skill signals**: "封装"、"工具"、"CLI"、specific script/spec dependencies
+- **Agent signals**: "角色"、"审查官"、"分析师"、semantic judgment needed
+- **General**: everything else → skip to Step 3
 
-Based on exploration results and user description, determine the topic:
+If signals conflict with user's stated topic, challenge proactively.
 
-| Signal | → Skill | → Agent | → General |
-|--------|---------|---------|-----------|
-| User wording | "封装"、"工具"、"CLI" | "角色"、"审查官"、"分析师" | "功能"、"改进"、"重构" |
-| Exploration | specific CLI/script/spec | semantic judgment needed | feature/bug/refactor |
-| Core verb | "做 X"、"生成 Y" | "判断"、"决策"、"负责" | "添加"、"修改"、"优化" |
+**Path A — Skill Gate:** Read `references/skill-fundamentals.md` and `references/design-patterns.md`. Run capability check (真实性/必要性/自治性) and pattern selection per those docs. Pass → proceed with `assets/skill-design-template.md`. Fail → terminate or adjust.
 
-If signals conflict with user's stated topic, challenge proactively before proceeding.
-
----
-
-### Path A: Skill Gate
-
-Read `references/skill-fundamentals.md` and `references/design-patterns.md`, then run:
-
-**Capability Check (Hard Gate):**
-
-Based on exploration results, verify three dimensions (model self-evaluates):
-
-1. **能力真实性** — Is this "wrapping a capability the model can't do alone", or just "make the model do X"?
-2. **必要性** — Without this Skill, can the model do equally well with general knowledge?
-3. **自治性** — Can all required knowledge be packaged into `references/` or `assets/`?
-
-Show exploration findings first, then ask targeted questions only for uncertain dimensions.
-
-**Failure** → terminate or adjust direction. **Pass** → continue to Pattern Selection.
-
-**Pattern Selection:**
-
-Recommend the best-fit pattern from `references/design-patterns.md`:
-
-```
-Tool Wrapper  — expert in specific tech/library, dynamically loads specs
-Generator     — template-driven structured output
-Reviewer      — check content against standards, classify by severity
-Inversion     — multi-round requirement collection before action, with gates
-Pipeline      — strict multi-step workflow with checkpoints
-```
-
-Patterns can combine. Model recommends proactively — don't let the user choose.
-
-After pattern selection, proceed to Step 3 (clarifying questions) with Skill context established.
-Use `assets/skill-design-template.md` as the design document template in Step 9.
-
----
-
-### Path B: Agent Identity Audit
-
-Read `references/agent-fundamentals.md`, then run:
-
-**Identity Audit (Hard Gate):**
-
-Verify three dimensions: Role × Agency × Ownership. Ask targeted questions based on exploration — one per round.
-
-Typical questioning patterns (choose based on context):
-
-- **When role is predictable:** Show exploration findings, propose the role, ask for confirmation.
-- **When tool signals detected (challenge → downgrade):** Point out the finding, explain why it looks like a Skill, ask what semantic judgment is needed.
-- **When existing agent overlaps:** Point out the overlap, ask for differentiation.
-
-**Judgment dimensions (model self-evaluates):**
-
-- **Role** — Can it be summarized as a profession? Contains "器/工具/处理/转换" → Skill signal.
-- **Agency** — Are there non-scriptable semantic judgment scenarios? All judgments can be rule-based → Skill signal.
-- **Ownership** — Does it own the final result? Just an intermediate step → Skill signal.
-
-**Any dimension = 0 → Fail.** On failure, automatically switch to Path A (Skill Gate) — no need for the user to re-trigger.
-
-After passing, proceed to Step 3 (clarifying questions) with Agent context established.
-Use `assets/agent-design-template.md` as the design document template in Step 9.
-
----
+**Path B — Agent Gate:** Read `references/agent-fundamentals.md`. Run identity audit (Role × Agency × Ownership) per that doc. Pass → proceed with `assets/agent-design-template.md`. Fail → auto-downgrade to Path A.
 
 ## The Process
 
