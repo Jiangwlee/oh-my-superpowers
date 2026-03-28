@@ -58,10 +58,10 @@ _build_runtime_cmd() {
       echo "cat '$prompt_file' | claude -p --model '$model' 2>&1 | tee '$output_file'"
       ;;
     codex)
-      echo "codex exec \"\$(cat '$prompt_file')\" 2>&1 | tee '$output_file'"
+      echo "cat '$prompt_file' | codex exec - 2>&1 | tee '$output_file'"
       ;;
     pi)
-      echo "pi --no-session -p \"\$(cat '$prompt_file')\" --model '$model' 2>&1 | tee '$output_file'"
+      echo "pi --no-session -p @'$prompt_file' --model '$model' 2>&1 | tee '$output_file'"
       ;;
     *)
       echo "echo '错误：未知 runtime: $runtime' | tee '$output_file'"
