@@ -127,6 +127,9 @@ echo "[team] spawned $runtime in session $session_name" >&2
 
 elapsed=0
 poll_interval=5
+last_size=0
+stall_count=0
+stall_threshold=6  # 连续 6 次无变化（30s）触发 warning
 
 while tmux has-session -t "$session_name" 2>/dev/null; do
   if [[ $elapsed -ge $timeout_secs ]]; then
@@ -137,6 +140,19 @@ while tmux has-session -t "$session_name" 2>/dev/null; do
     bash "$SCRIPT_DIR/clean.sh" "$output_file"
     exit 124
   fi
+
+  # Heartbeat: 检查 output_file 大小变化
+  curr_size=$(stat -c%s "$output_file" 2>/dev/null || echo 0)
+  if [[ "$curr_size" -eq "$last_size" ]]; then
+    stall_count=$((stall_count + 1))
+    if [[ $stall_count -ge $stall_threshold ]]; then
+      echo "[team] warning: worker stalled (no output for $((stall_count * poll_interval))s)" >&2
+    fi
+  else
+    stall_count=0
+    last_size=$curr_size
+  fi
+
   echo "[team] waiting for $runtime ($session_name) ... ${elapsed}s/${timeout_secs}s" >&2
   sleep "$poll_interval"
   elapsed=$((elapsed + poll_interval))
