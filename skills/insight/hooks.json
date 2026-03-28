@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "omp-insight recall --source $PWD --format md",
+            "command": "omp-insight recall --source $PWD --format md --hook",
             "timeout": 5000
           }
         ]

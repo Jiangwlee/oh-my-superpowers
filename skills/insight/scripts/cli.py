@@ -422,11 +422,16 @@ def cmd_recall(args: argparse.Namespace) -> int:
             # Hook 模式：输出 hookSpecificOutput JSON
             import json as json_mod
 
+            # 统计召回数量
+            mem_count = output.count("\n- [") if output else 0
+            summary = f"[omp-insight] recalled {mem_count} memories for this project"
+
             hook_output = {
+                "systemMessage": summary,
                 "hookSpecificOutput": {
                     "hookEventName": "SessionStart",
-                    "additionalContext": f"## Insight Memory\n\n{output}",
-                }
+                    "additionalContext": output,
+                },
             }
             print(json_mod.dumps(hook_output, ensure_ascii=False))
         else:

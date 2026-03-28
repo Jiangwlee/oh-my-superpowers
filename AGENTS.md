@@ -207,6 +207,7 @@ exec bash "${SCRIPT_DIR}/../skills/web-operator/scripts/..."
 - [Skills 规范](docs/specs/00_skills/README.md)：Skills 开发核心原则 + 详细文档索引
 - [Pi Agents 规范](docs/specs/01_agents/README.md)：Agent 身份审问 + Pi 框架索引
 - [Framework 规范](docs/specs/02_framework/README.md)：架构、安装设计索引
+- [Hooks 开发指南](docs/specs/02_framework/hooks.md)：生命周期事件、输出协议、设计原则
 
 ## 开源项目参考
 
