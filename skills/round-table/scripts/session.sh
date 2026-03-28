@@ -89,6 +89,12 @@ cmd_init() {
       [alan-kay]="Alan Kay"
       [andrej-karpathy]="Andrej Karpathy"
       [richard-stallman]="Richard Stallman"
+      [dhh]="DHH"
+      [yann-lecun]="Yann LeCun"
+      [grace-hopper]="Grace Hopper"
+      [nassim-taleb]="Nassim Taleb"
+      [leslie-lamport]="Leslie Lamport"
+      [dario-amodei]="Dario Amodei"
     )
     declare -A _ROLE_LABEL=(
       [steve-jobs]="产品视觉家"
@@ -97,6 +103,12 @@ cmd_init() {
       [alan-kay]="系统思想家"
       [andrej-karpathy]="AI 架构师"
       [richard-stallman]="魔鬼代言人"
+      [dhh]="独立开发倡导者"
+      [yann-lecun]="AI 科学务实派"
+      [grace-hopper]="工程先驱"
+      [nassim-taleb]="反脆弱思想家"
+      [leslie-lamport]="形式化验证者"
+      [dario-amodei]="AI 安全缩放者"
     )
     declare -A _ROLE_RUNTIME=(
       [steve-jobs]="claude"
@@ -105,6 +117,12 @@ cmd_init() {
       [alan-kay]="claude"
       [andrej-karpathy]="claude"
       [richard-stallman]="codex"
+      [dhh]="codex"
+      [yann-lecun]="claude"
+      [grace-hopper]="pi"
+      [nassim-taleb]="codex"
+      [leslie-lamport]="claude"
+      [dario-amodei]="claude"
     )
     declare -A _ROLE_MODEL=(
       [steve-jobs]="opus"
@@ -113,6 +131,12 @@ cmd_init() {
       [alan-kay]="sonnet"
       [andrej-karpathy]="sonnet"
       [richard-stallman]="gpt-5.4"
+      [dhh]="gpt-5.4"
+      [yann-lecun]="sonnet"
+      [grace-hopper]="qwen3.5-27b"
+      [nassim-taleb]="gpt-5.4"
+      [leslie-lamport]="sonnet"
+      [dario-amodei]="opus"
     )
 
     participants='[]'
