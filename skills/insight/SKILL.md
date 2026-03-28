@@ -33,6 +33,38 @@ omp-insight degrade  <id> [--reason <text>] [--source <dir>]
 omp-insight delete   <id> [--source <dir>]
 ```
 
+## 自动化（Hook 集成）
+
+安装 Insight skill 后自动注入 Claude Code hooks，无需额外配置。
+
+### 触发时机
+
+| Hook 事件 | 行为 | 模式 |
+|-----------|------|------|
+| SessionStart | `recall` — 召回记忆注入 additionalContext | 同步 |
+| PostCompact | `capture` — 从对话中增量提取记忆 | 异步 |
+| Stop | `capture --if-no-compact` — 短会话兜底 | 异步 |
+
+### 安装/卸载
+
+```bash
+omp install skill insight   # 自动注入 hooks 到 ~/.claude/settings.json
+omp remove skill insight    # 自动移除 hooks
+```
+
+hooks 安装使用安全写入流程（backup → tmp → verify → copy back），失败不影响 skill 本身的使用。
+
+### Recall 输出格式
+
+Hook 模式下 recall 使用 `## Insight Memory` 命名空间，每条记忆附带元数据：
+
+```
+## Insight Memory
+
+- **pattern** → action [confidence:0.8 | age:2mo | evidence:5]
+- [preference] 内容 [confidence:0.7 | age:1mo | hits:3]
+```
+
 ## 参考文档（按需加载）
 
 需要深入理解内部机制时，加载对应文档：

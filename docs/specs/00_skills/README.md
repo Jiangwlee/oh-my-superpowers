@@ -16,9 +16,36 @@
 ```
 <skill-name>/
 ├── SKILL.md          # 必须：元数据（frontmatter）+ 触发场景 + CLI 命令文档
+├── hooks.json        # 可选：Claude Code hook 声明（安装时自动合并）
 ├── scripts/          # 可选：脚本实现（不直接被模型调用）
 ├── references/       # 可选：给 Agent 按需加载的详细文档
 └── tests/            # 可选：T1 静态检查
+```
+
+### hooks.json（可选）
+
+Skill 可通过 `hooks.json` 声明所需的 Claude Code hooks。`omp install skill <name>` 时自动将 hooks 合并到 `~/.claude/settings.json`，`omp remove skill <name>` 时自动移除。
+
+格式与 Claude Code settings.json 的 hooks 结构对齐，每个条目会自动附带 `_omp_skill` 标记用于精准卸载。
+
+示例：
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "omp-<skill> recall --source $PWD",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 ## SKILL.md frontmatter 格式
