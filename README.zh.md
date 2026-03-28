@@ -25,8 +25,7 @@ oh-my-superpowers 聚焦两件事：
 
 ```
 skills/                       # Skill 单元（各自独立）
-├── agent-brainstorming/      # Agent 设计工作流
-├── skill-brainstorming/      # Skill 设计工作流
+├── brainstorming/            # 通用设计工作流（含 Skill/Agent 设计前置检验）
 ├── skill-review/             # Skill 质量审查工具
 └── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
 
@@ -58,8 +57,6 @@ docs/
 ```bash
 # 局部安装（当前项目）
 omp install skill skill-review
-omp install skill agent-brainstorming
-
 # 全局安装（所有项目可用）
 omp install skill skill-review --global
 ```
@@ -75,16 +72,15 @@ omp list --global  # 全局
 
 ```bash
 # 在 Claude Code 或 Pi 中触发对应工作流
-# "我需要设计一个 skill"   → skill-brainstorming 激活
-# "我需要设计一个 agent"   → agent-brainstorming 激活
+# "我需要设计一个 skill"   → brainstorming 激活（Skill Gate）
+# "我需要设计一个 agent"   → brainstorming 激活（Agent Gate）
 ```
 
 ## 可用 Skills
 
 | Skill | 模式 | 用途 |
 |-------|------|------|
-| `agent-brainstorming` | Inversion + Pipeline | Agent 设计工作流（含身份审问门控） |
-| `skill-brainstorming` | Inversion + Pipeline | Skill 设计工作流（含模式选择门控） |
+| `brainstorming` | Inversion + Pipeline | 通用设计工作流（含 Skill/Agent 前置检验、模式选择、身份审问） |
 | `skill-review` | Reviewer + Pipeline | Skill 目录质量审查 |
 | `markdown-to-anything` | Pipeline | Markdown 转 PDF、PNG 等格式 |
 

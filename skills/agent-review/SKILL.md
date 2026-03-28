@@ -5,7 +5,7 @@ description: >-
   Use when: reviewing an agent file, checking if an agent is ready to deploy,
   auditing agent description or system prompt quality.
   Do NOT use when: reviewing a skill directory (use skill-review), designing a new
-  agent (use agent-brainstorming), or testing agent runtime behavior.
+  agent (use brainstorming), or testing agent runtime behavior.
 ---
 
 # Agent Review

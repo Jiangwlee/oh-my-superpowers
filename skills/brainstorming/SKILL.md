@@ -2,23 +2,29 @@
 name: brainstorming
 description: >-
   You MUST use this before any creative work - creating features, building
-  components, adding functionality, or modifying behavior. Turns ideas into a
-  complete design + action plan through collaborative dialogue, then hands off
-  to execution. Do NOT use for pure research or questions with no implementation
-  intent.
+  components, adding functionality, or modifying behavior. Also covers Skill
+  and Agent design: "设计一个 skill"、"设计一个 agent"、"新建 skill/agent"、
+  "skill brainstorm"、"agent brainstorm". Turns ideas into a complete design +
+  action plan through collaborative dialogue, then hands off to execution.
+  Do NOT use for pure research or questions with no implementation intent.
 ---
 
 # Brainstorming: Ideas → Design + Action Plan
 
 <!--
-  用途：将头脑风暴转化为完整的设计方案 + 行动方案
+  用途：将头脑风暴转化为完整的设计方案 + 行动方案（含 Skill/Agent 设计前置检验）
   模式：Normal（默认）/ Fast（Claude 自动判断）
   输出：docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md
   终态：用户确认开发模式后执行
   关键引用：
     - assets/design-doc-template-normal.md  Normal 模式文档模板
     - assets/design-doc-template-fast.md    Fast 模式文档模板
+    - assets/skill-design-template.md       Skill 设计文档模板
+    - assets/agent-design-template.md       Agent 设计文档模板
     - references/principles-library.md      固定原则库（7 条）
+    - references/skill-fundamentals.md      Skill 自治原则和判断标准
+    - references/design-patterns.md         5 种 Skill 模式定义
+    - references/agent-fundamentals.md      Agent 身份标准和判断规则
     - spec-document-reviewer-prompt.md      Spec 审查 subagent 提示词
 -->
 
@@ -39,16 +45,17 @@ Every request goes through this process. Fast mode exists for simple tasks — i
 Create a task for each item and complete them in order:
 
 1. **Explore project context** — check files, docs, recent commits
-2. **Offer visual companion** (if topic will involve visual questions) — own message, no other content
-3. **Ask clarifying questions** — one at a time; purpose, constraints, success criteria
-4. **Challenge Gate** — before proposing any solution, raise the strongest objection to the core premise (see below); hold the position unless given a substantive counter-argument
-5. **Judge mode** — after Challenge Gate, assess complexity and select Normal or Fast; announce Fast mode if chosen
-6. **Propose approaches** — Normal: 2-3 options with trade-offs and recommendation; Fast: give recommendation directly
-7. **Present design** — section by section, get user approval after each
-8. **Write unified doc** — use the appropriate template, save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`, commit
-9. **Spec review loop** — (Normal only) dispatch spec-document-reviewer subagent; max 3 iterations, then surface to human
-10. **User reviews doc** — ask user to confirm before proceeding (both modes)
-11. **Recommend development mode** — propose Subagent or Inline execution; wait for user to confirm, then execute immediately
+2. **Topic-specific Gate** — if designing a Skill or Agent, run the corresponding pre-check (see below); skip for general brainstorming
+3. **Offer visual companion** (if topic will involve visual questions) — own message, no other content
+4. **Ask clarifying questions** — one at a time; purpose, constraints, success criteria
+5. **Challenge Gate** — before proposing any solution, raise the strongest objection to the core premise (see below); hold the position unless given a substantive counter-argument
+6. **Judge mode** — after Challenge Gate, assess complexity and select Normal or Fast; announce Fast mode if chosen
+7. **Propose approaches** — Normal: 2-3 options with trade-offs and recommendation; Fast: give recommendation directly
+8. **Present design** — section by section, get user approval after each
+9. **Write unified doc** — use the appropriate template, save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`, commit
+10. **Spec review loop** — (Normal only) dispatch spec-document-reviewer subagent; max 3 iterations, then surface to human
+11. **User reviews doc** — ask user to confirm before proceeding (both modes)
+12. **Recommend development mode** — propose Subagent or Inline execution; wait for user to confirm, then execute immediately
 
 **Fast mode: abbreviated Challenge Gate (root cause only, 1-2 points); skips step 9. All other steps run in both modes.**
 
@@ -74,7 +81,9 @@ digraph brainstorming {
     "User approves doc?" [shape=diamond];
     "Recommend dev mode" [shape=doublecircle];
 
-    "Explore context" -> "Visual questions?";
+    "Topic-specific Gate\n(Skill/Agent only)" [shape=box, style=dashed];
+    "Explore context" -> "Topic-specific Gate\n(Skill/Agent only)";
+    "Topic-specific Gate\n(Skill/Agent only)" -> "Visual questions?";
     "Visual questions?" -> "Offer Visual Companion" [label="yes"];
     "Visual questions?" -> "Clarifying questions" [label="no"];
     "Offer Visual Companion" -> "Clarifying questions";
@@ -98,6 +107,86 @@ digraph brainstorming {
     "User approves doc?" -> "Recommend dev mode" [label="approved"];
 }
 ```
+
+## Topic-specific Gate (Step 2)
+
+After exploring project context (Step 1), detect whether the user's request is a **Skill design**, **Agent design**, or **general brainstorming**. This gate only applies to Skill/Agent design — general brainstorming skips directly to Step 3.
+
+### Topic Detection
+
+Based on exploration results and user description, determine the topic:
+
+| Signal | → Skill | → Agent | → General |
+|--------|---------|---------|-----------|
+| User wording | "封装"、"工具"、"CLI" | "角色"、"审查官"、"分析师" | "功能"、"改进"、"重构" |
+| Exploration | specific CLI/script/spec | semantic judgment needed | feature/bug/refactor |
+| Core verb | "做 X"、"生成 Y" | "判断"、"决策"、"负责" | "添加"、"修改"、"优化" |
+
+If signals conflict with user's stated topic, challenge proactively before proceeding.
+
+---
+
+### Path A: Skill Gate
+
+Read `references/skill-fundamentals.md` and `references/design-patterns.md`, then run:
+
+**Capability Check (Hard Gate):**
+
+Based on exploration results, verify three dimensions (model self-evaluates):
+
+1. **能力真实性** — Is this "wrapping a capability the model can't do alone", or just "make the model do X"?
+2. **必要性** — Without this Skill, can the model do equally well with general knowledge?
+3. **自治性** — Can all required knowledge be packaged into `references/` or `assets/`?
+
+Show exploration findings first, then ask targeted questions only for uncertain dimensions.
+
+**Failure** → terminate or adjust direction. **Pass** → continue to Pattern Selection.
+
+**Pattern Selection:**
+
+Recommend the best-fit pattern from `references/design-patterns.md`:
+
+```
+Tool Wrapper  — expert in specific tech/library, dynamically loads specs
+Generator     — template-driven structured output
+Reviewer      — check content against standards, classify by severity
+Inversion     — multi-round requirement collection before action, with gates
+Pipeline      — strict multi-step workflow with checkpoints
+```
+
+Patterns can combine. Model recommends proactively — don't let the user choose.
+
+After pattern selection, proceed to Step 3 (clarifying questions) with Skill context established.
+Use `assets/skill-design-template.md` as the design document template in Step 9.
+
+---
+
+### Path B: Agent Identity Audit
+
+Read `references/agent-fundamentals.md`, then run:
+
+**Identity Audit (Hard Gate):**
+
+Verify three dimensions: Role × Agency × Ownership. Ask targeted questions based on exploration — one per round.
+
+Typical questioning patterns (choose based on context):
+
+- **When role is predictable:** Show exploration findings, propose the role, ask for confirmation.
+- **When tool signals detected (challenge → downgrade):** Point out the finding, explain why it looks like a Skill, ask what semantic judgment is needed.
+- **When existing agent overlaps:** Point out the overlap, ask for differentiation.
+
+**Judgment dimensions (model self-evaluates):**
+
+- **Role** — Can it be summarized as a profession? Contains "器/工具/处理/转换" → Skill signal.
+- **Agency** — Are there non-scriptable semantic judgment scenarios? All judgments can be rule-based → Skill signal.
+- **Ownership** — Does it own the final result? Just an intermediate step → Skill signal.
+
+**Any dimension = 0 → Fail.** On failure, automatically switch to Path A (Skill Gate) — no need for the user to re-trigger.
+
+After passing, proceed to Step 3 (clarifying questions) with Agent context established.
+Use `assets/agent-design-template.md` as the design document template in Step 9.
+
+---
 
 ## The Process
 

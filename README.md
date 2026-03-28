@@ -25,8 +25,7 @@ It provides the meta-skills, specs, and CLI tooling needed to design, build, rev
 
 ```
 skills/                       # Skill units (each independent)
-├── agent-brainstorming/      # Workflow for designing new Agents
-├── skill-brainstorming/      # Workflow for designing new Skills
+├── brainstorming/            # Universal design workflow (with Skill/Agent pre-checks)
 ├── skill-review/             # Skill quality audit tool
 └── markdown-to-anything/     # Convert Markdown to PDF/PNG
 
@@ -58,8 +57,6 @@ docs/
 ```bash
 # Local install (current project)
 omp install skill skill-review
-omp install skill agent-brainstorming
-
 # Global install (available in all projects)
 omp install skill skill-review --global
 ```
@@ -75,16 +72,15 @@ omp list --global  # global
 
 ```bash
 # In Claude Code or Pi — triggers the brainstorming workflow
-# "I need to design a new skill"   → skill-brainstorming activates
-# "I need to design a new agent"   → agent-brainstorming activates
+# "I need to design a new skill"   → brainstorming activates (Skill Gate)
+# "I need to design a new agent"   → brainstorming activates (Agent Gate)
 ```
 
 ## Available Skills
 
 | Skill | Pattern | Purpose |
 |-------|---------|---------|
-| `agent-brainstorming` | Inversion + Pipeline | Design workflow for new Agents (identity audit gate) |
-| `skill-brainstorming` | Inversion + Pipeline | Design workflow for new Skills (pattern selection gate) |
+| `brainstorming` | Inversion + Pipeline | Universal design workflow (with Skill/Agent pre-checks, pattern selection, identity audit) |
 | `skill-review` | Reviewer + Pipeline | Quality audit for Skill directories |
 | `markdown-to-anything` | Pipeline | Convert Markdown to PDF, PNG, and other formats |
 

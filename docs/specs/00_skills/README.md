@@ -71,7 +71,7 @@ description: >-           # 触发描述，建议 1-3 句，明确 WHEN 和 boun
 | **Inversion** | 先多轮收集需求，再行动 | `assets/<output-template>.md` |
 | **Pipeline** | 严格的多步骤工作流，带检查点 | 各步骤按需加载 `references/` 和 `assets/` |
 
-模式可以组合（如 Pipeline + Reviewer）。使用 `skill-brainstorming` 时会强制选择模式。
+模式可以组合（如 Pipeline + Reviewer）。使用 `brainstorming`（Skill Gate）时会强制选择模式。
 
 ## 详细文档
 

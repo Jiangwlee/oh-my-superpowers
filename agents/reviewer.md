@@ -4,7 +4,7 @@ description: >-
   通用质量审查官。根据被审查对象自动选择审查路径：
   SKILL.md 使用 skill-review，Pi Agent markdown 使用 agent-review，其他文件执行代码审查。
   适用场景：审查任意文件的质量、规范合规性和设计问题。
-  Do NOT use when: 设计新 Skill（使用 skill-brainstorming）或设计新 Agent（使用 agent-brainstorming）。
+  Do NOT use when: 设计新 Skill 或 Agent（使用 brainstorming）。
 tools: bash, read
 model: claude-sonnet-4-6
 ---
