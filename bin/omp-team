@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# omp-team — Team Skill CLI: one-shot tmux agent orchestration
+#
+# Commands:
+#   run <runtime> [prompt] [options]  — spawn + wait + return output
+#   status [session-name]             — query tmux session status
+#   clean <file>                      — strip ANSI escape sequences
+
+set -euo pipefail
+
+SCRIPTS="${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/team/scripts"
+
+case "${1:-}" in
+  run)    shift; exec bash "$SCRIPTS/run.sh" "$@" ;;
+  status) shift; exec bash "$SCRIPTS/status.sh" "$@" ;;
+  clean)  shift; exec bash "$SCRIPTS/clean.sh" "$@" ;;
+  help|--help|-h)
+    cat >&2 <<'EOF'
+用法：omp-team <command> [args...]
+
+Commands:
+  run <runtime> [prompt] [options]  one-shot 执行：spawn → wait → output
+  status [session-name]             查询 tmux session 状态
+  clean <file>                      strip ANSI 转义，规范化输出
+
+Runtime:
+  claude    设计、review、复杂推理
+  codex     编码实现、文件修改（YOLO）
+  pi        轻量任务、快速验证
+
+Run Options:
+  --prompt-file <path>   从文件读取 prompt
+  --model <model>        覆盖默认模型
+  --timeout <seconds>    超时秒数（默认 300）
+  --output-file <path>   指定输出文件
+  --cwd <dir>            worker 工作目录（默认 $PWD）
+
+Examples:
+  omp-team run codex "实现用户登录模块"
+  omp-team run claude --prompt-file design.md
+  omp-team run codex --prompt-file task.md --cwd ./project --timeout 600
+  omp-team status
+  omp-team clean /tmp/codex-output.txt
+EOF
+    exit 0
+    ;;
+  *)
+    echo "错误：未知命令 '${1:-}'" >&2
+    echo "用法：omp-team {run|status|clean|help}" >&2
+    exit 1
+    ;;
+esac
