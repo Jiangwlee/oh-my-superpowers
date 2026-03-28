@@ -108,14 +108,20 @@ Use `references/how-to-optimize-skill-descriptions.md` when trigger quality is i
 
 **Criteria**
 
+SKILL.md should read like a book's title page + table of contents: main flow skeleton and hard gates only.
+
 Check:
 - `SKILL.md` contains only the core workflow and constraints needed on every run
-- large examples and long reference material live in `references/`
-- the skill avoids `@path` force-load syntax
-- the skill tells the agent when to load each reference file
+- Each checklist step is a one-sentence brief; detailed rules live in `references/`
+- Branch-specific content (mode differences, conditional paths, detailed strategies) is in `references/`, not inline
+- The skill tells the agent when to load each reference file (loading conditions)
+- The skill avoids `@path` force-load syntax
+- Large examples and long reference material live in `references/`
+- Inline vs reference judgment: if it can be said in one sentence, inline it; if it needs multiple paragraphs, put it in a reference
 
 **Severity**
-- WARNING when the body is bloated or references are always-on without need
+- WARNING when SKILL.md contains detailed branch logic, multi-paragraph operational rules, or mode-specific instructions that should be in references
+- WARNING when references are always-on without loading conditions
 - SUGGESTION when structure works but can be tighter
 
 ### B3. Workflow Structure and Failure Handling
