@@ -19,4 +19,5 @@ deployment/docker/ashare-platform/data/
 .env
 **/.env
 
-.claude/settings.json
+.claude/
+.coverage
