@@ -69,6 +69,15 @@ omp install agent <name> --global
 
 详见 `docs/specs/02_framework/installation.md`。
 
+## 环境变量
+
+| 变量 | 用途 | 默认值 |
+|------|------|--------|
+| `OMP_HOME` | omp 安装路径 | `~/.oh-my-superpowers` |
+| `OMP_DEFAULT_MODEL_PI` | Pi runtime 默认模型 | `openai-codex/gpt-5.4-mini` |
+
+**默认模型原则**：所有需要调用 LLM 的组件（CLI、skill 脚本）统一通过 `OMP_DEFAULT_MODEL_PI` 环境变量获取默认模型，不在代码中硬编码模型名。优先级：`--model 命令行 > agents.json 显式声明 > OMP_DEFAULT_MODEL_PI > 硬编码 fallback`。
+
 ## 开发流程
 
 ```

@@ -62,7 +62,7 @@ def discover_sessions(
 
     if Runtime.OPENCLAW in runtimes:
         all_sessions.extend(
-            _discover_openclaw(since)
+            _discover_openclaw(project_path, since)
         )
 
     # 按开始时间倒序
@@ -135,15 +135,15 @@ def _discover_pi(
 
 
 def _discover_openclaw(
-    since: datetime | None,
+    project_path: str, since: datetime | None,
 ) -> list[SessionInfo]:
-    """发现 OpenClaw session（扫描所有 agent）。"""
+    """发现 OpenClaw session（按 project_path 过滤）。"""
     reader = OpenClawReader()
     sessions: list[SessionInfo] = []
 
     for path in find_openclaw_sessions(since):
         info = reader.get_session_info(path)
-        if info is not None:
+        if info is not None and info.project_path == project_path:
             sessions.append(info)
 
     logger.debug("Found %d OpenClaw sessions", len(sessions))

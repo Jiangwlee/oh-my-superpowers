@@ -15,6 +15,7 @@
 # Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -270,7 +271,8 @@ def _build_run_context(name: str, model: Optional[str]) -> dict:
         console.print(f"[red][omp] ERROR:[/red] agent file '{agent_path}' not found")
         raise typer.Exit(1)
 
-    effective_model = model or entry.get("model", "litellm-local/qwen3.5-27b")
+    default_model = os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini")
+    effective_model = model or entry.get("model", default_model)
     skill_flags: list[str] = []
     for skill in entry.get("skills", []):
         path = _resolve_path(skill)

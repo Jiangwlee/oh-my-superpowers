@@ -499,7 +499,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
 
     # 调用 LLM
     print("调用 LLM 提炼 insight...", file=sys.stderr)
-    items = call_llm_array(prompt, "sonnet")
+    items = call_llm_array(prompt, args.model if hasattr(args, "model") else os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini"))
     if not items:
         print("LLM 调用失败或无结果", file=sys.stderr)
         return 1
@@ -707,7 +707,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_capture.add_argument("--force", action="store_true", help="忽略已处理标记，强制重新处理")
     p_capture.add_argument("--dry-run", action="store_true", help="仅分析不写入")
-    p_capture.add_argument("--model", default="sonnet", help="LLM 模型（默认 sonnet）")
+    _default_model = os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini")
+    p_capture.add_argument("--model", default=_default_model, help=f"LLM 模型（默认 {_default_model}）")
     p_capture.add_argument(
         "--if-no-compact", action="store_true",
         help="仅在本次会话未触发 PostCompact 时执行（Stop hook 兜底用）",

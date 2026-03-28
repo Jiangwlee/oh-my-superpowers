@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -102,7 +103,10 @@ def format_conversation(messages: list[UnifiedMessage]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def call_llm(prompt: str, model: str = "sonnet") -> dict[str, Any] | None:
+def call_llm(
+    prompt: str,
+    model: str = os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini"),
+) -> dict[str, Any] | None:
     """调用 LLM 并返回解析后的 JSON。
 
     通过 pi -p 命令行调用（项目默认 Agent runtime）。
@@ -120,6 +124,7 @@ def call_llm(prompt: str, model: str = "sonnet") -> dict[str, Any] | None:
         try:
             result = subprocess.run(
                 cmd(prompt, model),
+                input=prompt,
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -148,7 +153,10 @@ def call_llm(prompt: str, model: str = "sonnet") -> dict[str, Any] | None:
     return None
 
 
-def call_llm_array(prompt: str, model: str = "sonnet") -> list[dict[str, Any]]:
+def call_llm_array(
+    prompt: str,
+    model: str = os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini"),
+) -> list[dict[str, Any]]:
     """调用 LLM 并返回 JSON 数组。
 
     与 call_llm 类似，但期望返回数组。
@@ -165,6 +173,7 @@ def call_llm_array(prompt: str, model: str = "sonnet") -> list[dict[str, Any]]:
         try:
             result = subprocess.run(
                 cmd(prompt, model),
+                input=prompt,
                 capture_output=True,
                 text=True,
                 timeout=120,
@@ -194,18 +203,18 @@ def call_llm_array(prompt: str, model: str = "sonnet") -> list[dict[str, Any]]:
 
 
 def _pi_cmd(prompt: str, model: str) -> list[str]:
-    """构造 Pi CLI 命令。"""
+    """构造 Pi CLI 命令（prompt 通过 stdin 传入）。"""
     return [
         "pi", "-p", "--no-session", "--mode", "text",
-        "--model", model, prompt,
+        "--model", model,
     ]
 
 
 def _claude_cmd(prompt: str, model: str) -> list[str]:
-    """构造 Claude CLI 命令（降级方案）。"""
+    """构造 Claude CLI 命令（prompt 通过 stdin 传入）。"""
     return [
         "claude", "-p", "--no-session-persistence",
-        "--model", model, "--output-format", "json", prompt,
+        "--model", model, "--output-format", "json",
     ]
 
 
