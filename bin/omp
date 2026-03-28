@@ -28,6 +28,7 @@ from rich.console import Console
 # ── constants ─────────────────────────────────────────────────────────────────
 
 OMP_HOME = Path.home() / ".oh-my-superpowers"
+sys.path.insert(0, str(OMP_HOME / "lib"))
 SKILLS_SRC = OMP_HOME / "skills"
 AGENTS_SRC = OMP_HOME / "agents"
 AGENTS_CFG = AGENTS_SRC / "agents.json"
@@ -519,6 +520,15 @@ def install(
         base = Path.home() if global_ else Path.cwd()
         _symlink(src, base / ".agents" / "skills" / name)
         _symlink(src, base / ".claude" / "skills" / name)
+        # hooks.json 检测和安装
+        hooks_json = src / "hooks.json"
+        if hooks_json.is_file():
+            try:
+                from omp_hooks import install_hooks
+                install_hooks(hooks_json, name)
+                console.print(f"[omp] installed hooks for skill [cyan]{name}[/cyan]")
+            except Exception as e:
+                console.print(f"[yellow][omp] WARNING:[/yellow] hooks install failed for '{name}': {e}")
     elif t == "agent":
         src = AGENTS_SRC / f"{name}.md"
         if not src.is_file():
@@ -544,6 +554,13 @@ def remove(
     if t == "skill":
         _remove_link(base / ".agents" / "skills" / name)
         _remove_link(base / ".claude" / "skills" / name)
+        # hooks 移除
+        try:
+            from omp_hooks import remove_hooks
+            remove_hooks(name)
+            console.print(f"[omp] removed hooks for skill [cyan]{name}[/cyan]")
+        except Exception as e:
+            console.print(f"[yellow][omp] WARNING:[/yellow] hooks removal failed for '{name}': {e}")
     elif t == "agent":
         _remove_link(base / ".pi" / "agents" / f"{name}.md")
     else:
