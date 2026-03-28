@@ -525,7 +525,7 @@ def install(
         if hooks_json.is_file():
             try:
                 from omp_hooks import install_hooks
-                install_hooks(hooks_json, name)
+                install_hooks(hooks_json, name, settings_path=base / ".claude" / "settings.json")
                 console.print(f"[omp] installed hooks for skill [cyan]{name}[/cyan]")
             except Exception as e:
                 console.print(f"[yellow][omp] WARNING:[/yellow] hooks install failed for '{name}': {e}")
@@ -557,7 +557,7 @@ def remove(
         # hooks 移除
         try:
             from omp_hooks import remove_hooks
-            remove_hooks(name)
+            remove_hooks(name, settings_path=base / ".claude" / "settings.json")
             console.print(f"[omp] removed hooks for skill [cyan]{name}[/cyan]")
         except Exception as e:
             console.print(f"[yellow][omp] WARNING:[/yellow] hooks removal failed for '{name}': {e}")
