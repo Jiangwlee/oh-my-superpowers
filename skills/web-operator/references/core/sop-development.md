@@ -335,3 +335,27 @@ When adding a new site, follow this sequence exactly:
 
 That is the workflow used to build the existing `x.com`, `reddit.com`, and
 `tgb.cn` SOPs in this skill.
+
+## Expected Project Structure
+
+Each supported site should eventually have:
+
+- scripts under `scripts/sites/<site>/`
+- references under `references/sites/<site>/`
+- tests under `tests/sites/<site>/`
+
+Test commands:
+
+- `omp-web-operator test list`
+- `omp-web-operator test core`
+- `omp-web-operator test site <name>`
+- `omp-web-operator test all`
+
+## Definition Of Done For New Site Support
+
+New site support is not complete unless it includes:
+
+- workflow scripts
+- a site reference document
+- at least one smoke test
+- registration in the unified test runner

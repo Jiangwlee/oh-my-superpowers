@@ -8,10 +8,7 @@ Pi Agent + Skills 开发套件。聚焦两件事：
 
 1. NO SKILL DESIGN WITHOUT reading `docs/specs/00_skills/README.md`.
 2. NO AGENT DESIGN WITHOUT passing the Agent 身份审问（见 `docs/specs/01_agents/README.md`）。
-3. 每个 skill 和 agent 独立自治，不依赖同项目其他 skill/agent。
-4. Skills 中的脚本必须 CLI 化，禁止在 SKILL.md 中引用相对路径调用脚本。
-5. 不要兼容性：正确的设计 > 兼容性。
-6. **渐进式文档披露**：任何文档目录（`docs/specs/*/`、`references/`）必须有入口文件（`README.md` 或同等索引文件），包含核心原则摘要和场景→文档的映射表。引用文档目录时只引用入口文件，不引用整个目录。
+3. 不要兼容性：正确的设计 > 兼容性。
 
 ## 架构（四层模型）
 
@@ -84,8 +81,8 @@ omp install agent <name> --global
 BrainStorm → Plan → Code → Review → Test → Commit
 ```
 
-- **Skill 开发**：先读 `docs/specs/00_skills/README.md`，再用 `skill-brainstorm` skill
-- **Agent 开发**：先读 `docs/specs/01_agents/README.md`，再用 `agent-brainstorm` skill
+- **Skill 开发**：先读 `docs/specs/00_skills/README.md`，再用 `brainstorming` skill
+- **Agent 开发**：先读 `docs/specs/01_agents/README.md`，再用 `brainstorming` skill
 - **Review**：用 `skill-review`（已有）/ `agent-review`（待建）
 - **测试分层**：T1 静态检查 → T2 E2E（`pi -p`）→ T3 LLM-as-judge
 

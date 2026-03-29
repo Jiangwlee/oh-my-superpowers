@@ -37,11 +37,13 @@ Load core references for shared browser behavior:
 - [references/core/index.md](references/core/index.md)
   Command selection and common workflow guidance.
 - [references/core/cli-reference.md](references/core/cli-reference.md)
-  CLI semantics and examples.
+  CLI semantics, low-level CDP commands, and full site command list.
+- [references/core/tab-management.md](references/core/tab-management.md)
+  Automatic tab lifecycle, shared library API, and concurrent execution guidelines.
 - [references/core/troubleshooting.md](references/core/troubleshooting.md)
   Connection failures, stale `DevToolsActivePort`, and approval-prompt issues.
 - [references/core/sop-development.md](references/core/sop-development.md)
-  The SOP development process used in this repository.
+  The SOP development process, project structure, and definition of done.
 - [references/core/common-library.md](references/core/common-library.md)
   API reference for `scripts/core/common.sh`: tab lifecycle, URL encoding, and CDP wrappers. Load when writing or debugging a site script.
 
@@ -78,207 +80,17 @@ Load site references for website-specific workflows:
 
 ## Preferred Command Map
 
-When a supported site appears in the task, start from these commands before considering any generic HTTP fallback:
+When a supported site appears in the task, start from these commands before considering any generic HTTP fallback. **You MUST use these commands — do NOT claim the site is inaccessible or fabricate results.**
 
-- **Any URL content**: `omp-web-operator read-url <url> [--limit N]` (preferred for reading article/page content)
-- **Multi-platform**: `omp-web-operator search-multi --<site> "<query>" [...] --limit N` (preferred for research tasks needing breadth)
-- Google: `omp-web-operator search google <query> [limit]`
-- Baidu: `omp-web-operator search baidu <query> [limit]`
-- Weixin-Sogou: `omp-web-operator search weixin-sogou <query> [limit]`
-- Reddit: `omp-web-operator search reddit <query> [limit]` then `omp-web-operator open-post reddit <url> [comment_limit]`
-- X: `omp-web-operator search x <query> [limit]` then `omp-web-operator open-post x <url>`
-- Xueqiu: `omp-web-operator search xueqiu <query> [limit]`, `omp-web-operator xueqiu hot [limit]`, or `omp-web-operator open-post xueqiu <url> [comment_limit]`
-- Taoguba: `omp-web-operator taoguba jinghua [hours] [limit]`, `omp-web-operator taoguba following [hours] [limit]`, or `omp-web-operator open-post taoguba <url>`
-- KDocs: `omp-web-operator kdocs ask-ai <question>`, or `kdocs search/open-doc/find-in-doc` for direct verification
-
-## ✅ Automatic Tab Management
-
-Each site workflow automatically manages its own Chrome tab:
-
-1. **Find existing tab**: Each script looks for an existing tab of its domain (e.g., `baidu.com`)
-2. **Create if missing**: If no matching tab exists, the script automatically creates a new one
-3. **Isolation**: Different sites never share the same tab, preventing navigation conflicts
-
-This means you **no longer need to specify target tabs manually** for normal usage:
-
-```bash
-# ✓ Automatic tab management - each site uses its own tab
-omp-web-operator search baidu "query" 5        # Uses/creates baidu tab
-omp-web-operator search google "query" 5       # Uses/creates google tab
-omp-web-operator search weixin-sogou "query" 5 # Uses/creates sogou tab
-```
-
-### Shared Core Library
-
-All site scripts source the shared helpers from `scripts/core/common.sh`:
-
-- `find_or_create_tab <homepage_url> [domain]` - Find existing site tab or create new one (for search workflows)
-- `create_tab <homepage_url>` - Create and navigate to a new tab
-- `acquire_worker_tab` - Get a persistent worker tab for stateless reads (for read-url)
-- `release_worker_tab <target>` - Reset state and release worker tab back to pool
-- `url_encode <string>` - URL encode strings
-- `cdp_eval <target> <expression>` - Evaluate JavaScript in tab
-
-Site-specific `common.sh` files (e.g., `scripts/sites/baidu/common.sh`) are now thin wrappers that call these shared functions with domain-specific parameters.
-
-## ⚠️ Concurrent Execution Guidelines
-
-**Same site**: Never run multiple scripts for the same site in parallel on the same tab. They will race for navigation.
-
-**Different sites**: Safe to run in parallel because each uses its own dedicated tab:
-
-```bash
-# ✓ SAFE: Different sites in parallel
-omp-web-operator search baidu "query" 5 &
-omp-web-operator search google "query" 5 &
-omp-web-operator search weixin-sogou "query" 5 &
-wait
-```
-
-**CDP connection limit**: While different sites are isolated by tab, they still share Chrome's DevTools WebSocket server. Avoid launching too many scripts simultaneously (more than ~5) to prevent connection timeouts.
-
-## Main Entrypoint
-
-All browser actions route through `omp-web-operator`. The underlying CDP engine is `scripts/cdp.mjs`.
-
-### Read URL Content
-
-- `omp-web-operator read-url <url> [--limit N]`
-  Read the main text content of any URL. Returns Markdown (when defuddle is available) or plain text.
-  Four-tier strategy (HTTP-first + CDP fallback):
-  1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to `open-post` for structured extraction
-  2. **HTTP-first** → `defuddle parse <URL> --markdown` directly fetches and parses (~200ms, no browser needed). Covers ~80% of static content (blogs, docs, papers)
-  3. **CDP + defuddle** → navigates worker tab to URL, extracts HTML, converts via defuddle. For JS-heavy/SPA pages where HTTP-first fails quality gate
-  4. **CDP fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
-
-  Tier 3-4 use **persistent worker tabs** (created once, reused across calls) to avoid the ~15s CDP authorization cost per new tab. Worker tabs are automatically reset between reads (`Storage.clearDataForOrigin` + navigate to `about:blank`).
-
-  ```bash
-  # Read an article (usually hits tier 2, ~200ms)
-  omp-web-operator read-url "https://www.paulgraham.com/writes.html"
-
-  # Read with character limit
-  omp-web-operator read-url "https://arxiv.org/html/2603.23013v1" --limit 15000
-  ```
-
-## Available Commands
-
-### Multi-Platform Parallel Search
-
-- `omp-web-operator search-multi --<platform> "<query>" [...] [--limit N]`
-  Run searches on multiple platforms in parallel and return merged results.
-  Supported platforms: `baidu`, `google`, `github`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, `taoguba`, `duckduckgo`.
-  Max 5 concurrent searches (CDP connection limit).
-
-  Example:
-  ```bash
-  omp-web-operator search-multi --google "AI agents" --baidu "AI 智能体" --reddit "AI agents" --limit 5
-  ```
-
-  Output format:
-  ```json
-  [
-    { "platform": "google", "query": "AI agents", "results": [{ "title": "...", "snippet": "...", "url": "..." }] },
-    { "platform": "baidu", "query": "AI 智能体", "results": [{ "title": "...", "snippet": "...", "url": "..." }] }
-  ]
-  ```
-
-### Baidu
-
-- `omp-web-operator search baidu <query> [limit] [target]`
-  Search `baidu.com` and extract up to 20 organic result summaries (title, snippet, url).
-
-### GitHub
-
-- `omp-web-operator search github <query> [limit]`
-  Search GitHub repos, issues, and discussions via `gh` CLI. Returns up to 60 results with type, title, summary, url, stars/labels. No browser needed.
-
-### Google
-
-- `omp-web-operator search google <query> [limit] [target]`
-  Search `google.com` and extract up to 20 organic result summaries (title, snippet, url).
-
-### Reddit
-
-- `omp-web-operator search reddit <query> [limit] [target]`
-  Search `reddit.com` and extract up to 10 result summaries.
-- `omp-web-operator open-post reddit <url> [comment_limit] [target]`
-  Open one Reddit post URL and extract the main post plus top visible comments.
-
-### Taoguba
-
-- `omp-web-operator taoguba jinghua [hours] [limit] [target]`
-  Extract Taoguba `jinghua` posts from the last 24 hours by default.
-- `omp-web-operator taoguba following [hours] [limit] [target]`
-  Extract followed-content updates from the last 12 hours by default.
-- `omp-web-operator open-post taoguba <url> [target]`
-  Open one Taoguba post and extract the main post body.
-
-### WPS 365 (365.kdocs.cn)
-
-- Prefer `omp-web-operator kdocs ask-ai <question> [target]` for document Q&A, summaries, fuzzy lookup, and multi-doc questions.
-- `omp-web-operator kdocs search <query> [limit] [target]`
-  Search WPS 365 documents; returns snippets and version ranking.
-- `omp-web-operator kdocs open-doc <file_key> [main_target]`
-  Open a document by file key; returns outline and first-page text.
-- `omp-web-operator kdocs find-in-doc <keyword> [target]`
-  Search for a keyword in the open document; returns match count and context.
-- `omp-web-operator kdocs ask-ai <question> [target]`
-  Ask WPS AI Docs Chat on the main page; returns answer text and referenced docs.
-- `omp-web-operator kdocs close-doc [target]`
-  Close the document tab, keeping the main 365.kdocs.cn/latest tab alive.
-
-### X
-
-- `omp-web-operator search x <query> [limit] [target]`
-  Search `x.com` and extract up to 10 result summaries.
-- `omp-web-operator open-post x <url> [target]`
-  Open one `x.com` post URL and extract the current visible post text.
-- `omp-web-operator x for-you [limit] [target]`
-  Read the X.com For You recommendation feed.
-
-### Weixin-Sogou
-
-- `omp-web-operator search weixin-sogou <query> [limit] [target]`
-  Search `weixin.sogou.com` (搜狗微信搜索) and extract article metadata (title, summary, account, time, link). Note: Only search is supported; full article content requires WeChat environment.
-
-### Xueqiu
-
-- `omp-web-operator search xueqiu <query> [limit] [target]`
-  Search `xueqiu.com` and extract up to 10 discussion results.
-- `omp-web-operator open-post xueqiu <url> [comment_limit] [target]`
-  Open one `xueqiu.com` post URL and extract the main article plus visible comments.
-- `omp-web-operator xueqiu hot [limit] [target]`
-  Extract the current visible "热门" home timeline post list.
-- `omp-web-operator xueqiu stock-info <symbol_or_url> [limit] [target]`
-  Open one stock page and extract the latest visible announcements and discussions.
-
-## Expected Future Structure
-
-Each supported site should eventually have:
-
-- scripts under `scripts/sites/<site>/`
-- references under `references/sites/<site>/`
-- tests under `tests/sites/<site>/`
-
-Test commands:
-
-- `omp-web-operator test list`
-- `omp-web-operator test core`
-- `omp-web-operator test site baidu`
-- `omp-web-operator test site google`
-- `omp-web-operator test site reddit`
-- `omp-web-operator test site taoguba`
-- `omp-web-operator test site weixin-sogou`
-- `omp-web-operator test site x`
-- `omp-web-operator test site xueqiu`
-- `omp-web-operator test all`
-
-## Definition Of Done For New Site Support
-
-New site support is not complete unless it includes:
-
-- workflow scripts
-- a site reference document
-- at least one smoke test
-- registration in the unified test runner
+| 关键词 / Site | 命令 |
+|--------------|------|
+| 任意 URL / read article | `omp-web-operator read-url <url> [--limit N]` |
+| 多平台搜索 / research | `omp-web-operator search-multi --<site> "<query>" [...] --limit N` |
+| Google / 谷歌 | `omp-web-operator search google <query> [limit]` |
+| Baidu / 百度 | `omp-web-operator search baidu <query> [limit]` |
+| 微信搜索 / Weixin-Sogou / 搜狗微信 | `omp-web-operator search weixin-sogou <query> [limit]` |
+| Reddit | `omp-web-operator search reddit <query> [limit]` → `omp-web-operator open-post reddit <url> [comment_limit]` |
+| X / Twitter / 推特 | `omp-web-operator search x <query> [limit]` → `omp-web-operator open-post x <url>` |
+| 雪球 / Xueqiu | `omp-web-operator search xueqiu <query> [limit]`、`omp-web-operator xueqiu hot [limit]`、`omp-web-operator open-post xueqiu <url> [comment_limit]` |
+| 淘股吧 / Taoguba / TGB | `omp-web-operator taoguba jinghua [hours] [limit]`、`omp-web-operator taoguba following [hours] [limit]`、`omp-web-operator open-post taoguba <url>` |
+| 金山文档 / KDocs / WPS 365 | `omp-web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
