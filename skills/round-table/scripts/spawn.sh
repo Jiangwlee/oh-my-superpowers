@@ -124,7 +124,7 @@ main() {
   local messages_history=""
   local omp_rt="omp-round-table"
   if command -v "$omp_rt" &>/dev/null; then
-    context_brief=$($omp_rt session context detail 2>/dev/null || true)
+    context_brief=$($omp_rt session context brief 2>/dev/null || true)
     messages_history=$($omp_rt session messages 2>/dev/null || true)
   fi
 
