@@ -19,6 +19,7 @@ Session 生命周期:
   session context [brief|detail]
   session messages [msg-id]
   session end --output-dir <path>
+  session post-message <role> <file> --round N --name '...' --action '...' --summary '...'
 
 Round 操作（自动取当前轮次）:
   round spawn          并行启动参与者（current_round + 1）
@@ -31,16 +32,6 @@ Round 操作（自动取当前轮次）:
   ROUND_TABLE_SESSION  指定 session-id（默认使用最新）
   OMP_HOME             oh-my-superpowers 安装路径（默认 ~/.oh-my-superpowers）
 
-已废弃命令（兼容旧版，建议迁移到两层命名空间）:
-  start       →  session init
-  get-context →  session context
-  get-messages → session messages
-  post-message   session.sh post-message（直接转发）
-  spawn       →  round spawn
-  end         →  session end
-  status      →  session status
-  watch       →  round watch
-  attach      →  round attach
 EOF
   exit 1
 }
@@ -56,7 +47,8 @@ case "$cmd" in
       status)   exec bash "$SKILL/scripts/session.sh" status "$@" ;;
       context)  exec bash "$SKILL/scripts/session.sh" get-context "$@" ;;
       messages) exec bash "$SKILL/scripts/session.sh" get-messages "$@" ;;
-      end)      exec bash "$SKILL/scripts/session.sh" end "$@" ;;
+      end)          exec bash "$SKILL/scripts/session.sh" end "$@" ;;
+      post-message) exec bash "$SKILL/scripts/session.sh" post-message "$@" ;;
       *) echo "错误：未知 session 子命令 '${sub:-}'" >&2; usage ;;
     esac
     ;;
@@ -72,17 +64,6 @@ case "$cmd" in
       *) echo "错误：未知 round 子命令 '${sub:-}'" >&2; usage ;;
     esac
     ;;
-
-  # --- 旧命令兼容（deprecated） ---
-  start)        exec bash "$SKILL/scripts/session.sh" init "$@" ;;
-  get-context)  exec bash "$SKILL/scripts/session.sh" get-context "$@" ;;
-  get-messages) exec bash "$SKILL/scripts/session.sh" get-messages "$@" ;;
-  post-message) exec bash "$SKILL/scripts/session.sh" post-message "$@" ;;
-  spawn)        exec bash "$SKILL/scripts/spawn.sh" "$@" ;;
-  end)          exec bash "$SKILL/scripts/session.sh" end "$@" ;;
-  status)       exec bash "$SKILL/scripts/session.sh" status "$@" ;;
-  watch)        exec bash "$SKILL/scripts/session.sh" watch "$@" ;;
-  attach)       exec bash "$SKILL/scripts/session.sh" attach "$@" ;;
 
   help|--help|-h) usage ;;
   *) echo "错误：未知命令 '${cmd:-}'" >&2; usage ;;

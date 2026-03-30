@@ -48,16 +48,20 @@ omp-round-table post-message <role> <file> [opts]  # 追加消息
 
 ### 2. 初始化
 
+根据议题从角色库选 3-5 人，一条命令完成全部准备：
+
 ```bash
-# 创建 session（输出 session-id）
-export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>")
+# --roles 自动拷贝预置 prompt、配置 runtime/model
+# --context 可传文本或文件路径，追加到 context.md
+export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>" \
+  --roles steve-jobs,dhh,alan-kay \
+  --context "背景描述或文件路径")
 ```
 
-- 根据议题从角色库选 3-5 人
-- 为每个角色生成完整 prompt，写入 session 目录的 `participants/<role-id>.md`
-- 写入 `context.md`（问题背景、约束条件、讨论目标）
-- 写入 `plan.md`（讨论计划、预期轮次）
-- 展示参会者列表，等待用户确认开始
+`session init` 自动完成：创建目录、拷贝角色 prompt、写入 meta.json、生成 context.md 和 plan.md。**不要手动创建这些文件。**
+
+- 展示参会者列表（从 `omp-round-table session status` 获取）
+- 等待用户确认开始
 
 ### 3. 每轮循环（至少 3 轮）
 
@@ -67,35 +71,36 @@ export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>")
 
 ```bash
 omp-round-table round run
-# 自动完成：构建四层 prompt → 并行启动参与者 → 等待完成 → 解析 response → post-message
+# spawn + wait + collect 一步完成
 # 返回 JSON：每个参与者的 action 和 summary
 ```
 
-**d. 综述**
+**b. 综述**
 
+根据 `round run` 返回的 JSON：
 - 提炼本轮核心争议点
 - 生成 ASCII 框架图（矩阵/光谱/因果环路/层级树）
 - 提出下一轮引导问题
-- 将综述写入文件并 post：
+- post 综述到 session：
 
 ```bash
-omp-round-table post-message moderator <summary-file> \
+omp-round-table session post-message moderator <summary-file> \
   --round N --name "主持人" --action "综合" --summary "本轮一句话摘要"
 ```
 
-**e. 用户参与（阻塞）**
+**c. 用户参与（阻塞）**
 
 展示摘要后询问用户：
 
 - **继续**：接受引导问题，进入下一轮
-- **结束**：进入 Phase 2
-- **深入**：不推进新问题，围绕当前争议深挖
-- **换人**：引入新角色加入讨论
+- **结束**：进入结束阶段
+- **深入**：围绕当前争议深挖
+- **换人**：引入新角色
 
 将用户回复 post 到 session：
 
 ```bash
-omp-round-table post-message user <user-input-file> \
+omp-round-table session post-message user <user-input-file> \
   --round N --name "用户" --action "指令" --summary "用户意图摘要"
 ```
 
