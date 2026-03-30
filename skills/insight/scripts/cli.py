@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Insight skill CLI v2。
+"""Insight skill CLI v3。
 
-从 AI 对话中提取 Memory，提炼 Insight，支持召回与管理。
+三层 pipeline：Capture (LLM → 结构化 Memory) → Aggregate (代码) → Evaluate (LLM → Insight)。
 
 用法：
     cli.py capture  --source <dir> [--session <id>] [--dry-run] [--model sonnet]
@@ -61,41 +61,55 @@ READER_MAP = {
 # Prompts
 # ---------------------------------------------------------------------------
 
-CAPTURE_PROMPT = """你是一个经验提取专家。分析以下对话，提取有价值的记忆（memory）。
+CAPTURE_PROMPT = """你是一位复盘分析师。请回顾以下对话，提取有价值的行为记忆（memory）。
 
-记忆有 5 种类型：
-- correction: 用户纠正了错误行为
-- preference: 用户偏好（代码风格、工具选择、沟通方式等）
-- workflow: 工作流程/协作方式
+记忆有 6 种类型：
+- bug: 发现的缺陷或错误
 - decision: 技术/产品决策
-- fact: 项目/环境事实
+- pattern: 反复出现的行为模式
+- friction: 摩擦点、低效环节
+- workflow: 工作流程/协作方式
+- other: 无法归入上述类别
+
+影响范围：
+- file: 单个文件
+- module: 模块级
+- skill: 技能级
+- agent: Agent 级
+- project: 项目级
+- other: 无法归入上述类别
 
 对话内容：
 {conversation}
 
 请以 JSON 数组格式输出，每条记忆包含：
-- kind: "correction" | "preference" | "workflow" | "decision" | "fact"
-- content: 一句话描述（不超过 100 字）
-- context: 触发场景（不超过 200 字）
-- scope: "project"（仅限此项目）或 "user"（通用经验）
+- kind: "bug" | "decision" | "pattern" | "friction" | "workflow" | "other"
+- scope: "file" | "module" | "skill" | "agent" | "project" | "other"
+- summary: 人类可读短文本（不超过 100 字）
+- evidence_ref: 原始证据位置（如消息序号、文件路径等）
 - confidence: 置信度（0.0-1.0）
 - tags: 标签列表
 - is_valid: 是否有价值（true/false）
 
 只输出 JSON 数组，不要其他文本。只保留真正有价值的记忆，不要水分。"""
 
-EVALUATE_PROMPT = """你是一个经验聚合专家。分析以下 memory 集合，提炼出高价值的 insight。
+EVALUATE_PROMPT = """你是一位持续改进顾问。基于以下聚合统计数据和代表性样本，提炼出高价值的 insight。
 
 Insight 是跨 session 反复出现的模式，值得 Agent 在每个 session 开始时优先加载。
 Insight 应该极少（一屏以内），只保留真正高价值的模式。
 
-Memories:
-{memories}
+## 聚合统计
+
+{aggregate_json}
+
+## 代表性样本
+
+{samples}
 
 对每条候选 insight 输出：
 - pattern: 一句话描述这个模式
 - action: Agent 应该怎么做
-- evidence: 哪些 memory ID 支撑这个 insight
+- evidence: 支撑此 insight 的 kind 列表（如 ["bug", "friction"]）
 - confidence: 置信度（0.0-1.0）
 - tags: 标签列表
 - is_valid: 是否值得成为 insight（true/false）
@@ -222,9 +236,9 @@ def cmd_capture(args: argparse.Namespace) -> int:
 
     print(f"待处理 {len(sessions)} 个 session", file=sys.stderr)
 
-    # 已有 memory 的 content 集合（用于去重）
-    existing_contents: set[str] = {
-        m.content for m in store.list_memories(limit=500)
+    # 已有 memory 的 summary 集合（用于去重）
+    existing_summaries: set[str] = {
+        m.summary for m in store.list_memories(limit=500)
     }
 
     total_created = 0
@@ -299,15 +313,15 @@ def cmd_capture(args: argparse.Namespace) -> int:
                 session_skipped += 1
                 continue
 
-            content = item.get("content", "")
-            if content in existing_contents:
+            summary = item.get("summary", "")
+            if summary in existing_summaries:
                 session_skipped += 1
                 continue
 
             try:
-                kind = MemoryKind(item.get("kind", "fact"))
+                kind = MemoryKind(item.get("kind", "other"))
             except ValueError:
-                kind = MemoryKind.FACT
+                kind = MemoryKind.OTHER
 
             try:
                 scope = Scope(item.get("scope", "project"))
@@ -317,19 +331,19 @@ def cmd_capture(args: argparse.Namespace) -> int:
             memory = Memory(
                 id=generate_id("mem"),
                 kind=kind,
-                content=content,
-                context=item.get("context", ""),
+                summary=summary,
                 scope=scope,
-                source_session_id=session.session_id,
+                source=f"{session.session_id}@{session.runtime.value}",
+                evidence_ref=item.get("evidence_ref", ""),
                 created_at=datetime.now(),
                 confidence=float(item.get("confidence", 0.5)),
                 tags=item.get("tags", []),
             )
             if args.dry_run:
-                print(f"  [+] [{kind.value}] {content}", file=sys.stderr)
+                print(f"  [+] [{kind.value}] {summary}", file=sys.stderr)
             else:
                 store.store_memory(memory)
-                existing_contents.add(content)
+                existing_summaries.add(summary)
             session_created += 1
 
         if not args.dry_run:
@@ -443,11 +457,11 @@ def cmd_recall(args: argparse.Namespace) -> int:
 def cmd_evaluate(args: argparse.Namespace) -> int:
     """从 memory 中提炼 insight 候选。
 
-    流程：
+    v3 三层 pipeline：
     1. 加载所有 memory
-    2. 按 kind 分组
-    3. 调用 LLM 提炼 insight
-    4. --dry-run 只输出候选不写入
+    2. 调用 aggregate() 生成确定性统计
+    3. 将聚合结果 + 代表性样本拼入 EVALUATE_PROMPT
+    4. 调用 LLM 提炼 insight
 
     Args:
         args: 命令行参数。
@@ -455,8 +469,10 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     Returns:
         退出码。
     """
+    from scripts.aggregate import aggregate
+
     store = _resolve_store(args.source)
-    memories = store.list_memories(sort="confidence", limit=200)
+    memories = store.list_memories(sort="confidence", limit=9999)
 
     if not memories:
         print("没有 memory 可供评估", file=sys.stderr)
@@ -464,15 +480,10 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
 
     print(f"加载 {len(memories)} 条 memory", file=sys.stderr)
 
-    # 格式化 memory 列表
-    mem_lines: list[str] = []
-    for mem in memories:
-        mem_lines.append(
-            f"- [{mem.id}] ({mem.kind.value}) {mem.content} "
-            f"| context: {mem.context} | confidence: {mem.confidence} "
-            f"| tags: {mem.tags}"
-        )
-    memories_text = "\n".join(mem_lines)
+    # 确定性聚合
+    agg = aggregate(memories)
+    aggregate_json = _format_aggregate_json(agg)
+    samples_text = _format_aggregate_samples(agg)
 
     # 加载 prompt 模板
     if args.prompt_file:
@@ -484,22 +495,19 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     else:
         template = EVALUATE_PROMPT
 
-    prompt = template.format(memories=memories_text)
+    prompt = template.format(aggregate_json=aggregate_json, samples=samples_text)
 
     if args.dry_run:
         print(f"[dry-run] Prompt 长度: {len(prompt)}", file=sys.stderr)
         print(f"[dry-run] Memory 数量: {len(memories)}", file=sys.stderr)
-        # 按 kind 分组统计
-        kind_counts: dict[str, int] = {}
-        for mem in memories:
-            kind_counts[mem.kind.value] = kind_counts.get(mem.kind.value, 0) + 1
-        for kind, count in sorted(kind_counts.items()):
-            print(f"  {kind}: {count}", file=sys.stderr)
+        print(f"[dry-run] 聚合统计:", file=sys.stderr)
+        for kind, stats in agg.by_kind.items():
+            print(f"  {kind}: count={stats.count} avg_conf={stats.avg_confidence:.2f}", file=sys.stderr)
         return 0
 
     # 调用 LLM
     print("调用 LLM 提炼 insight...", file=sys.stderr)
-    items = call_llm_array(prompt, args.model if hasattr(args, "model") else os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini"))
+    items = call_llm_array(prompt, args.model)
     if not items:
         print("LLM 调用失败或无结果", file=sys.stderr)
         return 1
@@ -510,26 +518,21 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
             continue
 
         now = datetime.now()
-        evidence_ids = item.get("evidence", [])
+        evidence_kinds = item.get("evidence", [])
 
         insight = Insight(
             id=generate_id("ins"),
             pattern=item.get("pattern", ""),
             action=item.get("action", ""),
-            evidence=evidence_ids,
+            evidence=evidence_kinds,
             scope=Scope.PROJECT,
             created_at=now,
             last_validated_at=now,
-            evidence_count=len(evidence_ids),
+            evidence_count=len(evidence_kinds),
             confidence=float(item.get("confidence", 0.6)),
             tags=item.get("tags", []),
         )
         store.store_insight(insight)
-
-        # 建立 evidence links
-        for mem_id in evidence_ids:
-            store.link_evidence(insight.id, mem_id)
-
         created += 1
         print(
             f"  + {insight.id}: {insight.pattern[:60]}",
@@ -538,6 +541,43 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
 
     print(f"\n共创建 {created} 条 insight", file=sys.stderr)
     return 0
+
+
+def _format_aggregate_json(agg: Any) -> str:
+    """将 AggregateResult 序列化为 JSON 字符串。"""
+    import json as json_mod
+
+    data = {
+        "total_memories": agg.total_memories,
+        "time_range": (
+            [agg.time_range[0].isoformat(), agg.time_range[1].isoformat()]
+            if agg.time_range else None
+        ),
+        "by_kind": {
+            k: {
+                "count": v.count,
+                "avg_confidence": round(v.avg_confidence, 3),
+                "recent_7d": v.recent_7d,
+                "recent_30d": v.recent_30d,
+                "top_scopes": v.top_scopes,
+            }
+            for k, v in agg.by_kind.items()
+        },
+        "by_scope": agg.by_scope,
+        "top_tags": agg.top_tags,
+    }
+    return json_mod.dumps(data, ensure_ascii=False, indent=2)
+
+
+def _format_aggregate_samples(agg: Any) -> str:
+    """将 samples_by_kind 格式化为人类可读文本。"""
+    parts: list[str] = []
+    for kind, summaries in agg.samples_by_kind.items():
+        parts.append(f"### {kind} (top {len(summaries)})")
+        for i, s in enumerate(summaries, 1):
+            parts.append(f"  {i}. {s}")
+        parts.append("")
+    return "\n".join(parts) if parts else "（无样本）"
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -576,7 +616,7 @@ def cmd_list(args: argparse.Namespace) -> int:
                 tags = ", ".join(mem.tags) if mem.tags else "-"
                 print(
                     f"  [{mem.id}] ({mem.kind.value}) conf={mem.confidence:.2f} "
-                    f"hits={mem.hit_count} | {mem.content[:60]} | tags: {tags}"
+                    f"hits={mem.hit_count} | {mem.summary[:60]} | tags: {tags}"
                 )
             print()
         elif args.type == "memory":
@@ -737,6 +777,7 @@ def main(argv: list[str] | None = None) -> int:
     p_evaluate.add_argument(
         "--prompt-file", default=None, help="外部 prompt 模板文件"
     )
+    p_evaluate.add_argument("--model", default=_default_model, help=f"LLM 模型（默认 {_default_model}）")
 
     # --- list ---
     p_list = sub.add_parser("list", help="列出 memory 和 insight")

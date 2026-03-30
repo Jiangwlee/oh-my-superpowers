@@ -1,64 +1,81 @@
-# Insight Schema
+# Insight Schema（v3）
 
-## 核心字段
+## Memory Schema（6 字段）
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `id` | string | 是 | SHA256[:12]，基于 trigger + wrong_default 生成 |
-| `trigger` | string | 是 | 什么情况下触发了错误行为 |
-| `wrong_default` | string | 是 | 助手的错误默认行为 |
-| `corrected_behavior` | string | 是 | 用户纠正后的正确行为 |
-| `examples` | array | 否 | 纠正实例（session_id, before, after, context） |
-| `tags` | array | 否 | 自由标签（从数据中涌现，非预设枚举） |
-| `correction_count` | int | 是 | 纠正次数（≥2 才是高置信） |
-| `confidence` | float | 是 | 0.0-1.0，带时间衰减 |
-| `first_seen` | datetime | 是 | 首次观察时间 |
-| `last_confirmed` | datetime | 是 | 最近一次确认时间 |
-| `scope` | enum | 是 | `project`（仅限此项目）或 `user`（通用） |
-| `why` | string | 否 | 为什么原来的做法是错的 |
-| `source_session_ids` | array | 是 | 来源 session ID 列表 |
-| `reframes` | array | 否 | 被此 insight 重新解读的 memory ID |
+| `id` | string | 是 | `mem_{hex_timestamp}_{random8}` |
+| `kind` | enum | 是 | bug / decision / pattern / friction / workflow / other |
+| `summary` | string | 是 | 人类可读短文本（≤100字） |
+| `scope` | enum | 是 | file / module / skill / agent / project / other |
+| `source` | string | 是 | `session_id@runtime`（来源定位） |
+| `evidence_ref` | string | 是 | 原始证据位置（消息序号、文件路径等） |
+| `created_at` | datetime | 是 | 创建时间 |
+| `hit_count` | int | 是 | recall 命中次数（默认 0） |
+| `confidence` | float | 是 | 0.0-1.0（默认 0.5） |
+| `tags` | array | 否 | 自由标签列表 |
+
+### kind 枚举
+
+| 值 | 说明 |
+|----|------|
+| `bug` | 发现的缺陷或错误 |
+| `decision` | 技术/产品决策 |
+| `pattern` | 反复出现的行为模式 |
+| `friction` | 摩擦点、低效环节 |
+| `workflow` | 工作流程/协作方式 |
+| `other` | 无法归入上述类别 |
+
+枚举允许 `other`，枚举表是产品资产，`other` 积累后人工决策是否扩展。
+
+### scope 枚举
+
+| 值 | 说明 |
+|----|------|
+| `file` | 单个文件 |
+| `module` | 模块级 |
+| `skill` | 技能级 |
+| `agent` | Agent 级 |
+| `project` | 项目级 |
+| `other` | 无法归入上述类别 |
+
+## Insight Schema
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `id` | string | 是 | `ins_{hex_timestamp}_{random8}` |
+| `pattern` | string | 是 | 一句话描述模式 |
+| `action` | string | 是 | Agent 应该怎么做 |
+| `evidence` | array | 是 | 支撑此 insight 的 kind 列表 |
+| `scope` | enum | 是 | 影响范围 |
+| `created_at` | datetime | 是 | 创建时间 |
+| `last_validated_at` | datetime | 是 | 最近验证时间 |
+| `evidence_count` | int | 是 | 证据数量 |
+| `confidence` | float | 是 | 0.0-1.0（默认 0.6） |
+| `tags` | array | 否 | 标签列表 |
 
 ## 存储格式
 
-Insight 存为 YAML frontmatter + markdown 文件：
+Memory 和 Insight 均存为 YAML frontmatter markdown 文件：
 
 ```markdown
 ---
-id: 3fae1e67394c
-trigger: "使用 find 命令搜索文件"
-wrong_default: "直接用 Bash 工具运行 find 命令"
-corrected_behavior: "使用 Glob 工具搜索文件"
-tags: ["tool-usage", "search"]
-correction_count: 3
-confidence: 0.8
-first_seen: 2026-03-20T10:00:00
-last_confirmed: 2026-03-27T15:00:00
+id: mem_19527a3f1b_c8e4a2d1
+kind: friction
+summary: "Claude 未验证修复就报告完成，导致多轮调试"
 scope: project
-source_session_ids: ["sess-001", "sess-003"]
+source: "sess-001@claude"
+evidence_ref: "message #42-45"
+created_at: "2026-03-30T10:00:00"
+hit_count: 0
+confidence: 0.85
+tags: ["debugging", "verification"]
 ---
-
-# 使用 find 命令搜索文件
-
-## Wrong Default
-直接用 Bash 工具运行 find 命令
-
-## Corrected Behavior
-使用 Glob 工具搜索文件
-
-## Why
-Glob 工具提供更好的用户体验，结果可审查
-
-## Examples
-### Example 1 (session: sess-001)
-**Before:** Bash: find . -name "*.py"
-**After:** Glob: pattern="**/*.py"
-**Context:** 用户要求搜索 Python 文件
 ```
 
 ## 置信度规则
 
-- 首次提取：0.3（dry-run）或 0.5（LLM 验证）
-- 每次再确认：+0.1（上限 0.95）
-- 时间衰减：待实现
-- correction_count ≥ 2 才视为可靠 insight
+- Capture 时由 LLM 判定初始 confidence（0.0-1.0）
+- recall 命中时 hit_count 递增
+- 排序使用 decay score：`hit_count * confidence - age_penalty`
+- 宽限期 3 个月内无衰减，之后每月 -0.5

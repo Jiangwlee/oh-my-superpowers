@@ -542,7 +542,7 @@ class InsightStore:
             for mem in memories:
                 age = self._age_str(mem.created_at)
                 parts.append(
-                    f"- [{mem.kind.value}] {mem.content} "
+                    f"- [{mem.kind.value}] {mem.summary} "
                     f"[confidence:{mem.confidence} | age:{age} | hits:{mem.hit_count}]"
                 )
             parts.append("")
@@ -576,8 +576,9 @@ class InsightStore:
                 {
                     "id": mem.id,
                     "kind": mem.kind.value,
-                    "content": mem.content,
-                    "context": mem.context,
+                    "summary": mem.summary,
+                    "source": mem.source,
+                    "evidence_ref": mem.evidence_ref,
                     "hit_count": mem.hit_count,
                     "confidence": mem.confidence,
                     "tags": mem.tags,
@@ -661,8 +662,8 @@ class InsightStore:
         now = datetime.now()
         insight = Insight(
             id=generate_id("ins"),
-            pattern=memory.content,
-            action=reason if reason else memory.context,
+            pattern=memory.summary,
+            action=reason if reason else "",
             evidence=[memory_id],
             scope=memory.scope,
             created_at=now,
@@ -736,6 +737,4 @@ def get_store(project_id: str, scope: Scope = Scope.PROJECT) -> InsightStore:
     Returns:
         对应的 InsightStore 实例。
     """
-    if scope == Scope.USER:
-        return InsightStore("global")
     return InsightStore(project_id)

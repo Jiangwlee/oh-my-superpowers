@@ -39,20 +39,25 @@ class MessageRole(str, Enum):
 
 
 class MemoryKind(str, Enum):
-    """Memory 的类别。"""
+    """Memory 的最小可计算分类。"""
 
-    CORRECTION = "correction"
-    PREFERENCE = "preference"
-    WORKFLOW = "workflow"
+    BUG = "bug"
     DECISION = "decision"
-    FACT = "fact"
+    PATTERN = "pattern"
+    FRICTION = "friction"
+    WORKFLOW = "workflow"
+    OTHER = "other"
 
 
 class Scope(str, Enum):
-    """作用域。"""
+    """影响范围。"""
 
+    FILE = "file"
+    MODULE = "module"
+    SKILL = "skill"
+    AGENT = "agent"
     PROJECT = "project"
-    USER = "user"
+    OTHER = "other"
 
 
 # ---------------------------------------------------------------------------
@@ -117,14 +122,17 @@ class SessionInfo:
 
 @dataclass
 class Memory:
-    """一条记忆。被动记录的事实，创建后不可变。"""
+    """一条记忆。被动记录的事实，创建后不可变。
 
-    id: str  # mem_{hex_timestamp}_{random4}
+    v3 六字段结构化：kind/scope/summary/source/evidence_ref/confidence。
+    """
+
+    id: str  # mem_{hex_timestamp}_{random8}
     kind: MemoryKind
-    content: str  # 一句话描述
-    context: str  # 触发场景
+    summary: str  # 人类可读短文本（≤100字）
     scope: Scope
-    source_session_id: str
+    source: str  # "session_id@runtime"
+    evidence_ref: str  # 原始证据位置
     created_at: datetime
     hit_count: int = 0
     confidence: float = 0.5
@@ -136,10 +144,10 @@ class Memory:
             "---",
             f"id: {self.id}",
             f"kind: {self.kind.value}",
-            f"content: {_yaml_quote(self.content)}",
-            f"context: {_yaml_quote(self.context)}",
+            f"summary: {_yaml_quote(self.summary)}",
             f"scope: {self.scope.value}",
-            f"source_session_id: {_yaml_quote(self.source_session_id)}",
+            f"source: {_yaml_quote(self.source)}",
+            f"evidence_ref: {_yaml_quote(self.evidence_ref)}",
             f"created_at: {_yaml_quote(self.created_at.isoformat())}",
             f"hit_count: {self.hit_count}",
             f"confidence: {self.confidence}",
@@ -163,11 +171,11 @@ class Memory:
 
         return cls(
             id=data.get("id", ""),
-            kind=_parse_enum(MemoryKind, data.get("kind", "fact"), MemoryKind.FACT),
-            content=data.get("content", ""),
-            context=data.get("context", ""),
+            kind=_parse_enum(MemoryKind, data.get("kind", "other"), MemoryKind.OTHER),
+            summary=data.get("summary", ""),
             scope=_parse_enum(Scope, data.get("scope", "project"), Scope.PROJECT),
-            source_session_id=data.get("source_session_id", ""),
+            source=data.get("source", ""),
+            evidence_ref=data.get("evidence_ref", ""),
             created_at=_parse_datetime(data.get("created_at", "")),
             hit_count=int(data.get("hit_count", 0)),
             confidence=float(data.get("confidence", 0.5)),
