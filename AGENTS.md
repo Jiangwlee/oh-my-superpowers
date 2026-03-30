@@ -9,6 +9,8 @@ Pi Agent + Skills 开发套件。聚焦两件事：
 1. NO SKILL DESIGN WITHOUT reading `docs/specs/00_skills/README.md`.
 2. NO AGENT DESIGN WITHOUT passing the Agent 身份审问（见 `docs/specs/01_agents/README.md`）。
 3. 不要兼容性：正确的设计 > 兼容性。
+4. 修复后必须运行相关测试或命令验证，未验证不能说"fixed"或"已修复"。
+5. 用户要求讨论、分析、brainstorming 时，不要改代码。等用户明确要求实现后再动手。
 
 ## 架构（四层模型）
 

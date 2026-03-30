@@ -84,7 +84,7 @@ omp-team clean /tmp/raw-output.txt
 |------|------|------|
 | 编码 + 审查 | `references/scenarios/code-and-review.md` | Pipeline：codex 实现 → claude 审查 |
 | 正反辩论 | `references/scenarios/debate.md` | Fan-out/Fan-in：多视角并行 → 聚合结论 |
-| 轻量圆桌 | `references/scenarios/round-table.md` | Discussion：多轮共享上下文讨论 |
+| 多轮讨论 | `references/patterns/discussion.md` | Discussion：多 agent 共享上下文逐轮收敛 |
 
 ## Prompt 框架索引
 

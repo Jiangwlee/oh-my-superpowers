@@ -103,13 +103,13 @@ fi
 case "$runtime" in
   claude)
     if [[ -n "$model" ]]; then
-      cmd="cat ${prompt_file} | claude -p --model ${model} 2>&1 | tee ${output_file}"
+      cmd="cat ${prompt_file} | claude -p --no-session-persistence --dangerously-skip-permissions --model ${model} 2>&1 | tee ${output_file}"
     else
-      cmd="cat ${prompt_file} | claude -p 2>&1 | tee ${output_file}"
+      cmd="cat ${prompt_file} | claude -p --no-session-persistence --dangerously-skip-permissions 2>&1 | tee ${output_file}"
     fi
     ;;
   codex)
-    cmd="cat ${prompt_file} | codex exec - 2>&1 | tee ${output_file}"
+    cmd="cat ${prompt_file} | codex exec - --dangerously-bypass-approvals-and-sandbox 2>&1 | tee ${output_file}"
     ;;
   pi)
     if [[ -n "$model" ]]; then

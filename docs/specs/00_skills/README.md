@@ -4,7 +4,7 @@
 
 ## 核心原则
 
-1. **Skill 封装真实能力，不封装通用 LLM 知识。** 来自真实工具、API、工作流的能力才值得封装。
+1. **Skill 封装真实能力，不封装通用 LLM 知识。** 来自真实工具、API、工作流的能力才值得封装。判定方法：去掉 SKILL.md 及其 references/assets，LLM 是否仍能可靠完成同样的事？如果是，不值得封装。
 2. **渐进式披露。** SKILL.md 是扉页 + 目录：只放主流程骨架（checklist、每步一句话 brief）和 Hard Gate。分支逻辑、详细操作规则、模式差异等内容下沉到 `references/`，由 SKILL.md 中的加载指令按需引入。判断标准：如果一段内容能用一句话讲清楚就内联；需要展开多段才能讲清楚就放 reference。
 3. **脚本必须 CLI 化。** 禁止在 SKILL.md 中写相对路径（`bash scripts/foo.sh`），改用 CLI 命令（`mytool foo --date 2026-03-24`）。弱模型无法可靠解析相对路径。
 4. **description 决定触发。** description 是模型决定是否激活 Skill 的唯一依据，必须精确描述触发场景和边界。

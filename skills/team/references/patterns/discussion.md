@@ -40,17 +40,6 @@ Round 2:
 - 参与者需要看到彼此的观点并做出回应
 - 需要逐轮收敛到结论
 
-## 与 round-table skill 的区别
-
-| 维度 | Discussion 模式 | round-table skill |
-|------|----------------|-------------------|
-| 定位 | 轻量编排原语 | 完整讨论框架 |
-| 状态管理 | Orchestrator 自行管理 | omp-round-table 内置 session |
-| 角色系统 | Orchestrator 在 prompt 中定义 | 预置历史人物角色库 |
-| 适用场景 | 2-3 轮快速讨论 | 正式多轮深度讨论 |
-
-**选择建议：** 3 轮以内的快速讨论用 Discussion 模式；需要完整角色系统和 session 管理的用 round-table skill。
-
 ## 编排规则
 
 1. Orchestrator 在每轮开始前构建 prompt，包含：

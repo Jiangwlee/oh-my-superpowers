@@ -29,5 +29,29 @@
     "skills": [
       "@skills/web-operator/SKILL.md"
     ]
+  },
+  "ux-engineer": {
+    "agent": "@agents/ux-engineer.md",
+    "model": "litellm-local/qwen3.5-27b",
+    "skills": [
+      "~/Github/impeccable/source/skills/frontend-design/SKILL.md",
+      "~/Github/impeccable/source/skills/audit/SKILL.md",
+      "~/Github/impeccable/source/skills/critique/SKILL.md",
+      "~/Github/impeccable/source/skills/normalize/SKILL.md",
+      "~/Github/impeccable/source/skills/harden/SKILL.md",
+      "~/Github/impeccable/source/skills/optimize/SKILL.md",
+      "~/Github/impeccable/source/skills/adapt/SKILL.md",
+      "~/Github/impeccable/source/skills/animate/SKILL.md",
+      "~/Github/impeccable/source/skills/bolder/SKILL.md",
+      "~/Github/impeccable/source/skills/clarify/SKILL.md",
+      "~/Github/impeccable/source/skills/colorize/SKILL.md",
+      "~/Github/impeccable/source/skills/delight/SKILL.md",
+      "~/Github/impeccable/source/skills/distill/SKILL.md",
+      "~/Github/impeccable/source/skills/extract/SKILL.md",
+      "~/Github/impeccable/source/skills/onboard/SKILL.md",
+      "~/Github/impeccable/source/skills/polish/SKILL.md",
+      "~/Github/impeccable/source/skills/quieter/SKILL.md",
+      "~/Github/impeccable/source/skills/teach-impeccable/SKILL.md"
+    ]
   }
 }

@@ -6,7 +6,7 @@
 
 | 参数 | 值 |
 |------|---|
-| 调用方式 | `cat prompt.md \| claude -p --model <model>` |
+| 调用方式 | `cat prompt.md \| claude -p --no-session-persistence --dangerously-skip-permissions --model <model>` |
 | Prompt 传递 | stdin 管道 |
 | 模型指定 | `--model <model>` (支持别名如 `sonnet`、`opus`，也支持全名如 `claude-sonnet-4-6`) |
 | 工作目录 | 在目标目录下执行即可（`cd <dir> && cat prompt.md \| claude -p`） |
@@ -19,14 +19,14 @@
 
 ```bash
 cd {working_directory} && \
-  cat {prompt_file} | claude -p --model {model} > {output_file} 2>{log_file}
+  cat {prompt_file} | claude -p --no-session-persistence --dangerously-skip-permissions --model {model} > {output_file} 2>{log_file}
 ```
 
 ## Codex
 
 | 参数 | 值 |
 |------|---|
-| 调用方式 | `cat prompt.md \| codex exec -` |
+| 调用方式 | `cat prompt.md \| codex exec - --dangerously-bypass-approvals-and-sandbox` |
 | Prompt 传递 | stdin，`-` 显式声明从 stdin 读取 |
 | 模型指定 | `-m <model>` / `--model <model>` |
 | 工作目录 | 在目标目录下执行（Codex 操作当前工作目录） |
@@ -38,7 +38,7 @@ cd {working_directory} && \
 
 ```bash
 cd {working_directory} && \
-  cat {prompt_file} | codex exec - -m {model} -s workspace-write > {output_file} 2>{log_file}
+  cat {prompt_file} | codex exec - --dangerously-bypass-approvals-and-sandbox -m {model} > {output_file} 2>{log_file}
 ```
 
 ## Pi

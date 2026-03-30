@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# omp-evolution — Evolution skill CLI 入口
+#
+# 子命令：
+#   scan      增量扫描 session，输出机械信号 + session 样本
+#   history   查看当前项目的演进历史
+
+set -euo pipefail
+
+OMP_HOME="${OMP_HOME:-$HOME/.oh-my-superpowers}"
+SCRIPTS_DIR="${OMP_HOME}/skills/evolution/scripts"
+
+usage() {
+  cat <<'EOF'
+Usage: omp-evolution <subcommand> [options]
+
+Subcommands:
+  scan      Scan sessions for skill usage data and mechanical signals
+  history   View evolution history for current project
+
+Options (scan):
+  --source <dir>        Directory to scan for project sessions (default: ~/Projects)
+  --days <n>            Scan last N days (default: 30)
+  --project-root <dir>  Current project root (default: auto-detect)
+
+Options (history):
+  --limit <n>           Show last N records (default: 20)
+  --project-root <dir>  Current project root (default: auto-detect)
+EOF
+}
+
+case "${1:-}" in
+  scan)
+    shift
+    exec python3 "${SCRIPTS_DIR}/scan.py" "$@"
+    ;;
+  history)
+    shift
+    exec python3 "${SCRIPTS_DIR}/history.py" "$@"
+    ;;
+  -h|--help|"")
+    usage
+    ;;
+  *)
+    echo "错误：未知子命令 '$1'" >&2
+    echo "运行 omp-evolution --help 查看帮助" >&2
+    exit 1
+    ;;
+esac
