@@ -45,15 +45,23 @@
 
 ## 行动计划
 
-### 文件变更清单
+# Scope Check：如果方案涉及多个独立子系统，必须拆分为独立 plan，每个 plan 产出可独立测试的软件。
+# 不要在一个 plan 里混合无关的子系统。
 
-| 操作 | 文件路径 | 说明 |
+### 文件结构设计
+
+# 先定文件边界再定任务。每个文件一个职责，变更相关的文件放在一起。
+# 在已有代码库中遵循现有模式，不要擅自重组。
+
+| 操作 | 文件路径 | 职责 |
 |------|----------|------|
-| 新增 | `path/to/new-file.py` | [职责说明] |
+| 新增 | `path/to/new-file.py` | [单一职责说明] |
 | 修改 | `path/to/existing-file.py` | [改动说明] |
 | 删除 | `path/to/removed-file.py` | [删除原因] |
 
 ### 任务步骤
+
+# 每步预估 2-5 分钟。如果一步超过 5 分钟，拆分它。
 
 #### Task 1: [组件/功能名称]
 
@@ -62,7 +70,7 @@
 - 修改: `path/to/existing.py`
 - 测试: `tests/path/to/test_file.py`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: 写失败测试** (~3 min)
 
 ```python
 def test_[specific_behavior]():
@@ -70,29 +78,27 @@ def test_[specific_behavior]():
     assert result == expected
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [ ] **Step 2: 运行测试确认失败** (~1 min)
 
 ```bash
 pytest tests/path/test_file.py::test_name -v
 # 预期：FAIL
 ```
 
-- [ ] **Step 3: 写最小实现**
+- [ ] **Step 3: 实现** (~5 min)
 
-```python
-def function(input):
-    # 最小实现
-    return expected
-```
+  - 函数签名: `def function(input: InputType) -> OutputType`
+  - 关键逻辑: [描述核心算法/流程，不要求完整代码]
+  - 边界情况: [需要处理的边界条件]
 
-- [ ] **Step 4: 运行测试确认通过**
+- [ ] **Step 4: 运行测试确认通过** (~1 min)
 
 ```bash
 pytest tests/path/test_file.py::test_name -v
 # 预期：PASS
 ```
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 5: 提交** (~1 min)
 
 ```bash
 git add path/to/file.py tests/path/test_file.py

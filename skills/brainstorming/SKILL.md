@@ -40,11 +40,12 @@ Create a task for each item and complete them in order:
 5. **Challenge Gate** — surface the strongest objection before proposing solutions; read `references/challenge-gate.md` for the 3 checks and rules
 6. **Judge mode** — default Normal; switch to Fast when single-file, unambiguous, obvious solution
 7. **Propose approaches** — Normal: 2-3 options with trade-offs; Fast: recommendation directly
-8. **Present design** — section by section, get user approval after each
-9. **Write unified doc** — read `references/document-writing.md` for templates and rules; save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`
-10. **Spec review loop** — (Normal only) dispatch spec-document-reviewer subagent; max 3 iterations
-11. **User reviews doc** — ask user to confirm before proceeding
-12. **Recommend development mode** — multi-module/5+ tasks → Subagent; simple → Inline; ask user to confirm, then execute
+8. **Present design** — section by section, get user approval after each (设计方案 + 行动原则)
+9. **Write implementation plan** — read `references/document-writing.md` 行动计划撰写约束; scope check → file structure → task 分解; present to user for approval
+10. **Write unified doc** — merge design + plan into single doc; read `references/document-writing.md` for templates; save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`
+11. **Spec review loop** — (Normal only) dispatch spec-document-reviewer subagent (covers both design and plan); max 3 iterations
+12. **User reviews doc** — ask user to confirm before proceeding
+13. **Recommend execution** — "多模块/5+ tasks 建议 subagent 逐 task 执行；简单任务建议 inline 执行"
 
 ## Topic-specific Gate (Step 2)
 

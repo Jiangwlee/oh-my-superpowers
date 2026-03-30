@@ -15,9 +15,18 @@ Save to: `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`
 2. Table of contents
 3. ���计方案 (Design)
 4. 行动原则 (Principles) — selected from `references/principles-library.md`
-5. 行动计划 (Action Plan) — file change list + task steps
+5. 行动计划 (Action Plan) — file structure + task steps
 
 The document MUST contain a table of contents so agents can navigate directly to any section without scanning the full file.
+
+## 行动计划撰写约束
+
+行动计划必须达到"agent 拿到文档可直接执行"的质量。遵守以下约束：
+
+1. **Scope Check** — 如果方案涉及多个独立子系统，必须拆分为独立 plan。每个 plan 产出可独立测试的软件。不要在一个 plan 里混合无关子系统。
+2. **File Structure First** — 先设计文件结构（每个文件的职责和边界），再定义任务。任务分解基于文件结构，而非反过来。
+3. **粒度约束** — 每步 2-5 分钟。如果一步超过 5 分钟，拆分它。
+4. **接口级描述** — 实现步骤给出函数签名 + 关键逻辑描述 + 边界情况，不要求完整代码。避免重复劳动（plan 写一遍、实现再写一遍）。
 
 ## Document update task
 
