@@ -66,6 +66,12 @@ check "test -f '$SKILL_DIR/references/mutation-operators.md'"
 desc="references/guard-checks.md exists"
 check "test -f '$SKILL_DIR/references/guard-checks.md'"
 
+desc="references/memory-validity.md exists"
+check "test -f '$SKILL_DIR/references/memory-validity.md'"
+
+desc="SKILL.md contains 阶段三"
+check "grep -q '阶段三' '$SKILL_MD'"
+
 echo ""
 
 # --- Scripts ---

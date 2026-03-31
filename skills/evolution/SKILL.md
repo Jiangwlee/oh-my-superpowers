@@ -53,6 +53,22 @@ omp-evolution history [--limit <n>]
 7. guard 失败或用户拒绝 → git revert，追加 results.tsv（status=discard）
 8. 回到发现表格，选下一条
 
+### 阶段三：memory 收尾（所有修复完成后执行）
+
+1. 运行 `omp-insight list --source .` 获取当前项目的 memory 列表
+2. 读取 `references/memory-validity.md`，对照本轮修复内容逐条过三个 yes/no 问题
+3. 生成候选删除表格，呈现给用户：
+
+```
+| # | memory ID | 摘要 | 失效类型 | 判断依据 |
+|---|-----------|------|---------|---------|
+```
+
+4. 用户逐条确认 → `omp-insight delete <id>`
+5. 拿不准 → 跳过，不删
+
+**HARD-GATE 继承**：每条删除必须用户确认，禁止批量自动执行。
+
 ### results.tsv 追加格式
 
 每次修复完成后追加一行（tab 分隔）：
@@ -70,3 +86,4 @@ date	commit	target	operator	status	description
 | 数据源定义 | `references/evidence-sources.md` |
 | 变异算子 + 证据映射 | `references/mutation-operators.md` |
 | Guard 检查规则 | `references/guard-checks.md` |
+| Memory 失效判断规则 | `references/memory-validity.md` |
