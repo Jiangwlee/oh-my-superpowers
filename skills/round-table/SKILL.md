@@ -42,23 +42,35 @@ omp-round-table post-message <role> <file> [opts]  # 追加消息
 
 你（当前会话的 AI agent）就是 orchestrator，负责协调整个圆桌讨论流程。
 
-### 1. 读取角色库
+### 职责边界
 
-加载 `references/roles.md` 了解可用角色和选取规则。
+| 决策类型 | 谁来做 | 说明 |
+|----------|--------|------|
+| 选哪些角色参与本次讨论 | **LLM 决策** | 读 roles.md，根据议题选 3-5 个 role ID |
+| 每轮综述、引导问题、用户意图路由 | **LLM 决策** | 主持人职责，见下文 |
+| 角色的 runtime / model / prompt 配置 | **CLI 执行** | 由 `session init --roles` 自动从 roles.md 读取，**禁止手动指定或覆盖** |
+| 目录创建、meta.json、context.md、plan.md | **CLI 执行** | `session init` 自动完成，**禁止手动创建这些文件** |
+| 每轮参与者的并行调用 | **CLI 执行** | `round run` / `round spawn` + `round collect` |
 
-### 2. 初始化
+### 1. 读取角色库，选择参与者
 
-根据议题从角色库选 3-5 人，一条命令完成全部准备：
+加载 `references/roles.md`，根据议题选出 3-5 个 role ID。
+
+> **LLM 决策点**：选哪些 ID。到此为止。runtime、model、prompt 由 CLI 处理。
+
+### 2. 初始化（CLI 全权执行）
+
+将选好的 role ID 传给 CLI，一条命令完成全部准备：
 
 ```bash
-# --roles 自动拷贝预置 prompt、配置 runtime/model
+# --roles 自动拷贝预置 prompt、从 roles.md 读取 runtime/model 写入 meta.json
 # --context 可传文本或文件路径，追加到 context.md
 export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>" \
   --roles steve-jobs,dhh,alan-kay \
   --context "背景描述或文件路径")
 ```
 
-`session init` 自动完成：创建目录、拷贝角色 prompt、写入 meta.json、生成 context.md 和 plan.md。**不要手动创建这些文件。**
+`session init` 自动完成：创建目录、拷贝角色 prompt、写入 meta.json（含 runtime/model）、生成 context.md 和 plan.md。**不要手动创建或修改这些文件。**
 
 - 展示参会者列表（从 `omp-round-table session status` 获取）
 - 等待用户确认开始
