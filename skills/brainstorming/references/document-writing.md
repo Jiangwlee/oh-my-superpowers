@@ -28,6 +28,17 @@ The document MUST contain a table of contents so agents can navigate directly to
 3. **粒度约束** — 每步 2-5 分钟。如果一步超过 5 分钟，拆分它。
 4. **接口级描述** — 实现步骤给出函数签名 + 关键逻辑描述 + 边界情况，不要求完整代码。避免重复劳动（plan 写一遍、实现再写一遍）。
 
+## Completion check task (mandatory)
+
+Every action plan MUST include a **完成核查** task as the **last task** (before 文档更新 if that also applies). This task exists to prevent agents from falsely reporting completion while steps remain unfinished.
+
+The task must:
+1. Check every Task/Step in the plan is done (checkbox ticked or output verified)
+2. Re-read the spec 设计方案 and confirm implementation matches — no silent deviations
+3. Report to the user: tasks completed (X/X), any unfinished steps, any spec deviations, and a final ✅/⚠️ conclusion
+
+The normal template includes a ready-made task for this — always include it.
+
 ## Document update task
 
 For significant changes (architecture changes, interface changes, directory restructuring, adding/removing core modules), the action plan MUST include a **文档更新** task as the final task. Skip this for small iterative changes or bug fixes. The template includes a ready-made task for this — use it when applicable.
