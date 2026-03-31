@@ -30,6 +30,10 @@
       "@skills/web-operator/SKILL.md"
     ]
   },
+  "oss-researcher": {
+    "agent": "@agents/oss-researcher.md",
+    "model": "claude-sonnet-4-6"
+  },
   "ux-engineer": {
     "agent": "@agents/ux-engineer.md",
     "model": "litellm-local/qwen3.5-27b",

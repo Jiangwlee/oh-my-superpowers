@@ -13,6 +13,7 @@ description: >-
 | `researcher` | Deep research, web search, information retrieval | "Research latest developments in X", "Compare approaches A vs B" |
 | `reviewer` | Skill/Agent quality audit | "Review this SKILL.md", "Check if agent definition is compliant" |
 | `ux-engineer` | UI audit, frontend design, style optimization | "Audit UI issues on this page", "Generate Tailwind component" |
+| `oss-researcher` | 开源项目代码研究与知识库沉淀 | "pi-mono 如何加载 skill？", "langchain memory 模块怎么设计的？" |
 
 Above is a high-frequency subset. Get the full agent list:
 
