@@ -127,7 +127,7 @@ cmd_init() {
     declare -A _ROLE_MODEL=(
       [steve-jobs]="opus"
       [elon-musk]="gpt-5.4"
-      [linus-torvalds]="qwen3.5-27b"
+      [linus-torvalds]="github-copilot/gpt-4.1"
       [alan-kay]="sonnet"
       [andrej-karpathy]="sonnet"
       [richard-stallman]="gpt-5.4"
