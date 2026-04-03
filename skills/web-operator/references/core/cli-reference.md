@@ -44,6 +44,8 @@ is the CLI command list below and the target-prefix workflow.
   Clicks by CSS pixel coordinates.
 - `type <target> <text>`
   Inserts text at the current focus using CDP input APIs.
+- `scroll <target> <up|down> [amount]`
+  Scrolls the page up or down by viewport heights (default: 3). Useful for triggering lazy-loading on infinite-scroll pages (x.com, Reddit, etc.).
 - `loadall <target> <selector> [ms]`
   Repeatedly clicks a "load more" control until it disappears.
 - `evalraw <target> <method> [json]`

@@ -3,7 +3,7 @@
 // Input: a CLI command plus an optional target prefix, URL, selector, or JS expr.
 // Output: page lists, extracted text/HTML, screenshots, or command status text.
 // Public interface: list, snap, eval, shot, html, nav, net, click, clickxy,
-// type, loadall, evalraw, reset, open, and stop.
+// type, scroll, loadall, evalraw, reset, open, and stop.
 //
 // The script connects directly to a Chrome-family browser over raw WebSocket.
 // It avoids Puppeteer and keeps one daemon per tab to reuse approval state.
@@ -491,6 +491,18 @@ async function clickXyStr(cdp, sid, x, y) {
   return `Clicked at CSS (${cx}, ${cy})`;
 }
 
+// Scroll up/down by viewport heights.
+// amount is a multiplier of viewport height (default 3).
+async function scrollStr(cdp, sid, direction, amount) {
+  const dir = (direction || '').toLowerCase();
+  if (dir !== 'up' && dir !== 'down') throw new Error('direction must be "up" or "down"');
+  const multiplier = parseFloat(amount) || 3;
+  const sign = dir === 'down' ? 1 : -1;
+  const expr = `(() => { const dy = window.innerHeight * ${multiplier} * ${sign}; window.scrollBy({ top: dy, behavior: 'instant' }); return dy; })()`;
+  const dy = await evalStr(cdp, sid, expr);
+  return `Scrolled ${dir} ${multiplier} viewport(s) (${dy}px)`;
+}
+
 // Type text using Input.insertText (works in cross-origin iframes, unlike eval)
 async function typeStr(cdp, sid, text) {
   if (text == null || text === '') throw new Error('text required');
@@ -616,6 +628,7 @@ async function runDaemon(targetId) {
         case 'click': result = await clickStr(cdp, sessionId, args[0]); break;
         case 'clickxy': result = await clickXyStr(cdp, sessionId, args[0], args[1]); break;
         case 'type': result = await typeStr(cdp, sessionId, args[0]); break;
+        case 'scroll': result = await scrollStr(cdp, sessionId, args[0], args[1]); break;
         case 'loadall': result = await loadAllStr(cdp, sessionId, args[0], args[1] ? parseInt(args[1]) : 1500); break;
         case 'evalraw': result = await evalRawStr(cdp, sessionId, args[0], args[1]); break;
         case 'reset': result = await resetStr(cdp, sessionId, args[0]); break;
@@ -795,6 +808,7 @@ Usage: cdp <command> [args]
   clickxy <target> <x> <y>          Click at CSS pixel coordinates (see coordinate note below)
   type    <target> <text>           Type text at current focus via Input.insertText
                                     Works in cross-origin iframes unlike eval-based approaches
+  scroll  <target> <dir> [amount]  Scroll up/down by viewport heights (default: 3)
   loadall <target> <selector> [ms]  Repeatedly click a "load more" button until it disappears
                                     Optional interval in ms between clicks (default 1500)
   evalraw <target> <method> [json]  Send a raw CDP command; returns JSON result
@@ -834,13 +848,13 @@ DAEMON IPC (for advanced use / scripting)
     Response: {"id":<number>, "ok":true,  "result":"<string>"}
            or {"id":<number>, "ok":false, "error":"<message>"}
   Commands mirror the CLI: snap, eval, shot, html, nav, net, click, clickxy,
-  type, loadall, evalraw, reset, stop. Use evalraw to send arbitrary CDP methods.
+  type, scroll, loadall, evalraw, reset, stop. Use evalraw to send arbitrary CDP methods.
   The socket disappears after 20 min of inactivity or when the tab closes.
 `;
 
 const NEEDS_TARGET = new Set([
   'snap','snapshot','eval','shot','screenshot','html','nav','navigate',
-  'net','network','click','clickxy','type','loadall','evalraw','reset',
+  'net','network','click','clickxy','type','scroll','loadall','evalraw','reset',
 ]);
 
 async function main() {

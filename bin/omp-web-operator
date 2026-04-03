@@ -12,9 +12,10 @@ usage() {
   cat >&2 <<'EOF'
 usage: omp-web-operator <command> [args...]
 
-CDP primitives:
-  cdp <cdp_command> [args...]          Raw CDP command (list, nav, eval, snap,
-                                       shot, html, click, type, open, stop...)
+Page interaction:
+  page <command> [args...]             Interact with browser pages (list, nav, eval,
+                                       snap, shot, html, click, scroll, type, open,
+                                       stop...)
 
 Search (returns JSON array):
   search baidu       <query> [limit] [target]
@@ -32,11 +33,11 @@ Multi-platform parallel search:
     e.g. search-multi --google "AI agents" --baidu "AI 智能体" --limit 5
 
 Read URL content (returns Markdown or plain text):
-  read-url <url> [--limit N]
+  read-url <url> [--limit N] [--comments N]   (0 = all comments)
 
 Open post (returns JSON object):
   open-post reddit  <url> [comment_limit] [target]
-  open-post x       <url> [target]
+  open-post x       <url> [comment_limit] [target]   (0 = all comments)
   open-post xueqiu  <url> [comment_limit] [target]
   open-post taoguba <url> [target]
 
@@ -71,7 +72,7 @@ cmd="${1:-}"
 shift || true
 
 case "$cmd" in
-  cdp)
+  page|cdp)
     exec node "${SKILL}/scripts/cdp.mjs" "$@"
     ;;
 

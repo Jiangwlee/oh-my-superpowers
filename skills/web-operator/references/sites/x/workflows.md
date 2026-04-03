@@ -19,8 +19,10 @@ from the helper scripts under `../../scripts/sites/x/`. Public entrypoints are
   Output: JSON array of up to 10 search results with `author`, `handle`,
   `time_hint`, `summary`, and `url`.
 - [../../scripts/sites/x/open-post.sh](../../scripts/sites/x/open-post.sh)
-  Inputs: one `x.com/<user>/status/<id>` URL, optional target prefix.
-  Output: JSON object with `author`, `handle`, `time`, `text`, and `url`.
+  Inputs: one `x.com/<user>/status/<id>` URL, optional comment limit (default 20,
+  0 = all comments), optional target prefix.
+  Output: JSON object with `author`, `handle`, `time`, `text`, `url`,
+  `reply_count`, `external_links`, and `comments` array.
 
 ## Search SOP
 
@@ -35,11 +37,13 @@ from the helper scripts under `../../scripts/sites/x/`. Public entrypoints are
 1. Pick a usable `x.com` tab with `list_raw`.
 2. Navigate to the target post URL.
 3. Wait for the main `article` to appear.
-4. Extract the current visible content from that article.
-5. Return the visible language version without toggling translation state.
+4. Extract the main post from the first article element.
+5. Scroll down and extract reply articles up to the comment limit.
+6. Return the main post plus comments array.
 
 ## Notes
 
 - These scripts prefer `nav` over simulated clicks.
 - The search script uses the default X search page and does not force `Top` or `Latest`.
-- The post script intentionally does not expand replies, threads, or quoted posts.
+- The open-post script scrolls to load reply articles, deduplicating by status URL.
+- Comments are extracted from all `article` elements after the first (main post).

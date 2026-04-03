@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # read-url — read the main text content of any URL.
-# Input:  <url> [--limit N]
+# Input:  <url> [--limit N] [--comments N]
 # Output: Markdown text (via defuddle) or plain text (fallback).
 #
 # Four-tier strategy:
@@ -22,14 +22,18 @@ source "${SCRIPT_DIR}/core/common.sh"
 
 URL=""
 LIMIT=""
+COMMENTS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --limit)
       LIMIT="${2:-}"
       shift 2 ;;
+    --comments)
+      COMMENTS="${2:-}"
+      shift 2 ;;
     --help|-h)
-      echo "usage: read-url <url> [--limit N]" >&2
+      echo "usage: read-url <url> [--limit N] [--comments N]" >&2
       exit 0 ;;
     -*)
       echo "error: unknown option: '$1'" >&2; exit 1 ;;
@@ -55,13 +59,15 @@ domain="${URL#*://}"
 domain="${domain%%/*}"
 domain="${domain,,}"  # lowercase
 
+COMMENT_LIMIT="${COMMENTS:-20}"
+
 case "$domain" in
   *reddit.com)
-    exec bash "${SKILL}/scripts/sites/reddit/open-post.sh" "$URL" ;;
+    exec bash "${SKILL}/scripts/sites/reddit/open-post.sh" "$URL" "$COMMENT_LIMIT" ;;
   *x.com)
-    exec bash "${SKILL}/scripts/sites/x/open-post.sh" "$URL" ;;
+    exec bash "${SKILL}/scripts/sites/x/open-post.sh" "$URL" "$COMMENT_LIMIT" ;;
   *xueqiu.com)
-    exec bash "${SKILL}/scripts/sites/xueqiu/open-post.sh" "$URL" ;;
+    exec bash "${SKILL}/scripts/sites/xueqiu/open-post.sh" "$URL" "$COMMENT_LIMIT" ;;
   *tgb.cn|*taoguba.com.cn)
     exec bash "${SKILL}/scripts/sites/taoguba/open-post.sh" "$URL" ;;
 esac

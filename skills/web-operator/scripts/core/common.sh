@@ -43,6 +43,12 @@ cdp_list_raw() {
   cdp list_raw
 }
 
+# Bring a tab to the foreground (required for scroll on some sites like x.com)
+cdp_bring_to_front() {
+  local target="$1"
+  cdp evalraw "$target" "Page.bringToFront" '{}' >/dev/null 2>&1 || true
+}
+
 # Evaluate JS expression in a tab
 cdp_eval() {
   local target="$1"
