@@ -69,13 +69,18 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
 ### Read URL Content
 
-- `omp-web-operator read-url <url> [--limit N]`
+- `omp-web-operator read-url <url> [--limit N] [--comments N] [--json]`
   Read the main text content of any URL. Returns Markdown (when defuddle is available) or plain text.
   Four-tier strategy (HTTP-first + CDP fallback):
   1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to `open-post` for structured extraction
   2. **HTTP-first** → `defuddle parse <URL> --markdown` directly fetches and parses (~200ms, no browser needed). Covers ~80% of static content (blogs, docs, papers)
   3. **CDP + defuddle** → navigates worker tab to URL, extracts HTML, converts via defuddle. For JS-heavy/SPA pages where HTTP-first fails quality gate
   4. **CDP fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
+
+  Options:
+  - `--limit N` — truncate output to N bytes
+  - `--comments N` — comment count for supported sites (default 20, 0 = all)
+  - `--json` — output `{title, url, domain, description, content}` JSON. Content is still markdown. Useful for ingest pipelines needing structured metadata.
 
   Tier 3-4 use **persistent worker tabs** (created once, reused across calls) to avoid the ~15s CDP authorization cost per new tab. Worker tabs are automatically reset between reads (`Storage.clearDataForOrigin` + navigate to `about:blank`).
 
@@ -85,6 +90,9 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
   # Read with character limit
   omp-web-operator read-url "https://arxiv.org/html/2603.23013v1" --limit 15000
+
+  # JSON output with metadata (for pipelines)
+  omp-web-operator read-url "https://blog.samaltman.com/..." --json
   ```
 
 ### Multi-Platform Parallel Search

@@ -33,7 +33,8 @@ Multi-platform parallel search:
     e.g. search-multi --google "AI agents" --baidu "AI 智能体" --limit 5
 
 Read URL content (returns Markdown or plain text):
-  read-url <url> [--limit N] [--comments N]   (0 = all comments)
+  read-url <url> [--limit N] [--comments N] [--json]
+    --json outputs {title, url, domain, description, content} (0 = all comments)
 
 Open post (returns JSON object):
   open-post reddit  <url> [comment_limit] [target]

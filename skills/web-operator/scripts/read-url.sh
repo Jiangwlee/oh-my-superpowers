@@ -23,6 +23,7 @@ source "${SCRIPT_DIR}/core/common.sh"
 URL=""
 LIMIT=""
 COMMENTS=""
+JSON_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,8 +33,11 @@ while [[ $# -gt 0 ]]; do
     --comments)
       COMMENTS="${2:-}"
       shift 2 ;;
+    --json)
+      JSON_MODE=true
+      shift ;;
     --help|-h)
-      echo "usage: read-url <url> [--limit N] [--comments N]" >&2
+      echo "usage: read-url <url> [--limit N] [--comments N] [--json]" >&2
       exit 0 ;;
     -*)
       echo "error: unknown option: '$1'" >&2; exit 1 ;;
@@ -49,7 +53,7 @@ done
 
 if [[ -z "$URL" ]]; then
   echo "error: URL is required" >&2
-  echo "usage: read-url <url> [--limit N]" >&2
+  echo "usage: read-url <url> [--limit N] [--json]" >&2
   exit 1
 fi
 
@@ -85,14 +89,31 @@ truncate_output() {
 # --- tier 2: HTTP-first (defuddle parse URL directly, no browser) -----------
 
 if command -v defuddle >/dev/null 2>&1; then
-  if output="$(defuddle parse "$URL" --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
-    # Quality gate: content must have meaningful text (>100 chars after trimming)
-    text_len=$(printf '%s' "$output" | wc -c)
-    if [[ "$text_len" -gt 100 ]]; then
-      printf '%s\n' "$output" | truncate_output
-      exit 0
+  if [[ "$JSON_MODE" == true ]]; then
+    # --json --markdown: content as markdown, metadata included
+    if output="$(defuddle parse "$URL" --json --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
+      text_len=$(printf '%s' "$output" | jq -r '.content // ""' | wc -c)
+      if [[ "$text_len" -gt 100 ]]; then
+        printf '%s\n' "$output" | jq --arg url "$URL" '{
+          title: .title,
+          url: $url,
+          domain: .domain,
+          description: .description,
+          content: .content
+        }' | truncate_output
+        exit 0
+      fi
     fi
-    # Quality too low — fall through to CDP path
+  else
+    if output="$(defuddle parse "$URL" --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
+      # Quality gate: content must have meaningful text (>100 chars after trimming)
+      text_len=$(printf '%s' "$output" | wc -c)
+      if [[ "$text_len" -gt 100 ]]; then
+        printf '%s\n' "$output" | truncate_output
+        exit 0
+      fi
+      # Quality too low — fall through to CDP path
+    fi
   fi
 fi
 
@@ -125,9 +146,22 @@ if command -v defuddle >/dev/null 2>&1; then
 
   cdp html "$TARGET" > "$TMPHTML" 2>/dev/null
 
-  if output="$(defuddle parse "$TMPHTML" --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
-    printf '%s\n' "$output" | truncate_output
-    exit 0
+  if [[ "$JSON_MODE" == true ]]; then
+    if output="$(defuddle parse "$TMPHTML" --json --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
+      printf '%s\n' "$output" | jq --arg url "$URL" '{
+        title: .title,
+        url: $url,
+        domain: (.domain // ($url | split("/")[2])),
+        description: .description,
+        content: .content
+      }' | truncate_output
+      exit 0
+    fi
+  else
+    if output="$(defuddle parse "$TMPHTML" --markdown 2>/dev/null)" && [[ -n "$output" ]]; then
+      printf '%s\n' "$output" | truncate_output
+      exit 0
+    fi
   fi
   # defuddle failed on this page, fall through to tier 4
 fi
@@ -147,4 +181,20 @@ read -r -d '' EXTRACT_JS <<'JSEOF' || true
 })()
 JSEOF
 
-cdp_eval "$TARGET" "$EXTRACT_JS" | truncate_output
+if [[ "$JSON_MODE" == true ]]; then
+  content="$(cdp_eval "$TARGET" "$EXTRACT_JS")"
+  # Extract title from the page
+  title="$(cdp_eval "$TARGET" "document.title" 2>/dev/null || echo "")"
+  # Build domain from URL
+  json_domain="${URL#*://}"
+  json_domain="${json_domain%%/*}"
+  jq -n \
+    --arg title "$title" \
+    --arg url "$URL" \
+    --arg domain "$json_domain" \
+    --arg content "$content" \
+    '{title: $title, url: $url, domain: $domain, description: "", content: $content}' \
+    | truncate_output
+else
+  cdp_eval "$TARGET" "$EXTRACT_JS" | truncate_output
+fi

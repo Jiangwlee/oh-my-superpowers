@@ -80,10 +80,11 @@ Load site references for website-specific workflows:
 
 ## read-url 参数说明
 
-`omp-web-operator read-url <url> [--limit N] [--comments N]`
+`omp-web-operator read-url <url> [--limit N] [--comments N] [--json]`
 
 - `--limit N`：截断输出到 N 字节。仅对非站点 URL（博客、文档等）生效。
 - `--comments N`：对支持评论的站点（reddit、x.com、xueqiu）设置评论获取数量。默认 20，**传 0 表示获取全部评论**。
+- `--json`：输出 JSON 格式 `{title, url, domain, description, content}`，content 为 markdown。适用于需要结构化元数据的 pipeline。
 - `read-url` 会自动识别 reddit.com、x.com、xueqiu.com、tgb.cn 的 URL 并路由到对应的 `open-post` 工作流，无需手动选择 `open-post` 命令。
 
 ## Preferred Command Map
@@ -92,7 +93,7 @@ When a supported site appears in the task, start from these commands before cons
 
 | 关键词 / Site | 命令 |
 |--------------|------|
-| 任意 URL / read article | `omp-web-operator read-url <url> [--limit N] [--comments N]` |
+| 任意 URL / read article | `omp-web-operator read-url <url> [--limit N] [--comments N] [--json]` |
 | 多平台搜索 / research | `omp-web-operator search-multi --<site> "<query>" [...] --limit N` |
 | Google / 谷歌 | `omp-web-operator search google <query> [limit]` |
 | Baidu / 百度 | `omp-web-operator search baidu <query> [limit]` |
