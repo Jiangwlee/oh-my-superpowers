@@ -179,37 +179,24 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 3. 禁止硬编码敏感信息
 4. 禁止直接修改 `~/.oh-my-superpowers/` 下的文件，只修改源码目录
 
-## Skills CLI Development Guide
+## Tool CLI Architecture
 
-Skill CLI 的两层结构，**必须**理解安装路径后再写代码：
+两层结构：`omp` 是唯一 PATH 入口，通过目录名路由到 `cli/<tool>/main.py`。
 
 | 文件 | 开发时位置 | 安装后位置 | 作用 |
 |------|-----------|-----------|------|
-| `bin/omp-<skill>` | `bin/omp-<skill>` | `~/.local/bin/omp-<skill>` | PATH 入口，agent 按名字调用 |
-| 内部脚本 | `skills/<skill>/scripts/` | `~/.oh-my-superpowers/skills/<skill>/scripts/` | 实现逻辑，不直接暴露 |
+| `omp`（唯一产品入口） | `bin/omp` | `~/.local/bin/omp` | 统一 CLI 入口 |
+| 工具 CLI 模块 | `cli/<tool>/main.py` | `$OMP_HOME/cli/<tool>/main.py` | typer app，定义子命令接口 |
+| 实现脚本 | `skills/<tool>/scripts/` | `$OMP_HOME/skills/<tool>/scripts/` | 业务逻辑实现 |
 
 **关键规则：**
 
-- `bin/omp-<skill>` 是唯一的 CLI 入口，**dispatcher 逻辑写在这里**
-- 内部脚本通过 `$OMP_HOME` 引用，不能用 `SCRIPT_DIR` 或相对路径
-- 标准模式（参考 `bin/omp-deep-research`）：
-
-```bash
-#!/usr/bin/env bash
-exec bash "${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/<skill>/scripts/sites/xxx/yyy.sh" "$@"
-```
-
-- `skills/<skill>/scripts/` 内部脚本之间可以用 `SCRIPT_DIR` 互相引用（它们在同一目录下）
-- SKILL.md 中只写 `omp-<skill> <subcommand> [args]`，不写路径
-
-**错误示例（永远不要这样写）：**
-
-```bash
-# ❌ bin/omp-web-operator 中不能这样写
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec bash "${SCRIPT_DIR}/../skills/web-operator/scripts/..."
-# 安装后 SCRIPT_DIR = ~/.local/bin，找不到 skills
-```
+- `omp` 是唯一进入 PATH 的命令，没有 `omp-xxx` 中间层
+- `omp <tool>` 自动路由到 `$OMP_HOME/cli/<tool>/main.py`（通过 `uv run`）
+- `cli/<tool>/main.py` 使用 typer + PEP 723 inline dependencies
+- 实现脚本通过 `$OMP_HOME` 引用，禁止相对路径
+- SKILL.md 中只写 `omp <tool> <subcommand> [args]`，不写路径
+- 详见 [CLI 开发规范](docs/specs/02_framework/cli-development-guide.md)
 
 ## 规范参考
 
