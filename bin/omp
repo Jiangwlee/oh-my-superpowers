@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# dependencies = ["typer", "rich"]
+# dependencies = ["typer", "rich", "click"]
 # ///
 #
 # omp — oh-my-superpowers CLI
@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 from typing import Annotated, Optional
 
+import click
 import typer
 from rich.console import Console
 
@@ -47,7 +48,8 @@ RUN_MODES = {"text", "stream", "json", "interactive"}
 
 # ── version ──────────────────────────────────────────────────────────────────
 
-__version__ = "0.1.0"
+_version_file = OMP_HOME / "VERSION"
+__version__ = _version_file.read_text().strip() if _version_file.is_file() else "0.0.0-dev"
 
 
 # ── tool discovery ───────────────────────────────────────────────────────────
@@ -80,18 +82,19 @@ def _discover_tools() -> list[tuple[str, str]]:
     return tools
 
 
-def _build_tools_epilog() -> str:
-    """构建已安装工具的 epilog 文本。"""
-    tools = _discover_tools()
-    if not tools:
-        return ""
-    lines = ["\n[bold]Installed tools[/bold] (via omp <tool>):"]
-    for name, desc in tools:
-        if desc:
-            lines.append(f"  {name:<20} {desc}")
-        else:
-            lines.append(f"  {name}")
-    return "\n".join(lines)
+def _register_tool_commands(app: typer.Typer) -> None:
+    """将已安装工具注册为 typer 命令（仅用于 --help 展示，实际路由由 _try_tool_route 拦截）。"""
+    for tool_name, tool_desc in _discover_tools():
+        def _make_cmd(tn: str = tool_name) -> None:
+            @app.command(
+                name=tn,
+                help=tool_desc or f"Run omp {tn} --help for details.",
+                rich_help_panel="Installed tools (via omp <tool>)",
+            )
+            def _cmd() -> None:
+                # Never reached: _try_tool_route() intercepts via os.execvp
+                pass
+        _make_cmd()
 
 
 # ── app setup ─────────────────────────────────────────────────────────────────
@@ -112,7 +115,7 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-@app.callback(epilog=_build_tools_epilog())
+@app.callback()
 def _main(
     version: Annotated[
         bool,
@@ -120,6 +123,43 @@ def _main(
     ] = False,
 ) -> None:
     """oh-my-superpowers CLI"""
+
+
+_register_tool_commands(app)
+
+# ── epilog patch ─────────────────────────────────────────────────────────────
+# typer 的 epilog 渲染会折叠换行（split("\n\n") + replace("\n"," ")），
+# 导致多行 Examples 挤成一行。这里 patch rich_help_rendering 的 epilog 部分，
+# 改为直接保留原始文本中的换行。
+
+import typer.rich_utils as _ru  # noqa: E402
+
+_orig_rich_format_help = _ru.rich_format_help
+
+
+def _patched_rich_format_help(
+    *,
+    obj: click.Command | click.Group,  # type: ignore[name-defined]
+    ctx: click.Context,
+    markup_mode: str,
+) -> None:
+    """在标准 help 输出后追加 Examples 区块（仅对 omp 顶层命令生效）。"""
+    _orig_rich_format_help(obj=obj, ctx=ctx, markup_mode=markup_mode)
+    if ctx.info_name == "omp" and ctx.parent is None:
+        from rich.panel import Panel
+        from rich.text import Text
+
+        out = _ru.Console(
+            theme=_ru.STYLE_DEFAULTS_OVERRIDE if hasattr(_ru, "STYLE_DEFAULTS_OVERRIDE") else None
+        )
+        examples = Text()
+        examples.append("omp install skill insight --global\n")
+        examples.append("omp run researcher \"研究 Claude Code 记忆机制\"\n")
+        examples.append("omp web-operator search --help")
+        out.print(Panel(examples, title="Examples", title_align="left", border_style="dim"))
+
+
+_ru.rich_format_help = _patched_rich_format_help
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
