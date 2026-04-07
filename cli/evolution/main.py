@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
 import typer
 
 OMP_HOME = Path(os.environ.get("OMP_HOME", Path.home() / ".oh-my-superpowers"))
@@ -39,7 +37,7 @@ def scan(
         str(Path.home() / "Projects"), "--source", help="Directory to scan for project sessions."
     ),
     days: int = typer.Option(30, "--days", help="Scan last N days."),
-    project_root: Optional[str] = typer.Option(
+    project_root: str | None = typer.Option(
         None, "--project-root", help="Current project root (default: auto-detect)."
     ),
 ) -> None:
@@ -59,7 +57,7 @@ def scan(
 @app.command()
 def history(
     limit: int = typer.Option(20, "--limit", "-l", help="Show last N records."),
-    project_root: Optional[str] = typer.Option(
+    project_root: str | None = typer.Option(
         None, "--project-root", help="Current project root (default: auto-detect)."
     ),
 ) -> None:

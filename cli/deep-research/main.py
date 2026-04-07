@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
 import typer
 
 OMP_HOME = Path(os.environ.get("OMP_HOME", Path.home() / ".oh-my-superpowers"))
@@ -36,7 +34,7 @@ app = typer.Typer(
 @app.command()
 def init(
     topic: str = typer.Option(..., "--topic", help="Research topic."),
-    slug: Optional[str] = typer.Option(None, "--slug", help="Optional explicit workspace slug."),
+    slug: str | None = typer.Option(None, "--slug", help="Optional explicit workspace slug."),
     mode: str = typer.Option(
         "default", "--mode", help="Research depth mode (quick|default|deep)."
     ),
@@ -57,13 +55,13 @@ def init(
 @app.command("build-report")
 def build_report(
     workspace: str = typer.Option(..., "--workspace", help="Workspace directory."),
-    brief_file: Optional[str] = typer.Option(None, "--brief-file", help="Markdown file for brief output."),
-    full_report_file: Optional[str] = typer.Option(
+    brief_file: str | None = typer.Option(None, "--brief-file", help="Markdown file for brief output."),
+    full_report_file: str | None = typer.Option(
         None, "--full-report-file", help="Markdown file for full report output."
     ),
-    brief: Optional[str] = typer.Option(None, "--brief", help="Inline brief markdown."),
-    full_report: Optional[str] = typer.Option(None, "--full-report", help="Inline full report markdown."),
-    sources_file: Optional[str] = typer.Option(None, "--sources-file", help="JSON file containing sources array."),
+    brief: str | None = typer.Option(None, "--brief", help="Inline brief markdown."),
+    full_report: str | None = typer.Option(None, "--full-report", help="Inline full report markdown."),
+    sources_file: str | None = typer.Option(None, "--sources-file", help="JSON file containing sources array."),
 ) -> None:
     """Write reports and persist sources to workspace.
 

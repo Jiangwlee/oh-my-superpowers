@@ -103,3 +103,5 @@ When a supported site appears in the task, start from these commands before cons
 | 雪球 / Xueqiu | `omp web-operator search xueqiu <query> [limit]`、`omp web-operator xueqiu hot [limit]`、`omp web-operator open-post xueqiu <url> [comment_limit]` |
 | 淘股吧 / Taoguba / TGB | `omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
 | 金山文档 / KDocs / WPS 365 | `omp web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
+
+> 不确定参数时，先运行 `omp web-operator <subcommand> --help` 查看完整用法。

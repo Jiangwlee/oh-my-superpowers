@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
 import typer
 
 OMP_HOME = Path(os.environ.get("OMP_HOME", Path.home() / ".oh-my-superpowers"))
@@ -42,9 +40,9 @@ def _run(args: list[str]) -> None:
 
 @app.command()
 def capture(
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
-    session: Optional[str] = typer.Option(None, "--session", help="Process only this session ID."),
-    since: Optional[str] = typer.Option(None, "--since", help="Only process sessions from last N days (e.g. 7d)."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    session: str | None = typer.Option(None, "--session", help="Process only this session ID."),
+    since: str | None = typer.Option(None, "--since", help="Only process sessions from last N days (e.g. 7d)."),
     min_messages: int = typer.Option(10, "--min-messages", help="Skip sessions with fewer messages."),
     force: bool = typer.Option(False, "--force", help="Ignore processed markers, force reprocess."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Analyze only, do not write."),
@@ -77,8 +75,8 @@ def capture(
 
 @app.command()
 def recall(
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
-    format: str = typer.Option("md", "--format", help="Output format (json|md)."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    format: str = typer.Option("md", "--format", "-f", help="Output format (json|md)."),
     budget: int = typer.Option(4096, "--budget", help="Token budget."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Do not record hit_logs."),
     hook: bool = typer.Option(False, "--hook", help="Hook mode: output hookSpecificOutput JSON."),
@@ -89,6 +87,9 @@ def recall(
         omp insight recall --source $PWD
         omp insight recall --budget 2048 --format json
     """
+    if format not in ("json", "md"):
+        typer.echo(f"error: --format must be json or md, got '{format}'", err=True)
+        raise typer.Exit(2)
     cmd = ["recall"]
     if source:
         cmd += ["--source", source]
@@ -102,9 +103,9 @@ def recall(
 
 @app.command()
 def evaluate(
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Output candidates only, do not write."),
-    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", help="External prompt template file."),
+    prompt_file: str | None = typer.Option(None, "--prompt-file", help="External prompt template file."),
     model: str = typer.Option(_default_model, "--model", help="LLM model."),
 ) -> None:
     """Distill insights from accumulated memories.
@@ -126,8 +127,8 @@ def evaluate(
 
 @app.command("list")
 def list_items(
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
-    type: Optional[str] = typer.Option(None, "--type", help="Filter by type (memory|insight)."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    type: str | None = typer.Option(None, "--type", help="Filter by type (memory|insight)."),
 ) -> None:
     """List memories and/or insights.
 
@@ -135,6 +136,9 @@ def list_items(
         omp insight list --source $PWD
         omp insight list --type insight
     """
+    if type is not None and type not in ("memory", "insight"):
+        typer.echo(f"error: --type must be memory or insight, got '{type}'", err=True)
+        raise typer.Exit(2)
     cmd = ["list"]
     if source:
         cmd += ["--source", source]
@@ -146,8 +150,8 @@ def list_items(
 @app.command()
 def promote(
     id: str = typer.Argument(..., help="Memory ID (mem_ prefix)."),
-    reason: Optional[str] = typer.Option(None, "--reason", help="Promotion reason."),
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    reason: str | None = typer.Option(None, "--reason", help="Promotion reason."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
 ) -> None:
     """Promote a memory to insight.
 
@@ -165,8 +169,8 @@ def promote(
 @app.command()
 def degrade(
     id: str = typer.Argument(..., help="Insight ID (ins_ prefix)."),
-    reason: Optional[str] = typer.Option(None, "--reason", help="Degradation reason."),
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    reason: str | None = typer.Option(None, "--reason", help="Degradation reason."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
 ) -> None:
     """Degrade an insight back to memory.
 
@@ -184,13 +188,17 @@ def degrade(
 @app.command()
 def delete(
     id: str = typer.Argument(..., help="ID (mem_ or ins_ prefix)."),
-    source: Optional[str] = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    source: str | None = typer.Option(None, "--source", help="Project directory (default: cwd)."),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation."),
 ) -> None:
     """Delete a memory or insight.
 
     Example:
-        omp insight delete mem_abc123
+        omp insight delete mem_abc123 --force
     """
+    if not force:
+        typer.echo("error: delete is destructive; pass --force to confirm", err=True)
+        raise typer.Exit(1)
     cmd = ["delete", id]
     if source:
         cmd += ["--source", source]

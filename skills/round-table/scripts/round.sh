@@ -32,7 +32,7 @@ _session_dir() {
   if [[ -z "$sid" ]]; then
     sid=$(ls -1 "$RT_DATA_DIR" 2>/dev/null | sort -r | head -1)
     if [[ -z "$sid" ]]; then
-      echo "错误：没有找到任何 session。请先运行: omp-round-table session init <topic>" >&2
+      echo "错误：没有找到任何 session。请先运行: omp round-table session init <topic>" >&2
       exit 1
     fi
   fi

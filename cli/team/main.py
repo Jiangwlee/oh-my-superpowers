@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
 import typer
 
 OMP_HOME = Path(os.environ.get("OMP_HOME", Path.home() / ".oh-my-superpowers"))
@@ -36,12 +34,12 @@ app = typer.Typer(
 @app.command()
 def run(
     runtime: str = typer.Argument(..., help="Agent runtime (claude|codex|pi)."),
-    prompt: Optional[str] = typer.Argument(None, help="Inline prompt text."),
-    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", help="Read prompt from file."),
-    model: Optional[str] = typer.Option(None, "--model", help="Override default model."),
+    prompt: str | None = typer.Argument(None, help="Inline prompt text."),
+    prompt_file: str | None = typer.Option(None, "--prompt-file", help="Read prompt from file."),
+    model: str | None = typer.Option(None, "--model", help="Override default model."),
     timeout: int = typer.Option(300, "--timeout", help="Timeout in seconds."),
-    output_file: Optional[str] = typer.Option(None, "--output-file", help="Write output to file."),
-    cwd: Optional[str] = typer.Option(None, "--cwd", help="Worker working directory (default: $PWD)."),
+    output_file: str | None = typer.Option(None, "--output-file", help="Write output to file."),
+    cwd: str | None = typer.Option(None, "--cwd", help="Worker working directory (default: $PWD)."),
 ) -> None:
     """Spawn an agent, wait for completion, and return output.
 
@@ -50,6 +48,13 @@ def run(
         omp team run claude --prompt-file design.md
         omp team run codex --prompt-file task.md --cwd ./project --timeout 600
     """
+    valid_runtimes = ("claude", "codex", "pi")
+    if runtime not in valid_runtimes:
+        typer.echo(f"error: runtime must be one of {', '.join(valid_runtimes)}, got '{runtime}'", err=True)
+        raise typer.Exit(2)
+    if not prompt and not prompt_file:
+        typer.echo("error: provide either prompt or --prompt-file", err=True)
+        raise typer.Exit(2)
     cmd = ["bash", str(SCRIPTS_DIR / "run.sh"), runtime]
     if prompt:
         cmd.append(prompt)
@@ -67,7 +72,7 @@ def run(
 
 @app.command()
 def status(
-    session_name: Optional[str] = typer.Argument(None, help="Specific tmux session name."),
+    session_name: str | None = typer.Argument(None, help="Specific tmux session name."),
 ) -> None:
     """Query tmux session status.
 

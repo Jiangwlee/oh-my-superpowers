@@ -30,6 +30,8 @@ omp deep-research <subcommand> [args]
 
 详细参数不要硬记，按需读取 `references/cli.md`。
 
+> 不确定参数时，先运行 `omp deep-research <subcommand> --help` 查看完整用法。
+
 ## 研究 SOP
 
 推荐的使用顺序：

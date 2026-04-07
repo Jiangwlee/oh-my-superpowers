@@ -23,20 +23,22 @@ Assistant: [启动 round-table，选取相关角色进行多视角辩论]
 ```bash
 # session 子命令
 omp round-table session init <topic>               # 创建 session
-omp round-table session end [--output-dir <path>]  # 结束，生成文档
+omp round-table session end --output-dir <path>     # 结束，生成文档
 omp round-table session status                     # 查看 session 状态
 omp round-table session context <brief|detail>     # 获取背景上下文
 omp round-table session messages [msg-id]          # 获取消息记录
 
 # round 子命令
-omp round-table round spawn [round-number]         # 并行启动参与者（轮次可省略，自动推断）
+omp round-table round spawn                        # 并行启动参与者（自动推断轮次）
 omp round-table round collect                      # 收集参与者回复并写入 session
-omp round-table round watch [round] [-f] [-n lines] # 实时查看参与者输出
+omp round-table round watch [-f]                    # 实时查看参与者输出
 omp round-table round attach                       # 连接 tmux session 直接观看
 
-# 通用
-omp round-table post-message <role> <file> [opts]  # 追加消息
+# post-message 在 session 命名空间下
+omp round-table session post-message <role> <file> --round N --name "<name>" --action "<action>" --summary "<summary>"
 ```
+
+> 不确定参数时，先运行 `omp round-table <subcommand> --help` 查看完整用法。
 
 ## Orchestrator SOP
 

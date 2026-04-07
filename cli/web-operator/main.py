@@ -8,7 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -69,14 +68,14 @@ SEARCH_SITES = [
 def search(
     site: str = typer.Argument(..., help=f"Search platform ({', '.join(SEARCH_SITES)})."),
     query: str = typer.Argument(..., help="Search query."),
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target (page URL or index)."),
+    limit: str | None = typer.Argument(None, help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Search a platform (returns JSON array).
 
     Example:
         omp web-operator search google "AI agents" 10
-        omp web-operator search x "Claude Code"
+        omp web-operator search x "Claude Code" --target 0
     """
     script = SITES_DIR / site / "search.sh"
     if not script.is_file():
@@ -108,8 +107,8 @@ def search_multi(ctx: typer.Context) -> None:
 @app.command("read-url")
 def read_url(
     url: str = typer.Argument(..., help="URL to read."),
-    limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Max content length."),
-    comments: Optional[int] = typer.Option(None, "--comments", help="Max comments (0 = all)."),
+    limit: int | None = typer.Option(None, "--limit", "-l", help="Max content length."),
+    comments: int | None = typer.Option(None, "--comments", help="Max comments (0 = all)."),
     json_output: bool = typer.Option(False, "--json", help="Output structured JSON."),
 ) -> None:
     """Read URL content as Markdown or structured JSON.
@@ -139,14 +138,14 @@ OPEN_POST_SITES = ["reddit", "x", "xueqiu", "taoguba"]
 def open_post(
     site: str = typer.Argument(..., help=f"Platform ({', '.join(OPEN_POST_SITES)})."),
     url: str = typer.Argument(..., help="Post URL."),
-    comment_limit: Optional[str] = typer.Argument(None, help="Max comments (0 = all)."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    comment_limit: str | None = typer.Argument(None, help="Max comments (0 = all)."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Open and extract a post with comments (returns JSON).
 
     Example:
         omp web-operator open-post x "https://x.com/user/status/123"
-        omp web-operator open-post reddit "https://reddit.com/r/..." 50
+        omp web-operator open-post reddit "https://reddit.com/r/..." 50 --target 0
     """
     script = SITES_DIR / site / "open-post.sh"
     if not script.is_file():
@@ -175,14 +174,14 @@ app.add_typer(taoguba_app, name="taoguba")
 
 @taoguba_app.command()
 def jinghua(
-    hours: Optional[str] = typer.Argument(None, help="Hours to look back."),
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    hours: str | None = typer.Option(None, "--hours", help="Hours to look back."),
+    limit: str | None = typer.Option(None, "--limit", help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Fetch jinghua (精华) posts.
 
     Example:
-        omp web-operator taoguba jinghua 24 10
+        omp web-operator taoguba jinghua --hours 24 --limit 10
     """
     cmd = ["bash", str(SITES_DIR / "taoguba" / "jinghua.sh")]
     for arg in [hours, limit, target]:
@@ -193,14 +192,14 @@ def jinghua(
 
 @taoguba_app.command()
 def following(
-    hours: Optional[str] = typer.Argument(None, help="Hours to look back."),
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    hours: str | None = typer.Option(None, "--hours", help="Hours to look back."),
+    limit: str | None = typer.Option(None, "--limit", help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Fetch posts from followed users.
 
     Example:
-        omp web-operator taoguba following 12 20
+        omp web-operator taoguba following --hours 12 --limit 20
     """
     cmd = ["bash", str(SITES_DIR / "taoguba" / "following.sh")]
     for arg in [hours, limit, target]:
@@ -225,13 +224,13 @@ app.add_typer(kdocs_app, name="kdocs")
 @kdocs_app.command("search")
 def kdocs_search(
     query: str = typer.Argument(..., help="Search query."),
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    limit: str | None = typer.Argument(None, help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Search KDocs documents.
 
     Example:
-        omp web-operator kdocs search "quarterly report"
+        omp web-operator kdocs search "quarterly report" --target 0
     """
     cmd = ["bash", str(SITES_DIR / "kdocs" / "search.sh"), query]
     if limit:
@@ -244,7 +243,7 @@ def kdocs_search(
 @kdocs_app.command("open-doc")
 def kdocs_open_doc(
     file_key: str = typer.Argument(..., help="Document file key."),
-    main_target: Optional[str] = typer.Argument(None, help="CDP main target."),
+    main_target: str | None = typer.Argument(None, help="CDP main target."),
 ) -> None:
     """Open a KDocs document.
 
@@ -260,7 +259,7 @@ def kdocs_open_doc(
 @kdocs_app.command("find-in-doc")
 def kdocs_find_in_doc(
     keyword: str = typer.Argument(..., help="Keyword to find."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    target: str | None = typer.Argument(None, help="CDP target."),
 ) -> None:
     """Find keyword in current KDocs document.
 
@@ -276,7 +275,7 @@ def kdocs_find_in_doc(
 @kdocs_app.command("ask-ai")
 def kdocs_ask_ai(
     question: str = typer.Argument(..., help="Question to ask AI."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    target: str | None = typer.Argument(None, help="CDP target."),
 ) -> None:
     """Ask AI a question about the current document.
 
@@ -291,7 +290,7 @@ def kdocs_ask_ai(
 
 @kdocs_app.command("close-doc")
 def kdocs_close_doc(
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    target: str | None = typer.Argument(None, help="CDP target."),
 ) -> None:
     """Close current KDocs document.
 
@@ -319,13 +318,13 @@ app.add_typer(xueqiu_app, name="xueqiu")
 
 @xueqiu_app.command()
 def hot(
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    limit: str | None = typer.Argument(None, help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Fetch hot topics on Xueqiu.
 
     Example:
-        omp web-operator xueqiu hot 20
+        omp web-operator xueqiu hot 20 --target 0
     """
     cmd = ["bash", str(SITES_DIR / "xueqiu" / "hot.sh")]
     if limit:
@@ -338,13 +337,13 @@ def hot(
 @xueqiu_app.command("stock-info")
 def stock_info(
     symbol_or_url: str = typer.Argument(..., help="Stock symbol or URL."),
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    limit: str | None = typer.Argument(None, help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Get stock information from Xueqiu.
 
     Example:
-        omp web-operator xueqiu stock-info SH600519
+        omp web-operator xueqiu stock-info SH600519 --target 0
     """
     cmd = ["bash", str(SITES_DIR / "xueqiu" / "stock-info.sh"), symbol_or_url]
     if limit:
@@ -369,13 +368,13 @@ app.add_typer(x_app, name="x")
 
 @x_app.command("for-you")
 def x_for_you(
-    limit: Optional[str] = typer.Argument(None, help="Max results."),
-    target: Optional[str] = typer.Argument(None, help="CDP target."),
+    limit: str | None = typer.Argument(None, help="Max results."),
+    target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
 ) -> None:
     """Fetch For You feed from X.
 
     Example:
-        omp web-operator x for-you 20
+        omp web-operator x for-you 20 --target 0
     """
     cmd = ["bash", str(SITES_DIR / "x" / "for-you.sh")]
     if limit:

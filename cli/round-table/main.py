@@ -8,7 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -53,7 +52,7 @@ def _session(args: list[str]) -> None:
 def init(
     topic: str = typer.Argument(..., help="Discussion topic."),
     roles: str = typer.Option(..., "--roles", help="Comma-separated participant role IDs."),
-    context: Optional[str] = typer.Option(None, "--context", help="Context text or file path."),
+    context: str | None = typer.Option(None, "--context", help="Context text or file path."),
 ) -> None:
     """Initialize a new round table session.
 
@@ -90,7 +89,7 @@ def context(
 
 @session_app.command()
 def messages(
-    msg_id: Optional[str] = typer.Argument(None, help="Specific message ID."),
+    msg_id: str | None = typer.Argument(None, help="Specific message ID."),
 ) -> None:
     """List session messages.
 

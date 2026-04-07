@@ -19,6 +19,8 @@ omp evolution scan [--source <dir>] [--days <n>]
 omp evolution history [--limit <n>]
 ```
 
+> 不确定参数时，先运行 `omp evolution <subcommand> --help` 查看完整用法。
+
 ## 使用流程
 
 <HARD-GATE>

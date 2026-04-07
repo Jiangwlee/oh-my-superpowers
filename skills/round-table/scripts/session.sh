@@ -32,7 +32,7 @@ _session_dir() {
     # 自动选最新的 session
     sid=$(ls -1 "$RT_DATA_DIR" 2>/dev/null | sort -r | head -1)
     if [[ -z "$sid" ]]; then
-      echo "错误：没有找到任何 session。请先运行: omp-round-table start <topic>" >&2
+      echo "错误：没有找到任何 session。请先运行: omp round-table session init <topic>" >&2
       exit 1
     fi
   fi
@@ -247,7 +247,7 @@ cmd_get_messages() {
     local msg
     msg=$(jq -r "select(.msg_id == \"$msg_id\")" "$jsonl")
     if [[ -z "$msg" ]]; then
-      echo "错误：消息 $msg_id 不存在。运行 omp-round-table get-messages 查看所有消息。" >&2
+      echo "错误：消息 $msg_id 不存在。运行 omp round-table session messages 查看所有消息。" >&2
       exit 1
     fi
     local round name action content
@@ -595,7 +595,7 @@ cmd_attach() {
 
   if ! tmux has-session -t "$tmux_session" 2>/dev/null; then
     echo "错误：tmux session '$tmux_session' 不存在（参与者可能已全部完成）。" >&2
-    echo "提示：使用 omp-round-table watch 查看已完成的输出。" >&2
+    echo "提示：使用 omp round-table round watch 查看已完成的输出。" >&2
     exit 1
   fi
 

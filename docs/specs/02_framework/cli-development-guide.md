@@ -84,6 +84,10 @@ omp                              # 唯一入口（~/.local/bin/omp）
 
 使用 `uv run` 确保 `main.py` 的第三方依赖（typer、rich 等）通过 PEP 723 inline metadata 自动解析，无需预装。
 
+### 自动路由注册
+
+`omp --help` 应动态列出所有已安装的工具。实现方式：启动时扫描 `$OMP_HOME/cli/` 下含 `main.py` 的子目录，提取工具名和描述，注册为子命令组。
+
 ### 环境变量
 
 工具 CLI 启动时自动加载 `$OMP_HOME/.env`（如果存在），用于注入配置：
@@ -104,9 +108,18 @@ DEFAULT_SEARCH_LIMIT=10
 |------|------|------|
 | 顶层命令 | `omp` 固定 | `omp` |
 | 工具名 | 小写连字符，对应 `cli/` 下目录名 | `web-operator`, `insight`, `deep-research` |
-| 子命令 | 小写连字符，动词或名词 | `search`, `read-url`, `open-post` |
-| 参数 | `--long-flag` 小写连字符 | `--limit`, `--output-dir` |
+| noun（可选） | 小写连字符，资源名词 | `taoguba`, `kdocs`, `session` |
+| verb | 小写连字符，动作动词 | `search`, `jinghua`, `init` |
+| flag | `--long-flag` 小写连字符 | `--limit`, `--output-dir` |
 | 位置参数 | 按重要性排序，必填在前 | `<query> [limit]` |
+
+子命令层级最多三层：`omp <tool> <noun> <verb>`。
+
+```bash
+omp insight capture                    # 工具 + verb（2 层）
+omp web-operator taoguba jinghua       # 工具 + noun + verb（3 层）
+omp round-table session init           # 工具 + noun + verb（3 层）
+```
 
 ---
 
@@ -214,6 +227,17 @@ if __name__ == "__main__":
     app()
 ```
 
+### 分层原则
+
+```
+bin/omp                          # 入口层：路由分发
+cli/<tool>/main.py               # CLI 层：参数定义 + action 路由 + 输出格式化
+skills/<tool>/scripts/<module>   # 业务层：实现逻辑（纯函数或独立脚本）
+```
+
+- **main.py 职责单一**：参数解析 + 调用业务函数/脚本 + 序列化输出。不含业务逻辑。
+- **业务层独立**：实现脚本不依赖 typer、不直接读写 argv。接受参数，返回/输出结果。
+
 ### 关键规则
 
 1. **统一入口**：每个工具只有一个 `main.py`，用 typer 管理所有子命令
@@ -221,6 +245,7 @@ if __name__ == "__main__":
 3. **自动加载 .env**：启动时读取 `$OMP_HOME/.env`，`os.environ.setdefault` 不覆盖已有值
 4. **`--help` 由 typer 自动生成**：只需写好 docstring 和参数 help 字符串
 5. **subprocess 调用外部脚本**：bash/node 脚本通过 subprocess 调用，保持进程退出码
+6. **`--version`**：`omp --version` 输出版本号（格式 `omp x.y.z`）
 
 ### 混合语言工具
 
@@ -247,12 +272,26 @@ def search(
 
 ### 输出设计
 
-| 原则 | 做法 |
-|------|------|
-| 数据走 stdout | JSON、CSV 等结构化格式 |
-| 诊断走 stderr | 进度、警告、调试信息 |
-| 错误要有用 | 说明错了什么、期望什么、怎么修 |
-| 大小可控 | 默认输出有上限，提供 `--limit` / `--offset` |
+| 通道 | 用途 | 格式 |
+|------|------|------|
+| stdout | 业务结果 | JSON 单行（不 pretty-print，管道友好） |
+| stderr | 进度、警告、调试 | 自由文本 |
+| stdin | 结构化输入（pipeline 场景） | JSON |
+
+- **JSON 单行**：stdout 输出的 JSON 不得 pretty-print（`json.dumps` 不传 indent），确保管道可组合
+- **错误要有用**：说明错了什么、期望什么、怎么修
+- **大小可控**：默认输出有上限，提供 `--limit` / `--offset`
+
+### 管道组合性
+
+前一命令的 stdout 可直接 pipe 到下一命令的 stdin：
+
+```bash
+omp insight recall "AI agents" | jq '.[] | .content'
+omp web-operator search google "query" | omp web-operator read-url --json
+```
+
+设计命令时考虑：输出能否被下游消费？输入能否来自上游？
 
 ### 参数设计
 
@@ -271,11 +310,25 @@ def search(
 
 ### 退出码
 
-| 退出码 | 含义 |
-|--------|------|
-| 0 | 成功 |
-| 1 | 一般错误（参数错误、运行时失败） |
-| 2 | 用法错误（未知命令、缺少必填参数） |
+| 退出码 | 含义 | 示例场景 |
+|--------|------|---------|
+| 0 | 成功 | 正常完成 |
+| 1 | 业务失败 | 校验不通过、API 返回错误 |
+| 2 | 用法错误 | 未知命令、缺参数、stdin 非法 JSON |
+| 4 | 权限/环境缺失 | 必要环境变量未设置、认证过期 |
+
+### 错误处理链
+
+```
+业务层（scripts/）抛出异常
+    → CLI 层（main.py）catch
+        → stderr 输出错误信息（错了什么、期望什么、怎么修）
+        → 设置退出码（1=业务失败，2=用法错误，4=权限缺失）
+```
+
+- 环境变量校验：需要环境变量的子命令，在入口处立即校验，缺失则 stderr 报错并 exit 4
+- 业务错误：业务层抛异常，CLI 层 catch 后输出到 stderr 并 exit 1
+- **禁止吞错误**：不允许 catch 后静默继续执行
 
 ---
 

@@ -28,12 +28,71 @@ from rich.console import Console
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
-OMP_HOME = Path.home() / ".oh-my-superpowers"
+OMP_HOME = Path(os.environ.get("OMP_HOME", str(Path.home() / ".oh-my-superpowers")))
+
+# ── .env loading ─────────────────────────────────────────────────────────────
+_env_file = OMP_HOME / ".env"
+if _env_file.is_file():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _key, _, _value = _line.partition("=")
+            os.environ.setdefault(_key.strip(), _value.strip())
+
 sys.path.insert(0, str(OMP_HOME / "lib"))
 SKILLS_SRC = OMP_HOME / "skills"
 AGENTS_SRC = OMP_HOME / "agents"
 AGENTS_CFG = AGENTS_SRC / "agents.json"
 RUN_MODES = {"text", "stream", "json", "interactive"}
+
+# ── version ──────────────────────────────────────────────────────────────────
+
+__version__ = "0.1.0"
+
+
+# ── tool discovery ───────────────────────────────────────────────────────────
+
+
+def _discover_tools() -> list[tuple[str, str]]:
+    """扫描 $OMP_HOME/cli/ 下含 main.py 的子目录，返回 (工具名, 描述) 列表。"""
+    cli_dir = OMP_HOME / "cli"
+    if not cli_dir.is_dir():
+        return []
+    tools: list[tuple[str, str]] = []
+    for entry in sorted(cli_dir.iterdir()):
+        main_py = entry / "main.py"
+        if not main_py.is_file():
+            continue
+        name = entry.name
+        desc = ""
+        try:
+            import ast as _ast
+
+            tree = _ast.parse(main_py.read_text())
+            docstring = _ast.get_docstring(tree) or ""
+            if "—" in docstring:
+                desc = docstring.split("—", 1)[1].strip()
+            elif docstring:
+                desc = docstring.strip()
+        except Exception:
+            pass
+        tools.append((name, desc))
+    return tools
+
+
+def _build_tools_epilog() -> str:
+    """构建已安装工具的 epilog 文本。"""
+    tools = _discover_tools()
+    if not tools:
+        return ""
+    lines = ["\n[bold]Installed tools[/bold] (via omp <tool>):"]
+    for name, desc in tools:
+        if desc:
+            lines.append(f"  {name:<20} {desc}")
+        else:
+            lines.append(f"  {name}")
+    return "\n".join(lines)
+
 
 # ── app setup ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +102,24 @@ app = typer.Typer(
     help="oh-my-superpowers CLI",
     add_completion=False,
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        print(f"omp {__version__}")
+        raise typer.Exit()
+
+
+@app.callback(epilog=_build_tools_epilog())
+def _main(
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_version_callback, is_eager=True, help="显示版本号"),
+    ] = False,
+) -> None:
+    """oh-my-superpowers CLI"""
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

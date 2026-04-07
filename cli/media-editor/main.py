@@ -8,8 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
 import typer
 
 OMP_HOME = Path(os.environ.get("OMP_HOME", Path.home() / ".oh-my-superpowers"))
@@ -57,9 +55,9 @@ def save(
 
 @app.command()
 def query(
-    l1: Optional[str] = typer.Option(None, "--l1", help="L1 category filter."),
-    date: Optional[str] = typer.Option(None, "--date", help="Date filter (YYYY-MM-DD)."),
-    source: Optional[str] = typer.Option(None, "--source", help="Source filter (e.g. x.com)."),
+    l1: str | None = typer.Option(None, "--l1", help="L1 category filter."),
+    date: str | None = typer.Option(None, "--date", help="Date filter (YYYY-MM-DD)."),
+    source: str | None = typer.Option(None, "--source", help="Source filter (e.g. x.com)."),
     limit: int = typer.Option(20, "--limit", "-l", help="Max results to return."),
 ) -> None:
     """Query the media archive.

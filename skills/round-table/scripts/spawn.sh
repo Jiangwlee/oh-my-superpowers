@@ -33,7 +33,7 @@ _session_dir() {
   if [[ -z "$sid" ]]; then
     sid=$(ls -1 "$RT_DATA_DIR" 2>/dev/null | sort -r | head -1)
     if [[ -z "$sid" ]]; then
-      echo "错误：没有活跃的 session。请先运行: omp-round-table session init <topic>" >&2
+      echo "错误：没有活跃的 session。请先运行: omp round-table session init <topic>" >&2
       exit 1
     fi
   fi
@@ -122,11 +122,8 @@ main() {
   # 获取上下文（供 prompt 拼接）
   local context_brief=""
   local messages_history=""
-  local omp_rt="omp-round-table"
-  if command -v "$omp_rt" &>/dev/null; then
-    context_brief=$($omp_rt session context brief 2>/dev/null || true)
-    messages_history=$($omp_rt session messages 2>/dev/null || true)
-  fi
+  context_brief=$(omp round-table session context brief 2>/dev/null || true)
+  messages_history=$(omp round-table session messages 2>/dev/null || true)
 
   # tmux session 名
   local sid
@@ -208,7 +205,7 @@ main() {
   # 等待所有参与者完成
   echo ""
   echo "等待所有参与者完成（超时: ${RT_TIMEOUT}s）..."
-  echo "提示：运行 omp-round-table round watch 实时查看输出，或 omp-round-table round attach 进入 tmux"
+  echo "提示：运行 omp round-table round watch 实时查看输出，或 omp round-table round attach 进入 tmux"
   echo ""
 
   local elapsed=0

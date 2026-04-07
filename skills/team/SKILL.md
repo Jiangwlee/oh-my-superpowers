@@ -20,27 +20,7 @@ omp team status [session-name]
 omp team clean <file>
 ```
 
-### `run` 参数
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `<runtime>` | 目标运行时：`claude` / `codex` / `pi` | 必填 |
-| `"<prompt>"` | 发送给 worker 的任务指令 | 与 `--prompt-file` 二选一 |
-| `--prompt-file <path>` | 从文件读取 prompt | 与内联 prompt 二选一 |
-| `--model <model>` | 指定模型 | runtime 默认模型 |
-| `--timeout <seconds>` | 超时时间 | 300 |
-| `--output-file <path>` | 将 worker 输出写入文件 | 无（输出到 stdout） |
-| `--cwd <path>` | worker 工作目录 | 当前目录 |
-
-### 输出协议
-
-| 通道 | 内容 |
-|------|------|
-| stdout | clean 后的 worker 输出（无 ANSI 转义） |
-| stderr | team 状态日志（启动、等待、完成等） |
-| 退出码 0 | 执行成功 |
-| 退出码 1 | 执行错误 |
-| 退出码 124 | 超时 |
+> 不确定参数时，先运行 `omp team <subcommand> --help` 查看完整用法。
 
 ### 示例
 
