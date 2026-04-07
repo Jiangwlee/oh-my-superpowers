@@ -1,0 +1,409 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["typer", "rich"]
+# ///
+"""omp web-operator — Browser automation, search, and content extraction."""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional
+
+import typer
+
+OMP_HOME = Path(os.environ.get("OMP_HOME", Path.home() / ".oh-my-superpowers"))
+
+# 加载 .env
+_env_file = OMP_HOME / ".env"
+if _env_file.is_file():
+    for line in _env_file.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+
+SKILL_DIR = OMP_HOME / "skills" / "web-operator"
+SCRIPTS_DIR = SKILL_DIR / "scripts"
+SITES_DIR = SCRIPTS_DIR / "sites"
+
+app = typer.Typer(
+    name="web-operator",
+    help="Browser automation, search, and content extraction.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+
+
+# ---------------------------------------------------------------------------
+# page (CDP)
+# ---------------------------------------------------------------------------
+
+
+@app.command(
+    "page",
+    context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+)
+def page(ctx: typer.Context) -> None:
+    """Interact with browser pages via CDP (list, nav, eval, snap, shot, html, click, scroll, type, open, stop...).
+
+    Example:
+        omp web-operator page list
+        omp web-operator page nav "https://example.com"
+        omp web-operator page snap
+    """
+    sys.exit(subprocess.call(["node", str(SCRIPTS_DIR / "cdp.mjs")] + ctx.args))
+
+
+# ---------------------------------------------------------------------------
+# search
+# ---------------------------------------------------------------------------
+
+SEARCH_SITES = [
+    "baidu", "duckduckgo", "github", "google", "reddit",
+    "taoguba", "weixin-sogou", "x", "xueqiu",
+]
+
+
+@app.command()
+def search(
+    site: str = typer.Argument(..., help=f"Search platform ({', '.join(SEARCH_SITES)})."),
+    query: str = typer.Argument(..., help="Search query."),
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target (page URL or index)."),
+) -> None:
+    """Search a platform (returns JSON array).
+
+    Example:
+        omp web-operator search google "AI agents" 10
+        omp web-operator search x "Claude Code"
+    """
+    script = SITES_DIR / site / "search.sh"
+    if not script.is_file():
+        typer.echo(f"error: unknown search site '{site}'", err=True)
+        raise typer.Exit(2)
+    cmd = ["bash", str(script), query]
+    if limit:
+        cmd.append(limit)
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+@app.command("search-multi")
+def search_multi(ctx: typer.Context) -> None:
+    """Multi-platform parallel search.
+
+    Example:
+        omp web-operator search-multi --google "AI agents" --baidu "AI 智能体" --limit 5
+    """
+    sys.exit(subprocess.call(["bash", str(SCRIPTS_DIR / "search-multi.sh")] + ctx.args))
+
+
+# ---------------------------------------------------------------------------
+# read-url
+# ---------------------------------------------------------------------------
+
+
+@app.command("read-url")
+def read_url(
+    url: str = typer.Argument(..., help="URL to read."),
+    limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Max content length."),
+    comments: Optional[int] = typer.Option(None, "--comments", help="Max comments (0 = all)."),
+    json_output: bool = typer.Option(False, "--json", help="Output structured JSON."),
+) -> None:
+    """Read URL content as Markdown or structured JSON.
+
+    Example:
+        omp web-operator read-url "https://example.com" --limit 5000
+        omp web-operator read-url "https://example.com" --json
+    """
+    cmd = ["bash", str(SCRIPTS_DIR / "read-url.sh"), url]
+    if limit is not None:
+        cmd += ["--limit", str(limit)]
+    if comments is not None:
+        cmd += ["--comments", str(comments)]
+    if json_output:
+        cmd.append("--json")
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
+# open-post
+# ---------------------------------------------------------------------------
+
+OPEN_POST_SITES = ["reddit", "x", "xueqiu", "taoguba"]
+
+
+@app.command("open-post")
+def open_post(
+    site: str = typer.Argument(..., help=f"Platform ({', '.join(OPEN_POST_SITES)})."),
+    url: str = typer.Argument(..., help="Post URL."),
+    comment_limit: Optional[str] = typer.Argument(None, help="Max comments (0 = all)."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Open and extract a post with comments (returns JSON).
+
+    Example:
+        omp web-operator open-post x "https://x.com/user/status/123"
+        omp web-operator open-post reddit "https://reddit.com/r/..." 50
+    """
+    script = SITES_DIR / site / "open-post.sh"
+    if not script.is_file():
+        typer.echo(f"error: unknown open-post site '{site}'", err=True)
+        raise typer.Exit(2)
+    cmd = ["bash", str(script), url]
+    if comment_limit:
+        cmd.append(comment_limit)
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
+# taoguba
+# ---------------------------------------------------------------------------
+
+taoguba_app = typer.Typer(
+    name="taoguba",
+    help="Taoguba workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(taoguba_app, name="taoguba")
+
+
+@taoguba_app.command()
+def jinghua(
+    hours: Optional[str] = typer.Argument(None, help="Hours to look back."),
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Fetch jinghua (精华) posts.
+
+    Example:
+        omp web-operator taoguba jinghua 24 10
+    """
+    cmd = ["bash", str(SITES_DIR / "taoguba" / "jinghua.sh")]
+    for arg in [hours, limit, target]:
+        if arg:
+            cmd.append(arg)
+    sys.exit(subprocess.call(cmd))
+
+
+@taoguba_app.command()
+def following(
+    hours: Optional[str] = typer.Argument(None, help="Hours to look back."),
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Fetch posts from followed users.
+
+    Example:
+        omp web-operator taoguba following 12 20
+    """
+    cmd = ["bash", str(SITES_DIR / "taoguba" / "following.sh")]
+    for arg in [hours, limit, target]:
+        if arg:
+            cmd.append(arg)
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
+# kdocs
+# ---------------------------------------------------------------------------
+
+kdocs_app = typer.Typer(
+    name="kdocs",
+    help="KDocs (365.kdocs.cn) workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(kdocs_app, name="kdocs")
+
+
+@kdocs_app.command("search")
+def kdocs_search(
+    query: str = typer.Argument(..., help="Search query."),
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Search KDocs documents.
+
+    Example:
+        omp web-operator kdocs search "quarterly report"
+    """
+    cmd = ["bash", str(SITES_DIR / "kdocs" / "search.sh"), query]
+    if limit:
+        cmd.append(limit)
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+@kdocs_app.command("open-doc")
+def kdocs_open_doc(
+    file_key: str = typer.Argument(..., help="Document file key."),
+    main_target: Optional[str] = typer.Argument(None, help="CDP main target."),
+) -> None:
+    """Open a KDocs document.
+
+    Example:
+        omp web-operator kdocs open-doc abc123
+    """
+    cmd = ["bash", str(SITES_DIR / "kdocs" / "open-doc.sh"), file_key]
+    if main_target:
+        cmd.append(main_target)
+    sys.exit(subprocess.call(cmd))
+
+
+@kdocs_app.command("find-in-doc")
+def kdocs_find_in_doc(
+    keyword: str = typer.Argument(..., help="Keyword to find."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Find keyword in current KDocs document.
+
+    Example:
+        omp web-operator kdocs find-in-doc "revenue"
+    """
+    cmd = ["bash", str(SITES_DIR / "kdocs" / "find-in-doc.sh"), keyword]
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+@kdocs_app.command("ask-ai")
+def kdocs_ask_ai(
+    question: str = typer.Argument(..., help="Question to ask AI."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Ask AI a question about the current document.
+
+    Example:
+        omp web-operator kdocs ask-ai "summarize this document"
+    """
+    cmd = ["bash", str(SITES_DIR / "kdocs" / "ask-ai.sh"), question]
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+@kdocs_app.command("close-doc")
+def kdocs_close_doc(
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Close current KDocs document.
+
+    Example:
+        omp web-operator kdocs close-doc
+    """
+    cmd = ["bash", str(SITES_DIR / "kdocs" / "close-doc.sh")]
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
+# xueqiu
+# ---------------------------------------------------------------------------
+
+xueqiu_app = typer.Typer(
+    name="xueqiu",
+    help="Xueqiu (雪球) workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(xueqiu_app, name="xueqiu")
+
+
+@xueqiu_app.command()
+def hot(
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Fetch hot topics on Xueqiu.
+
+    Example:
+        omp web-operator xueqiu hot 20
+    """
+    cmd = ["bash", str(SITES_DIR / "xueqiu" / "hot.sh")]
+    if limit:
+        cmd.append(limit)
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+@xueqiu_app.command("stock-info")
+def stock_info(
+    symbol_or_url: str = typer.Argument(..., help="Stock symbol or URL."),
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Get stock information from Xueqiu.
+
+    Example:
+        omp web-operator xueqiu stock-info SH600519
+    """
+    cmd = ["bash", str(SITES_DIR / "xueqiu" / "stock-info.sh"), symbol_or_url]
+    if limit:
+        cmd.append(limit)
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
+# x (x.com)
+# ---------------------------------------------------------------------------
+
+x_app = typer.Typer(
+    name="x",
+    help="X (x.com) workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(x_app, name="x")
+
+
+@x_app.command("for-you")
+def x_for_you(
+    limit: Optional[str] = typer.Argument(None, help="Max results."),
+    target: Optional[str] = typer.Argument(None, help="CDP target."),
+) -> None:
+    """Fetch For You feed from X.
+
+    Example:
+        omp web-operator x for-you 20
+    """
+    cmd = ["bash", str(SITES_DIR / "x" / "for-you.sh")]
+    if limit:
+        cmd.append(limit)
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
+# test
+# ---------------------------------------------------------------------------
+
+
+@app.command(
+    "test",
+    context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+)
+def test(ctx: typer.Context) -> None:
+    """Run web-operator tests (list, core, site <name>, all).
+
+    Example:
+        omp web-operator test list
+        omp web-operator test core
+        omp web-operator test site google
+    """
+    sys.exit(subprocess.call(["node", str(SCRIPTS_DIR / "test.mjs")] + ctx.args))
+
+
+if __name__ == "__main__":
+    app()
