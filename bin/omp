@@ -650,5 +650,20 @@ def test(
     raise typer.Exit(rc)
 
 
+def _try_tool_route() -> None:
+    """检查 argv[1] 是否匹配 cli/<tool>/main.py，匹配则 exec 过去。"""
+    if len(sys.argv) < 2:
+        return
+    candidate = sys.argv[1]
+    # 内置命令不路由
+    if candidate.startswith("-") or candidate in {"install", "remove", "list", "run", "test"}:
+        return
+    tool_main = OMP_HOME / "cli" / candidate / "main.py"
+    if tool_main.is_file():
+        os.execvp("uv", ["uv", "run", "--script", str(tool_main)] + sys.argv[2:])
+    # 未匹配任何 tool → 交给 typer 处理（会显示 help/error）
+
+
 if __name__ == "__main__":
+    _try_tool_route()
     app()
