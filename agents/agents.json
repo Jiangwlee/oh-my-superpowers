@@ -4,7 +4,8 @@
     "model": "litellm-local/qwen3.5-27b",
     "skills": [
       "@skills/skill-review/SKILL.md",
-      "@skills/agent-review/SKILL.md"
+      "@skills/agent-review/SKILL.md",
+      "@skills/code-review/SKILL.md"
     ]
   },
   "media-editor": {
