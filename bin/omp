@@ -766,13 +766,55 @@ def test(
     raise typer.Exit(rc)
 
 
+@app.command()
+def upgrade() -> None:
+    """拉取最新版本并重新注册命令。"""
+    _check_home()
+    # 解析真实 git 目录（OMP_HOME 可能是 symlink）
+    git_dir = OMP_HOME.resolve()
+    if not (git_dir / ".git").exists():
+        console.print(f"[red][omp] ERROR:[/red] {git_dir} is not a git repository")
+        raise typer.Exit(1)
+
+    old_version = __version__
+
+    # git pull
+    console.print(f"[omp] pulling latest from {git_dir} ...")
+    rc = subprocess.call(["git", "-C", str(git_dir), "pull", "--ff-only"])
+    if rc != 0:
+        console.print("[red][omp] ERROR:[/red] git pull failed")
+        raise typer.Exit(1)
+
+    # 读取新版本
+    new_version_file = git_dir / "VERSION"
+    new_version = new_version_file.read_text().strip() if new_version_file.is_file() else "unknown"
+
+    # 重新注册 bin/
+    bin_src = git_dir / "bin"
+    bin_dst = Path.home() / ".local" / "bin"
+    bin_dst.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for script in sorted(bin_src.iterdir()):
+        if script.is_file() and os.access(script, os.X_OK):
+            link = bin_dst / script.name
+            link.unlink(missing_ok=True)
+            link.symlink_to(script)
+            count += 1
+
+    if old_version == new_version:
+        console.print(f"[omp] already up to date: [bold]v{new_version}[/bold]")
+    else:
+        console.print(f"[omp] upgraded: [bold]v{old_version}[/bold] → [bold]v{new_version}[/bold]")
+    console.print(f"[omp] registered {count} command(s) to {bin_dst}")
+
+
 def _try_tool_route() -> None:
     """检查 argv[1] 是否匹配 cli/<tool>/main.py，匹配则 exec 过去。"""
     if len(sys.argv) < 2:
         return
     candidate = sys.argv[1]
     # 内置命令不路由
-    if candidate.startswith("-") or candidate in {"install", "remove", "list", "run", "test"}:
+    if candidate.startswith("-") or candidate in {"install", "remove", "list", "run", "test", "upgrade"}:
         return
     tool_main = OMP_HOME / "cli" / candidate / "main.py"
     if tool_main.is_file():

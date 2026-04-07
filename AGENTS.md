@@ -206,6 +206,7 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 - [Hooks 开发指南](docs/specs/02_framework/hooks.md)：生命周期事件、输出协议、设计原则
 - [CLI 开发规范](docs/specs/02_framework/cli-development-guide.md)：命令结构、--help 规范、工具模块模板、输出设计
 - [CLI Checklist](docs/specs/02_framework/cli-checklist.md)：新增/修改 CLI 时逐项确认
+- [Release Guide](docs/specs/02_framework/release.md)：版本管理、发布流程、omp upgrade
 - [CDP 开发指南](docs/specs/00_skills/cdp-development-guide.md)：web-operator CDP 架构、开发模式、踩坑经验
 
 ## 开源项目参考
