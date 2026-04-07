@@ -25,8 +25,8 @@ This repository uses a `core + sites + tests` layout.
 ## Quick Start
 
 - Confirm Chrome remote debugging is enabled at `chrome://inspect/#remote-debugging`.
-- For bundled sites, start from `omp-web-operator` site commands first. Do not start with `curl` if a matching site workflow already exists.
-- Use `omp-web-operator page list` to identify the target tab prefix.
+- For bundled sites, start from `omp web-operator` site commands first. Do not start with `curl` if a matching site workflow already exists.
+- Use `omp web-operator page list` to identify the target tab prefix.
 - Prefer stable URL navigation when a workflow can avoid brittle click paths.
 - Load the relevant core or site reference before running a non-trivial workflow.
 
@@ -68,19 +68,19 @@ Load site references for website-specific workflows:
 
 ## Core Rules
 
-- The `<target>` argument is a unique `targetId` prefix from `omp-web-operator page list`.
+- The `<target>` argument is a unique `targetId` prefix from `omp web-operator page list`.
 - Prefer `nav` over click-driven navigation when a stable URL is known.
 - Prefer one `eval` that collects all needed data over multiple DOM-indexed `eval` calls.
 - Use `type` instead of `eval` for text entry in cross-origin iframes.
 - Expect one Chrome "Allow debugging" prompt per tab daemon on first access.
 - Keep browser primitives in the core layer. Do not bury general CDP logic inside a site-specific workflow unless the behavior is truly site-bound.
 - For bundled sites with dedicated workflows, prefer the site workflow over raw HTTP fetching. Do not use `curl` to read main content from `reddit.com`, `x.com`, `xueqiu.com`, `tgb.cn` / `taoguba.com.cn`, or `365.kdocs.cn`; these sites rely on dynamic rendering, login state, or anti-bot defenses, and raw HTTP usually returns shell HTML or incomplete content.
-- Treat `google.com` and `weixin.sogou.com` the same way for search tasks: prefer `omp-web-operator search ...` over `curl`, because the browser workflow is far more reliable for rendered results, anti-bot handling, and stable extraction.
-- For `365.kdocs.cn`, prefer `omp-web-operator kdocs ask-ai` when the task is question answering, summarization, document lookup, or cross-document synthesis. Use `kdocs search`, `open-doc`, and `find-in-doc` when the task explicitly needs direct document inspection or keyword verification.
+- Treat `google.com` and `weixin.sogou.com` the same way for search tasks: prefer `omp web-operator search ...` over `curl`, because the browser workflow is far more reliable for rendered results, anti-bot handling, and stable extraction.
+- For `365.kdocs.cn`, prefer `omp web-operator kdocs ask-ai` when the task is question answering, summarization, document lookup, or cross-document synthesis. Use `kdocs search`, `open-doc`, and `find-in-doc` when the task explicitly needs direct document inspection or keyword verification.
 
 ## read-url 参数说明
 
-`omp-web-operator read-url <url> [--limit N] [--comments N] [--json]`
+`omp web-operator read-url <url> [--limit N] [--comments N] [--json]`
 
 - `--limit N`：截断输出到 N 字节。仅对非站点 URL（博客、文档等）生效。
 - `--comments N`：对支持评论的站点（reddit、x.com、xueqiu）设置评论获取数量。默认 20，**传 0 表示获取全部评论**。
@@ -93,13 +93,13 @@ When a supported site appears in the task, start from these commands before cons
 
 | 关键词 / Site | 命令 |
 |--------------|------|
-| 任意 URL / read article | `omp-web-operator read-url <url> [--limit N] [--comments N] [--json]` |
-| 多平台搜索 / research | `omp-web-operator search-multi --<site> "<query>" [...] --limit N` |
-| Google / 谷歌 | `omp-web-operator search google <query> [limit]` |
-| Baidu / 百度 | `omp-web-operator search baidu <query> [limit]` |
-| 微信搜索 / Weixin-Sogou / 搜狗微信 | `omp-web-operator search weixin-sogou <query> [limit]` |
-| Reddit | `omp-web-operator search reddit <query> [limit]` → `omp-web-operator open-post reddit <url> [comment_limit]` |
-| X / Twitter / 推特 | `omp-web-operator search x <query> [limit]` → `omp-web-operator open-post x <url> [comment_limit]` (0 = all comments) |
-| 雪球 / Xueqiu | `omp-web-operator search xueqiu <query> [limit]`、`omp-web-operator xueqiu hot [limit]`、`omp-web-operator open-post xueqiu <url> [comment_limit]` |
-| 淘股吧 / Taoguba / TGB | `omp-web-operator taoguba jinghua [hours] [limit]`、`omp-web-operator taoguba following [hours] [limit]`、`omp-web-operator open-post taoguba <url>` |
-| 金山文档 / KDocs / WPS 365 | `omp-web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
+| 任意 URL / read article | `omp web-operator read-url <url> [--limit N] [--comments N] [--json]` |
+| 多平台搜索 / research | `omp web-operator search-multi --<site> "<query>" [...] --limit N` |
+| Google / 谷歌 | `omp web-operator search google <query> [limit]` |
+| Baidu / 百度 | `omp web-operator search baidu <query> [limit]` |
+| 微信搜索 / Weixin-Sogou / 搜狗微信 | `omp web-operator search weixin-sogou <query> [limit]` |
+| Reddit | `omp web-operator search reddit <query> [limit]` → `omp web-operator open-post reddit <url> [comment_limit]` |
+| X / Twitter / 推特 | `omp web-operator search x <query> [limit]` → `omp web-operator open-post x <url> [comment_limit]` (0 = all comments) |
+| 雪球 / Xueqiu | `omp web-operator search xueqiu <query> [limit]`、`omp web-operator xueqiu hot [limit]`、`omp web-operator open-post xueqiu <url> [comment_limit]` |
+| 淘股吧 / Taoguba / TGB | `omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
+| 金山文档 / KDocs / WPS 365 | `omp web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |

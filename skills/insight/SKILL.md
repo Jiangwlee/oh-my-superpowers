@@ -11,26 +11,26 @@ description: >-
 
 | 用户意图 | 命令 |
 |---------|------|
-| 回忆/想起/回顾 经验、教训、踩坑 | `omp-insight recall --source . --format md --budget 4096` |
-| 提取/记住/保存 当前对话经验 | `omp-insight capture --source .` |
-| 提炼/归纳/总结 洞察模式 | `omp-insight evaluate --source .` |
-| 查看/列出 记忆或洞察 | `omp-insight list --source .` |
-| 提升 memory 为 insight | `omp-insight promote <id> --reason "<text>"` |
-| 降级 insight | `omp-insight degrade <id> --reason "<text>"` |
-| 删除记录 | `omp-insight delete <id>` |
+| 回忆/想起/回顾 经验、教训、踩坑 | `omp insight recall --source . --format md --budget 4096` |
+| 提取/记住/保存 当前对话经验 | `omp insight capture --source .` |
+| 提炼/归纳/总结 洞察模式 | `omp insight evaluate --source .` |
+| 查看/列出 记忆或洞察 | `omp insight list --source .` |
+| 提升 memory 为 insight | `omp insight promote <id> --reason "<text>"` |
+| 降级 insight | `omp insight degrade <id> --reason "<text>"` |
+| 删除记录 | `omp insight delete <id>` |
 
 > **规则**：收到用户意图后直接执行对应命令，不需要先搜索文件、检查命令是否存在、或阅读其他文档。
 
 ## 完整参数
 
 ```bash
-omp-insight capture  --source <dir> [--session <id>] [--since 7d] [--min-messages 10] [--force] [--dry-run] [--model sonnet]
-omp-insight recall   --source <dir> [--format json|md] [--budget 4096] [--dry-run]
-omp-insight evaluate --source <dir> [--dry-run] [--prompt-file <path>]
-omp-insight list     --source <dir> [--type memory|insight]
-omp-insight promote  <id> [--reason <text>] [--source <dir>]
-omp-insight degrade  <id> [--reason <text>] [--source <dir>]
-omp-insight delete   <id> [--source <dir>]
+omp insight capture  --source <dir> [--session <id>] [--since 7d] [--min-messages 10] [--force] [--dry-run] [--model sonnet]
+omp insight recall   --source <dir> [--format json|md] [--budget 4096] [--dry-run]
+omp insight evaluate --source <dir> [--dry-run] [--prompt-file <path>]
+omp insight list     --source <dir> [--type memory|insight]
+omp insight promote  <id> [--reason <text>] [--source <dir>]
+omp insight degrade  <id> [--reason <text>] [--source <dir>]
+omp insight delete   <id> [--source <dir>]
 ```
 
 ## 自动化（Hook 集成）

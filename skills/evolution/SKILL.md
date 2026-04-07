@@ -15,8 +15,8 @@ description: >-
 ## CLI
 
 ```bash
-omp-evolution scan [--source <dir>] [--days <n>]
-omp-evolution history [--limit <n>]
+omp evolution scan [--source <dir>] [--days <n>]
+omp evolution history [--limit <n>]
 ```
 
 ## 使用流程
@@ -27,7 +27,7 @@ omp-evolution history [--limit <n>]
 
 ### 阶段一：扫描
 
-1. 运行 `omp-evolution scan`，获取机械信号 + session 样本
+1. 运行 `omp evolution scan`，获取机械信号 + session 样本
 2. 读取 `references/evidence-sources.md`，理解数据含义
 3. 读取 `references/mutation-operators.md`，理解算子映射
 4. 对 session 样本做语义分析（误触发、重试、纠正）
@@ -55,7 +55,7 @@ omp-evolution history [--limit <n>]
 
 ### 阶段三：memory 收尾（所有修复完成后执行）
 
-1. 运行 `omp-insight list --source .` 获取当前项目的 memory 列表
+1. 运行 `omp insight list --source .` 获取当前项目的 memory 列表
 2. 读取 `references/memory-validity.md`，对照本轮修复内容逐条过三个 yes/no 问题
 3. 生成候选删除表格，呈现给用户：
 
@@ -64,7 +64,7 @@ omp-evolution history [--limit <n>]
 |---|-----------|------|---------|---------|
 ```
 
-4. 用户逐条确认 → `omp-insight delete <id>`
+4. 用户逐条确认 → `omp insight delete <id>`
 5. 拿不准 → 跳过，不删
 
 **HARD-GATE 继承**：每条删除必须用户确认，禁止批量自动执行。

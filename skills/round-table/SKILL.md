@@ -22,20 +22,20 @@ Assistant: [启动 round-table，选取相关角色进行多视角辩论]
 
 ```bash
 # session 子命令
-omp-round-table session init <topic>               # 创建 session
-omp-round-table session end [--output-dir <path>]  # 结束，生成文档
-omp-round-table session status                     # 查看 session 状态
-omp-round-table session context <brief|detail>     # 获取背景上下文
-omp-round-table session messages [msg-id]          # 获取消息记录
+omp round-table session init <topic>               # 创建 session
+omp round-table session end [--output-dir <path>]  # 结束，生成文档
+omp round-table session status                     # 查看 session 状态
+omp round-table session context <brief|detail>     # 获取背景上下文
+omp round-table session messages [msg-id]          # 获取消息记录
 
 # round 子命令
-omp-round-table round spawn [round-number]         # 并行启动参与者（轮次可省略，自动推断）
-omp-round-table round collect                      # 收集参与者回复并写入 session
-omp-round-table round watch [round] [-f] [-n lines] # 实时查看参与者输出
-omp-round-table round attach                       # 连接 tmux session 直接观看
+omp round-table round spawn [round-number]         # 并行启动参与者（轮次可省略，自动推断）
+omp round-table round collect                      # 收集参与者回复并写入 session
+omp round-table round watch [round] [-f] [-n lines] # 实时查看参与者输出
+omp round-table round attach                       # 连接 tmux session 直接观看
 
 # 通用
-omp-round-table post-message <role> <file> [opts]  # 追加消息
+omp round-table post-message <role> <file> [opts]  # 追加消息
 ```
 
 ## Orchestrator SOP
@@ -65,14 +65,14 @@ omp-round-table post-message <role> <file> [opts]  # 追加消息
 ```bash
 # --roles 自动拷贝预置 prompt、从 roles.md 读取 runtime/model 写入 meta.json
 # --context 可传文本或文件路径，追加到 context.md
-export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>" \
+export ROUND_TABLE_SESSION=$(omp round-table session init "<topic>" \
   --roles steve-jobs,dhh,alan-kay \
   --context "背景描述或文件路径")
 ```
 
 `session init` 自动完成：创建目录、拷贝角色 prompt、写入 meta.json（含 runtime/model）、生成 context.md 和 plan.md。**不要手动创建或修改这些文件。**
 
-- 展示参会者列表（从 `omp-round-table session status` 获取）
+- 展示参会者列表（从 `omp round-table session status` 获取）
 - 等待用户确认开始
 
 ### 3. 每轮循环（至少 3 轮）
@@ -82,7 +82,7 @@ export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>" \
 **a. 启动并收集**
 
 ```bash
-omp-round-table round run
+omp round-table round run
 # spawn + wait + collect 一步完成
 # 返回 JSON：每个参与者的 action 和 summary
 ```
@@ -96,7 +96,7 @@ omp-round-table round run
 - post 综述到 session：
 
 ```bash
-omp-round-table session post-message moderator <summary-file> \
+omp round-table session post-message moderator <summary-file> \
   --round N --name "主持人" --action "综合" --summary "本轮一句话摘要"
 ```
 
@@ -112,7 +112,7 @@ omp-round-table session post-message moderator <summary-file> \
 将用户回复 post 到 session：
 
 ```bash
-omp-round-table session post-message user <user-input-file> \
+omp round-table session post-message user <user-input-file> \
   --round N --name "用户" --action "指令" --summary "用户意图摘要"
 ```
 
@@ -121,7 +121,7 @@ omp-round-table session post-message user <user-input-file> \
 ### 4. 结束
 
 ```bash
-omp-round-table session end --output-dir "$(pwd)/docs/round-table"
+omp round-table session end --output-dir "$(pwd)/docs/round-table"
 ```
 
 生成最终文档，包含：背景、各轮讨论记录、最终结论、未解决问题、行动建议。

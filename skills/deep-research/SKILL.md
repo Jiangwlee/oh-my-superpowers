@@ -21,7 +21,7 @@ description: >-
 ## 统一入口
 
 ```bash
-omp-deep-research <subcommand> [args]
+omp deep-research <subcommand> [args]
 ```
 
 两个命令：

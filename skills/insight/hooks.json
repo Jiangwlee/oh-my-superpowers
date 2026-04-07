@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "omp-insight recall --source $PWD --format md --hook",
+            "command": "omp insight recall --source $PWD --format md --hook",
             "timeout": 5000
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "omp-insight capture --source $PWD --since 1d",
+            "command": "omp insight capture --source $PWD --since 1d",
             "timeout": 30000,
             "async": true
           }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "omp-insight capture --source $PWD --since 1d --if-no-compact",
+            "command": "omp insight capture --source $PWD --since 1d --if-no-compact",
             "timeout": 30000,
             "async": true
           }

@@ -10,14 +10,14 @@ description: >-
 
 ```bash
 # One-shot 执行任务
-omp-team run <runtime> "<prompt>"
-omp-team run <runtime> --prompt-file <path>
+omp team run <runtime> "<prompt>"
+omp team run <runtime> --prompt-file <path>
 
 # 查询 tmux session 状态
-omp-team status [session-name]
+omp team status [session-name]
 
 # 清理 ANSI 转义码
-omp-team clean <file>
+omp team clean <file>
 ```
 
 ### `run` 参数
@@ -46,21 +46,21 @@ omp-team clean <file>
 
 ```bash
 # 让 codex 实现一个函数
-omp-team run codex "在 src/utils.py 中实现 parse_config 函数，读取 YAML 配置文件并返回 dict" \
+omp team run codex "在 src/utils.py 中实现 parse_config 函数，读取 YAML 配置文件并返回 dict" \
   --cwd /path/to/project --timeout 180
 
 # 让 claude 做代码审查（通过 prompt 文件传递代码内容）
-omp-team run claude --prompt-file /tmp/review-prompt.md \
+omp team run claude --prompt-file /tmp/review-prompt.md \
   --output-file /tmp/review.md
 
 # 从 prompt 文件执行
-omp-team run pi --prompt-file /tmp/task-prompt.md --timeout 60
+omp team run pi --prompt-file /tmp/task-prompt.md --timeout 60
 
 # 查看运行状态
-omp-team status
+omp team status
 
 # 清理输出文件中的 ANSI 转义
-omp-team clean /tmp/raw-output.txt
+omp team clean /tmp/raw-output.txt
 ```
 
 ## Runtime 选择指南
@@ -78,7 +78,7 @@ omp-team clean /tmp/raw-output.txt
 
 ## 场景编排索引
 
-> 以下场景文档提供完整 SOP，包含具体的 omp-team 调用序列。
+> 以下场景文档提供完整 SOP，包含具体的 omp team 调用序列。
 
 | 场景 | 文档 | 说明 |
 |------|------|------|
@@ -108,13 +108,13 @@ One-shot 执行没有多轮修正机会，prompt 必须一次到位：
 
 ## 并发编排
 
-Orchestrator（你）负责并发控制。omp-team 本身是同步阻塞的，并发通过 shell 后台任务实现：
+Orchestrator（你）负责并发控制。omp team 本身是同步阻塞的，并发通过 shell 后台任务实现：
 
 ```bash
 # 并行启动多个 worker
-omp-team run claude "从安全角度审查..." --output-file /tmp/security.md &
-omp-team run claude "从性能角度审查..." --output-file /tmp/perf.md &
-omp-team run claude "从可维护性角度审查..." --output-file /tmp/maintain.md &
+omp team run claude "从安全角度审查..." --output-file /tmp/security.md &
+omp team run claude "从性能角度审查..." --output-file /tmp/perf.md &
+omp team run claude "从可维护性角度审查..." --output-file /tmp/maintain.md &
 wait
 
 # 收集结果
