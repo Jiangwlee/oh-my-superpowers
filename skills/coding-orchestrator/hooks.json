@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $OMP_HOME/skills/coding-orchestrator/scripts/handoff.py --auto --story-dir ./stories",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run $OMP_HOME/skills/coding-orchestrator/scripts/restore.py --story-dir ./stories",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}
