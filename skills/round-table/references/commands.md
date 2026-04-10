@@ -18,7 +18,7 @@
 输出：session-id（时间戳格式，如 `20260328T074441`）
 
 ```bash
-omp-round-table session init "是否需要独立Agent框架" \
+omp round-table session init "是否需要独立Agent框架" \
   --roles linus-torvalds,alan-kay,elon-musk \
   --context "当前项目使用 Pi + Claude Code 双运行时"
 ```
@@ -100,17 +100,17 @@ omp-round-table session init "是否需要独立Agent框架" \
 
 ```bash
 # 1. 初始化
-export ROUND_TABLE_SESSION=$(omp-round-table session init "议题" --roles linus-torvalds,alan-kay,elon-musk)
+export ROUND_TABLE_SESSION=$(omp round-table session init "议题" --roles linus-torvalds,alan-kay,elon-musk)
 
 # 2. 每轮讨论
-result=$(omp-round-table round run)
+result=$(omp round-table round run)
 
 # 3. Orchestrator 综述后 post
-omp-round-table post-message moderator summary.md \
+omp round-table post-message moderator summary.md \
   --round 1 --name "主持人" --action "综合" --summary "本轮一句话摘要"
 
 # 4. 重复 2-3，直到结束
 
 # 5. 生成文档
-omp-round-table session end --output-dir ./docs/round-table
+omp round-table session end --output-dir ./docs/round-table
 ```

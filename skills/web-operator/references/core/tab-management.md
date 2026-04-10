@@ -10,9 +10,9 @@ This means you **no longer need to specify target tabs manually** for normal usa
 
 ```bash
 # Automatic tab management - each site uses its own tab
-omp-web-operator search baidu "query" 5        # Uses/creates baidu tab
-omp-web-operator search google "query" 5       # Uses/creates google tab
-omp-web-operator search weixin-sogou "query" 5 # Uses/creates sogou tab
+omp web-operator search baidu "query" 5        # Uses/creates baidu tab
+omp web-operator search google "query" 5       # Uses/creates google tab
+omp web-operator search weixin-sogou "query" 5 # Uses/creates sogou tab
 ```
 
 ## Shared Core Library
@@ -36,9 +36,9 @@ Site-specific `common.sh` files (e.g., `scripts/sites/baidu/common.sh`) are thin
 
 ```bash
 # SAFE: Different sites in parallel
-omp-web-operator search baidu "query" 5 &
-omp-web-operator search google "query" 5 &
-omp-web-operator search weixin-sogou "query" 5 &
+omp web-operator search baidu "query" 5 &
+omp web-operator search google "query" 5 &
+omp web-operator search weixin-sogou "query" 5 &
 wait
 ```
 

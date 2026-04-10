@@ -30,7 +30,7 @@ REQUIRED_REFERENCES = [
     "reporting.md",
 ]
 REQUIRED_CLI_COMMANDS = [
-    "omp-deep-research <subcommand> [args]",
+    "omp deep-research <subcommand> [args]",
 ]
 FORBIDDEN_PATTERNS = [
     "bash scripts/",

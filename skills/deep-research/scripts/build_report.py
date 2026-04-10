@@ -1,7 +1,7 @@
 """Persist brief and full report files into a deep-research workspace.
 
 Usage:
-    omp-deep-research build-report --workspace "<workspace>" \
+    omp deep-research build-report --workspace "<workspace>" \
         --brief-file "<brief_md>" --full-report-file "<full_report_md>" \
         [--sources-file "<sources_json>"]
 """

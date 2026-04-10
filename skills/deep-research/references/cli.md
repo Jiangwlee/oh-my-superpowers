@@ -3,7 +3,7 @@
 统一入口：
 
 ```bash
-omp-deep-research <subcommand> [args]
+omp deep-research <subcommand> [args]
 ```
 
 ## `init`
@@ -11,7 +11,7 @@ omp-deep-research <subcommand> [args]
 创建新的 research workspace。
 
 ```bash
-omp-deep-research init --topic "<topic>" [--slug "<slug>"] [--mode quick|default|deep]
+omp deep-research init --topic "<topic>" [--slug "<slug>"] [--mode quick|default|deep]
 ```
 
 输出：JSON，包含：
@@ -24,13 +24,13 @@ omp-deep-research init --topic "<topic>" [--slug "<slug>"] [--mode quick|default
 写入 `brief` 和 `full report` 到 workspace 的 `reports/` 目录，同时将 sources 列表持久化到 `state.json`。
 
 ```bash
-omp-deep-research build-report --workspace "<workspace>" --brief-file "<brief_md>" --full-report-file "<full_report_md>" [--sources-file "<sources_json>"]
+omp deep-research build-report --workspace "<workspace>" --brief-file "<brief_md>" --full-report-file "<full_report_md>" [--sources-file "<sources_json>"]
 ```
 
 也支持 inline 形式：
 
 ```bash
-omp-deep-research build-report --workspace "<workspace>" --brief "<markdown>" --full-report "<markdown>" [--sources-file "<sources_json>"]
+omp deep-research build-report --workspace "<workspace>" --brief "<markdown>" --full-report "<markdown>" [--sources-file "<sources_json>"]
 ```
 
 ### `--sources-file` 格式

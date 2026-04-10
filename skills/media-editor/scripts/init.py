@@ -1,6 +1,6 @@
 """初始化 media-editor 数据目录和 SQLite schema。
 
-用途：omp-media-init
+用途：omp media-editor init
 功能：创建目录结构、初始化 SQLite FTS5 索引、写入默认 taxonomy.json 和 preferences.json。
 幂等：重复运行安全，不会覆盖已有数据。
 """

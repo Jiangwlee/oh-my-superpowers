@@ -33,7 +33,7 @@
 读全文统一使用：
 
 ```bash
-omp-web-operator read-url <url> --limit 15000
+omp web-operator read-url <url> --limit 15000
 ```
 
 该命令自动处理动态渲染页面，已适配站点（reddit/x/xueqiu/taoguba）走专用提取路径。不要手动拼凑 cdp 命令或使用 curl 读取页面。
@@ -64,11 +64,11 @@ omp-web-operator read-url <url> --limit 15000
 
 ## Prefer search-multi
 
-每轮搜索优先使用 `omp-web-operator search-multi` 一次覆盖 2-3 个互补平台，而不是逐个平台串行搜索。
+每轮搜索优先使用 `omp web-operator search-multi` 一次覆盖 2-3 个互补平台，而不是逐个平台串行搜索。
 
 ```bash
 # 示例：技术主题
-omp-web-operator search-multi \
+omp web-operator search-multi \
   --google "Claude Code memory" \
   --github "Claude Code memory" \
   --reddit "Claude Code memory" \

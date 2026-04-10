@@ -40,9 +40,9 @@ PREFERENCES_FILE: $DATA_DIR/preferences.json
 
 首次运行时初始化数据目录：
 ```bash
-omp-media-editor init
+omp media-editor init
 ```
-如果 `omp-media-editor` 命令不存在，提示用户：「请先安装 media-editor skill：`omp install skill media-editor`」
+如果 `omp media-editor` 命令不存在，提示用户：「请先安装 media-editor skill：`omp install skill media-editor`」
 
 检查 qmd 是否可用：`qmd --version 2>/dev/null || echo "not_found"`
 如果 qmd 不存在，在需要语义检索时告知用户：`npm install -g qmd`
@@ -101,7 +101,7 @@ Reddit 各板块热帖（共 100 条，5 个板块各 20 条）：
 
 对每条选中内容：
 ```bash
-omp-media-editor save --json '{"url":"...","title":"...","source":"x.com","fetch_time":"2026-03-25T14:30:00Z","tags":{"L1":"Claude Code","L2":""},"engagement":{"retweets":0,"comments":0},"summary":"20字以内摘要","selected":true}'
+omp media-editor save --json '{"url":"...","title":"...","source":"x.com","fetch_time":"2026-03-25T14:30:00Z","tags":{"L1":"Claude Code","L2":""},"engagement":{"retweets":0,"comments":0},"summary":"20字以内摘要","selected":true}'
 ```
 
 如遇新 L2 话题，读取并更新 taxonomy.json：
@@ -164,7 +164,7 @@ print(c.strip()[:15000])
 
 **Step 3：晋升至 root-archive + 偏好更新**
 ```bash
-omp-media-editor promote --url "<url>"
+omp media-editor promote --url "<url>"
 ```
 
 读取 preferences.json，在 `user_profile` 中追加从本文提炼的关键词/人物，用 write 工具写回。
@@ -180,7 +180,7 @@ qmd search "<topic>" --dir ~/.local/share/oh-my-superpowers/media-editor/cards/ 
 
 **Step 2：结构化查询**
 ```bash
-omp-media-editor query --l1 "<L1 category>" --limit 30
+omp media-editor query --l1 "<L1 category>" --limit 30
 ```
 
 **Step 3：补充实时搜索**

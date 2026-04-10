@@ -18,10 +18,10 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 
 REQUIRED_SCRIPTS = ["init.py", "save.py", "query.py", "promote.py"]
 REQUIRED_CLI_COMMANDS = [
-    "omp-media-init",
-    "omp-media-save",
-    "omp-media-query",
-    "omp-media-promote",
+    "omp media-editor init",
+    "omp media-editor save",
+    "omp media-editor query",
+    "omp media-editor promote",
 ]
 FORBIDDEN_PATTERNS = [
     "bash scripts/",

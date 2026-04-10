@@ -8,7 +8,7 @@
 ### Step 1: 创建 Session
 
 ```bash
-export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>")
+export ROUND_TABLE_SESSION=$(omp round-table session init "<topic>")
 ```
 
 ### Step 2: 选择参与者
@@ -59,7 +59,7 @@ export ROUND_TABLE_SESSION=$(omp-round-table session init "<topic>")
 ### Step 3: 启动参与者
 
 ```bash
-omp-round-table round spawn
+omp round-table round spawn
 ```
 
 spawn 会：
@@ -71,7 +71,7 @@ spawn 会：
 ### Step 4: 收集回复
 
 ```bash
-omp-round-table round collect
+omp round-table round collect
 ```
 
 collect 会自动读取各参与者 response 文件，提取行动标签和摘要，批量调用 post-message 写入 session。
@@ -90,7 +90,7 @@ Orchestrator 作为主持人：
 将综述写入文件并 post：
 
 ```bash
-omp-round-table post-message moderator <summary-file> \
+omp round-table post-message moderator <summary-file> \
   --round N --name "主持人" --action "综合" --summary "本轮一句话摘要"
 ```
 
@@ -114,7 +114,7 @@ omp-round-table post-message moderator <summary-file> \
 将用户回复 post 到 session：
 
 ```bash
-omp-round-table post-message user <user-input-file> \
+omp round-table post-message user <user-input-file> \
   --round N --name "用户" --action "指令" --summary "用户意图"
 ```
 
@@ -139,7 +139,7 @@ Orchestrator 做最终综述：
 ### Step 2: 生成文档
 
 ```bash
-omp-round-table session end --output-dir "$(pwd)/docs/round-table"
+omp round-table session end --output-dir "$(pwd)/docs/round-table"
 ```
 
 `end` 命令生成基础文档框架，但 orchestrator 应该补充：

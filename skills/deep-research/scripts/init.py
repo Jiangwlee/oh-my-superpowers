@@ -1,7 +1,7 @@
 """Initialize a deep-research workspace.
 
 Usage:
-    omp-deep-research init --topic "<topic>" [--slug "<slug>"] [--mode quick|default|deep]
+    omp deep-research init --topic "<topic>" [--slug "<slug>"] [--mode quick|default|deep]
 """
 
 from __future__ import annotations

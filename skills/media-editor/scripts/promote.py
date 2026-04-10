@@ -1,6 +1,6 @@
 """将 daily archive 中的条目晋升至 root-archive，并更新用户偏好。
 
-用途：omp-media-promote --url <url>
+用途：omp media-editor promote --url <url>
 晋升规则：URL 去重，已存在于 root-archive 则返回 duplicate。
 """
 

@@ -82,9 +82,9 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 1. **一个 Skill，只能有一个 CLI**
    - 入口唯一，不允许多个并列脚本供调用方随意选择
 
-2. **命名规范：`omp-<skill-name>`**
-   - 例：skill 名为 `skill-review` → CLI 命名为 `omp-skill-review`
-   - CLI 文件放在 `scripts/omp-<skill-name>`（无扩展名），由 `omp install` 安装到 PATH
+2. **命名规范：`omp <skill-name>`**
+   - 例：skill 名为 `skill-review` → CLI 调用为 `omp skill-review`
+   - CLI 模块放在 `cli/<skill-name>/main.py`，由 `omp` 统一路由
 
 3. **SKILL.md 中只引用 CLI 名称，不写相对路径**
    ```
@@ -92,7 +92,7 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
    python scripts/check.py --skill-dir <path>
 
    # 正确 — CLI 调用
-   omp-skill-review --skill-dir <path>
+   omp skill-review --skill-dir <path>
    ```
 
 ### 为什么这样设计

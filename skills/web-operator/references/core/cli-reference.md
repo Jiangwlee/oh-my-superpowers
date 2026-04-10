@@ -65,11 +65,11 @@ is the CLI command list below and the target-prefix workflow.
 
 ## High-Level Site Commands
 
-All browser actions route through `omp-web-operator`. The underlying CDP engine is `scripts/cdp.mjs`.
+All browser actions route through `omp web-operator`. The underlying CDP engine is `scripts/cdp.mjs`.
 
 ### Read URL Content
 
-- `omp-web-operator read-url <url> [--limit N] [--comments N] [--json]`
+- `omp web-operator read-url <url> [--limit N] [--comments N] [--json]`
   Read the main text content of any URL. Returns Markdown (when defuddle is available) or plain text.
   Four-tier strategy (HTTP-first + CDP fallback):
   1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to `open-post` for structured extraction
@@ -86,25 +86,25 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
   ```bash
   # Read an article (usually hits tier 2, ~200ms)
-  omp-web-operator read-url "https://www.paulgraham.com/writes.html"
+  omp web-operator read-url "https://www.paulgraham.com/writes.html"
 
   # Read with character limit
-  omp-web-operator read-url "https://arxiv.org/html/2603.23013v1" --limit 15000
+  omp web-operator read-url "https://arxiv.org/html/2603.23013v1" --limit 15000
 
   # JSON output with metadata (for pipelines)
-  omp-web-operator read-url "https://blog.samaltman.com/..." --json
+  omp web-operator read-url "https://blog.samaltman.com/..." --json
   ```
 
 ### Multi-Platform Parallel Search
 
-- `omp-web-operator search-multi --<platform> "<query>" [...] [--limit N]`
+- `omp web-operator search-multi --<platform> "<query>" [...] [--limit N]`
   Run searches on multiple platforms in parallel and return merged results.
   Supported platforms: `baidu`, `google`, `github`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, `taoguba`, `duckduckgo`.
   Max 5 concurrent searches (CDP connection limit).
 
   Example:
   ```bash
-  omp-web-operator search-multi --google "AI agents" --baidu "AI 智能体" --reddit "AI agents" --limit 5
+  omp web-operator search-multi --google "AI agents" --baidu "AI 智能体" --reddit "AI agents" --limit 5
   ```
 
   Output format:
@@ -117,72 +117,72 @@ All browser actions route through `omp-web-operator`. The underlying CDP engine 
 
 ### Baidu
 
-- `omp-web-operator search baidu <query> [limit] [target]`
+- `omp web-operator search baidu <query> [limit] [target]`
   Search `baidu.com` and extract up to 20 organic result summaries (title, snippet, url).
 
 ### GitHub
 
-- `omp-web-operator search github <query> [limit]`
+- `omp web-operator search github <query> [limit]`
   Search GitHub repos, issues, and discussions via `gh` CLI. Returns up to 60 results with type, title, summary, url, stars/labels. No browser needed.
 
 ### Google
 
-- `omp-web-operator search google <query> [limit] [target]`
+- `omp web-operator search google <query> [limit] [target]`
   Search `google.com` and extract up to 20 organic result summaries (title, snippet, url).
 
 ### Reddit
 
-- `omp-web-operator search reddit <query> [limit] [target]`
+- `omp web-operator search reddit <query> [limit] [target]`
   Search `reddit.com` and extract up to 10 result summaries.
-- `omp-web-operator open-post reddit <url> [comment_limit] [target]`
+- `omp web-operator open-post reddit <url> [comment_limit] [target]`
   Open one Reddit post URL and extract the main post plus top visible comments.
 
 ### Taoguba
 
-- `omp-web-operator taoguba jinghua [hours] [limit] [target]`
+- `omp web-operator taoguba jinghua [hours] [limit] [target]`
   Extract Taoguba `jinghua` posts from the last 24 hours by default.
-- `omp-web-operator taoguba following [hours] [limit] [target]`
+- `omp web-operator taoguba following [hours] [limit] [target]`
   Extract followed-content updates from the last 12 hours by default.
-- `omp-web-operator open-post taoguba <url> [target]`
+- `omp web-operator open-post taoguba <url> [target]`
   Open one Taoguba post and extract the main post body.
 
 ### WPS 365 (365.kdocs.cn)
 
-- Prefer `omp-web-operator kdocs ask-ai <question> [target]` for document Q&A, summaries, fuzzy lookup, and multi-doc questions.
-- `omp-web-operator kdocs search <query> [limit] [target]`
+- Prefer `omp web-operator kdocs ask-ai <question> [target]` for document Q&A, summaries, fuzzy lookup, and multi-doc questions.
+- `omp web-operator kdocs search <query> [limit] [target]`
   Search WPS 365 documents; returns snippets and version ranking.
-- `omp-web-operator kdocs open-doc <file_key> [main_target]`
+- `omp web-operator kdocs open-doc <file_key> [main_target]`
   Open a document by file key; returns outline and first-page text.
-- `omp-web-operator kdocs find-in-doc <keyword> [target]`
+- `omp web-operator kdocs find-in-doc <keyword> [target]`
   Search for a keyword in the open document; returns match count and context.
-- `omp-web-operator kdocs ask-ai <question> [target]`
+- `omp web-operator kdocs ask-ai <question> [target]`
   Ask WPS AI Docs Chat on the main page; returns answer text and referenced docs.
-- `omp-web-operator kdocs close-doc [target]`
+- `omp web-operator kdocs close-doc [target]`
   Close the document tab, keeping the main 365.kdocs.cn/latest tab alive.
 
 ### X
 
-- `omp-web-operator search x <query> [limit] [target]`
+- `omp web-operator search x <query> [limit] [target]`
   Search `x.com` and extract up to 10 result summaries.
-- `omp-web-operator open-post x <url> [target]`
+- `omp web-operator open-post x <url> [target]`
   Open one `x.com` post URL and extract the current visible post text.
-- `omp-web-operator x for-you [limit] [target]`
+- `omp web-operator x for-you [limit] [target]`
   Read the X.com For You recommendation feed.
 
 ### Weixin-Sogou
 
-- `omp-web-operator search weixin-sogou <query> [limit] [target]`
+- `omp web-operator search weixin-sogou <query> [limit] [target]`
   Search `weixin.sogou.com` (搜狗微信搜索) and extract article metadata (title, summary, account, time, link). Note: Only search is supported; full article content requires WeChat environment.
 
 ### Xueqiu
 
-- `omp-web-operator search xueqiu <query> [limit] [target]`
+- `omp web-operator search xueqiu <query> [limit] [target]`
   Search `xueqiu.com` and extract up to 10 discussion results.
-- `omp-web-operator open-post xueqiu <url> [comment_limit] [target]`
+- `omp web-operator open-post xueqiu <url> [comment_limit] [target]`
   Open one `xueqiu.com` post URL and extract the main article plus visible comments.
-- `omp-web-operator xueqiu hot [limit] [target]`
+- `omp web-operator xueqiu hot [limit] [target]`
   Extract the current visible "热门" home timeline post list.
-- `omp-web-operator xueqiu stock-info <symbol_or_url> [limit] [target]`
+- `omp web-operator xueqiu stock-info <symbol_or_url> [limit] [target]`
   Open one stock page and extract the latest visible announcements and discussions.
 
 ## Script entrypoint

@@ -10,8 +10,8 @@
 ```
 ┌─────────────────────────────┐
 │ Layer 1: 角色身份            │ ← participants/<role-id>.md
-│ Layer 2: 讨论背景            │ ← omp-round-table session context detail
-│ Layer 3: 对话历史            │ ← omp-round-table get-messages
+│ Layer 2: 讨论背景            │ ← omp round-table session context detail
+│ Layer 3: 对话历史            │ ← omp round-table get-messages
 │ Layer 4: 本轮指令            │ ← orchestrator 动态生成
 └─────────────────────────────┘
 ```
@@ -31,20 +31,20 @@
 
 ## Layer 2: 讨论背景
 
-来源：`omp-round-table session context detail`
+来源：`omp round-table session context detail`
 
 ```bash
-context=$(omp-round-table session context detail)
+context=$(omp round-table session context detail)
 ```
 
-detail 模式包含完整背景（议题、约束条件、讨论目标）。如需 token 精简可改用 `omp-round-table session context brief`，只包含议题和核心约束。
+detail 模式包含完整背景（议题、约束条件、讨论目标）。如需 token 精简可改用 `omp round-table session context brief`，只包含议题和核心约束。
 
 ## Layer 3: 对话历史
 
-来源：`omp-round-table session messages`
+来源：`omp round-table session messages`
 
 ```bash
-messages=$(omp-round-table session messages)
+messages=$(omp round-table session messages)
 ```
 
 输出包含：

@@ -346,10 +346,10 @@ Each supported site should eventually have:
 
 Test commands:
 
-- `omp-web-operator test list`
-- `omp-web-operator test core`
-- `omp-web-operator test site <name>`
-- `omp-web-operator test all`
+- `omp web-operator test list`
+- `omp web-operator test core`
+- `omp web-operator test site <name>`
+- `omp web-operator test all`
 
 ## Definition Of Done For New Site Support
 

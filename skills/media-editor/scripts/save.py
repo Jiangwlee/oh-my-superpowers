@@ -1,6 +1,6 @@
 """保存媒体条目到 daily archive、SQLite 索引和 markdown card。
 
-用途：omp-media-save --json '<item_json>'
+用途：omp media-editor save --json '<item_json>'
 原子性：使用临时文件 + rename 保证 JSONL 写入原子性，SQLite 使用事务。
 任意步骤失败时回滚已完成步骤。
 """

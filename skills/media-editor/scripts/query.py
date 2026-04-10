@@ -1,6 +1,6 @@
 """结构化查询 media-editor SQLite 存档。
 
-用途：omp-media-query [--l1 <category>] [--date <YYYY-MM-DD>] [--source <x.com|reddit.com>] [--limit <n>]
+用途：omp media-editor query [--l1 <category>] [--date <YYYY-MM-DD>] [--source <x.com|reddit.com>] [--limit <n>]
 输出：JSON 数组，每个元素为一条存档条目。
 """
 
@@ -43,7 +43,7 @@ def query_items(
         条目字典列表，出错时返回空列表。
     """
     if not db_path.exists():
-        logger.error("数据库不存在：%s，请先运行 omp-media-init", db_path)
+        logger.error("数据库不存在：%s，请先运行 omp media-editor init", db_path)
         return []
 
     conditions: list[str] = []

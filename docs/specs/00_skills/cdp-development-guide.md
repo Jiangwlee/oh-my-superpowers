@@ -5,7 +5,7 @@ web-operator skill 的 Chrome DevTools Protocol 开发参考。记录架构设�
 ## 架构概览
 
 ```
-omp-web-operator (bin/omp-web-operator)     ← CLI 入口，dispatcher
+omp web-operator (bin/omp web-operator)     ← CLI 入口，dispatcher
   └── cdp.mjs (scripts/cdp.mjs)             ← CDP 核心，所有浏览器原语
         ├── CDP class                        ← WebSocket 客户端
         ├── Per-tab daemon                   ← 每个 tab 一个持久进程
@@ -23,7 +23,7 @@ omp-web-operator (bin/omp-web-operator)     ← CLI 入口，dispatcher
 |---|---|---|
 | **Core** | Chrome 连接、tab 路由、CDP 命令原语 | `cdp.mjs`, `core/common.sh` |
 | **Sites** | 站点 SOP（搜索、帖子提取等） | `sites/<site>/*.sh` |
-| **CLI** | 子命令分发 | `bin/omp-web-operator` |
+| **CLI** | 子命令分发 | `bin/omp web-operator` |
 
 ### Daemon 机制
 
@@ -249,7 +249,7 @@ scroll → wait → extract visible articles → deduplicate → accumulate
 ```bash
 node skills/web-operator/scripts/cdp.mjs stop
 # 或
-omp-web-operator page stop
+omp web-operator page stop
 ```
 
 ### 7. DevToolsActivePort 过期

@@ -59,10 +59,10 @@ model: claude-sonnet-4-6
 
 ## Phase 0：初始化
 
-1. 验证依赖可用：`omp-deep-research` 和 `omp-web-operator` 均存在，否则立即停止并告知安装命令
+1. 验证依赖可用：`omp deep-research` 和 `omp web-operator` 均存在，否则立即停止并告知安装命令
 2. 读 `deep-research` SKILL.md
 3. 读 `references/cli.md`
-4. 执行 `omp-deep-research init` 创建 workspace，记住 workspace 路径
+4. 执行 `omp deep-research init` 创建 workspace，记住 workspace 路径
 
 ## Phase 1：研究规划
 
@@ -75,8 +75,8 @@ model: claude-sonnet-4-6
 ## Phase 2：研究循环（每轮执行）
 
 1. 选择 2-3 个互补平台和对应 query（中英文混合）
-2. 通过 `omp-web-operator search-multi` 并行搜索多个平台
-3. 对高价值结果，通过 `omp-web-operator read-url <url> [--limit N]` 读取全文
+2. 通过 `omp web-operator search-multi` 并行搜索多个平台
+3. 对高价值结果，通过 `omp web-operator read-url <url> [--limit N]` 读取全文
 4. **记录来源**：在自身上下文中维护 sources 列表（url + title + platform），供 Phase 3 使用
 5. 读 `references/stop-criteria.md` → 判断是否继续
 6. **回退检查**：如果本轮发现了新的重要维度或子问题，回到 Phase 1 的广度探索
@@ -96,7 +96,7 @@ model: claude-sonnet-4-6
 5. 如有不足，回到 Phase 2 补充
 6. 将 sources 列表写入 JSON 文件，然后执行：
    ```bash
-   omp-deep-research build-report \
+   omp deep-research build-report \
      --workspace "<workspace>" \
      --brief-file "<brief_md>" \
      --full-report-file "<full_report_md>" \
@@ -109,9 +109,9 @@ model: claude-sonnet-4-6
 
 | 场景 | 处理方式 |
 |------|---------|
-| `omp-deep-research` 命令不存在 | 立即停止，告知用户：`omp install skill deep-research` |
-| `omp-deep-research init` 失败 | 报告错误原因，不继续研究 |
-| `omp-web-operator` 不可用 | 立即停止，告知用户：`omp install skill web-operator` |
+| `omp deep-research` 命令不存在 | 立即停止，告知用户：`omp install skill deep-research` |
+| `omp deep-research init` 失败 | 报告错误原因，不继续研究 |
+| `omp web-operator` 不可用 | 立即停止，告知用户：`omp install skill web-operator` |
 | 单次搜索返回空结果 | 换查询词或换平台后重试，不将「未找到」计入有效轮次 |
 | skill 文档读取失败 | 报告缺失文件路径，停止依赖该文档的判断 |
 
