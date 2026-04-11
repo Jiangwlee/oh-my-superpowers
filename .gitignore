@@ -21,3 +21,8 @@ deployment/docker/ashare-platform/data/
 
 .claude/
 .coverage
+
+# External reference projects
+claude-code-spec-workflow/
+claude-code-workflow-orchestration/
+claude-sub-agent/
