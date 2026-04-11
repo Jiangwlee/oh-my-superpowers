@@ -1,6 +1,6 @@
 # Runtime Reference
 
-> 三种 AI runtime 的 CLI 差异速查。omp-team run 内部使用这些命令驱动 agent 执行任务。
+> 三种 AI runtime 的 CLI 差异速查。omp team run 内部使用这些命令驱动 agent 执行任务。
 
 ## Claude
 
@@ -69,13 +69,13 @@ cd {working_directory} && \
 | 命令行参数 (`cmd "prompt"`) | 不安全，shell 转义问题 | 受 ARG_MAX 限制 | 不推荐 |
 | `$(cat file)` 命令替换 | 不安全，含 `$`/`` ` ``/`\` 时会被 shell 展开 | 受 ARG_MAX 限制 | 不推荐 |
 
-## omp-team run 内部映射
+## omp team run 内部映射
 
-`omp-team run <runtime> [prompt] [--prompt-file <path>] [--model <model>] [--timeout <sec>] [--output-file <path>] [--cwd <dir>]`
+`omp team run <runtime> [prompt] [--prompt-file <path>] [--model <model>] [--timeout <sec>] [--output-file <path>] [--cwd <dir>]`
 
 各参数到 runtime CLI 的映射：
 
-| omp-team 参数 | claude | codex | pi |
+| omp team 参数 | claude | codex | pi |
 |--------------|--------|-------|-----|
 | `--prompt-file` | stdin 管道 | stdin 管道 + `-` | `@file` |
 | `--model` | `--model` | `-m` | `--model` |

@@ -51,17 +51,17 @@ Round 2:
 
 ```bash
 # Round 1
-omp-team run claude "你是安全专家。议题：... 请给出观点" --output-file /tmp/r1-security.md &
-omp-team run claude "你是架构师。议题：... 请给出观点" --output-file /tmp/r1-arch.md &
-omp-team run pi "你是产品经理。议题：... 请给出观点" --output-file /tmp/r1-pm.md &
+omp team run claude "你是安全专家。议题：... 请给出观点" --output-file /tmp/r1-security.md &
+omp team run claude "你是架构师。议题：... 请给出观点" --output-file /tmp/r1-arch.md &
+omp team run pi "你是产品经理。议题：... 请给出观点" --output-file /tmp/r1-pm.md &
 wait
 
 # Orchestrator 聚合 Round 1，构建 Round 2 prompt
 # Round 2 的 prompt 包含 Round 1 所有人的观点
 
-omp-team run claude "你是安全专家。前轮讨论：[R1输出]。请回应..." --output-file /tmp/r2-security.md &
-omp-team run claude "你是架构师。前轮讨论：[R1输出]。请回应..." --output-file /tmp/r2-arch.md &
-omp-team run pi "你是产品经理。前轮讨论：[R1输出]。请回应..." --output-file /tmp/r2-pm.md &
+omp team run claude "你是安全专家。前轮讨论：[R1输出]。请回应..." --output-file /tmp/r2-security.md &
+omp team run claude "你是架构师。前轮讨论：[R1输出]。请回应..." --output-file /tmp/r2-arch.md &
+omp team run pi "你是产品经理。前轮讨论：[R1输出]。请回应..." --output-file /tmp/r2-pm.md &
 wait
 ```
 

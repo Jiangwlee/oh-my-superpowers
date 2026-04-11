@@ -23,7 +23,7 @@
 
 ## 编排规则
 
-1. Orchestrator 按顺序调用 `omp-team run`，等待每步完成后再启动下一步
+1. Orchestrator 按顺序调用 `omp team run`，等待每步完成后再启动下一步
 2. 前一步的 stdout 作为下一步 prompt 的上下文（直接嵌入或通过 `--prompt-file`）
 3. 任何一步失败（退出码 != 0）则整个 pipeline 停止
 4. Orchestrator 在步骤之间可以：
@@ -35,13 +35,13 @@
 
 ```bash
 # Step 1: codex 实现
-OUTPUT=$(omp-team run codex "实现 parse_config 函数..." --cwd /project)
+OUTPUT=$(omp team run codex "实现 parse_config 函数..." --cwd /project)
 if [ $? -ne 0 ]; then echo "Step 1 failed" >&2; exit 1; fi
 
 # Orchestrator 中间决策：检查输出，构建 review prompt
 
 # Step 2: claude 审查
-REVIEW=$(omp-team run claude "审查以下代码的质量：${OUTPUT}")
+REVIEW=$(omp team run claude "审查以下代码的质量：${OUTPUT}")
 if [ $? -ne 0 ]; then echo "Step 2 failed" >&2; exit 1; fi
 ```
 

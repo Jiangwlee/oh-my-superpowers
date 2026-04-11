@@ -44,7 +44,6 @@ REQUIRED_FILES=(
   "references/patterns/batch.md"
   "references/scenarios/code-and-review.md"
   "references/scenarios/debate.md"
-  "references/scenarios/round-table.md"
   "references/prompts/coding-task.md"
   "references/prompts/code-review.md"
   "references/prompts/role-activation.md"
@@ -59,15 +58,12 @@ done
 echo ""
 echo "--- CLI Entry Point ---"
 
-BIN_FILE="$SKILL_DIR/../../bin/omp-team"
-desc="bin/omp-team exists"
+BIN_FILE="$SKILL_DIR/../../bin/omp"
+desc="bin/omp exists"
 check test -f "$BIN_FILE"
 
-desc="bin/omp-team is executable"
+desc="bin/omp is executable"
 check test -x "$BIN_FILE"
-
-desc="bin/omp-team has bash shebang"
-check grep -q '#!/usr/bin/env bash' "$BIN_FILE"
 
 # ── 4. Script shebangs ───────────────────────────────
 echo ""
@@ -93,14 +89,14 @@ check grep -q '^name:' "$SKILL_MD"
 desc="SKILL.md has description field"
 check grep -q '^description:' "$SKILL_MD"
 
-desc="SKILL.md references omp-team run"
-check grep -q 'omp-team run' "$SKILL_MD"
+desc="SKILL.md references omp team run"
+check grep -q 'omp team run' "$SKILL_MD"
 
-desc="SKILL.md references omp-team status"
-check grep -q 'omp-team status' "$SKILL_MD"
+desc="SKILL.md references omp team status"
+check grep -q 'omp team status' "$SKILL_MD"
 
-desc="SKILL.md references omp-team clean"
-check grep -q 'omp-team clean' "$SKILL_MD"
+desc="SKILL.md references omp team clean"
+check grep -q 'omp team clean' "$SKILL_MD"
 
 # ── 6. No relative path calls in SKILL.md ────────────
 echo ""

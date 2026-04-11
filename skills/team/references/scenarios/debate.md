@@ -1,5 +1,9 @@
 # Debate
 
+> **DEPRECATED**: 多视角辩论场景已由独立 skill `round-table` 承担，
+> 提供完整的角色库、session 管理和多轮讨论流程。
+> 本文档保留作为 team 原语层的 fan-out/fan-in 用法示例。
+
 > pattern: fan-out-fan-in
 > 正反方对抗式辩论：多 agent 并行阐述立场 → orchestrator 聚合结论。
 
@@ -25,9 +29,9 @@
 3. 并行执行各方辩论：
 
 ```bash
-omp-team run claude --prompt-file debate-pro.md --output-file debate-side-1.txt &
-omp-team run codex --prompt-file debate-con.md --output-file debate-side-2.txt &
-omp-team run pi --prompt-file debate-neutral.md --output-file debate-side-3.txt &
+omp team run claude --prompt-file debate-pro.md --output-file debate-side-1.txt &
+omp team run codex --prompt-file debate-con.md --output-file debate-side-2.txt &
+omp team run pi --prompt-file debate-neutral.md --output-file debate-side-3.txt &
 wait
 ```
 
@@ -42,7 +46,7 @@ wait
 6. 执行综合分析：
 
 ```bash
-omp-team run claude --prompt-file synthesis.md --output-file synthesis-out.txt
+omp team run claude --prompt-file synthesis.md --output-file synthesis-out.txt
 ```
 
 ### Phase 4: 多轮深化（可选）

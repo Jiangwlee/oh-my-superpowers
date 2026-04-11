@@ -13,11 +13,10 @@
 
 ## 场景索引
 
-| 场景 | 文档 | 使用模式 |
-|------|------|---------|
-| 编码与评审 | scenarios/code-and-review.md | Pipeline |
-| 正反辩论 | scenarios/debate.md | Fan-out/Fan-in |
-| 轻量圆桌 | scenarios/round-table.md | Discussion |
+| 场景 | 文档 | 状态 |
+|------|------|------|
+| 编码与评审 | scenarios/code-and-review.md | ⚠️ DEPRECATED → 使用 `coding-orchestrator` skill |
+| 正反辩论 | scenarios/debate.md | ⚠️ DEPRECATED → 使用 `round-table` skill |
 
 ## Prompt 框架
 

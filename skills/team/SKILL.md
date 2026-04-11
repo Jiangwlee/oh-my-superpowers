@@ -1,105 +1,113 @@
 ---
 name: team
 description: >-
-  Use when you need to dispatch a task to another AI runtime (claude/codex/pi)
-  via tmux. Provides one-shot execution: spawn → wait → return output.
+  Dispatch tasks to external AI runtimes (claude/codex/pi) via tmux.
+  Stateless one-shot execution: spawn → wait → return output.
   Do NOT use for interactive/multi-turn sessions.
 ---
+
+# Team: AI Runtime Dispatch Protocol
+
+## Protocol
+
+`omp team run` is a **stateless transport primitive**. It spawns one AI runtime in a tmux session, waits for completion, and returns the output. No state is persisted between calls.
+
+### Interface
+
+```
+omp team run <runtime> [prompt] [options] → stdout (worker output)
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `runtime` | yes | `claude`, `codex`, or `pi` |
+| `prompt` | one of | Inline prompt string (mutually exclusive with `--prompt-file`) |
+| `--prompt-file` | one of | Path to prompt file (recommended for non-trivial prompts) |
+| `--model` | no | Override default model |
+| `--timeout` | no | Seconds before kill (default: 300) |
+| `--output-file` | no | Write output to file (default: temp file) |
+| `--cwd` | no | Worker's working directory (default: `$PWD`) |
+
+### Exit Codes
+
+| Code | Meaning | Orchestrator Action |
+|------|---------|---------------------|
+| `0` | Success | Read stdout / output file |
+| `1` | Worker error | Check stderr, revise prompt or retry |
+| `124` | Timeout | Increase `--timeout`, or split task |
+
+### Prompt Delivery
+
+| Runtime | Mechanism | Why |
+|---------|-----------|-----|
+| claude | stdin pipe (`cat file \| claude -p`) | Safe for special chars, no length limit |
+| codex | stdin pipe (`cat file \| codex exec -`) | Same |
+| pi | `@file` native syntax (`pi -p @file`) | Pi reads file directly |
+
+**Never pass prompts as inline bash arguments.** Use `--prompt-file` or pipe from file.
+
+### Runtime Details
+
+See `references/runtime-reference.md` for per-runtime CLI flags and known limitations.
 
 ## Quick Reference
 
 ```bash
-# One-shot 执行任务
-omp team run <runtime> "<prompt>"
+# One-shot execution
 omp team run <runtime> --prompt-file <path>
+omp team run <runtime> "<short prompt>"
 
-# 查询 tmux session 状态
+# Status and cleanup
 omp team status [session-name]
-
-# 清理 ANSI 转义码
 omp team clean <file>
 ```
 
-> 不确定参数时，先运行 `omp team <subcommand> --help` 查看完整用法。
+> Run `omp team <subcommand> --help` for full usage.
 
-### 示例
+## Runtime Selection
 
-```bash
-# 让 codex 实现一个函数
-omp team run codex "在 src/utils.py 中实现 parse_config 函数，读取 YAML 配置文件并返回 dict" \
-  --cwd /path/to/project --timeout 180
+| Runtime | Best for | Traits |
+|---------|----------|--------|
+| `codex` | Coding, file modification, refactoring | YOLO mode, no confirmation, direct file ops |
+| `claude` | Design, review, complex reasoning | Deep thinking, judgment-heavy tasks |
+| `pi` | Lightweight tasks, quick validation | Fast, low cost, simple instructions |
 
-# 让 claude 做代码审查（通过 prompt 文件传递代码内容）
-omp team run claude --prompt-file /tmp/review-prompt.md \
-  --output-file /tmp/review.md
+## Prompt Principles
 
-# 从 prompt 文件执行
-omp team run pi --prompt-file /tmp/task-prompt.md --timeout 60
+One-shot execution has no retry loop — the prompt must be right the first time:
 
-# 查看运行状态
-omp team status
+1. **Self-contained** — Worker has no memory. Include all context, code, and files in the prompt.
+2. **Explicit output format** — Tell the worker what to produce (markdown / JSON / code).
+3. **Working directory** — Use `--cwd` and describe project structure in the prompt.
+4. **Single responsibility** — One prompt = one task. Chain multi-step work via patterns.
+5. **Use templates** — See `references/prompts/` for reusable prompt structures.
 
-# 清理输出文件中的 ANSI 转义
-omp team clean /tmp/raw-output.txt
-```
+## Orchestration Patterns
 
-## Runtime 选择指南
+> How to compose multiple `omp team run` calls. Load on demand.
 
-| Runtime | 适用任务 | 特点 |
-|---------|---------|------|
-| `codex` | 编码实现、文件修改、重构 | YOLO 模式，不需确认，直接执行文件操作 |
-| `claude` | 设计、review、复杂推理、文档撰写 | 深度思考，适合需要判断力的任务 |
-| `pi` | 轻量任务、快速验证、格式转换 | 速度快，成本低，适合简单指令 |
+| Pattern | Document | Topology | When to use |
+|---------|----------|----------|-------------|
+| Pipeline | `references/patterns/pipeline.md` | A → B → C | Sequential stages with intermediate decisions |
+| Fan-out/Fan-in | `references/patterns/fan-out-fan-in.md` | Parallel → Aggregate | Multi-perspective analysis |
+| Discussion | `references/patterns/discussion.md` | Multi-round convergence | Iterative multi-agent debate |
+| Batch | `references/patterns/batch.md` | N parallel independent | Bulk similar tasks |
 
-**选择原则：**
-- 需要改代码 → `codex`
-- 需要思考/判断 → `claude`
-- 简单/快速任务 → `pi`
+### Parallel Dispatch (all fan-out patterns)
 
-## 场景编排索引
-
-> 以下场景文档提供完整 SOP，包含具体的 omp team 调用序列。
-
-| 场景 | 文档 | 说明 |
-|------|------|------|
-| 编码 + 审查 | `references/scenarios/code-and-review.md` | Pipeline：codex 实现 → claude 审查 |
-| 正反辩论 | `references/scenarios/debate.md` | Fan-out/Fan-in：多视角并行 → 聚合结论 |
-| 多轮讨论 | `references/patterns/discussion.md` | Discussion：多 agent 共享上下文逐轮收敛 |
-
-## Prompt 框架索引
-
-> 下发给 worker 的 prompt 质量决定 one-shot 成功率。使用以下模板，填入 `{placeholder}` 变量。
-
-| 模板 | 文档 | 用途 |
-|------|------|------|
-| 编码任务 | `references/prompts/coding-task.md` | 分配编码实现任务 |
-| 代码审查 | `references/prompts/code-review.md` | 分配代码审查任务 |
-| 角色激活 | `references/prompts/role-activation.md` | 通用角色定义与行为约束 |
-
-## Prompt 规范
-
-One-shot 执行没有多轮修正机会，prompt 必须一次到位：
-
-1. **上下文自包含** — Worker 没有历史记忆。所有必要的背景信息、代码片段、文件内容必须包含在 prompt 中。
-2. **明确输出格式** — 告诉 worker 输出什么格式（markdown / JSON / 代码文件），不要让 worker 猜。
-3. **指定工作目录** — 通过 `--cwd` 指定，并在 prompt 中说明项目结构和目标文件位置。
-4. **使用模板** — 优先使用 `references/prompts/` 中的模板，填入 `{placeholder}` 变量，确保结构完整。
-5. **单一职责** — 一个 prompt 只做一件事。复杂任务拆成多步，用 pipeline 模式串联。
-
-## 并发编排
-
-Orchestrator（你）负责并发控制。omp team 本身是同步阻塞的，并发通过 shell 后台任务实现：
+`omp team run` is synchronous. Achieve parallelism via shell background jobs:
 
 ```bash
-# 并行启动多个 worker
-omp team run claude "从安全角度审查..." --output-file /tmp/security.md &
-omp team run claude "从性能角度审查..." --output-file /tmp/perf.md &
-omp team run claude "从可维护性角度审查..." --output-file /tmp/maintain.md &
+omp team run claude --prompt-file task-a.md --output-file /tmp/a.md &
+omp team run codex --prompt-file task-b.md --output-file /tmp/b.md &
 wait
-
-# 收集结果
-cat /tmp/security.md /tmp/perf.md /tmp/maintain.md
+# Collect results from /tmp/a.md and /tmp/b.md
 ```
 
-> 并发编排模式详见 `references/patterns/` 下的模式文档（Pipeline / Fan-out/Fan-in / Discussion / Batch）。
-> 完整模式索引见 `references/README.md`。
+## Prompt Templates
+
+| Template | Document | Purpose |
+|----------|----------|---------|
+| Role Activation | `references/prompts/role-activation.md` | Define identity, stance, constraints for any role |
+| Coding Task | `references/prompts/coding-task.md` | Assign coding implementation to worker |
+| Code Review | `references/prompts/code-review.md` | Assign code review to worker |

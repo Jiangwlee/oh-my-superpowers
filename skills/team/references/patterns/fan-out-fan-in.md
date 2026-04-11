@@ -40,11 +40,11 @@
 
 ```bash
 # Fan-out：并行启动
-omp-team run claude "从安全角度分析..." --output-file /tmp/security.md &
+omp team run claude "从安全角度分析..." --output-file /tmp/security.md &
 PID1=$!
-omp-team run claude "从性能角度分析..." --output-file /tmp/performance.md &
+omp team run claude "从性能角度分析..." --output-file /tmp/performance.md &
 PID2=$!
-omp-team run pi "从成本角度分析..." --output-file /tmp/cost.md &
+omp team run pi "从成本角度分析..." --output-file /tmp/cost.md &
 PID3=$!
 wait $PID1 $PID2 $PID3
 
