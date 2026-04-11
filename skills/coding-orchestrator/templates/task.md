@@ -157,8 +157,8 @@ When stuck:
 
 <!-- Updated by orchestrator as pipeline advances. -->
 
-- [ ] Execute — sub agent assigned: <agent-id or pending>
-- [ ] Review — reviewer: <codex/sonnet or pending>
+- [ ] Execute — worker assigned: <runtime/agent-id or pending>
+- [ ] Review — reviewer: <runtime or pending>
 - [ ] Test — result: <pass/fail or pending>
 - [ ] Acceptance — verified: <date or pending>
 ```

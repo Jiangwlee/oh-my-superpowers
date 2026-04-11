@@ -33,10 +33,11 @@ Create a task for each step and complete them in order:
 
   references/ (orchestrator reads):
     - references/constitution.md          全局编码准则（全员必读，Karpathy 四原则）
+    - references/commands.md              tmux dispatch 命令（走 tmux 路线时加载）
     - references/handoff-guideline.md     Handoff 格式 + 恢复流程
 
-  worker-refs/ (sub agent reads, orchestrator only传路径):
-    - worker-refs/worker-guideline.md     Sub agent 行为协议
+  worker-refs/ (worker reads, orchestrator only传路径):
+    - worker-refs/worker-guideline.md     Worker 行为协议
     - worker-refs/debugging-guideline.md  日志驱动调试方法论
 
   templates/ (orchestrator复制填充):
@@ -68,16 +69,40 @@ For each task (orchestrator dispatches in dependency order):
 
 <dispatch_protocol>
 
-**Sub agent prompt contains only:**
+### Route Decision
+
+Before dispatching, determine your dispatch route:
+
+| Condition | Route | Example |
+|-----------|-------|---------|
+| You have native sub-agent AND task runs in same runtime | **Sub-agent** | Claude Code's `Agent()` tool |
+| You need a different runtime OR no sub-agent mechanism | **tmux** | Read `references/commands.md` |
+
+### Prompt Preparation (both routes)
+
+Write a prompt file at `/tmp/orchestrator-task-<NN>.md` containing:
 1. Path to the task spec file: `./stories/<story-name>/tasks/task-NN.md`
 2. One sentence: "Read the spec, then read every file in its Worker Refs and Read First sections, then execute."
 
-**Sub agent reads spec file itself** — orchestrator does NOT inject spec content into prompt.
-The task spec's **Worker Refs** section lists all behavioral docs (constitution, worker-guideline, etc.) the sub agent must read.
+The task spec's **Worker Refs** section lists all behavioral docs (constitution, worker-guideline, etc.) the worker must read.
 
-**No-spec fallback**: only when there is no spec file (e.g., urgent hotfix), inject the task description directly into the sub agent prompt.
+**No-spec fallback**: only when there is no spec file (e.g., urgent hotfix), inject the task description directly into the prompt.
 
-**Parallel execution**: tasks without dependencies may run in parallel using worktree isolation (`Agent(isolation: "worktree")`).
+### Sub-agent Route
+
+Dispatch using your runtime's native sub-agent mechanism. Pass the prompt file path.
+
+### tmux Route
+
+Read `references/commands.md` for exact commands. Key steps:
+1. Write prompt to file
+2. Spawn tmux session with the appropriate runtime command
+3. Poll until session exits
+4. Read output file
+
+**Parallel execution**: tasks without dependencies may run in parallel.
+- Sub-agent route: use your runtime's isolation mechanism (e.g., worktree)
+- tmux route: spawn multiple tmux sessions + git worktree (see `references/commands.md`)
 
 </dispatch_protocol>
 
@@ -85,14 +110,14 @@ The task spec's **Worker Refs** section lists all behavioral docs (constitution,
 
 After each task's code is written:
 
-1. Dispatch sub agent for code review (recommended: `Agent(subagent_type: "codex")` or Sonnet)
-   - Reviewer reads the task spec + changed files
+1. Dispatch a reviewer (different from the coder when possible):
+   - Write review prompt to `/tmp/orchestrator-review-<NN>.md` (include: task spec path, changed files, diff)
+   - Use the same route decision as Execute: sub-agent or tmux
+   - Recommended: use a reasoning-focused runtime for review (e.g., Claude for review, Codex for coding)
 2. Orchestrator reads the review result and applies **second judgment**:
-   - Confirmed issue → orchestrator fixes directly (small fix) or dispatches sub agent (large fix)
+   - Confirmed issue → orchestrator fixes directly (small fix) or dispatches worker (large fix)
    - False positive → ignore, note in task progress
 3. Update task progress
-
-**Codex unavailable?** Fall back to another sub agent with explicit review instructions.
 
 ## Test & Debug
 
