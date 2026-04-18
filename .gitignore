@@ -26,3 +26,6 @@ deployment/docker/ashare-platform/data/
 claude-code-spec-workflow/
 claude-code-workflow-orchestration/
 claude-sub-agent/
+
+# Orchestrator working files (per coding-orchestrator SKILL.md storage spec)
+skills/*/stories/

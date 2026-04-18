@@ -21,7 +21,7 @@ implementation code, STOP — you are violating the orchestrator contract.
 
 Create a task for each step and complete them in order:
 
-1. **Story Intake** — understand the requirement, create `./stories/<name>/story.md`
+1. **Story Intake** — understand the requirement, create `<PROJECT_ROOT>/stories/<name>/story.md`
 2. **Task Breakdown** — decompose into tasks, create spec per task; read `templates/task.md`
 3. **Execute** — dispatch sub agents for coding (worktree isolation for parallel)
 4. **Review** — dispatch sub agent for code review + orchestrator second judgment
@@ -157,13 +157,36 @@ When all tasks pass → story complete.
 
 ## Compaction Recovery
 
-If context was compressed, read `./stories/.handoff-context` to restore state.
+If context was compressed, read `<PROJECT_ROOT>/stories/.handoff-context` to restore state.
 For details on the handoff mechanism: read `references/handoff-guideline.md`.
 
 ## Storage
 
+<HARD-RULE>
+`stories/` MUST live at the **target project's root directory** — NEVER at the
+orchestrator's cwd, NEVER inside the skill's own repo, NEVER inside a sub-directory
+of the project. The orchestrator's cwd at invocation time is unreliable (it may be
+the skill directory, a worktree, or anywhere else the user happened to be).
+</HARD-RULE>
+
+### Resolving `<PROJECT_ROOT>`
+
+Before creating any story file, resolve the project root **deterministically**:
+
+1. If the user explicitly named a project path → use it.
+2. Otherwise run `git rev-parse --show-toplevel` from the user's working context.
+   - If it returns a path → that is `<PROJECT_ROOT>`.
+   - If it errors (no git repo) → STOP and ask the user "where should `stories/` live?". Do not guess, do not fall back to cwd.
+3. Sanity-check the resolved path is NOT inside the skill's own repo
+   (`~/Projects/oh-my-superpowers/` or wherever this skill is installed).
+   If it is → STOP and ask the user. The skill repo is never a valid target.
+
+Record the resolved `<PROJECT_ROOT>` in the first task you create and reuse it for the entire story — do not re-resolve mid-story.
+
+### Layout
+
 ```
-./stories/                          # add to .gitignore
+<PROJECT_ROOT>/stories/             # MUST be in project's .gitignore
 ├── .handoff-context                # PostCompact recovery file
 └── <story-name>/
     ├── story.md                    # story overview + global progress
@@ -173,3 +196,9 @@ For details on the handoff mechanism: read `references/handoff-guideline.md`.
         ├── task-02.md
         └── ...
 ```
+
+### .gitignore check (one-time per project)
+
+After resolving `<PROJECT_ROOT>`, verify `stories/` (or `/stories/`) is in
+`<PROJECT_ROOT>/.gitignore`. If not, append it before creating any story file.
+This prevents orchestrator working files from leaking into project commits.
