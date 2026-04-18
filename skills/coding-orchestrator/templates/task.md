@@ -13,6 +13,11 @@ status: pending          # pending | executing | reviewing | testing | completed
 wave: N                  # Orchestrator assigns: tasks with same wave can run in parallel
 depends_on: []           # Task IDs this task requires (e.g., ["01", "03"])
 files_modified: []       # Files this task will modify (for conflict detection)
+test_layer: integration  # unit | hook | component | integration | e2e
+                         # MUST match the highest layer the acceptance criteria touch.
+                         # See references/task-decomposition-rules.md Rule 1.
+                         # Lower-layer tests may be added as supplemental, but the
+                         # acceptance-matching layer is the FIRST red test.
 ---
 
 # Task: <action-oriented name>
@@ -147,11 +152,16 @@ When stuck:
 
 ## Test Plan
 
-<!-- What to test and how. Sub agent executes these. -->
+<!-- What to test and how. Sub agent executes these.
+     The FIRST red test must be at the layer declared in `test_layer:` frontmatter.
+     If acceptance describes user-observable behavior across navigation/mount/async,
+     the first test is integration (real Provider tree, mocked router only) — NOT
+     a hook unit test that will pass while the feature breaks in browser.
+     See references/task-decomposition-rules.md Rule 1. -->
 
-- [ ] <test command 1> — verifies <what>
-- [ ] <test command 2> — verifies <what>
-- [ ] <manual verification step if needed>
+- [ ] <first red test at acceptance layer> — verifies <observable behavior>
+- [ ] <supplemental lower-layer tests if useful> — verifies <internal contract>
+- [ ] <E2E / browser verification — owned by THIS task, not a separate one> — see Rule 4
 
 ## Progress
 
@@ -167,7 +177,15 @@ When stuck:
 
 ## Template Usage Notes
 
-**Sizing**: one task = one vertical slice (model + API + UI for one feature). Prefer vertical over horizontal (all models, then all APIs).
+**Sizing**: one task = one vertical slice (model + API + UI for one feature). Prefer vertical over horizontal (all models, then all APIs). See `references/task-decomposition-rules.md` Rule 5 for the ≤5 files / vertical-only split rule.
+
+**Cross-layer wiring**: if a task adds a shared API (store action, hook return, context value), the SAME task must wire its first consumer + ship an integration test. Splitting "add API" from "use API" produces orphaned APIs — see Rule 2.
+
+**Test layer**: the `test_layer:` frontmatter field declares the layer for the first red test. It MUST match the highest layer the acceptance criteria touch — see Rule 1.
+
+**Fix batching**: surgical fix tasks (≤30 lines each, ≤3 fixes, sharing a single verification cycle) MAY be combined into one fix-batch task instead of running full ceremony per fix. See Rule 3.
+
+**Verification ownership**: the implementation task OWNS its E2E verification. Do not spawn a separate "verify story" task. See Rule 4.
 
 **Read First vs References**: Read First = mandatory pre-reading before any code change. References = optional additional context.
 

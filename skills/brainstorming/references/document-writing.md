@@ -13,11 +13,16 @@ Save to: `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`
 
 1. One-line summary
 2. Table of contents
-3. ���计方案 (Design)
-4. 行动原则 (Principles) — selected from `references/principles-library.md`
-5. 行动计划 (Action Plan) — file structure + task steps
+3. 设计方案 (Design)
+4. 假设与风险登记 (Assumptions & Risks) — see `references/risk-and-spike.md`
+5. Spike 计划 (Spike Plan) — only when 🔴 risks exist; Normal mode only
+6. Spike 结果 (Spike Results) — filled after spikes run; Normal mode only
+7. 行动原则 (Principles) — selected from `references/principles-library.md`
+8. 行动计划 (Action Plan) — file structure + task steps
 
 The document MUST contain a table of contents so agents can navigate directly to any section without scanning the full file.
+
+**Hard rule on risks**: Section 4 must list every assumption the design bets on. Section 5/6 must be present (Normal) and resolved before the document moves to spec review. Fast mode skips 5/6 only when zero 🔴 risks exist.
 
 ## 行动计划撰写约束
 

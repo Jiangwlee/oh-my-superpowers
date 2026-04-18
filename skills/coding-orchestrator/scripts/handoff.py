@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 
@@ -120,7 +120,7 @@ def build_handoff(story_name: str, story_dir: Path) -> str:
         Markdown content for the handoff file.
     """
     tasks = scan_tasks(story_dir / "tasks")
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
 
     lines: list[str] = [
         f"# Handoff: {story_name}",

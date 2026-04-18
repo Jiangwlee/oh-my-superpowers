@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 
@@ -108,7 +108,7 @@ def build_recovery_context(story_name: str, handoff_content: str) -> str:
     Returns:
         Markdown content for the recovery file.
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
     tasks = parse_handoff_table(handoff_content)
 
     total = len(tasks)

@@ -32,9 +32,10 @@ Create a task for each step and complete them in order:
   Load on demand, never all at once:
 
   references/ (orchestrator reads):
-    - references/constitution.md          全局编码准则（全员必读，Karpathy 四原则）
-    - references/commands.md              tmux dispatch 命令（走 tmux 路线时加载）
-    - references/handoff-guideline.md     Handoff 格式 + 恢复流程
+    - references/constitution.md             全局编码准则（全员必读，Karpathy 四原则）
+    - references/task-decomposition-rules.md 任务拆分铁律（Test Layer Match / Cross-Layer Wiring / Fix Batching / etc.）
+    - references/commands.md                 tmux dispatch 命令（走 tmux 路线时加载）
+    - references/handoff-guideline.md        Handoff 格式 + 恢复流程
 
   worker-refs/ (worker reads, orchestrator only传路径):
     - worker-refs/worker-guideline.md     Worker 行为协议
@@ -52,6 +53,8 @@ Understand the user's intent. Copy `templates/story.md` to `./stories/<story-nam
 
 ## Task Breakdown
 
+**Before writing any task spec, read `references/task-decomposition-rules.md`.** It encodes hard rules for test-layer match, cross-layer API wiring, surgical-fix batching, and verification-task folding — all derived from real story post-mortems where ignoring them cost 5-10 extra fix-loop tasks.
+
 Read `templates/task.md`, then for each task:
 
 1. Define a clear, independently verifiable objective
@@ -59,9 +62,12 @@ Read `templates/task.md`, then for each task:
 3. List `File Scope` — only these files may be modified
 4. Write `Deviation Rules` — what the sub agent can auto-fix vs must ask about
 5. Write `Must-Haves` — goal-backward acceptance (truths + artifacts + key_links)
-6. Save as `./stories/<story-name>/tasks/task-NN.md`
+6. Set `test_layer:` in frontmatter — the lowest layer that can falsify acceptance (per Rule 1)
+7. Save as `./stories/<story-name>/tasks/task-NN.md`
 
-**Sizing rule**: one task = one vertical slice. If a task touches more than 5 files, split it.
+**Sizing rule**: one task = one vertical slice. If a task touches more than 5 files, split it — but split **vertically** (two smaller features), not **horizontally** (all stores, then all components). See Rule 5 in `references/task-decomposition-rules.md`.
+
+**Self-check before dispatching**: run the checklist at the bottom of `references/task-decomposition-rules.md` against your task list. Revise before dispatching if any answer is "no".
 
 ## Execute
 
