@@ -37,6 +37,7 @@ CLI            ← omp 命令（安装/卸载/测试）
 ```
 skills/                   # Skill 单元（每个独立）
 ├── markdown-to-anything/ # Markdown 转 PDF/PNG 等格式
+├── llm-wiki/             # Karpathy 风格 markdown wiki：omp wiki 能力层 + SOP skill
 ├── round-table/          # 多 AI runtime 圆桌讨论（claude/codex/pi 并行）
 ├── team/                 # 通用 tmux agent 编排（one-shot 驱动 claude/codex/pi）
 └── <skill-name>/

@@ -26,6 +26,7 @@ It provides the meta-skills, specs, and CLI tooling needed to design, build, rev
 ```
 skills/                       # Skill units (each independent)
 ├── brainstorming/            # Universal design workflow (with Skill/Agent pre-checks)
+├── llm-wiki/                 # Karpathy-style markdown wiki SOP + omp wiki scripts
 ├── skill-review/             # Skill quality audit tool
 └── markdown-to-anything/     # Convert Markdown to PDF/PNG
 
@@ -81,6 +82,7 @@ omp list --global  # global
 | Skill | Pattern | Purpose |
 |-------|---------|---------|
 | `brainstorming` | Inversion + Pipeline | Universal design workflow (with Skill/Agent pre-checks, pattern selection, identity audit) |
+| `llm-wiki` | Pipeline + Tool Wrapper | Karpathy-style markdown wiki workflow on top of `omp wiki` |
 | `skill-review` | Reviewer + Pipeline | Quality audit for Skill directories |
 | `markdown-to-anything` | Pipeline | Convert Markdown to PDF, PNG, and other formats |
 
