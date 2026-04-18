@@ -26,6 +26,7 @@ oh-my-superpowers 聚焦两件事：
 ```
 skills/                       # Skill 单元（各自独立）
 ├── brainstorming/            # 通用设计工作流（含 Skill/Agent 设计前置检验）
+├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki 数据层 + 合成 SOP
 ├── skill-review/             # Skill 质量审查工具
 └── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
 
@@ -81,6 +82,7 @@ omp list --global  # 全局
 | Skill | 模式 | 用途 |
 |-------|------|------|
 | `brainstorming` | Inversion + Pipeline | 通用设计工作流（含 Skill/Agent 前置检验、模式选择、身份审问） |
+| `llm-wiki` | Pipeline + Tool Wrapper | 基于 `omp wiki` 的 Karpathy 风格 markdown wiki 工作流 |
 | `skill-review` | Reviewer + Pipeline | Skill 目录质量审查 |
 | `markdown-to-anything` | Pipeline | Markdown 转 PDF、PNG 等格式 |
 
