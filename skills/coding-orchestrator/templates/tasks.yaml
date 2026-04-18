@@ -1,0 +1,24 @@
+# Single source of truth for task state.
+# - Add / remove / reorder tasks: edit this file directly.
+# - Flip status / attach commit / set worker: use `omp coding-orchestrator task update ...`
+#   (atomic, auto-maintains started / completed / story-level `updated`).
+
+story: <story-slug>          # matches directory suffix: stories/<YYYY-MM-DD>-<story-slug>/
+created: <YYYY-MM-DD>
+updated: <YYYY-MM-DD>        # story-level activity stamp; archive.py uses this
+
+tasks:
+  - id: "01"
+    title: <action-oriented task title>
+    status: pending          # pending | executing | reviewing | testing | completed | blocked
+    wave: 1                  # same wave = parallelizable; higher wave depends on lower
+    depends_on: []           # list of task ids, e.g. ["01"]
+    spec: tasks/task-01.md   # worker prompt file (narrative only, no frontmatter)
+    files_modified: []       # files this task will touch (conflict detection)
+    test_layer: integration  # unit | hook | component | integration | e2e
+    worker: ""               # filled on dispatch
+    reviewer: ""             # filled on review
+    started: null            # ISO 8601, auto-set when status first becomes executing
+    completed: null          # ISO 8601, auto-set when status becomes completed
+    commits: []              # hashes appended via --commit
+    notes: ""                # free-form note (--note overwrites)

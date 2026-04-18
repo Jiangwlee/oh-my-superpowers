@@ -19,8 +19,10 @@ to survive it without losing progress:
 
 Triggered automatically before Claude compresses context.
 
-**What it does**: `scripts/handoff.py` scans `./stories/` and writes a
-`handoff.md` file for each active story containing:
+**What it runs**: `omp coding-orchestrator handoff --auto --story-dir ./stories`
+(dispatches to `scripts/handoff.py`). It scans every active story directory,
+reads each `tasks.yaml` (single source of truth for status), and writes a
+`handoff.md` per story containing:
 
 - Current story progress (which tasks are done, in progress, pending)
 - Active task details (what sub agent is working on, current status)
@@ -30,17 +32,18 @@ Triggered automatically before Claude compresses context.
 
 Triggered automatically after context compression completes.
 
-**What it does**: `scripts/restore.py` reads the latest `handoff.md` and
-writes a consolidated recovery file to `./stories/.handoff-context`.
+**What it runs**: `omp coding-orchestrator restore --story-dir ./stories`
+(dispatches to `scripts/restore.py`). It reads the freshest `handoff.md`
+and writes a consolidated recovery file to `<PROJECT_ROOT>/stories/.handoff-context`.
 
 **Important**: PostCompact stdout does NOT inject into Claude's context.
-The orchestrator must **actively read** `./stories/.handoff-context` to recover.
+The orchestrator must **actively read** `<PROJECT_ROOT>/stories/.handoff-context` to recover.
 
 ### Recovery Protocol
 
 After compaction, the orchestrator should:
 
-1. Read `./stories/.handoff-context`
+1. Read `<PROJECT_ROOT>/stories/.handoff-context`
 2. Understand current story progress
 3. Resume from where the last task left off
 4. Do NOT re-dispatch completed tasks
@@ -63,13 +66,13 @@ already being compressed.
 The orchestrator writes the handoff file directly:
 
 ```
-./stories/<story-name>/handoff.md
+<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/handoff.md
 ```
 
 ### Handoff File Format
 
 ```markdown
-# Handoff: <story-name>
+# Handoff: <YYYY-MM-DD>-<slug>
 
 **Timestamp**: <ISO 8601>
 **Context usage**: <approximate %>
@@ -110,15 +113,15 @@ in auth handler). Issue #2 is false positive (existing pattern, not a bug).
 
 ## .handoff-context File Format
 
-The consolidated recovery file at `./stories/.handoff-context` is a simplified
+The consolidated recovery file at `<PROJECT_ROOT>/stories/.handoff-context` is a simplified
 version meant for quick orientation after compaction:
 
 ```markdown
 # Coding Orchestrator — Recovery Context
 
-**Story**: <story-name>
+**Story**: <YYYY-MM-DD>-<slug>
 **Last updated**: <ISO 8601>
-**Source**: ./stories/<story-name>/handoff.md
+**Source**: <PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/handoff.md
 
 ## Quick Status
 

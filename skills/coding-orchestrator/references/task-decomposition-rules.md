@@ -40,7 +40,7 @@ The rules below close each.
 
 ### How to enforce
 
-When writing a task spec, read the **acceptance criteria first**, then ask: "what's the lowest test layer that can falsify this criterion?" That is the required first-red-test layer. Write it into `test_layer:` frontmatter (see `templates/task.md`).
+When writing a task spec, read the **acceptance criteria first**, then ask: "what's the lowest test layer that can falsify this criterion?" That is the required first-red-test layer. Set it as the `test_layer` field of the task's entry in `tasks.yaml` (see `templates/tasks.yaml`).
 
 ---
 

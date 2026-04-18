@@ -118,7 +118,7 @@ After completing a task:
 - <key change 2>
 ```
 
-Types: `feat`, `fix`, `test`, `refactor`, `chore`
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`
 
 ## Completion Report
 

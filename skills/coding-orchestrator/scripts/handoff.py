@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
+# dependencies = ["pyyaml"]
 # ///
 """PreCompact hook: extract story state into handoff.md.
 
-Scans the story directory for active stories, reads task spec frontmatter
-to determine progress, and writes a handoff.md file for each active story.
+Scans the story directory for active stories, reads ``tasks.yaml`` to
+determine progress, and writes a handoff.md file for each active story.
 
 Usage:
     uv run scripts/handoff.py --auto --story-dir ./stories
@@ -14,86 +15,48 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
 
-def parse_task_frontmatter(content: str) -> dict[str, str]:
-    """Extract frontmatter fields from a task spec file.
+def scan_tasks(story_dir: Path) -> list[dict[str, object]]:
+    """Read tasks.yaml for a story and return task metadata.
 
     Args:
-        content: Full text content of the task spec.
+        story_dir: Path to the story directory.
 
     Returns:
-        Dict of frontmatter key-value pairs. Empty dict if no frontmatter.
+        Ordered list of task dicts (id, title, status, depends_on).
+        Empty list if tasks.yaml is missing or malformed.
     """
-    if not content.startswith("---"):
-        return {}
-    end = content.find("\n---", 3)
-    if end == -1:
-        return {}
+    import yaml  # lazy — keep --help fast when pyyaml missing
 
-    data: dict[str, str] = {}
-    for line in content[3:end].splitlines():
-        if ":" not in line:
+    tasks_file = story_dir / "tasks.yaml"
+    if not tasks_file.is_file():
+        return []
+
+    try:
+        data = yaml.safe_load(tasks_file.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as e:
+        print(f"[handoff] malformed {tasks_file}: {e}", file=sys.stderr)
+        return []
+
+    raw_tasks = data.get("tasks") or []
+    tasks: list[dict[str, object]] = []
+    for t in raw_tasks:
+        if not isinstance(t, dict):
             continue
-        key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-        # Handle YAML lists like depends_on: ["01", "03"]
-        data[key] = value.strip('"').strip("'")
-    return data
-
-
-def extract_task_title(content: str) -> str:
-    """Extract the first H1 heading from a task spec.
-
-    Args:
-        content: Full text content of the task spec.
-
-    Returns:
-        The heading text, or "untitled" if not found.
-    """
-    for line in content.splitlines():
-        m = re.match(r"^#\s+(?:Task:\s*)?(.+)", line)
-        if m:
-            return m.group(1).strip()
-    return "untitled"
-
-
-def scan_tasks(tasks_dir: Path) -> list[dict[str, str]]:
-    """Scan task spec files and return their metadata.
-
-    Args:
-        tasks_dir: Path to the tasks/ directory.
-
-    Returns:
-        Sorted list of task dicts with keys: id, title, status, notes.
-    """
-    tasks: list[dict[str, str]] = []
-    if not tasks_dir.is_dir():
-        return tasks
-
-    for task_file in sorted(tasks_dir.glob("task-*.md")):
-        content = task_file.read_text(encoding="utf-8")
-        fm = parse_task_frontmatter(content)
-        task_id = fm.get("task", task_file.stem.replace("task-", ""))
-        status = fm.get("status", "pending")
-        title = extract_task_title(content)
-        depends = fm.get("depends_on", "[]")
         tasks.append({
-            "id": task_id,
-            "title": title,
-            "status": status,
-            "depends_on": depends,
+            "id": str(t.get("id", "")).strip(),
+            "title": str(t.get("title", "untitled")).strip(),
+            "status": str(t.get("status", "pending")).strip(),
+            "depends_on": t.get("depends_on", []) or [],
         })
-
     return tasks
 
 
-def find_active_task(tasks: list[dict[str, str]]) -> dict[str, str] | None:
+def find_active_task(tasks: list[dict[str, object]]) -> dict[str, object] | None:
     """Find the first task with non-terminal status.
 
     Args:
@@ -119,7 +82,7 @@ def build_handoff(story_name: str, story_dir: Path) -> str:
     Returns:
         Markdown content for the handoff file.
     """
-    tasks = scan_tasks(story_dir / "tasks")
+    tasks = scan_tasks(story_dir)
     now = datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
 
     lines: list[str] = [
@@ -194,7 +157,7 @@ def find_active_stories(story_dir: Path) -> list[Path]:
     for child in sorted(story_dir.iterdir()):
         if not child.is_dir() or child.name.startswith("."):
             continue
-        tasks = scan_tasks(child / "tasks")
+        tasks = scan_tasks(child)
         if any(t["status"] != "completed" for t in tasks):
             active.append(child)
     return active

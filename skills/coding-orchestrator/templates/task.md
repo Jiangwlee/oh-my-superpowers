@@ -1,25 +1,15 @@
 # Task Spec Template
 
-Orchestrator reads this file when breaking down a story into tasks.
-Copy and fill for each task. Save as `./stories/<story-name>/tasks/task-NN.md`.
+Worker-prompt template. This file is **narrative only** — state lives in `tasks.yaml`.
+Copy and fill for each task. Save as `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/tasks/task-NN.md`.
+
+Structured fields (`status`, `wave`, `depends_on`, `files_modified`, `test_layer`,
+`worker`, `reviewer`, `commits`, timestamps) are managed in `tasks.yaml` via
+`omp coding-orchestrator task update`. Do NOT duplicate them here.
 
 ---
 
 ```markdown
----
-task: NN
-story: <story-name>
-status: pending          # pending | executing | reviewing | testing | completed | blocked
-wave: N                  # Orchestrator assigns: tasks with same wave can run in parallel
-depends_on: []           # Task IDs this task requires (e.g., ["01", "03"])
-files_modified: []       # Files this task will modify (for conflict detection)
-test_layer: integration  # unit | hook | component | integration | e2e
-                         # MUST match the highest layer the acceptance criteria touch.
-                         # See references/task-decomposition-rules.md Rule 1.
-                         # Lower-layer tests may be added as supplemental, but the
-                         # acceptance-matching layer is the FIRST red test.
----
-
 # Task: <action-oriented name>
 
 ## Context
@@ -27,7 +17,7 @@ test_layer: integration  # unit | hook | component | integration | e2e
 <!-- WHY this task exists. Link to story and design docs. -->
 <!-- Keep it short — sub agent reads the linked docs for detail. -->
 
-Story: `./stories/<story-name>/story.md`
+Story: `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story.md`
 Design: `<link to brainstorming design doc if applicable>`
 
 <one paragraph explaining the motivation>
@@ -153,24 +143,15 @@ When stuck:
 ## Test Plan
 
 <!-- What to test and how. Sub agent executes these.
-     The FIRST red test must be at the layer declared in `test_layer:` frontmatter.
-     If acceptance describes user-observable behavior across navigation/mount/async,
-     the first test is integration (real Provider tree, mocked router only) — NOT
-     a hook unit test that will pass while the feature breaks in browser.
-     See references/task-decomposition-rules.md Rule 1. -->
+     The FIRST red test must be at the layer declared in this task's `test_layer`
+     field in tasks.yaml. If acceptance describes user-observable behavior across
+     navigation/mount/async, the first test is integration (real Provider tree,
+     mocked router only) — NOT a hook unit test that will pass while the feature
+     breaks in browser. See references/task-decomposition-rules.md Rule 1. -->
 
 - [ ] <first red test at acceptance layer> — verifies <observable behavior>
 - [ ] <supplemental lower-layer tests if useful> — verifies <internal contract>
 - [ ] <E2E / browser verification — owned by THIS task, not a separate one> — see Rule 4
-
-## Progress
-
-<!-- Updated by orchestrator as pipeline advances. -->
-
-- [ ] Execute — worker assigned: <runtime/agent-id or pending>
-- [ ] Review — reviewer: <runtime or pending>
-- [ ] Test — result: <pass/fail or pending>
-- [ ] Acceptance — verified: <date or pending>
 ```
 
 ---
@@ -181,7 +162,7 @@ When stuck:
 
 **Cross-layer wiring**: if a task adds a shared API (store action, hook return, context value), the SAME task must wire its first consumer + ship an integration test. Splitting "add API" from "use API" produces orphaned APIs — see Rule 2.
 
-**Test layer**: the `test_layer:` frontmatter field declares the layer for the first red test. It MUST match the highest layer the acceptance criteria touch — see Rule 1.
+**Test layer**: the `test_layer` field in `tasks.yaml` declares the layer for the first red test. It MUST match the highest layer the acceptance criteria touch — see Rule 1.
 
 **Fix batching**: surgical fix tasks (≤30 lines each, ≤3 fixes, sharing a single verification cycle) MAY be combined into one fix-batch task instead of running full ceremony per fix. See Rule 3.
 

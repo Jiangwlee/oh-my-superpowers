@@ -1,5 +1,11 @@
 # Story: <story-name>
 
+<!--
+Directory naming: stories/<YYYY-MM-DD>-<slug>/
+Task breakdown lives in tasks.yaml (single source of truth for state).
+This file is narrative only — goal, context, scope.
+-->
+
 ## Goal
 
 <!-- What the user wants to achieve (not how). One paragraph. -->
@@ -22,8 +28,4 @@
 
 ## Tasks
 
-<!-- Filled during task breakdown. One row per task. -->
-
-| Task | Name | Status | Spec |
-|------|------|--------|------|
-| 01 | <name> | pending | `tasks/task-01.md` |
+See `tasks.yaml` in this directory for the task list, status, and dependencies.

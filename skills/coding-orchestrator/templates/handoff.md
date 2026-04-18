@@ -1,4 +1,4 @@
-# Handoff: <story-name>
+# Handoff: <YYYY-MM-DD>-<slug>
 
 **Timestamp**: <ISO 8601>
 **Context usage**: <approximate %>

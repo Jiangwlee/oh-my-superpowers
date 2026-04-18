@@ -42,28 +42,41 @@ Create a task for each step and complete them in order:
     - worker-refs/debugging-guideline.md  日志驱动调试方法论
 
   templates/ (orchestrator复制填充):
-    - templates/task.md                   Task Spec 模板
-    - templates/story.md                  Story 模板
+    - templates/story.md                  Story 模板（叙事，纯 markdown）
+    - templates/tasks.yaml                任务状态模板（单一事实来源）
+    - templates/task.md                   Task Spec 模板（worker prompt，不含 frontmatter）
     - templates/handoff.md                Handoff 文件模板
 -->
 
 ## Story Intake
 
-Understand the user's intent. Copy `templates/story.md` to `./stories/<story-name>/story.md` and fill it in.
+1. **Archive first** (keeps active `stories/` uncluttered):
+   `omp coding-orchestrator archive --story-dir <PROJECT_ROOT>/stories`
+   Moves any story whose `tasks.yaml:updated` is older than 1 day (and any
+   legacy dir missing the `YYYY-MM-DD-` prefix) into `stories/archives/`.
+2. **Name the directory** `<YYYY-MM-DD>-<slug>` — the date prefix is required
+   by the archive rule and lets the orchestrator see chronology at a glance.
+3. Copy `templates/story.md` to `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story.md` and fill it in.
 
 ## Task Breakdown
 
 **Before writing any task spec, read `references/task-decomposition-rules.md`.** It encodes hard rules for test-layer match, cross-layer API wiring, surgical-fix batching, and verification-task folding — all derived from real story post-mortems where ignoring them cost 5-10 extra fix-loop tasks.
 
-Read `templates/task.md`, then for each task:
+First write `tasks.yaml` (state), then one `task-NN.md` (worker prompt) per task.
 
-1. Define a clear, independently verifiable objective
-2. List `Read First` files the sub agent must read before modifying anything
-3. List `File Scope` — only these files may be modified
-4. Write `Deviation Rules` — what the sub agent can auto-fix vs must ask about
-5. Write `Must-Haves` — goal-backward acceptance (truths + artifacts + key_links)
-6. Set `test_layer:` in frontmatter — the lowest layer that can falsify acceptance (per Rule 1)
-7. Save as `./stories/<story-name>/tasks/task-NN.md`
+1. Copy `templates/tasks.yaml` to `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/tasks.yaml`.
+   Set `story`, `created`, `updated`, and one entry per task: `id`, `title`,
+   `wave`, `depends_on`, `spec`, `files_modified`, `test_layer`.
+   `test_layer` = the lowest layer that can falsify acceptance (per Rule 1).
+2. For each task, copy `templates/task.md` to `tasks/task-NN.md` and fill:
+   - `Objective`, `Read First`, `File Scope`
+   - `Deviation Rules` — what the sub agent can auto-fix vs must ask about
+   - `Must-Haves` — goal-backward acceptance (truths + artifacts + key_links)
+   - `Test Plan` — first red test at the `test_layer` declared in tasks.yaml
+
+**Freedom note**: appending, reordering, or removing tasks is a direct
+`tasks.yaml` edit. The `omp coding-orchestrator task` command is only for
+the high-frequency fields (status / worker / reviewer / commit / note).
 
 **Sizing rule**: one task = one vertical slice. If a task touches more than 5 files, split it — but split **vertically** (two smaller features), not **horizontally** (all stores, then all components). See Rule 5 in `references/task-decomposition-rules.md`.
 
@@ -87,7 +100,7 @@ Before dispatching, determine your dispatch route:
 ### Prompt Preparation (both routes)
 
 Write a prompt file at `/tmp/orchestrator-task-<NN>.md` containing:
-1. Path to the task spec file: `./stories/<story-name>/tasks/task-NN.md`
+1. Path to the task spec file: `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/tasks/task-NN.md`
 2. One sentence: "Read the spec, then read every file in its Worker Refs and Read First sections, then execute."
 
 The task spec's **Worker Refs** section lists all behavioral docs (constitution, worker-guideline, etc.) the worker must read.
@@ -116,14 +129,19 @@ Read `references/commands.md` for exact commands. Key steps:
 
 After each task's code is written:
 
-1. Dispatch a reviewer (different from the coder when possible):
+1. Flip status to `reviewing` **before** dispatching the reviewer:
+   `omp coding-orchestrator task update --story <slug> --id NN --status reviewing --reviewer <id>`
+2. Dispatch a reviewer (different from the coder when possible):
    - Write review prompt to `/tmp/orchestrator-review-<NN>.md` (include: task spec path, changed files, diff)
    - Use the same route decision as Execute: sub-agent or tmux
    - Recommended: use a reasoning-focused runtime for review (e.g., Claude for review, Codex for coding)
-2. Orchestrator reads the review result and applies **second judgment**:
-   - Confirmed issue → orchestrator fixes directly (small fix) or dispatches worker (large fix)
-   - False positive → ignore, note in task progress
-3. Update task progress
+3. Orchestrator reads the review result and applies **second judgment**:
+   - Confirmed issue → orchestrator fixes directly (small fix) or dispatches worker (large fix);
+     flip back to `executing` while the fix is in flight
+   - False positive → ignore, add `--note "..."` explaining why
+4. When the review is resolved, advance to the Test phase:
+   `omp coding-orchestrator task update --story <slug> --id NN --status testing`
+   (append `--commit <hash>` for any fix commit produced during review)
 
 ## Test & Debug
 
@@ -151,9 +169,11 @@ For each completed task:
 2. Verify each `truth` — is the behavior observable?
 3. Verify each `artifact` — does the file exist with expected content?
 4. Verify each `key_link` — does the regex pattern match?
-5. All pass → mark task complete in `story.md`
+5. All pass →
+   `omp coding-orchestrator task update --story <slug> --id NN --status completed`
+   (appends commit hash with `--commit <hash>` when relevant)
 
-When all tasks pass → story complete.
+When all tasks in `tasks.yaml` show `status: completed` → story complete.
 
 ## Compaction Recovery
 
@@ -188,11 +208,14 @@ Record the resolved `<PROJECT_ROOT>` in the first task you create and reuse it f
 ```
 <PROJECT_ROOT>/stories/             # MUST be in project's .gitignore
 ├── .handoff-context                # PostCompact recovery file
-└── <story-name>/
-    ├── story.md                    # story overview + global progress
+├── archives/                       # auto-populated by `omp coding-orchestrator archive`
+│   └── <YYYY-MM-DD>-<slug>/        # aged or legacy stories land here
+└── <YYYY-MM-DD>-<slug>/            # active story (date prefix required)
+    ├── story.md                    # story narrative (goal, context, scope)
+    ├── tasks.yaml                  # single source of truth for task state
     ├── handoff.md                  # handoff state (auto/manual)
     └── tasks/
-        ├── task-01.md              # task spec (with progress)
+        ├── task-01.md              # worker prompt only (no frontmatter)
         ├── task-02.md
         └── ...
 ```

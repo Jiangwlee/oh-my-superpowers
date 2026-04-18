@@ -35,9 +35,10 @@ REQUIRED_WORKER_REFS = [
 REQUIRED_TEMPLATES = [
     "task.md",
     "story.md",
+    "tasks.yaml",
     "handoff.md",
 ]
-REQUIRED_SCRIPTS = ["handoff.py", "restore.py"]
+REQUIRED_SCRIPTS = ["handoff.py", "restore.py", "task.py", "archive.py"]
 FORBIDDEN_PATTERNS = [
     "bash scripts/",
     "python scripts/",
@@ -216,6 +217,12 @@ class TestScriptSyntax(unittest.TestCase):
     def test_restore_syntax(self) -> None:
         self._check_syntax("restore.py")
 
+    def test_task_syntax(self) -> None:
+        self._check_syntax("task.py")
+
+    def test_archive_syntax(self) -> None:
+        self._check_syntax("archive.py")
+
 
 class TestScriptHelp(unittest.TestCase):
     """脚本 --help 支持验证。"""
@@ -238,6 +245,12 @@ class TestScriptHelp(unittest.TestCase):
 
     def test_restore_help(self) -> None:
         self._check_help("restore.py")
+
+    def test_task_help(self) -> None:
+        self._check_help("task.py")
+
+    def test_archive_help(self) -> None:
+        self._check_help("archive.py")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/coding-orchestrator/scripts/handoff.py --auto --story-dir ./stories",
+            "command": "${OMP_HOME:-$HOME/.oh-my-superpowers}/bin/omp coding-orchestrator handoff --auto --story-dir ./stories",
             "timeout": 10000
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run ${OMP_HOME:-$HOME/.oh-my-superpowers}/skills/coding-orchestrator/scripts/restore.py --story-dir ./stories",
+            "command": "${OMP_HOME:-$HOME/.oh-my-superpowers}/bin/omp coding-orchestrator restore --story-dir ./stories",
             "timeout": 5000
           }
         ]
