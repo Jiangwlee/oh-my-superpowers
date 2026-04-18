@@ -96,6 +96,32 @@ class TestWikiNavAndLint(unittest.TestCase):
                 ["alpha-note.md", "beta-note.md"],
             )
 
+    def test_lint_accepts_raw_links_from_sources(self) -> None:
+        """Links like `../../raw/foo.md` from wiki/sources/ must be valid when the raw file exists."""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wiki_home = Path(tmpdir) / "wiki-home"
+            init_result = run_omp("wiki", "init", env={"WIKI_HOME": str(wiki_home)})
+            self.assertEqual(init_result.returncode, 0, init_result.stderr)
+
+            (wiki_home / "raw" / "alpha-note.md").write_text("# Alpha\n", encoding="utf-8")
+            (wiki_home / "wiki" / "sources" / "alpha-note.md").write_text(
+                "# Alpha\n\n[[../../raw/alpha-note.md]]\n",
+                encoding="utf-8",
+            )
+            (wiki_home / "wiki" / "sources" / "missing.md").write_text(
+                "# Missing\n\n[[../../raw/does-not-exist.md]]\n",
+                encoding="utf-8",
+            )
+
+            result = run_omp("wiki", "lint", "--json", env={"WIKI_HOME": str(wiki_home)})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+
+            messages = [issue["message"] for issue in payload["issues"]]
+            self.assertNotIn("missing raw target: ../../raw/alpha-note.md", messages)
+            self.assertIn("missing raw target: ../../raw/does-not-exist.md", messages)
+
     def test_nav_pending_synthesis_respects_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             wiki_home = Path(tmpdir) / "wiki-home"

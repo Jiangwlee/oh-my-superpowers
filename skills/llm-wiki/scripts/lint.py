@@ -7,10 +7,11 @@ import json
 import re
 from pathlib import Path
 
-from common import list_markdown_files, resolve_wiki_home, wiki_dir
+from common import list_markdown_files, raw_dir, resolve_wiki_home, wiki_dir
 
 
 WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
+RAW_LINK_RE = re.compile(r"^(?:\.\./)+raw/(.+)$")
 
 
 def known_pages(compiled_root: Path) -> set[str]:
@@ -26,6 +27,8 @@ def known_pages(compiled_root: Path) -> set[str]:
 def collect_issues(compiled_root: Path) -> list[dict[str, str]]:
     """Collect structural issues from compiled wiki pages."""
 
+    wiki_home = compiled_root.parent
+    raw_root = raw_dir(wiki_home)
     issues: list[dict[str, str]] = []
     index_text = (compiled_root / "index.md").read_text(encoding="utf-8")
     if "# Knowledge Base Index" not in index_text:
@@ -52,7 +55,17 @@ def collect_issues(compiled_root: Path) -> list[dict[str, str]]:
         content = page.read_text(encoding="utf-8")
         for target in WIKILINK_RE.findall(content):
             raw_target = target.strip()
-            if raw_target.startswith("../raw/"):
+            raw_match = RAW_LINK_RE.match(raw_target)
+            if raw_match:
+                raw_file = raw_root / raw_match.group(1)
+                if not raw_file.is_file():
+                    issues.append(
+                        {
+                            "kind": "broken_wikilink",
+                            "path": str(page.relative_to(compiled_root)),
+                            "message": f"missing raw target: {target}",
+                        }
+                    )
                 continue
             normalized = raw_target.lstrip("./").removesuffix(".md")
             if normalized not in available:

@@ -20,7 +20,8 @@ It surfaces issues such as:
 - missing index sections;
 - obvious structural drift.
 
-Wikilinks pointing to `../raw/<file>.md` are considered always valid as long as the
-raw file exists — lint does not consider them broken even though they sit outside `wiki/`.
+Wikilinks pointing into `raw/` (any depth of `../`, e.g. `../raw/foo.md` or
+`../../raw/foo.md`) are treated as valid when the raw file exists. Lint reports
+them as `missing raw target: …` only when the referenced raw file is gone.
 
 Do not claim the wiki is healthy if lint reports unresolved issues.
