@@ -54,9 +54,10 @@ Synthesis and page reading are **not** CLI commands. The caller agent does them 
 
 ## When To Load References
 
-- CLI details: `references/cli.md`
-- End-to-end workflow: `references/workflow.md`
-- Compile SOP (synthesis playbook): `references/compile.md`
-- Page templates: `references/source-template.md`, `references/concept-template.md`, `references/map-template.md`
-- Linting rules: `references/linting.md`
-- Archive guidance: `references/archive.md`
+- Load `references/cli.md` when you need flags or argument shapes beyond `--help`.
+- Load `references/workflow.md` at the start of a fresh wiki session or when query discipline is unclear.
+- Load `references/compile.md` + `references/source-template.md` when `pending_synthesis` is non-empty.
+- Load `references/concept-template.md` when creating a cross-source concept page.
+- Load `references/map-template.md` when creating a reading-path map.
+- Load `references/linting.md` when `omp wiki lint` output is unclear or you need to resolve a reported issue.
+- Load `references/archive.md` when deciding whether to persist an output back into the wiki.

@@ -13,4 +13,4 @@ Karpathy's pattern treats valuable outputs as cumulative knowledge.
 
 If an output should help a future query, it belongs in the wiki workflow rather than only in chat history.
 
-V1 does not yet require a dedicated `omp wiki archive` command. Until that exists, treat archive as a follow-up workflow item.
+There is no dedicated `omp wiki archive` command. Archive by writing the page under `wiki/outputs/` and linking it from `wiki/index.md`.
