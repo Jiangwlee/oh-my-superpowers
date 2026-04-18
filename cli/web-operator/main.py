@@ -41,7 +41,11 @@ app = typer.Typer(
 
 @app.command(
     "page",
-    context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+    context_settings={
+        "allow_extra_args": True,
+        "allow_interspersed_args": False,
+        "ignore_unknown_options": True,
+    },
 )
 def page(ctx: typer.Context) -> None:
     """Interact with browser pages via CDP (list, nav, eval, snap, shot, html, click, scroll, type, open, stop...).
@@ -89,7 +93,14 @@ def search(
     sys.exit(subprocess.call(cmd))
 
 
-@app.command("search-multi")
+@app.command(
+    "search-multi",
+    context_settings={
+        "allow_extra_args": True,
+        "allow_interspersed_args": False,
+        "ignore_unknown_options": True,
+    },
+)
 def search_multi(ctx: typer.Context) -> None:
     """Multi-platform parallel search.
 
@@ -391,7 +402,11 @@ def x_for_you(
 
 @app.command(
     "test",
-    context_settings={"allow_extra_args": True, "allow_interspersed_args": False},
+    context_settings={
+        "allow_extra_args": True,
+        "allow_interspersed_args": False,
+        "ignore_unknown_options": True,
+    },
 )
 def test(ctx: typer.Context) -> None:
     """Run web-operator tests (list, core, site <name>, all).
