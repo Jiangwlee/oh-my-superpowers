@@ -63,7 +63,7 @@ For significant changes (architecture changes, interface changes, directory rest
 ## Spec review loop (Normal mode only)
 
 After writing the document:
-1. Dispatch spec-document-reviewer subagent (see `spec-document-reviewer-prompt.md`)
+1. Dispatch spec-document-reviewer subagent (see `spec-document-reviewer-prompt.md` in this directory)
 2. Fix any blocking issues and re-dispatch
 3. If loop exceeds 3 iterations, surface to the user
 

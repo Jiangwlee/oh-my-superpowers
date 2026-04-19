@@ -25,7 +25,8 @@ oh-my-superpowers 聚焦两件事：
 
 ```
 skills/                       # Skill 单元（各自独立）
-├── brainstorming/            # 通用设计工作流（含 Skill/Agent 设计前置检验）
+├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
+├── coding-orchestrator/      # 消费 S3 产物的 spec 驱动子代理编排
 ├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki 数据层 + 合成 SOP
 ├── skill-review/             # Skill 质量审查工具
 └── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
@@ -41,7 +42,7 @@ docs/
 │   ├── 00_skills/            # Skills 规范、最佳实践、设计模式
 │   ├── 01_agents/            # Pi Agent 框架参考
 │   └── 02_framework/         # 架构设计、安装规范
-└── design/                   # 设计文档（brainstorming 输出）
+└── brainstorming/            # S3 设计文档（specs/）+ S1 讨论记录（discussions/）
 ```
 
 ## 快速开始
@@ -73,15 +74,18 @@ omp list --global  # 全局
 
 ```bash
 # 在 Claude Code 或 Pi 中触发对应工作流
-# "我需要设计一个 skill"   → brainstorming 激活（Skill Gate）
-# "我需要设计一个 agent"   → brainstorming 激活（Agent Gate）
+# "我需要设计一个 skill"    → 路由到 S2（skill-agent 场景）
+# "我需要设计一个 agent"    → 路由到 S2（skill-agent 场景）
+# "加功能 X" / "重构 Y"    → 路由到 S3（产物交接 coding-orchestrator）
+# "我们聊聊 / 探索一下 ..."  → 路由到 S1（开放讨论）
 ```
 
 ## 可用 Skills
 
 | Skill | 模式 | 用途 |
 |-------|------|------|
-| `brainstorming` | Inversion + Pipeline | 通用设计工作流（含 Skill/Agent 前置检验、模式选择、身份审问） |
+| `brainstorming` | Router + Pipeline | 场景路由（S1 开放讨论 / S2 skill-agent / S3 feature）；S3 产出 story 骨架交接 `coding-orchestrator` |
+| `coding-orchestrator` | Orchestrator + Sub-agent | Spec 驱动的子代理编排；消费 S3 产物，JIT 分波执行 |
 | `llm-wiki` | Pipeline + Tool Wrapper | 基于 `omp wiki` 的 Karpathy 风格 markdown wiki 工作流 |
 | `skill-review` | Reviewer + Pipeline | Skill 目录质量审查 |
 | `markdown-to-anything` | Pipeline | Markdown 转 PDF、PNG 等格式 |

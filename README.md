@@ -25,7 +25,8 @@ It provides the meta-skills, specs, and CLI tooling needed to design, build, rev
 
 ```
 skills/                       # Skill units (each independent)
-├── brainstorming/            # Universal design workflow (with Skill/Agent pre-checks)
+├── brainstorming/            # Scenario router: S1 open / S2 skill-agent / S3 feature
+├── coding-orchestrator/      # Spec-driven sub-agent orchestration for S3 handoffs
 ├── llm-wiki/                 # Karpathy-style markdown wiki SOP + omp wiki scripts
 ├── skill-review/             # Skill quality audit tool
 └── markdown-to-anything/     # Convert Markdown to PDF/PNG
@@ -41,7 +42,7 @@ docs/
 │   ├── 00_skills/            # Skills spec, best practices, patterns
 │   ├── 01_agents/            # Pi Agent framework reference
 │   └── 02_framework/         # Architecture, installation design
-└── design/                   # Design docs output from brainstorming
+└── brainstorming/            # S3 design docs (specs/) + S1 discussions
 ```
 
 ## Quick Start
@@ -73,15 +74,18 @@ omp list --global  # global
 
 ```bash
 # In Claude Code or Pi — triggers the brainstorming workflow
-# "I need to design a new skill"   → brainstorming activates (Skill Gate)
-# "I need to design a new agent"   → brainstorming activates (Agent Gate)
+# "I need to design a new skill"   → routes to S2 (skill-agent scenario)
+# "I need to design a new agent"   → routes to S2 (skill-agent scenario)
+# "Add feature X" / "Refactor Y"   → routes to S3 (hands off to coding-orchestrator)
+# "Let's discuss / explore ..."    → routes to S1 (open discussion)
 ```
 
 ## Available Skills
 
 | Skill | Pattern | Purpose |
 |-------|---------|---------|
-| `brainstorming` | Inversion + Pipeline | Universal design workflow (with Skill/Agent pre-checks, pattern selection, identity audit) |
+| `brainstorming` | Router + Pipeline | Scenario router (S1 open / S2 skill-agent / S3 feature); S3 outputs a story skeleton for `coding-orchestrator` |
+| `coding-orchestrator` | Orchestrator + Sub-agent | Spec-driven sub-agent orchestration; consumes S3 handoff, runs JIT wave-by-wave task execution |
 | `llm-wiki` | Pipeline + Tool Wrapper | Karpathy-style markdown wiki workflow on top of `omp wiki` |
 | `skill-review` | Reviewer + Pipeline | Quality audit for Skill directories |
 | `markdown-to-anything` | Pipeline | Convert Markdown to PDF, PNG, and other formats |

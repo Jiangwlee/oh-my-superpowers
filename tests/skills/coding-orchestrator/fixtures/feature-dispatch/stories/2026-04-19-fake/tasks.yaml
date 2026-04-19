@@ -1,0 +1,24 @@
+story: fake
+created: 2026-04-19
+updated: 2026-04-19
+
+tasks:
+  - id: "01"
+    title: seed the fake
+    status: pending
+    wave: 1
+    depends_on: []
+    spec: tasks/task-01.md
+    files_modified:
+      - src/fake/seed.py
+    test_layer: integration
+
+  - id: "02"
+    title: extend the fake
+    status: pending
+    wave: 2
+    depends_on: ["01"]
+    spec: null
+    files_modified:
+      - src/fake/extend.py
+    test_layer: component

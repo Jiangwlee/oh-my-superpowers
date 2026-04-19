@@ -68,6 +68,7 @@ Design: `<link to brainstorming design doc if applicable>`
 
 - `references/constitution.md` — coding principles (always include)
 - `worker-refs/worker-guideline.md` — worker behavioral protocol (always include)
+- `../story-memory.md` — this story's accumulated patterns / gotchas / known false positives (always include)
 - `worker-refs/debugging-guideline.md` — include only if task has complex test plan
 
 ## References

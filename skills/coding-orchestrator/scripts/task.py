@@ -94,6 +94,14 @@ def cmd_update(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
+        if args.status == "executing" and not target.get("spec"):
+            print(
+                f"[task] JIT spec missing for task {args.id}: "
+                f"cannot transition to executing while 'spec' is null/empty. "
+                f"Write tasks/task-{args.id}.md and set spec before dispatching.",
+                file=sys.stderr,
+            )
+            return 2
         prev = target.get("status")
         target["status"] = args.status
         if args.status == "executing" and not target.get("started"):

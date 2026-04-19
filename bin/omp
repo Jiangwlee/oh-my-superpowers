@@ -752,9 +752,9 @@ def test(
 ) -> None:
     """运行 skill T1 静态测试。"""
     _check_home()
-    tests_dir = SKILLS_SRC / name / "tests"
+    tests_dir = OMP_HOME / "tests" / "skills" / name
     if not tests_dir.is_dir():
-        console.print(f"[red][omp] ERROR:[/red] no tests/ directory found for skill '{name}'")
+        console.print(f"[red][omp] ERROR:[/red] no tests/skills/{name}/ directory found")
         raise typer.Exit(1)
     console.print(f"[omp] running T1 tests for skill '{name}'...")
     if shutil.which("pytest"):

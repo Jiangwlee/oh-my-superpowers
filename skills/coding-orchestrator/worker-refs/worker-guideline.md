@@ -139,6 +139,12 @@ When done, return this structure:
 
 ### Issues Found (out of scope)
 - <description> (not fixed — outside task scope)
+
+### Story-Memory Impact
+<!-- Did this task verify, refute, or add to ../story-memory.md? -->
+<!-- Orchestrator uses this to decide what to promote into the file. -->
+<!-- Write "none" if this task surfaced no cross-task learning. -->
+- <candidate pattern / gotcha / false-positive note, or "none">
 ```
 
 If blocked or escalated:

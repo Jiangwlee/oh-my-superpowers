@@ -44,7 +44,8 @@ skills/                   # Skill 单元（每个独立）
     ├── SKILL.md          # 元数据 + CLI 命令文档（不写相对路径）
     ├── scripts/          # 脚本（CLI 封装的实现，不直接被模型调用）
     ├── references/       # 给 Agent 读的参考文档
-    └── tests/            # T1 静态测试
+    └── assets/           # Generator / Inversion 模式的模板或骨架
+    # 注意：tests 不得放在 skill 目录下（会随 symlink 进 bundle）
 
 agents/                   # Pi Agent 定义（每个独立）
 ├── skill-review.md       # Skill 质量审查官
@@ -52,6 +53,9 @@ agents/                   # Pi Agent 定义（每个独立）
 
 cli/                      # 工具 CLI 模块（typer apps）
 └── <tool>/main.py        # 每个 skill 对应一个 CLI 模块
+
+tests/                    # 所有测试的统一根（skill 测试不放 skill 目录下）
+└── skills/<skill-name>/  # 对应 skill 的 T1 静态测试
 
 bin/
 └── omp                   # 项目 CLI（install/remove/list/test）
@@ -61,7 +65,9 @@ docs/
 │   ├── 00_skills/        # Skills 规范
 │   ├── 01_agents/        # Pi Agent 规范
 │   └── 02_framework/     # 本框架规范（架构、安装、标准、评分表）
-└── design/               # 设计文档（brainstorming 输出，YYYY-MM-DD-<name>-design.md）
+└── brainstorming/        # brainstorming 输出
+    ├── specs/            # S3 设计文档（YYYY-MM-DD-<slug>.md）
+    └── discussions/      # S1 开放讨论记录
 ```
 
 ---
@@ -306,6 +312,7 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 3. 禁止硬编码敏感信息
 4. 禁止直接修改 `~/.oh-my-superpowers/` 下的文件，只修改源码目录
 5. 禁止在未跑 `omp --help` / 未读 `cli/<tool>/main.py` 的情况下讨论 CLI 命令设计
+6. 禁止把测试放在 skill 目录下（`skills/<name>/tests/`、`test_*.py`、fixtures 等）——skill 通过 symlink 对下游暴露，测试属开发期产物，统一放 `tests/skills/<name>/`
 
 ---
 

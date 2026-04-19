@@ -21,8 +21,8 @@ implementation code, STOP — you are violating the orchestrator contract.
 
 Create a task for each step and complete them in order:
 
-1. **Story Intake** — understand the requirement, create `<PROJECT_ROOT>/stories/<name>/story.md`
-2. **Task Breakdown** — decompose into tasks, create spec per task; read `templates/task.md`
+1. **Story Intake** — if brainstorming S3 produced a skeleton (see §Story Intake below), validate it; otherwise create `<PROJECT_ROOT>/stories/<name>/story.md`
+2. **Task Breakdown** — decompose into tasks with JIT wave-by-wave spec writing; read `templates/task.md` and `references/task-decomposition-rules.md`
 3. **Execute** — dispatch sub agents for coding (worktree isolation for parallel)
 4. **Review** — dispatch sub agent for code review + orchestrator second judgment
 5. **Test & Debug** — on failure, sub agent reads `worker-refs/debugging-guideline.md`
@@ -36,6 +36,7 @@ Create a task for each step and complete them in order:
     - references/task-decomposition-rules.md 任务拆分铁律（Test Layer Match / Cross-Layer Wiring / Fix Batching / etc.）
     - references/commands.md                 tmux dispatch 命令（走 tmux 路线时加载）
     - references/handoff-guideline.md        Handoff 格式 + 恢复流程
+    - references/story-memory-guideline.md   story-memory.md 写入 / 提升规则（orchestrator-only write）
 
   worker-refs/ (worker reads, orchestrator only传路径):
     - worker-refs/worker-guideline.md     Worker 行为协议
@@ -50,6 +51,24 @@ Create a task for each step and complete them in order:
 
 ## Story Intake
 
+Two entry paths: **handoff from brainstorming S3** (default when the user came through the brainstorming skill) or **self-created** (hotfixes, or topics that skipped brainstorming).
+
+### Path A — handoff from brainstorming (default)
+
+When `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/` already exists with the four-artifact chain written by brainstorming S3 (see `skills/brainstorming/scenarios/feature.md`), **do not create — validate**:
+
+1. Assert the four artifacts exist: `story.md`, `tasks.yaml`, `story-memory.md`, `tasks/task-01.md`.
+2. Assert `story.md` has the `> Design: /docs/brainstorming/specs/<...>.md` backlink on its first non-title line.
+3. Run the task-decomposition self-check at the bottom of `references/task-decomposition-rules.md` against the incoming skeleton. Any "no" answer → return control to brainstorming with the specific failure, do not silently reshape the skeleton.
+4. Assert wave-1 tasks have non-null `spec` pointing to an existing `tasks/task-NN.md`; wave≥2 tasks have `spec: null` (JIT slots).
+5. Proceed to Task Breakdown § Wave 1.
+
+Orchestrator never modifies `story.md` or the design doc. If rationale needs revision, return to brainstorming.
+
+### Path B — self-created (fallback)
+
+When there is no brainstorming skeleton (hotfix, direct request):
+
 1. **Archive first** (keeps active `stories/` uncluttered):
    `omp coding-orchestrator archive --story-dir <PROJECT_ROOT>/stories`
    Moves any story whose `tasks.yaml:updated` is older than 1 day (and any
@@ -57,22 +76,34 @@ Create a task for each step and complete them in order:
 2. **Name the directory** `<YYYY-MM-DD>-<slug>` — the date prefix is required
    by the archive rule and lets the orchestrator see chronology at a glance.
 3. Copy `templates/story.md` to `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story.md` and fill it in.
+4. Create an empty `story-memory.md` placeholder (three section headers: Patterns / Gotchas / Known False Positives).
 
 ## Task Breakdown
 
 **Before writing any task spec, read `references/task-decomposition-rules.md`.** It encodes hard rules for test-layer match, cross-layer API wiring, surgical-fix batching, and verification-task folding — all derived from real story post-mortems where ignoring them cost 5-10 extra fix-loop tasks.
 
-First write `tasks.yaml` (state), then one `task-NN.md` (worker prompt) per task.
+### JIT wave-by-wave spec writing
 
-1. Copy `templates/tasks.yaml` to `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/tasks.yaml`.
-   Set `story`, `created`, `updated`, and one entry per task: `id`, `title`,
-   `wave`, `depends_on`, `spec`, `files_modified`, `test_layer`.
-   `test_layer` = the lowest layer that can falsify acceptance (per Rule 1).
-2. For each task, copy `templates/task.md` to `tasks/task-NN.md` and fill:
-   - `Objective`, `Read First`, `File Scope`
-   - `Deviation Rules` — what the sub agent can auto-fix vs must ask about
-   - `Must-Haves` — goal-backward acceptance (truths + artifacts + key_links)
-   - `Test Plan` — first red test at the `test_layer` declared in tasks.yaml
+Task specs are written **wave by wave**, not all at once. This lets each wave's specs reflect what prior waves actually learned.
+
+**Path A (handoff from brainstorming)**: wave 1 specs arrive pre-written. Wave ≥ 2 enter with `spec: null` — you write them JIT before dispatching that wave.
+
+**Path B (self-created)**: you write the full skeleton, populating only wave-1 `spec` fields. Leave wave ≥ 2 as `spec: null`.
+
+**Hard rule — enforced by `scripts/task.py`**:
+
+> `omp coding-orchestrator task update --status executing` is rejected (exit 2) whenever the target task's `spec` is null, missing, or empty. Write the spec first, or the dispatch fails.
+
+Before dispatching each wave:
+1. Read every completed prior-wave task's Worker Report (esp. `### Story-Memory Impact`, `### Deviations`, `### Issues Found`) and the current `story-memory.md`.
+2. Decide what to promote into `story-memory.md` (see `references/story-memory-guideline.md` — paraphrase, don't paste raw).
+3. Copy `templates/task.md` to `tasks/task-NN.md` for each task in the upcoming wave. Fill `Objective`, `Read First`, `File Scope`, `Deviation Rules`, `Must-Haves`, `Test Plan`. `Worker Refs` is pre-populated to include `../story-memory.md`.
+4. Update each task's `tasks.yaml` entry: set `spec: tasks/task-NN.md`.
+5. Now you can flip status to `executing`.
+
+### tasks.yaml skeleton (applies to both paths)
+
+Entries must set: `id`, `title`, `wave`, `depends_on`, `spec`, `files_modified`, `test_layer`. `test_layer` = the lowest layer that can falsify acceptance (per Rule 1).
 
 **Freedom note**: appending, reordering, or removing tasks is a direct
 `tasks.yaml` edit. The `omp coding-orchestrator task` command is only for
@@ -80,7 +111,7 @@ the high-frequency fields (status / worker / reviewer / commit / note).
 
 **Sizing rule**: one task = one vertical slice. If a task touches more than 5 files, split it — but split **vertically** (two smaller features), not **horizontally** (all stores, then all components). See Rule 5 in `references/task-decomposition-rules.md`.
 
-**Self-check before dispatching**: run the checklist at the bottom of `references/task-decomposition-rules.md` against your task list. Revise before dispatching if any answer is "no".
+**Self-check before dispatching each wave**: run the checklist at the bottom of `references/task-decomposition-rules.md` against the wave's specs. Revise before dispatching if any answer is "no".
 
 ## Execute
 

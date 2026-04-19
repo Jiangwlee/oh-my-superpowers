@@ -19,8 +19,15 @@
 ├── hooks.json        # 可选：Claude Code hook 声明（安装时自动合并）
 ├── scripts/          # 可选：脚本实现（不直接被模型调用）
 ├── references/       # 可选：给 Agent 按需加载的详细文档
-└── tests/            # 可选：T1 静态检查
+└── assets/           # 可选：Generator / Inversion 模式的模板或输出骨架
 ```
+
+### 硬规则：tests 不得在 skill 目录下
+
+- Skill 通过 `omp install skill <name>` symlink 到 `~/.claude/skills/<name>`，目录内所有文件都会作为 skill bundle 暴露给 Agent 和下游打包流程。
+- 测试文件（`tests/`、`test_*.py`、fixtures 等）属于开发期产物，不应进 bundle。
+- 测试统一放在项目根 `tests/skills/<skill-name>/`，由 `omp test skill <name>` 从这个位置拉取。
+- 任何以 skill 名字命名的"姐妹目录"（`<skill-name>.tests/`、`<skill-name>_tests/` 等）也不允许——它们仍在 `skills/` 下，容易被误安装或误打包。
 
 ### hooks.json（可选）
 
