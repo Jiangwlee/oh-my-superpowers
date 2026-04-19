@@ -82,12 +82,6 @@ flowchart TD
 - **Incremental validation** — scenarios present design section-by-section, approval before moving on.
 - **Action principles are the scenario's to pick** — default set: TDD · Break-Don't-Bend · Zero-Context Entry. See `references/principles-library.md` for the catalog.
 
-## Producer contract (S3 only — full detail in scenarios/feature.md)
+## Producer contract (S3 only)
 
-S3 hands off to coding-orchestrator via a four-artifact execution chain under `stories/<YYYY-MM-DD>-<slug>/`:
-- `story.md` (narrative, **must** backlink the design doc)
-- `tasks.yaml` (skeleton; wave≥2 has `spec: null`)
-- `tasks/task-01.md` (wave-1 worker spec)
-- `story-memory.md` (placeholder)
-
-Design doc itself stays in `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`. brainstorming is the sole author; coding-orchestrator reads but does not write it. See `scenarios/feature.md` for the full contract.
+S3's only deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`. brainstorming is its sole author; coding-orchestrator consumes it and generates the story skeleton on its own. Full detail in `scenarios/feature.md`.

@@ -2,7 +2,7 @@
 
 > You have completed the common skeleton (Explore → Clarifying → Challenge Gate → Propose approaches). This file is the S3 SOP.
 
-S3 covers implementing a feature, fixing a non-trivial bug, or refactoring. It produces the handoff artifacts that coding-orchestrator consumes.
+S3 covers implementing a feature, fixing a non-trivial bug, or refactoring. Its sole deliverable is a design doc that coding-orchestrator consumes to generate the story skeleton.
 
 ## When S3 applies
 
@@ -33,89 +33,28 @@ Use `assets/design-doc-template-normal.md` for standard scope, `assets/design-do
 
 ### Step 3 — Write design doc
 
-Save to `docs/brainstorming/specs/YYYY-MM-DD-<slug>.md`. **brainstorming is the sole author**; coding-orchestrator reads but does not write this file.
+Save to `docs/brainstorming/specs/YYYY-MM-DD-<slug>.md`.
 
 ### Step 4 — Spec review loop
 
 Dispatch spec-document-reviewer subagent per `../references/spec-document-reviewer-prompt.md`. Max 3 iterations.
 
-### Step 5 — Produce the four-artifact execution chain
+### Step 5 — Hand off to coding-orchestrator
 
-Located at `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/`. The `YYYY-MM-DD` must match the design doc's date prefix.
+Notify the user that the design doc is complete and provide its path (`docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`). Recommend coding-orchestrator take over to generate the story skeleton.
 
-#### 5.1 `story.md`
-
-Complete narrative: goal, scope, constraints, high-level approach, acceptance criteria. **First line after the title must be the design doc backlink:**
-
-```markdown
-# Story: <slug>
-
-> Design: /docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md
-```
-
-This backlink is **mandatory** — it's how orchestrator / worker / reviewer find the rationale.
-
-#### 5.2 `tasks.yaml` (skeleton)
-
-Follow `skills/coding-orchestrator/templates/tasks.yaml`. Skeleton contract:
-
-```yaml
-story: <slug>
-created: <date>
-updated: <date>
-
-tasks:
-  - id: "01"
-    title: <action-oriented>
-    status: pending
-    wave: 1
-    depends_on: []
-    spec: tasks/task-01.md       # wave 1: non-null, must exist
-    files_modified: [<estimate>]
-    test_layer: integration
-    # worker/reviewer/started/completed/commits/notes left for orchestrator
-
-  - id: "02"
-    title: <action-oriented>
-    status: pending
-    wave: 2
-    depends_on: ["01"]
-    spec: null                   # wave ≥ 2: null, orchestrator writes JIT
-    files_modified: [<estimate>]
-    test_layer: component
-```
-
-**brainstorming MUST write:**
-- Complete dependency graph (`id / title / wave / depends_on`)
-- `test_layer` per `skills/coding-orchestrator/references/task-decomposition-rules.md` Rule 1
-- `files_modified` estimate per task
-- **wave 1** tasks' `spec` pointing to real `tasks/task-NN.md` file
-
-**brainstorming MUST NOT write:**
-- wave ≥ 2 `tasks/task-NN.md` (orchestrator writes them JIT after prior wave's feedback)
-
-**Self-check before saving**: run the Rule 1-5 checklist in `skills/coding-orchestrator/references/task-decomposition-rules.md`. If any rule fails, revise until it passes.
-
-#### 5.3 `tasks/task-01.md` (and any other wave-1 task spec)
-
-Use `skills/coding-orchestrator/templates/task.md`. Worker Refs section **must include** `../story-memory.md`.
-
-#### 5.4 `story-memory.md` (placeholder)
-
-Just the title line and the three section headers (Patterns / Gotchas / Known False Positives). Orchestrator fills it in as the story progresses. See `skills/coding-orchestrator/references/story-memory-guideline.md` for write rules.
-
-### Step 6 — Hand off to coding-orchestrator
-
-Notify the user: design is complete, skeleton is in place, coding-orchestrator should take over. Point at the story directory. The orchestrator's intake path for brainstorming handoffs is documented in `skills/coding-orchestrator/SKILL.md` under "Story Intake → Path A — handoff from brainstorming".
+Do **not** create `stories/<slug>/` or write any task artifacts — that is coding-orchestrator's job.
 
 ## Producer / consumer contract
 
-- **brainstorming is the sole producer** of the design doc and the story skeleton.
-- **coding-orchestrator is the consumer** — reads everything, writes wave≥2 task specs, updates tasks.yaml status, appends to story-memory.md. Does **not** modify the design doc or story.md.
-- If design rationale needs revision mid-execution, coding-orchestrator halts and returns control to brainstorming (which runs spec review loop again if needed).
+- **brainstorming is the sole producer** of the design doc. brainstorming does not write anything under `stories/`.
+- **coding-orchestrator is the consumer** — it reads the design doc and generates the story skeleton (`story.md`, `tasks.yaml`, `tasks/task-NN.md`, `story-memory.md`) on its own.
+- If design rationale needs revision mid-execution, coding-orchestrator halts and returns control to brainstorming (which re-runs the spec review loop if needed).
 
 ## Gotchas
 
-- **Fast branch**: single-file + unambiguous + zero 🔴 risk → skip the entire execution chain; inline the recommendation. Fast is a cost branch within S3, not a separate scenario.
+- **Fast branch**: skip Steps 1-5 entirely; inline the recommendation or implement directly in the current session. Fast is a cost branch within S3, not a separate scenario. Triggers when **any** of the following holds:
+  - single-file + unambiguous + zero 🔴 risk
+  - estimated scope ≤ 3 tasks AND < 5 files touched
 - **Cross-story scope**: if the Explore step shows the work spans multiple independent subsystems, recommend splitting into multiple stories (each with its own S3 pass), not one mega-story.
 - **Break, Don't Bend**: default position is to remove the old implementation; do not add compat shims, legacy aliases, or v1/v2 coexistence unless the user explicitly justifies it.
