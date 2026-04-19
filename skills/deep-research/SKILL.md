@@ -45,6 +45,10 @@ omp deep-research <subcommand> [args]
 
 如果研究还没有覆盖多个角度、缺乏关键来源、或缺少反方/限制信息，就不应过早结束。
 
+## 搜索与信息获取
+
+使用`omp web-operator`进行搜索和信息获取，使用`omp web-operator --help`了解`omp web-operator`的详细参数和用法。
+
 ---
 
 ## 数据目录
