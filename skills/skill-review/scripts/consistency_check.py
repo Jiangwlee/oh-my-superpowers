@@ -291,12 +291,23 @@ def detect_legacy_pollution(scripts_dir: Path) -> list[dict]:
     # Matches commented lines that contain code-like tokens (=, (, ), :, import, def, return)
     code_comment_pattern = re.compile(r"^\s*#.*[=(){}\[\]:]\s*\S")
 
+    pep723_delim = re.compile(r"^\s*#\s*///\s*(?:script)?\s*$")
+
     for py_file in sorted(scripts_dir.glob("*.py")):
         lines = py_file.read_text(encoding="utf-8").splitlines()
         consecutive = 0
         block_start = 0
+        in_pep723 = False
 
         for i, line in enumerate(lines, 1):
+            # PEP 723 inline-script metadata block: skip everything between `# ///` delimiters
+            if pep723_delim.match(line):
+                in_pep723 = not in_pep723
+                consecutive = 0
+                continue
+            if in_pep723:
+                continue
+
             # Migration TODO detection
             if migration_pattern.match(line):
                 findings.append({
@@ -350,10 +361,11 @@ def _find_project_bin(skill_dir: Path) -> Path | None:
 def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
     """Verify CLI-ization rules when scripts/ directory exists.
 
-    Rules:
-    - If scripts/ exists: exactly one file named omp-{skill_name} must exist in
-      the project's bin/ directory (found by walking up from skill_dir).
-    - SKILL.md must not invoke scripts via relative path (bash scripts/ or python scripts/).
+    Accepts either CLI layout:
+    - Per-skill `bin/omp-<skill>` (classic)
+    - Unified `cli/<skill>/main.py` routed via `bin/omp <skill>` (oh-my-superpowers)
+
+    Also checks SKILL.md does not invoke scripts via relative path.
 
     Returns list of dicts: {type, reason, detail}.
     """
@@ -370,13 +382,18 @@ def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
     bin_dir = _find_project_bin(skill_dir)
     cli_files = [f for f in bin_dir.iterdir() if f.name == expected_cli] if bin_dir else []
 
-    if not cli_files:
+    project_root = bin_dir.parent if bin_dir else None
+    unified_main = project_root / "cli" / skill_name / "main.py" if project_root else None
+    has_unified_cli = unified_main.is_file() if unified_main else False
+
+    if not cli_files and not has_unified_cli:
         bin_hint = str(bin_dir) if bin_dir else "bin/"
         findings.append({
             "type": "cli",
             "reason": "missing_cli",
-            "detail": f"scripts/ exists but no '{expected_cli}' CLI found in {bin_hint}. "
-                      f"Create bin/{expected_cli} as the unified CLI entry point.",
+            "detail": f"scripts/ exists but no CLI entry point found. Expected either "
+                      f"'{bin_hint}/{expected_cli}' or 'cli/{skill_name}/main.py' "
+                      f"(unified omp router).",
         })
     elif len(cli_files) > 1:
         findings.append({
