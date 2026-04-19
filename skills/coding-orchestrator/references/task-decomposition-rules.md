@@ -1,6 +1,40 @@
 # Task Decomposition Rules
 
-Read this when breaking a story into tasks. These rules exist to prevent specific failure modes that have cost real stories 5-10 extra fix-loop tasks.
+Read this when breaking a story into tasks, and when writing JIT specs wave by wave.
+
+---
+
+## JIT Spec Writing Protocol
+
+Task specs are written **wave by wave**, not all at once. Each wave's specs reflect what prior waves actually learned.
+
+- **Path A (handoff)**: wave 1 specs arrive pre-written from brainstorming. Wave ≥ 2 enter with `spec: null` — write them JIT before dispatching that wave.
+- **Path B (self-created)**: write the full skeleton, populating only wave-1 `spec` fields. Leave wave ≥ 2 as `spec: null`.
+
+**Hard rule — enforced by `scripts/task.py`**: `status: executing` is rejected (exit 2) whenever the target task's `spec` is null, missing, or empty. Write the spec first.
+
+Before dispatching each wave:
+1. Read every completed prior-wave task's Worker Report (esp. `### Story-Memory Impact`, `### Deviations`, `### Issues Found`) and the current `story-memory.md`.
+2. Decide what to promote into `story-memory.md` (see `references/story-memory-guideline.md` — paraphrase, don't paste raw).
+3. Copy `templates/task.md` to `tasks/task-NN.md` for each task in the upcoming wave. Fill `Objective`, `Read First`, `File Scope`, `Deviation Rules`, `Must-Haves`, `Test Plan`. `Worker Refs` is pre-populated to include `../story-memory.md`.
+4. Update each task's `tasks.yaml` entry: set `spec: tasks/task-NN.md`.
+5. Now flip status to `executing`.
+
+### tasks.yaml skeleton
+
+Entries must set: `id`, `title`, `wave`, `depends_on`, `spec`, `files_modified`, `test_layer`. `test_layer` = the lowest layer that can falsify acceptance (per Rule 1 below).
+
+**Freedom note**: appending, reordering, or removing tasks is a direct `tasks.yaml` edit — the `omp` command is only for high-frequency fields (status/worker/reviewer/commit/note).
+
+**Sizing rule**: one task = one vertical slice. If a task touches more than 5 files, split it vertically (two smaller features), not horizontally (all stores, then all components). See Rule 5 below.
+
+**Self-check before dispatching each wave**: run the checklist at the bottom of this file against the wave's specs. Revise before dispatching if any answer is "no".
+
+---
+
+## Why this exists
+
+Three recurring orchestrator mistakes have been observed:
 
 ## Why this exists
 

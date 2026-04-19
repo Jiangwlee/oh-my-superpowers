@@ -36,3 +36,39 @@ Read `commands.md` for exact commands. Key steps:
 Tasks without dependencies may run in parallel.
 - Sub-agent route: use your runtime's isolation mechanism (e.g., worktree)
 - tmux route: spawn multiple tmux sessions + git worktree (see `commands.md`)
+
+---
+
+## Review Protocol
+
+After each task's code is written:
+
+1. Flip status to `reviewing` before dispatching the reviewer:
+   `omp coding-orchestrator task update --story <slug> --id <NN> --status reviewing --reviewer <id>`
+2. Write review prompt to `/tmp/orchestrator-review-<NN>.md` (include: task spec path, changed files, diff). Dispatch using the same route decision as Execute. Prefer a reasoning-focused runtime for review.
+3. Orchestrator applies second judgment to the review result:
+   - Confirmed issue → fix directly (small) or dispatch worker (large); flip back to `executing` while fix is in flight
+   - False positive → ignore; add `--note "..."` explaining why
+4. Advance to Test phase:
+   `omp coding-orchestrator task update --story <slug> --id <NN> --status testing`
+   (append `--commit <hash>` for any fix commit produced during review)
+
+---
+
+## Test & Debug
+
+Sub-agent runs tests defined in the task spec's Test Plan.
+
+On failure:
+1. Read `worker-refs/debugging-guideline.md`: list causes → add diagnostic logs → read logs → narrow scope → fix → clean up.
+2. **Iteration limit**: max 3 fix attempts per task.
+
+### Failure Escalation
+
+```
+Sub-agent fails or 3 attempts exhausted
+    → Escalate to a different sub-agent
+        → Orchestrator takes over (this task only)
+```
+
+Each escalation carries: error logs, attempted fixes, current hypothesis.
