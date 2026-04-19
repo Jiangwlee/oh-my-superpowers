@@ -14,6 +14,7 @@ description: >-
 Purpose: 审查 skill 目录，发现 spec 违规、设计缺陷和证据质量问题。
 Input:   Skill 目录路径（用户提供）。
 Output:  按 `assets/review-result-template.md` 格式输出的审查报告。
+Scope:   审查对象 = `SKILL.md` + `references/**/*.md` + `scripts/*` + `assets/**`。references 会在运行时被 agent 增量加载，其内容等同 SKILL.md 的延伸指令，必须同步审查。
 
 ## 前置检查
 
@@ -43,7 +44,8 @@ omp skill-review --skill-dir <path>
 ### Step 2：语义审查
 
 加载 `references/rubric.md`。
-按其 11 个维度逐一检查。每个维度必须得出结论（PASS / FINDING / N/A）。
+按其 13 个维度逐一检查，每个维度必须得出结论（PASS / FINDING / N/A）。
+每条 finding 必须标注 `source_file`（SKILL.md / references/X.md / scripts/Y）。
 
 按需加载（发现 FINDING 时）：
 

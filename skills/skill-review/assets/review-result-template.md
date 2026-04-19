@@ -1,6 +1,7 @@
 # skill-review: {{skill-name}}
 
 审查路径：`{{skill-dir}}`
+审查范围：`{{review-scope}}`（SKILL.md + references/**/*.md 列表）
 发现：{{X}} critical · {{Y}} warnings · {{Z}} suggestions
 机械检查：完成 | 失败（原因：{{error}}）
 
@@ -12,7 +13,9 @@
 |------|-------------------------------|---------|-------------|--------|
 | A1   | Frontmatter & Directory Spec  | PASS / FINDING / N/A | — / WARNING / CRITICAL | 0 |
 | A2   | File Reference Discipline     | PASS / FINDING / N/A | — | 0 |
-| A3   | Mechanical Consistency        | PASS / FINDING / N/A | — | 0 |
+| A3   | Skill Independence            | PASS / FINDING / N/A | — | 0 |
+| A4   | Mechanical Consistency        | PASS / FINDING / N/A | — | 0 |
+| A5   | Cross-File Consistency        | PASS / FINDING / N/A | — | 0 |
 | B1   | Trigger Description Quality   | PASS / FINDING / N/A | — | 0 |
 | B2   | Progressive Disclosure        | PASS / FINDING / N/A | — | 0 |
 | B3   | Workflow Structure & Failure  | PASS / FINDING / N/A | — | 0 |
@@ -36,6 +39,8 @@
 #### [CRITICAL] {{层}} / {{维度名}}
 
 **标签**：SPEC | BEST_PRACTICE | PROJECT_POLICY
+
+**文件**：{{source_file}}（SKILL.md / references/X.md / scripts/Y；跨文件冲突时列出所有相关文件）
 
 **问题**：一句话精确描述。
 
@@ -65,6 +70,8 @@
 
 **标签**：SPEC | BEST_PRACTICE | PROJECT_POLICY
 
+**文件**：{{source_file}}（SKILL.md / references/X.md / scripts/Y；跨文件冲突时列出所有相关文件）
+
 **问题**：一句话精确描述。
 
 **证据**：
@@ -92,6 +99,8 @@
 #### [SUGGESTION] {{层}} / {{维度名}}
 
 **标签**：SPEC | BEST_PRACTICE | PROJECT_POLICY
+
+**文件**：{{source_file}}（SKILL.md / references/X.md / scripts/Y；跨文件冲突时列出所有相关文件）
 
 **问题**：一句话精确描述。
 

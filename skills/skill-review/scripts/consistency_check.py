@@ -26,6 +26,24 @@ _FORCE_LOAD_PATTERN = re.compile(r"@[\w./-]*SKILL\.md|@skills/[\w./-]+")
 _SCRIPT_PATH_VAR_PATTERN = re.compile(
     r"(?:python3?|bash)\s+[$][A-Z_][A-Z0-9_]*[/][\w.\-/]+",
 )
+_CROSS_SKILL_PATH_PATTERN = re.compile(r"(?<![\w./-])skills/([a-z0-9][\w-]*)/[\w.\-/]+")
+_SEMANTIC_DEP_VERB_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"(?:先|再|然后|接着|配合|依赖|基于)\s*(?:运行|使用|调用|跑|执行|触发)?\s*[`'\"]?([a-z][a-z0-9-]*)[`'\"]?\s*skill",
+    ),
+    re.compile(
+        r"\b(?:first\s+)?(?:use|run|invoke|call|trigger)\s+(?:the\s+)?[`'\"]?([a-z][a-z0-9-]*)[`'\"]?\s+skill\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bafter\s+(?:running|invoking|calling|using)\s+(?:the\s+)?[`'\"]?([a-z][a-z0-9-]*)[`'\"]?\s+skill",
+        re.IGNORECASE,
+    ),
+]
+_SEMANTIC_DEP_STOPWORDS = {
+    "this", "that", "the", "a", "an", "any", "every", "some",
+    "such", "all", "various", "these", "those", "other", "another",
+}
 
 
 def parse_frontmatter_name(content: str) -> str:
@@ -200,6 +218,62 @@ def find_path_variable_invocations(content: str) -> list[dict]:
     return findings
 
 
+def _body_lines(content: str) -> list[tuple[int, str]]:
+    """Return (lineno, text) pairs from SKILL.md body, skipping frontmatter."""
+    lines = content.splitlines()
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for j in range(1, len(lines)):
+            if lines[j].strip() == "---":
+                start = j + 1
+                break
+    return [(i + 1, lines[i]) for i in range(start, len(lines))]
+
+
+def find_cross_skill_references(content: str, skill_name: str) -> list[dict]:
+    """Detect dependencies on other skills (path or semantic).
+
+    Emits candidate evidence for Layer A3 Skill Independence. The semantic
+    reviewer decides whether each candidate is a true violation or an allowed
+    boundary mention. Frontmatter is skipped so description boundary hints
+    ("Do NOT use for X — use Y instead") do not produce noise.
+
+    Returns list of dicts: {type, line, snippet, target?}.
+    """
+    findings: list[dict] = []
+    for lineno, line in _body_lines(content):
+        for m in _CROSS_SKILL_PATH_PATTERN.finditer(line):
+            target = m.group(1)
+            if target == skill_name:
+                continue
+            if line[: m.start()].rstrip().endswith("@"):
+                continue
+            findings.append({
+                "type": "cross_skill_path",
+                "line": lineno,
+                "snippet": line.strip(),
+                "target": target,
+            })
+        matched_target: str | None = None
+        for pattern in _SEMANTIC_DEP_VERB_PATTERNS:
+            m = pattern.search(line)
+            if not m:
+                continue
+            candidate = m.group(1).lower()
+            if candidate == skill_name or candidate in _SEMANTIC_DEP_STOPWORDS:
+                continue
+            matched_target = candidate
+            break
+        if matched_target:
+            findings.append({
+                "type": "semantic_dependency",
+                "line": lineno,
+                "snippet": line.strip(),
+                "target": matched_target,
+            })
+    return findings
+
+
 def validate_frontmatter(
     content: str,
     skill_dir: Path,
@@ -344,6 +418,142 @@ def detect_legacy_pollution(scripts_dir: Path) -> list[dict]:
     return findings
 
 
+def collect_review_files(skill_dir: Path) -> list[tuple[Path, str, str]]:
+    """Collect every file that agent may load at runtime.
+
+    Scope: SKILL.md + references/**/*.md. scripts/ and assets/ are handled
+    by their own dedicated checks.
+
+    Returns list of (absolute_path, relative_posix_path, content).
+    """
+    files: list[tuple[Path, str, str]] = []
+    skill_md = skill_dir / "SKILL.md"
+    if skill_md.exists():
+        files.append((
+            skill_md,
+            "SKILL.md",
+            skill_md.read_text(encoding="utf-8"),
+        ))
+    ref_dir = skill_dir / "references"
+    if ref_dir.is_dir():
+        for path in sorted(ref_dir.rglob("*.md")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(skill_dir).as_posix()
+            files.append((path, rel, path.read_text(encoding="utf-8")))
+    return files
+
+
+_MD_LEGACY_PATTERN = re.compile(
+    r"<!--[^>]*?\b(TODO|FIXME|deprecated|legacy|migrat\w*|obsolete)\b[^>]*?-->",
+    re.IGNORECASE,
+)
+_MD_DEPRECATED_HEADING_PATTERN = re.compile(
+    r"^#{1,6}\s+.*\((?:deprecated|legacy|obsolete|removed)\)",
+    re.IGNORECASE,
+)
+
+
+def detect_md_legacy_markers(
+    files: list[tuple[Path, str, str]],
+) -> list[dict]:
+    """Scan markdown files for HTML-comment migration markers and deprecated headings.
+
+    Returns list of dicts: {source_file, line, type, snippet}.
+    """
+    findings: list[dict] = []
+    for _, rel, content in files:
+        for i, line in enumerate(content.splitlines(), 1):
+            if _MD_LEGACY_PATTERN.search(line):
+                findings.append({
+                    "source_file": rel,
+                    "line": i,
+                    "type": "html_comment_migration",
+                    "snippet": line.strip(),
+                })
+            elif _MD_DEPRECATED_HEADING_PATTERN.match(line):
+                findings.append({
+                    "source_file": rel,
+                    "line": i,
+                    "type": "deprecated_heading",
+                    "snippet": line.strip(),
+                })
+    return findings
+
+
+_COMMAND_BODY_PATTERN = re.compile(
+    r"(omp\s+[a-z][\w-]*(?:\s+[a-z][\w-]*)?|python3?\s+scripts/[\w.\-/]+\.py|bash\s+scripts/[\w.\-/]+\.sh)([^`\n]*)",
+)
+_INLINE_CODE_PATTERN = re.compile(r"`([^`\n]+)`")
+
+
+def _extract_invocations_from_line(line: str) -> list[tuple[str, list[str], str]]:
+    """Return list of (head, flags, raw) for every command invocation in a line.
+
+    Accepts both fenced-code-block lines (passed as-is) and inline `` `...` ``
+    backtick content (caller strips the backticks).
+    """
+    results: list[tuple[str, list[str], str]] = []
+    for m in _COMMAND_BODY_PATTERN.finditer(line):
+        head = m.group(1).strip()
+        tail = m.group(2)
+        body = (head + tail).strip()
+        flags = sorted(set(re.findall(r"--[\w\-]+", body)))
+        results.append((head, flags, body))
+    return results
+
+
+def find_cross_file_command_variants(
+    files: list[tuple[Path, str, str]],
+) -> list[dict]:
+    """Collect invocations of the same command across files to surface flag drift.
+
+    Scans both fenced code blocks and inline backtick spans, because
+    SKILL.md commonly writes commands as inline code while references put
+    them in fenced blocks. Groups by command head (e.g. `omp fake`) and
+    collects distinct flag sets.
+
+    Emits one finding per command head that has >1 distinct flag set OR
+    appears in >=2 files. Layer B decides if drift is a real contradiction.
+
+    Returns list of dicts: {command, variants: [{source_file, line, flags, raw}]}.
+    """
+    variants: dict[str, list[dict]] = {}
+    for _, rel, content in files:
+        in_code_block = False
+        for i, line in enumerate(content.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            sources: list[str] = []
+            if in_code_block:
+                sources.append(line)
+            else:
+                sources.extend(m.group(1) for m in _INLINE_CODE_PATTERN.finditer(line))
+            for src in sources:
+                for head, flags, raw in _extract_invocations_from_line(src):
+                    variants.setdefault(head, []).append({
+                        "source_file": rel,
+                        "line": i,
+                        "flags": flags,
+                        "raw": raw,
+                    })
+
+    findings: list[dict] = []
+    for head, occurrences in variants.items():
+        distinct_flag_sets = {tuple(o["flags"]) for o in occurrences}
+        distinct_files = {o["source_file"] for o in occurrences}
+        if len(distinct_flag_sets) > 1 or (
+            len(distinct_files) > 1 and len(occurrences) > 1
+        ):
+            findings.append({
+                "command": head,
+                "variants": occurrences,
+            })
+    return findings
+
+
 def _find_project_bin(skill_dir: Path) -> Path | None:
     """Walk up from skill_dir to find a bin/ directory (project root indicator)."""
     current = skill_dir.resolve()
@@ -358,16 +568,22 @@ def _find_project_bin(skill_dir: Path) -> Path | None:
     return None
 
 
-def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
+def check_cli_requirement(
+    skill_dir: Path,
+    skill_name: str,
+    review_files: list[tuple[Path, str, str]],
+) -> list[dict]:
     """Verify CLI-ization rules when scripts/ directory exists.
 
     Accepts either CLI layout:
     - Per-skill `bin/omp-<skill>` (classic)
     - Unified `cli/<skill>/main.py` routed via `bin/omp <skill>` (oh-my-superpowers)
 
-    Also checks SKILL.md does not invoke scripts via relative path.
+    Scans every review file (SKILL.md + references/**/*.md) for direct relative
+    script invocations — agent loads these files at runtime and may copy the
+    invocation form.
 
-    Returns list of dicts: {type, reason, detail}.
+    Returns list of dicts: {type, reason, source_file?, line?, detail}.
     """
     findings: list[dict] = []
     scripts_dir = skill_dir / "scripts"
@@ -403,19 +619,25 @@ def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
                       "A skill must have exactly one CLI entry point.",
         })
 
-    skill_md = skill_dir / "SKILL.md"
-    if skill_md.exists():
-        content = skill_md.read_text(encoding="utf-8")
-        direct_invocation_pattern = re.compile(
-            r"(?:python3?|bash)\s+scripts/[\w.\-/]+",
-        )
+    direct_invocation_pattern = re.compile(
+        r"(?:python3?|bash)\s+scripts/[\w.\-/]+",
+    )
+    for _, rel, content in review_files:
+        in_code_block = False
         for i, line in enumerate(content.splitlines(), 1):
-            if direct_invocation_pattern.search(line.strip()):
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if not in_code_block:
+                continue
+            if direct_invocation_pattern.search(stripped):
                 findings.append({
                     "type": "cli",
                     "reason": "direct_script_invocation",
+                    "source_file": rel,
                     "line": i,
-                    "detail": f"Direct script invocation found: '{line.strip()}'. "
+                    "detail": f"Direct script invocation found: '{stripped}'. "
                               f"Use '{expected_cli}' CLI instead.",
                 })
 
@@ -425,15 +647,23 @@ def check_cli_requirement(skill_dir: Path, skill_name: str) -> list[dict]:
 def run_checks(skill_dir: Path) -> dict:
     """Run all consistency checks against the skill directory.
 
+    Scope: SKILL.md + references/**/*.md are all review targets. Every
+    finding that is traceable to a file carries `source_file`.
+
     Returns dict with keys used by skill-review mechanical checks.
     """
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
         return {"error": f"SKILL.md not found in {skill_dir}"}
 
-    content = skill_md.read_text(encoding="utf-8")
+    review_files = collect_review_files(skill_dir)
+    skill_content = next(
+        (c for _, rel, c in review_files if rel == "SKILL.md"),
+        "",
+    )
 
     issues: dict = {
+        "review_scope": [rel for _, rel, _ in review_files],
         "parameter_mismatches": [],
         "missing_files": [],
         "frontmatter_warnings": [],
@@ -441,68 +671,90 @@ def run_checks(skill_dir: Path) -> dict:
         "spec_violations": [],
         "force_load_syntax": [],
         "path_style_violations": [],
+        "cross_skill_references": [],
         "orphaned_references": [],
-        "legacy_pollution": [],
+        "scripts_legacy_pollution": [],
+        "md_legacy_markers": [],
+        "cross_file_command_variants": [],
         "cli_violations": [],
     }
 
     spec_violations, frontmatter_warnings, name_mismatch = validate_frontmatter(
-        content,
+        skill_content,
         skill_dir,
     )
     issues["spec_violations"] = spec_violations
     issues["frontmatter_warnings"] = frontmatter_warnings
     issues["name_mismatch"] = name_mismatch
-    issues["force_load_syntax"] = find_force_load_syntax(content)
-    issues["path_style_violations"] = find_path_variable_invocations(content)
 
-    # Check script command references
-    commands = extract_script_commands(content)
-    for cmd in commands:
-        script_path = skill_dir / cmd["script"]
-        if not script_path.exists():
-            issues["missing_files"].append({
-                "type": "script",
-                "path": cmd["script"],
-                "line": cmd["line"],
-            })
-            continue
-        if not cmd["flags"]:
-            continue
-        help_flags = get_script_flags(script_path)
-        if help_flags is None:
-            continue
-        for flag in cmd["flags"]:
-            if flag not in help_flags:
-                issues["parameter_mismatches"].append({
-                    "script": cmd["script"],
-                    "flag": flag,
+    fm = parse_frontmatter(skill_content)
+    skill_name = (fm or {}).get("name", "") or skill_dir.name
+
+    linked_references: set[str] = set()
+
+    for _, rel, content in review_files:
+        for item in find_force_load_syntax(content):
+            item["source_file"] = rel
+            issues["force_load_syntax"].append(item)
+        for item in find_path_variable_invocations(content):
+            item["source_file"] = rel
+            issues["path_style_violations"].append(item)
+        for item in find_cross_skill_references(content, skill_name):
+            item["source_file"] = rel
+            issues["cross_skill_references"].append(item)
+
+        for cmd in extract_script_commands(content):
+            script_path = skill_dir / cmd["script"]
+            if not script_path.exists():
+                issues["missing_files"].append({
+                    "type": "script",
+                    "path": cmd["script"],
                     "line": cmd["line"],
-                    "available_flags": sorted(set(help_flags)),
+                    "source_file": rel,
+                })
+                continue
+            if not cmd["flags"]:
+                continue
+            help_flags = get_script_flags(script_path)
+            if help_flags is None:
+                continue
+            for flag in cmd["flags"]:
+                if flag not in help_flags:
+                    issues["parameter_mismatches"].append({
+                        "script": cmd["script"],
+                        "flag": flag,
+                        "line": cmd["line"],
+                        "source_file": rel,
+                        "available_flags": sorted(set(help_flags)),
+                    })
+
+        linked_references.update(extract_linked_references(content))
+        for ref in extract_file_references(content):
+            full_path = skill_dir / ref["path"]
+            if not full_path.exists():
+                issues["missing_files"].append({
+                    "type": "reference",
+                    "path": ref["path"],
+                    "line": ref["line"],
+                    "source_file": rel,
                 })
 
-    # Check file references (references/, assets/)
-    linked_references = extract_linked_references(content)
-    for ref in extract_file_references(content):
-        full_path = skill_dir / ref["path"]
-        if not full_path.exists():
-            issues["missing_files"].append({
-                "type": "reference",
-                "path": ref["path"],
-                "line": ref["line"],
-            })
     issues["orphaned_references"] = find_orphaned_references(
         skill_dir,
         linked_references,
     )
-
-    # Detect legacy pollution in scripts/
-    issues["legacy_pollution"] = detect_legacy_pollution(skill_dir / "scripts")
-
-    # Check CLI-ization requirement
-    fm = parse_frontmatter(content)
-    skill_name = (fm or {}).get("name", "") or skill_dir.name
-    issues["cli_violations"] = check_cli_requirement(skill_dir, skill_name)
+    issues["scripts_legacy_pollution"] = detect_legacy_pollution(
+        skill_dir / "scripts",
+    )
+    issues["md_legacy_markers"] = detect_md_legacy_markers(review_files)
+    issues["cross_file_command_variants"] = find_cross_file_command_variants(
+        review_files,
+    )
+    issues["cli_violations"] = check_cli_requirement(
+        skill_dir,
+        skill_name,
+        review_files,
+    )
 
     return issues
 
