@@ -190,10 +190,10 @@ If a task touches more than 5 files, split it — but split **vertically** (two 
 
 Run through this checklist mentally:
 
-1. ☐ Does each task's first red test match its acceptance layer? (Rule 1)
-2. ☐ Are there any "add API" tasks without paired "consume API" in the same task? (Rule 2)
-3. ☐ If this is a fix loop, are batchable fixes batched? (Rule 3)
-4. ☐ Are there standalone verification tasks that could be folded into implementation? (Rule 4)
-5. ☐ Is each task a vertical slice ≤ 5 files? (Rule 5)
+- [ ] Does each task's first red test match its acceptance layer? (Rule 1)
+- [ ] Are there any "add API" tasks without paired "consume API" in the same task? (Rule 2)
+- [ ] If this is a fix loop, are batchable fixes batched? (Rule 3)
+- [ ] Are there standalone verification tasks that could be folded into implementation? (Rule 4)
+- [ ] Is each task a vertical slice ≤ 5 files? (Rule 5)
 
 If any answer is "no" or "I don't know", revise the task list before dispatching.

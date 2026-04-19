@@ -1,10 +1,15 @@
 ---
 name: coding-orchestrator
 description: >-
-  Spec-driven coding orchestration with sub-agent dispatch.
-  Trigger: user says "orchestrate", acts as orchestrator, or invokes
-  via slash command. Breaks work into task specs, dispatches sub-agents
-  for coding/review/testing, tracks progress across context compactions.
+  Use when coordinating multi-agent coding work on a feature, refactor, or bug
+  that requires multiple tasks dispatched to sub-agents in sequential waves —
+  even if the user doesn't say "orchestrate." Typical signals: "break this into
+  tasks for different agents", "work in parallel", "manage a complex multi-file
+  project end-to-end", or any request implying spec → dispatch → review → test
+  cycles across multiple sub-agents.
+  Do NOT trigger for tasks spanning ≤ 1 wave or ≤ 5 files — recommend direct
+  coding with the main agent instead. Do NOT trigger if the user is still in
+  the design/brainstorming phase — use the brainstorming skill first.
 ---
 
 # Coding Orchestrator: Spec-Driven Sub-Agent Orchestration
@@ -34,7 +39,11 @@ implementation code, STOP — you are violating the orchestrator contract.
 6. **Feedback & Revise** — capture reusable feedback into `story-memory.md`. Protocol: `references/story-memory-guideline.md`.
 7. **Advance Wave** — when all current-wave tasks are `completed`, flip each next-wave task to executing:
    `omp coding-orchestrator task update --story <slug> --id <NN> --status executing`
-8. **Report & Repeat** — report status, loop back to step 1.
+8. **Report & Repeat** — report wave status in this format, then loop back to step 1:
+   ```
+   Wave N: X/Y completed — task-NN [status], task-MM [status]
+   Next: <one-sentence next action>
+   ```
 
 ### Phase 3 — E2E Testing & Acceptance
 
