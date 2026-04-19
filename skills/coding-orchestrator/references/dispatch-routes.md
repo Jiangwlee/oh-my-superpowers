@@ -7,7 +7,7 @@ Detailed protocol for the Execute step.
 | Condition | Route | Example |
 |-----------|-------|---------|
 | You have native sub-agent AND task runs in same runtime | **Sub-agent** | Claude Code's `Agent()` tool |
-| You need a different runtime OR no sub-agent mechanism | **tmux** | Read `commands.md` |
+| You need a different runtime OR no sub-agent mechanism | **tmux** | Read `references/commands.md` |
 
 ## Prompt Preparation (both routes)
 
@@ -25,7 +25,7 @@ Dispatch using your runtime's native sub-agent mechanism. Pass the prompt file p
 
 ## tmux Route
 
-Read `commands.md` for exact commands. Key steps:
+Read `references/commands.md` for exact commands. Key steps:
 1. Write prompt to file
 2. Spawn tmux session with the appropriate runtime command
 3. Poll until session exits
@@ -35,7 +35,7 @@ Read `commands.md` for exact commands. Key steps:
 
 Tasks without dependencies may run in parallel.
 - Sub-agent route: use your runtime's isolation mechanism (e.g., worktree)
-- tmux route: spawn multiple tmux sessions + git worktree (see `commands.md`)
+- tmux route: spawn multiple tmux sessions + git worktree (see `references/commands.md`)
 
 ---
 
@@ -45,7 +45,7 @@ After each task's code is written:
 
 1. Flip status to `reviewing` before dispatching the reviewer:
    `omp coding-orchestrator task update --story <slug> --id <NN> --status reviewing --reviewer <id>`
-2. Write review prompt to `/tmp/orchestrator-review-<NN>.md` (include: task spec path, changed files, diff). Dispatch using the same route decision as Execute. Prefer a reasoning-focused runtime for review.
+2. Copy `templates/review-prompt.md` to `/tmp/orchestrator-review-<NN>.md` and fill only the Spec / Changes / Diff sections. The rubric and output format are fixed — leave them as written. Dispatch using the same route decision as Execute. Prefer a reasoning-focused runtime for review.
 3. Orchestrator applies second judgment to the review result:
    - Confirmed issue → fix directly (small) or dispatch worker (large); flip back to `executing` while fix is in flight
    - False positive → ignore; add `--note "..."` explaining why

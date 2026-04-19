@@ -19,7 +19,7 @@ It exists because context compaction erases orchestrator memory; without an expl
 
 `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story-memory.md`
 
-Created as an empty placeholder by **brainstorming** at the end of the S3 scenario; filled in by **coding-orchestrator** as the story progresses.
+Created as an empty placeholder by **coding-orchestrator** during story intake; filled in as the story progresses.
 
 ## Write Authority
 
@@ -53,7 +53,7 @@ Avoid: dated raw quotes, worker reports pasted in full, unstructured dumps.
 
 ## Lifecycle
 
-1. **Creation** — brainstorming writes an empty placeholder at end of S3 (title + three empty section headers).
+1. **Creation** — coding-orchestrator writes an empty placeholder during story intake (title + three empty section headers).
 2. **Accumulation** — after each wave completes, orchestrator reads worker reports (esp. `Story-Memory Impact` line), decides what is cross-task reusable, **paraphrases** it, and appends to the matching section. Raw copy-paste is forbidden.
 3. **Consumption** — every task spec's Worker Refs section lists `../story-memory.md` by default; workers read it before designing. Reviewers also read it before flagging issues.
 4. **Promotion at close** — when the story finishes, orchestrator re-reads `story-memory.md` and asks for each entry:
@@ -73,7 +73,7 @@ Nothing is promoted silently; every promotion is an explicit orchestrator action
 
 | File | Role | Writer |
 |---|---|---|
-| `story.md` | Story narrative (what/how) | brainstorming (immutable after handoff) |
+| `story.md` | Story narrative (what/how) | coding-orchestrator (from design doc, immutable after intake) |
 | `tasks.yaml` | Task state (SSOT) | coding-orchestrator + workers (via task.py) |
 | `tasks/task-NN.md` | Per-task spec | coding-orchestrator (JIT, wave by wave) |
 | `handoff.md` | Compaction-survival snapshot | PreCompact hook (auto) |

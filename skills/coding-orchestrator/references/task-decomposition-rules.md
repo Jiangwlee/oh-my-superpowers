@@ -8,8 +8,12 @@ Read this when breaking a story into tasks, and when writing JIT specs wave by w
 
 Task specs are written **wave by wave**, not all at once. Each wave's specs reflect what prior waves actually learned.
 
-- **Path A (handoff)**: wave 1 specs arrive pre-written from brainstorming. Wave ≥ 2 enter with `spec: null` — write them JIT before dispatching that wave.
-- **Path B (self-created)**: write the full skeleton, populating only wave-1 `spec` fields. Leave wave ≥ 2 as `spec: null`.
+Orchestrator writes every task spec. Both entry paths share the same JIT rule:
+
+- **Path A (handoff)**: derive wave 1 specs from the brainstorming design doc before dispatching wave 1. Leave wave ≥ 2 as `spec: null`.
+- **Path B (self-created)**: write wave 1 specs from the user's direct request before dispatching wave 1. Leave wave ≥ 2 as `spec: null`.
+
+In both paths, wave ≥ 2 specs are written JIT once prior waves complete, informed by their worker reports and the current `story-memory.md`.
 
 **Hard rule — enforced by `scripts/task.py`**: `status: executing` is rejected (exit 2) whenever the target task's `spec` is null, missing, or empty. Write the spec first.
 
@@ -31,10 +35,6 @@ Entries must set: `id`, `title`, `wave`, `depends_on`, `spec`, `files_modified`,
 **Self-check before dispatching each wave**: run the checklist at the bottom of this file against the wave's specs. Revise before dispatching if any answer is "no".
 
 ---
-
-## Why this exists
-
-Three recurring orchestrator mistakes have been observed:
 
 ## Why this exists
 
