@@ -12,25 +12,20 @@ Real-world signal: any story whose verification phase needs more than 2 fix roun
 
 ## Workflow
 
-```
-Challenge Gate done
-       ↓
-[1] Risk Extraction      — list every assumption the design bets on
-       ↓
-[2] Risk Classification  — 🟢 / 🟡 / 🔴
-       ↓
-[3] Spike Plan           — one spike per 🔴 risk, time-boxed
-       ↓
-[4] Spike Execution      — run them, write results
-       ↓
-[5] Design Revision Gate — did spike results change the design?
-       ↓ yes → revise design → re-extract risks
-       ↓ no  → continue to Propose approaches
+```mermaid
+flowchart TD
+    CG[Challenge Gate done] --> R1[Stage 1. Risk Extraction<br/>list every assumption]
+    R1 --> R2[Stage 2. Risk Classification<br/>🟢 / 🟡 / 🔴]
+    R2 --> R3[Stage 3. Spike Plan<br/>one spike per 🔴, time-boxed]
+    R3 --> R4[Stage 4. Spike Execution<br/>run, write results]
+    R4 --> R5{Stage 5. Design Revision Gate<br/>did results change the design?}
+    R5 -->|yes| REV[revise design] --> R1
+    R5 -->|no| OUT[Propose approaches]
 ```
 
-Steps 1-5 run inside brainstorming. The spike code never enters the main branch.
+Stages 1-5 run inside brainstorming. The spike code never enters the main branch. (Named **Stage** to avoid collision with scenario **Step N** and SKILL.md **Phase N**.)
 
-## Step 1: Risk Extraction
+## Stage 1: Risk Extraction
 
 For every major design decision, ask three questions:
 
@@ -55,7 +50,7 @@ Record each bet as a row in the Risk Register. Aim for 5-15 entries on a non-tri
 
 If a story doesn't touch any of these families, it probably doesn't need spikes — Risk Register may stay 🟢/🟡 only.
 
-## Step 2: Risk Classification
+## Stage 2: Risk Classification
 
 | 类别 | 判据 | 处理 |
 |------|------|------|
@@ -70,7 +65,7 @@ If a story doesn't touch any of these families, it probably doesn't need spikes 
 - 1-3 个 🔴 → 正常 spike loop
 - 4+ 个 🔴 → story 范围/认知欠债太大，停下报用户，建议拆 story 或先做技术调研
 
-## Step 3: Spike Plan
+## Stage 3: Spike Plan
 
 For each 🔴 risk, write a Spike entry:
 
@@ -89,7 +84,7 @@ For each 🔴 risk, write a Spike entry:
 - ❌ Spike 答案是 "看起来能用" / "应该可以" → 不是 yes/no，没结束
 - ❌ Spike 代码 commit 到主分支 → 永远禁止
 
-## Step 4: Spike Execution
+## Stage 4: Spike Execution
 
 执行 Spike 时遵守：
 
@@ -103,12 +98,12 @@ For each 🔴 risk, write a Spike entry:
    ```
 4. **跑完即删**：spike 代码立即丢弃（rm -rf 或 branch 删除）
 
-## Step 5: Design Revision Gate
+## Stage 5: Design Revision Gate
 
 Spike 结果回填后，重读 Risk Register + 设计方案，回答：
 
 - 有任何 🔴 spike 结果与原设计冲突吗？
-- 如果有 → **必须**修改设计方案，再回到 Step 1（重新 extract risks，因为修改可能引入新 bet）
+- 如果有 → **必须**修改设计方案，再回到 Stage 1（重新 extract risks，因为修改可能引入新 bet）
 - 如果没有 → 进入 Propose approaches
 
 **Hard rule**: 不允许 "spike 结果不利但设计不改" — 这等于浪费 spike 投入，且把已知 bug 留给实现阶段。

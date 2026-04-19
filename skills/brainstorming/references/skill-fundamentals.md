@@ -89,10 +89,10 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 3. **SKILL.md 中只引用 CLI 名称，不写相对路径**
    ```
    # 错误 — 相对路径调用
-   python scripts/check.py --skill-dir <path>
+   python scripts/<your-script>.py --skill-dir <path>
 
    # 正确 — CLI 调用
-   omp skill-review --skill-dir <path>
+   omp <skill-name> --skill-dir <path>
    ```
 
 ### 为什么这样设计
@@ -110,19 +110,21 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 
 ## 6. 常见设计错误
 
+以下示例使用占位符（`<project-docs-path>` 等），仅为教学，不是真实路径。
+
 **错误 1：把项目文档路径写进 SKILL.md**
 ```
 # 错误
-读取 docs/specs/00_skills/README.md 中的规范...
+读取 <project-docs-path>/README.md 中的规范...
 
 # 正确
-读取 references/skill-spec.md 中的规范...
+读取 references/<your-spec>.md 中的规范...
 ```
 
 **错误 2：Skill 调用另一个 Skill**
 ```
 # 错误
-完成后调用 skill-review skill 进行验证...
+完成后调用 <another-skill> skill 进行验证...
 
 # 正确
 在 references/ 中打包审查标准，在本 Skill 内完成验证
@@ -131,7 +133,7 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 **错误 3：依赖 Agent 的配置**
 ```
 # 错误
-读取 agents/agents.json 获取模型配置...
+读取 <agents-config>.json 获取模型配置...
 
 # 正确
 Skill 不关心 Agent 配置，只提供能力

@@ -34,7 +34,7 @@ Turn ideas into complete designs through collaborative dialogue. This file is **
 Do NOT write code, scaffold a project, or take implementation action until the relevant scenario SOP has run and the user has approved the output. Fast mode (defined per scenario) exists for trivial tasks — it is not an excuse to skip brainstorming.
 </HARD-GATE>
 
-## Step 0 — Scenario routing
+## Phase 0 — Scenario routing
 
 Before anything else, determine which scenario applies:
 
@@ -44,25 +44,34 @@ Before anything else, determine which scenario applies:
 
 Matching order: **try S2 → try S3 → fall back to S1**. When the trigger is ambiguous (e.g. "I want X to be better"), **ask the user** which scenario applies; do not silently default.
 
-Once matched, the rest of this file is the common skeleton; scenario-specific steps live in `scenarios/<matched>.md`.
+Once matched, the rest of this file is the common skeleton; scenario-specific steps live in `scenarios/<matched>.md` (those files use **Step N**; this file uses **Phase N** to avoid cross-file collision).
+
+## Mode selection
+
+Two cost branches exist within every scenario — pick before running the skeleton:
+
+- **Normal mode** — default. Full skeleton + full scenario SOP. Use for any non-trivial design.
+- **Fast mode** — compressed branch. SKILL.md's HARD-GATE still applies. Triggers and skip list live in each scenario file (S2 §Gotchas, S3 §Gotchas). Fast is **never** an excuse to skip brainstorming entirely; it is a lower-ceremony path for trivial scope.
+
+If uncertain which mode applies, default to Normal and let the scenario's Fast trigger escalate downward.
 
 ## Common skeleton (all scenarios)
 
 ```mermaid
 flowchart TD
-    P1[1. Explore] --> P2[2. Clarifying questions]
-    P2 --> P3[3. Challenge Gate]
-    P3 --> P4[4. Propose approaches]
+    P1[Phase 1. Explore] --> P2[Phase 2. Clarifying questions]
+    P2 --> P3[Phase 3. Challenge Gate]
+    P3 --> P4[Phase 4. Propose approaches]
     P4 --> R{Route to scenario}
     R -->|S2 skill/agent| SA[scenarios/skill-agent.md]
     R -->|S3 feature/refactor| F[scenarios/feature.md]
     R -->|S1 fallback| O[scenarios/open.md]
 ```
 
-1. **Explore project context** — files, recent commits, ecosystem relevant to the scenario.
-2. **Ask clarifying questions** — purpose / scope baseline; further questions are heuristic.
-3. **Challenge Gate** — strongest objection + 3 checks (see `references/challenge-gate.md`).
-4. **Propose approaches** — Normal: 2-3 options with trade-offs; Fast branch: direct recommendation.
+1. **Phase 1 — Explore project context** — files, recent commits, ecosystem relevant to the scenario.
+2. **Phase 2 — Ask clarifying questions** — purpose / scope baseline; further questions are heuristic.
+3. **Phase 3 — Challenge Gate** — strongest objection + 3 checks (see `references/challenge-gate.md`).
+4. **Phase 4 — Propose approaches** — Normal: 2-3 options with trade-offs; Fast branch: direct recommendation.
 
 ### Clarifying questions: principle
 
@@ -76,12 +85,23 @@ flowchart TD
 
 ## Key principles
 
-- **One question at a time** — avoid overwhelming the user.
-- **Multiple choice preferred** — easier to decide than open-ended.
-- **YAGNI ruthlessly** — remove unrequested features from all designs.
-- **Incremental validation** — scenarios present design section-by-section, approval before moving on.
+- **One question at a time** — MUST NOT ask multiple clarifying questions in one turn.
+- **Multiple choice first** — MUST offer enumerated choices when the answer space is bounded; open-ended only when genuinely open.
+- **YAGNI ruthlessly** — MUST remove unrequested features from all designs.
+- **Incremental validation** — scenarios MUST present design section-by-section; move to the next only after user approval.
 - **Action principles are the scenario's to pick** — default set: TDD · Break-Don't-Bend · Zero-Context Entry. See `references/principles-library.md` for the catalog.
 
 ## Producer contract (S3 only)
 
 S3's only deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`. brainstorming is its sole author; coding-orchestrator consumes it and generates the story skeleton on its own. Full detail in `scenarios/feature.md`.
+
+## Failure handling
+
+Explicit walk-off for each failure point; never silently proceed.
+
+- **User refuses clarifying questions** — state which decisions are blocked, offer the smallest default you would otherwise infer, require explicit user OK before continuing.
+- **Challenge Gate standoff** (user rejects the strongest objection without a refutation) — pause. Record the disagreement in the design doc as an open risk and ask the user to either refute the objection or narrow scope; do NOT push to Propose approaches.
+- **Scenario routing ambiguous** (cannot pick S1 / S2 / S3) — MUST ask the user; never default silently.
+- **Unresolved 🔴 risk after max spike time-boxes** — halt. Report which assumption is still open and recommend either (a) splitting the story or (b) treating the unknown as a known risk handed to the downstream consumer; do NOT finalize design.
+- **Spec review loop exceeds 3 iterations** — stop iterating. Surface the outstanding blocking issues to the user and ask for a decision (accept as-is / redesign the contested section).
+- **Fast mode triggered but 🔴 risk appears mid-design** — MUST escalate to Normal mode and rerun from Risk & Spike; Fast mode cannot absorb 🔴.

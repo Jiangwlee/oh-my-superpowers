@@ -115,8 +115,8 @@ System prompt 从这里开始...
 
 **错误 2：Agent 直接写业务逻辑而不依赖 Skill**
 ```
-# 错误：system prompt 里写了 bash 脚本路径
-运行 /home/user/scripts/check.sh --input $file
+# 错误：system prompt 里写了绝对脚本路径（示例占位符，非真实路径）
+运行 <abs-path>/scripts/<your-script>.sh --input $file
 
 # 正确：通过 agents.json 声明 skill 依赖，skill 提供 CLI
 ```
