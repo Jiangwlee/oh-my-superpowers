@@ -5,9 +5,8 @@ description: >-
   skills/agents, building features, fixing non-trivial bugs, refactoring.
   Triggers include: "设计 skill/agent"、"新建 skill/agent"、"skill/agent brainstorm"、
   "开发/实现/加功能/修复/重构 X". Turns ideas into a complete design through
-  collaborative dialogue, then routes to the right scenario SOP (S1 open
-  discussion / S2 skill-agent / S3 feature-refactoring). Do NOT use for pure
-  factual lookups or questions with no creative or implementation intent.
+  collaborative dialogue. Do NOT use for pure factual lookups or questions
+  with no creative or implementation intent.
 ---
 
 # Brainstorming: Methodology + Scenario Router
@@ -49,14 +48,21 @@ Once matched, the rest of this file is the common skeleton; scenario-specific st
 
 ## Common skeleton (all scenarios)
 
+```mermaid
+flowchart TD
+    P1[1. Explore] --> P2[2. Clarifying questions]
+    P2 --> P3[3. Challenge Gate]
+    P3 --> P4[4. Propose approaches]
+    P4 --> R{Route to scenario}
+    R -->|S2 skill/agent| SA[scenarios/skill-agent.md]
+    R -->|S3 feature/refactor| F[scenarios/feature.md]
+    R -->|S1 fallback| O[scenarios/open.md]
 ```
-1. Explore project context — files, recent commits, ecosystem relevant to the scenario
-2. Ask clarifying questions — purpose / scope baseline; further questions are heuristic
-3. Challenge Gate — strongest objection + 3 checks (see references/challenge-gate.md)
-4. Propose approaches — Normal: 2-3 options with trade-offs; inline-scope: direct recommendation
-↓
-Branch into scenarios/{open,skill-agent,feature}.md for the scenario-specific SOP
-```
+
+1. **Explore project context** — files, recent commits, ecosystem relevant to the scenario.
+2. **Ask clarifying questions** — purpose / scope baseline; further questions are heuristic.
+3. **Challenge Gate** — strongest objection + 3 checks (see `references/challenge-gate.md`).
+4. **Propose approaches** — Normal: 2-3 options with trade-offs; Fast branch: direct recommendation.
 
 ### Clarifying questions: principle
 
