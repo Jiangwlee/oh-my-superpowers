@@ -120,8 +120,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--story-dir",
-        default="./stories",
-        help="Root stories directory (default: ./stories).",
+        required=True,
+        help="Resolved project stories directory.",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 

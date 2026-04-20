@@ -170,8 +170,8 @@ def main() -> int:
         description="Hot-path edits for tasks.yaml (status / worker / commit / note).",
     )
     parser.add_argument(
-        "--story-dir", default="./stories",
-        help="Root stories directory (default: ./stories).",
+        "--story-dir", required=True,
+        help="Resolved project stories directory.",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 

@@ -12,7 +12,7 @@ For each completed task:
    - **Artifacts** — does each file exist with the expected content/pattern?
    - **Key Links** — does each cross-file connection match the declared regex pattern?
 3. All present items pass →
-   `omp coding-orchestrator task update --story <slug> --id <NN> --status completed`
+   `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --status completed`
    (append `--commit <hash>` when relevant)
 
 ## Story Complete

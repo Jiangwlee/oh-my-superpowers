@@ -77,7 +77,7 @@ def handoff_update(
     reviewer_agent_id: str | None = typer.Option(None, "--reviewer-agent-id", help="Reviewer agent id."),
     commit: str | None = typer.Option(None, "--commit", help="Commit hash for the task."),
     deviation: str | None = typer.Option(None, "--deviation", help="Accepted deviation note."),
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
     """Write the structured `.handoff-context` for one story/task."""
     args = [
@@ -101,7 +101,7 @@ def handoff_update(
 
 @app.command()
 def archive(
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
     threshold_days: int = typer.Option(1, "--threshold-days", help="Age cutoff in days."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Report without moving."),
 ) -> None:
@@ -119,7 +119,7 @@ def review_create(
     additional: str | None = typer.Option(None, "--additional", help="Extra task-specific review instructions."),
     template: str = typer.Option("default", "--template", help="default|strict|minimal."),
     out: str | None = typer.Option(None, "--out", help="Output path for the rendered review prompt."),
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
     """Render a review prompt from the task spec and tasks.yaml metadata."""
     args = [
@@ -139,7 +139,7 @@ def review_create(
 @story_app.command("summarize")
 def story_summarize(
     story: str = typer.Argument(..., help="Story slug or <YYYY-MM-DD>-<slug>."),
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
     """Aggregate task usage by wave, role, and model."""
     _run("story.py", ["--story-dir", story_dir, "summarize", "--story", story])
@@ -159,7 +159,7 @@ def task_update(
     tokens: int | None = typer.Option(None, "--tokens", help="Total tokens for the run."),
     tool_uses: int | None = typer.Option(None, "--tool-uses", help="Tool call count for the run."),
     duration_ms: int | None = typer.Option(None, "--duration-ms", help="Duration in milliseconds."),
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
     """Flip status, attach a commit, set worker/reviewer, or leave a note."""
     args = ["--story-dir", story_dir, "update", "--story", story, "--id", id]
@@ -190,7 +190,7 @@ def task_update(
 def task_show(
     story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
     id: str | None = typer.Option(None, "--id", help="Show one task; omit to list all."),
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
     """List tasks for a story, or show one task's full record."""
     args = ["--story-dir", story_dir, "show", "--story", story]

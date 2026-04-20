@@ -14,6 +14,7 @@ Write it with:
 
 ```bash
 omp coding-orchestrator handoff update \
+  --story-dir <PROJECT_ROOT>/stories \
   --story <slug> \
   --task-id <NN> \
   --phase <executing|reviewing|accepting|advancing> \

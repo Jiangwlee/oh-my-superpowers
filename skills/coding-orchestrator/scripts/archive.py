@@ -13,7 +13,7 @@ free of context noise. Three archive rules (any match triggers a move):
   3. Aged: ``today - tasks.yaml.updated > --threshold-days``.
 
 Usage:
-    uv run scripts/archive.py --story-dir ./stories [--threshold-days 1] [--dry-run]
+    uv run scripts/archive.py --story-dir /repo/stories [--threshold-days 1] [--dry-run]
 """
 from __future__ import annotations
 
@@ -70,8 +70,8 @@ def main() -> int:
         description="Move stale stories into stories/archives/.",
     )
     parser.add_argument(
-        "--story-dir", default="./stories",
-        help="Root stories directory (default: ./stories).",
+        "--story-dir", required=True,
+        help="Resolved project stories directory.",
     )
     parser.add_argument(
         "--threshold-days", type=int, default=1,

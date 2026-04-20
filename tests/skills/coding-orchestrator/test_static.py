@@ -91,6 +91,12 @@ class TestSkillMd(unittest.TestCase):
         content = SKILL_MD.read_text(encoding="utf-8")
         self.assertIn("<HARD-GATE>", content, "SKILL.md 缺少 HARD-GATE 标记")
 
+    def test_hard_gate_restricts_orchestrator_to_control_plane(self) -> None:
+        """SKILL.md 必须明确约束 orchestrator 只能改控制面工件。"""
+        content = SKILL_MD.read_text(encoding="utf-8")
+        self.assertIn("control-plane artifacts only", content)
+        self.assertIn("MUST NOT edit implementation files or test files", content)
+
 
 class TestHooksJson(unittest.TestCase):
     """hooks.json 结构验证。"""
@@ -134,6 +140,30 @@ class TestReferences(unittest.TestCase):
             if ref_path.exists():
                 content = ref_path.read_text(encoding="utf-8").strip()
                 self.assertTrue(len(content) > 100, f"{ref_name} 内容过短（<100字符）")
+
+    def test_dispatch_routes_never_assigns_coding_to_orchestrator(self) -> None:
+        """dispatch-routes 不得允许 orchestrator 直接修代码或接管实现。"""
+        content = (REFERENCES_DIR / "dispatch-routes.md").read_text(encoding="utf-8")
+        forbidden = [
+            "fix directly",
+            "takes over",
+            "Orchestrator takes over",
+        ]
+        for pattern in forbidden:
+            self.assertNotIn(pattern, content, f"dispatch-routes 含禁止表述：{pattern}")
+
+    def test_no_docs_claim_cwd_based_story_dir_default(self) -> None:
+        """文档与脚本不得继续宣称 ./stories 是默认真相。"""
+        files = [
+            SKILL_MD,
+            REFERENCES_DIR / "storage-layout.md",
+            REFERENCES_DIR / "handoff-guideline.md",
+            REFERENCES_DIR / "dispatch-routes.md",
+            REFERENCES_DIR / "acceptance.md",
+        ]
+        for path in files:
+            content = path.read_text(encoding="utf-8")
+            self.assertNotIn("./stories", content, f"{path} 仍引用 cwd 默认 stories 路径")
 
 
 class TestWorkerRefs(unittest.TestCase):

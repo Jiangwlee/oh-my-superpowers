@@ -1,8 +1,8 @@
 # Single source of truth for task state.
 # - Add / remove / reorder tasks: edit this file directly.
-# - Flip status / attach commit / set worker: use `omp coding-orchestrator task update ...`
+# - Flip status / attach commit / set worker: use `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories ...`
 #   (atomic, auto-maintains started / completed / story-level `updated`).
-# - Record sub-agent usage metrics with `omp coding-orchestrator task update --usage-*`.
+# - Record sub-agent usage metrics with `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --usage-*`.
 
 story: <story-slug>          # matches directory suffix: stories/<YYYY-MM-DD>-<story-slug>/
 created: <YYYY-MM-DD>

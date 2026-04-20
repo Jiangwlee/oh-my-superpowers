@@ -1,12 +1,13 @@
 ---
 name: brainstorming
 description: >-
-  You MUST use this before any creative or implementation work — designing
-  skills/agents, building features, fixing non-trivial bugs, refactoring.
-  Triggers include: "设计 skill/agent"、"新建 skill/agent"、"skill/agent brainstorm"、
-  "开发/实现/加功能/修复/重构 X". Turns ideas into a complete design through
-  collaborative dialogue. Do NOT use for pure factual lookups or questions
-  with no creative or implementation intent.
+  Use when the user wants to design before implementation, shape a new
+  skill/agent, or clarify a non-trivial feature or refactor plan through
+  structured discussion. Typical triggers include: "设计 skill/agent"、
+  "新建 skill/agent"、"skill/agent brainstorm"、"先讨论方案再实现"、
+  "开发/实现/加功能/修复/重构 X". Do NOT use for pure factual lookups,
+  casual discussion, or trivial single-file changes that can be handled
+  directly.
 ---
 
 # Brainstorming: Methodology + Scenario Router

@@ -66,15 +66,15 @@ Tasks without dependencies may run in parallel.
 After each task's code is written:
 
 1. Flip status to `reviewing` before dispatching the reviewer:
-   `omp coding-orchestrator task update --story <slug> --id <NN> --status reviewing --reviewer <id>`
+   `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --status reviewing --reviewer <id>`
 2. Generate the review prompt with:
-   `omp coding-orchestrator review create --story <slug> --task-id <NN> [--template default|strict|minimal]`
+   `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--template default|strict|minimal]`
    The rubric and output format are fixed by template. Dispatch using the same route decision as Execute. Prefer an L2+ reasoning-focused runtime for review.
 3. Orchestrator applies second judgment to the review result:
-   - Confirmed issue → fix directly (small) or dispatch worker (large); flip back to `executing` while fix is in flight
+   - Confirmed issue → dispatch worker revision; flip back to `executing` while the fix is in flight
    - False positive → ignore; add `--note "..."` explaining why
 4. Advance to Test phase:
-   `omp coding-orchestrator task update --story <slug> --id <NN> --status testing`
+   `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --status testing`
    (append `--commit <hash>` for any fix commit produced during review)
 
 ---
@@ -92,7 +92,8 @@ On failure:
 ```
 Sub-agent fails or 3 attempts exhausted
     → Escalate to a different sub-agent
-        → Orchestrator takes over (this task only)
+        → Escalate to a stronger worker or different runtime
+            → If still blocked, pause and report the blocker to the user
 ```
 
 Each escalation carries: error logs, attempted fixes, current hypothesis.

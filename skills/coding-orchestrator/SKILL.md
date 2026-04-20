@@ -18,6 +18,9 @@ description: >-
 The orchestrator does NOT write code. All coding, design, testing, and
 debugging is delegated to sub-agents. If you catch yourself writing
 implementation code, STOP — you are violating the orchestrator contract.
+The orchestrator may edit control-plane artifacts only: `tasks.yaml`,
+`.handoff-context`, task specs, review prompts, and `story-memory.md`.
+It MUST NOT edit implementation files or test files.
 </HARD-GATE>
 
 ## Pipeline
@@ -35,15 +38,15 @@ implementation code, STOP — you are violating the orchestrator contract.
 1. **Write JIT Spec** — for this wave, before dispatching. Read `references/task-decomposition-rules.md` before writing any spec.
 2. **Execute** — dispatch coding tasks. Route/prompt protocol: `references/dispatch-routes.md`.
 3. **Checkpoint** — after each material state change, update `stories/<slug>/.handoff-context` with:
-   `omp coding-orchestrator handoff update --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
+   `omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
 4. **Review** — generate a fixed review rubric with:
-   `omp coding-orchestrator review create --story <slug> --task-id <NN> [--template default|strict|minimal]`
-   Then dispatch review + apply orchestrator second judgment. Protocol: `references/dispatch-routes.md` § Review Protocol.
-4. **Test & Debug** — run tests; on failure see `references/dispatch-routes.md` § Test & Debug.
+   `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--template default|strict|minimal]`
+   Then dispatch review + apply orchestrator second judgment. The orchestrator judges and routes fixes; workers make all code changes. Protocol: `references/dispatch-routes.md` § Review Protocol.
+4. **Test & Debug** — run tests; on failure see `references/dispatch-routes.md` § Test & Debug. The orchestrator decides escalation; workers execute the fix.
 5. **Accept Task** — verify must_haves; mark passing tasks `completed`. Protocol: `references/acceptance.md`.
 6. **Feedback & Revise** — capture reusable feedback into `story-memory.md`. Protocol: `references/story-memory-guideline.md`.
 7. **Advance Wave** — when all current-wave tasks are `completed`, flip each next-wave task to executing:
-   `omp coding-orchestrator task update --story <slug> --id <NN> --status executing`
+   `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --status executing`
 8. **Report & Repeat** — report wave status in this format, then loop back to step 1:
    ```
    Wave N: X/Y completed — task-NN [status], task-MM [status]
