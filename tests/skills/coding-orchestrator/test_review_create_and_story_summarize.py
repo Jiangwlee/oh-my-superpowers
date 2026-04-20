@@ -6,6 +6,7 @@ import contextlib
 import importlib.util
 import io
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,8 +14,10 @@ from pathlib import Path
 
 import yaml
 
-SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "coding-orchestrator"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SKILL_DIR = REPO_ROOT / "skills" / "coding-orchestrator"
 SCRIPTS_DIR = SKILL_DIR / "scripts"
+CLI_MAIN = REPO_ROOT / "cli" / "coding-orchestrator" / "main.py"
 FIXTURE_STORY = Path(__file__).parent / "fixtures" / "feature-dispatch" / "stories" / "2026-04-19-fake"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -54,7 +57,6 @@ class TestReviewCreate(unittest.TestCase):
                 story_dir=str(Path(self.tmpdir) / "stories"),
                 story="fake",
                 task_id="01",
-                template="default",
                 additional="Focus on file scope drift.",
                 out=str(out),
             )
@@ -65,6 +67,46 @@ class TestReviewCreate(unittest.TestCase):
         self.assertIn("git show def5678 --stat", text)
         self.assertIn("## Acceptance Criteria", text)
         self.assertIn("Focus on file scope drift.", text)
+
+
+class TestReviewCreateCliIntegration(unittest.TestCase):
+    """Guard against CLI-wrapper ↔ script argument drift.
+
+    The typer wrapper at cli/coding-orchestrator/main.py forwards args to
+    scripts/review.py; regressions there never surface in the unit tests
+    that call cmd_create() directly.
+    """
+
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.mkdtemp()
+        self.story_root = Path(self.tmpdir) / "stories"
+        shutil.copytree(FIXTURE_STORY, self.story_root / "2026-04-19-fake")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_review_create_via_cli_succeeds(self) -> None:
+        out = Path(self.tmpdir) / "review.md"
+        result = subprocess.run(
+            [
+                "uv", "run", "--script", str(CLI_MAIN),
+                "review", "create",
+                "--story-dir", str(self.story_root),
+                "--story", "fake",
+                "--task-id", "01",
+                "--additional", "cli integration",
+                "--out", str(out),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            f"CLI failed.\nstdout={result.stdout}\nstderr={result.stderr}",
+        )
+        self.assertTrue(out.exists(), "review output file not created")
+        self.assertIn("## Acceptance Criteria", out.read_text(encoding="utf-8"))
 
 
 class TestStorySummarize(unittest.TestCase):

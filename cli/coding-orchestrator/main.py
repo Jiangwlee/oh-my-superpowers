@@ -117,17 +117,15 @@ def review_create(
     story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
     task_id: str = typer.Option(..., "--task-id", help="Task id, e.g. '01'."),
     additional: str | None = typer.Option(None, "--additional", help="Extra task-specific review instructions."),
-    template: str = typer.Option("default", "--template", help="default|strict|minimal."),
     out: str | None = typer.Option(None, "--out", help="Output path for the rendered review prompt."),
     story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
-    """Render a review prompt from the task spec and tasks.yaml metadata."""
+    """Render a task context fragment for code review dispatch."""
     args = [
         "--story-dir", story_dir,
         "create",
         "--story", story,
         "--task-id", task_id,
-        "--template", template,
     ]
     if additional is not None:
         args += ["--additional", additional]
