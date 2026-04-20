@@ -32,6 +32,18 @@ CLI            ← omp 命令（安装/卸载/测试）
 
 ---
 
+## Hooks 机制
+
+Hooks 是 Claude Code 的生命周期事件钩子。**Skill 通过 `hooks.json` 声明所需 hooks，`omp install` 自动合并到 `~/.claude/settings.json`，`omp remove` 自动移除。**
+
+常用事件：`SessionStart`（注入 Claude 上下文）、`UserPromptSubmit`（注入 Claude 上下文）、`PreToolUse`（可阻断工具调用）、`PostCompact`（压缩后恢复上下文）、`Stop`。
+
+> 只有 `SessionStart` 和 `UserPromptSubmit` 的 stdout 自动注入 Claude 上下文；其余事件须通过 JSON `additionalContext` 字段显式注入。
+
+详见 `docs/specs/02_framework/hooks.md`。
+
+---
+
 ## 项目结构
 
 ```
@@ -42,6 +54,7 @@ skills/                   # Skill 单元（每个独立）
 ├── team/                 # 通用 tmux agent 编排（one-shot 驱动 claude/codex/pi）
 └── <skill-name>/
     ├── SKILL.md          # 元数据 + CLI 命令文档（不写相对路径）
+    ├── hooks.json        # 可选：声明所需 Claude Code hooks（omp install 自动合并）
     ├── scripts/          # 脚本（CLI 封装的实现，不直接被模型调用）
     ├── references/       # 给 Agent 读的参考文档
     └── assets/           # Generator / Inversion 模式的模板或骨架
