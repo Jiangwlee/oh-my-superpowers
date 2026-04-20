@@ -28,3 +28,8 @@ pending: false
 ## Resume
 <!-- One line, fixed format:
      Read .handover.md and continue [exact next action] -->
+
+## Compaction Rules
+- Turn -1 (last): remove tool results; keep user + assistant in full
+- Turn -2: remove tool results; keep user in full; summarize assistant ≤100 chars
+- Turn -3: remove tool results; keep user in full; summarize assistant ≤50 chars

@@ -34,6 +34,7 @@ focused `/compact` instruction. Show:
 ━━━ Handover saved → .handover.md ━━━
 
 ① /compact Focus on [task]. Preserve: [decision], [decision], [next task].
+   Apply compaction rules from .handover.md.
 
 ② (PostCompact hook will auto-restore on your next message)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
