@@ -18,7 +18,7 @@ FORBIDDEN_PATTERNS = [
 
 REQUIRED_COMMANDS = [
     "omp run",
-    "omp list -t agent",
+    "omp list agent",
 ]
 
 

@@ -18,7 +18,7 @@ description: >-
 Above is a high-frequency subset. Get the full agent list:
 
 ```bash
-omp list -t agent
+omp list agent
 ```
 
 ## Invocation

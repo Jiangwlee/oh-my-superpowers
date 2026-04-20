@@ -8,9 +8,9 @@
 # Commands:
 #   install <skill|agent> <name> [--global]                  安装 skill 或 agent
 #   remove  <skill|agent> <name> [--global]                  卸载 skill 或 agent
-#   list    [--type skill|agent] [--global]                  列出已安装的 skills 和 agents
+#   list    [skill|agent] [--global]                         列出已安装的 skills 和 agents
 #   run     <name> [--mode text|stream|json|interactive]     运行 Pi Agent
-#   test    <name>                                           运行 skill T1 测试
+#   test    <skill|agent> <name>                             运行 T1 测试（目前仅支持 skill）
 #
 # Source of truth: ~/.oh-my-superpowers/ (bootstrapped by install.sh)
 
@@ -688,12 +688,19 @@ def remove(
 
 @app.command(name="list")
 def list_cmd(
-    type_: Annotated[Optional[str], typer.Option("--type", "-t", metavar="skill|agent", help="过滤类型")] = None,
+    type_: Annotated[
+        Optional[str],
+        typer.Argument(metavar="[skill|agent]", help="只列出 skill 或 agent（省略则全列）"),
+    ] = None,
     global_: Annotated[bool, typer.Option("--global", "-g", help="显示全局安装")] = False,
 ) -> None:
     """列出已安装的 skills 和 agents。"""
     _check_home()
     base = Path.home() if global_ else Path.cwd()
+
+    if type_ is not None and type_.lower() not in {"skill", "agent"}:
+        console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
+        raise typer.Exit(1)
 
     show_skills = type_ is None or type_.lower() == "skill"
     show_agents = type_ is None or type_.lower() == "agent"
@@ -748,10 +755,18 @@ def run(
 
 @app.command()
 def test(
-    name: Annotated[str, typer.Argument(help="skill 名称")],
+    type_: Annotated[str, typer.Argument(metavar="skill|agent", help="skill 或 agent")],
+    name: Annotated[str, typer.Argument(help="名称")],
 ) -> None:
-    """运行 skill T1 静态测试。"""
+    """运行 T1 静态测试（目前仅支持 skill）。"""
     _check_home()
+    t = type_.lower()
+    if t == "agent":
+        console.print("[red][omp] ERROR:[/red] agent tests not yet supported")
+        raise typer.Exit(1)
+    if t != "skill":
+        console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
+        raise typer.Exit(1)
     tests_dir = OMP_HOME / "tests" / "skills" / name
     if not tests_dir.is_dir():
         console.print(f"[red][omp] ERROR:[/red] no tests/skills/{name}/ directory found")

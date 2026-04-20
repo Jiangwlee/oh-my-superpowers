@@ -95,14 +95,14 @@ omp remove agent <name> --global
 ```bash
 omp list                          # 列出已安装的 skills 和 agents（局部）
 omp list --global                 # 仅列出全局安装
-omp list --type skill             # 只列出 skills
-omp list --type agent             # 只列出 agents
+omp list skill                    # 只列出 skills
+omp list agent                    # 只列出 agents
 ```
 
 ### test
 
 ```bash
-omp test <name>                   # 运行指定 skill 的 T1 测试
+omp test skill <name>             # 运行指定 skill 的 T1 测试
 ```
 
 ### run
