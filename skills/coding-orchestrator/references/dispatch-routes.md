@@ -71,9 +71,9 @@ After each task's code is written:
 
 1. Flip status to `reviewing` before dispatching the reviewer:
    `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --status reviewing --reviewer <id>`
-2. Generate the review prompt with:
-   `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--template default|strict|minimal]`
-   The rubric and output format are fixed by template. Dispatch using the same route decision as Execute. Prefer an L2+ reasoning-focused runtime for review.
+2. Generate the task context fragment with:
+   `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--additional <str>]`
+   Read the `code-reviewer` agent (see SKILL.md Agents table), pass `<agent protocol body>\n\n<task context>` as the dispatch prompt. Prefer an L2+ reasoning-focused runtime for review.
 3. Orchestrator applies second judgment to the review result:
    - Confirmed issue → dispatch worker revision; flip back to `executing` while the fix is in flight
    - False positive → ignore; add `--note "..."` explaining why

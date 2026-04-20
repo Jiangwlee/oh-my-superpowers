@@ -17,7 +17,7 @@ In both paths, wave ≥ 2 specs are written JIT once prior waves complete, infor
 
 ## Phase 1 Skeleton Review Gate
 
-Before wave 1 dispatch, run a skeleton review using `templates/task-skeleton-reviewer-prompt.md`.
+Before wave 1 dispatch, dispatch the `task-skeleton-reviewer` agent (see SKILL.md Agents table).
 
 - Route this review to an L3 reviewer.
 - The reviewer returns JSON with `merge`, `split`, and `rewave`.
