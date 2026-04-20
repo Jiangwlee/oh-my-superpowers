@@ -17,18 +17,55 @@ Do NOT guess, rewrite broadly, or "try a few fixes" before collecting
 evidence. Reproducible debugging starts with observation.
 </HARD-GATE>
 
-## Checklist
+## Workflow
 
-1. **Reproduce the problem** — identify the failing test, command, or user flow.
-2. **Read the coding constraints** — load `references/coding-guideline.md`.
-3. **Read the debugging method** — load `references/debugging-guideline.md`.
-4. **List possible causes** — write 3-7 falsifiable hypotheses before changing code.
-5. **Add targeted diagnostics** — log values at decision points, not generic traces.
-6. **Read the evidence** — run the failing path and inspect logs, errors, and outputs.
-7. **Narrow the scope** — isolate the specific file, function, or condition causing the failure.
-8. **Make the smallest fix** — change only what addresses the root cause.
-9. **Verify** — rerun the original failing test or reproduction, then related checks.
-10. **Clean up** — remove temporary logs and debugging artifacts.
+Debugging is not a straight line. The flow below has three feedback loops:
+re-form hypotheses when evidence falsifies them, re-pick the observation
+method when the current lens is too coarse, and re-enter the loop when the
+fix fails verification.
+
+```mermaid
+flowchart TD
+    A[Reproduce the failure] --> B[Load coding-guideline<br/>& debugging-guideline]
+    B --> C[List 3-7 falsifiable hypotheses]
+    C --> D{Choose observation method<br/>read code / add logs / chrome-devtools}
+    D --> E[Run failing path,<br/>gather evidence]
+    E --> F{Evidence supports<br/>a hypothesis?}
+    F -- no, all falsified --> C
+    F -- yes --> G[Narrow scope to<br/>file / function / condition]
+    G --> H{Root cause<br/>identified?}
+    H -- no, need different lens --> D
+    H -- yes --> I[Smallest fix]
+    I --> J[Rerun failing test<br/>+ related checks]
+    J --> K{Original failure gone?}
+    K -- no --> C
+    K -- yes --> L[Clean up diagnostic artifacts]
+    L --> M([Done])
+
+    classDef loop stroke:#d97706,stroke-width:2px;
+    class C,D loop
+```
+
+## Observation Methods
+
+Pick by **environment** + **suspect range**:
+
+| Method | Use when | Avoid when |
+|---|---|---|
+| **Read code** | Range already narrow (short stack, error pinpoints line); pure logic / pure function; config / type / typo error; small recent change | Depends on runtime values; concurrency / timing; spread across many modules with no entry point |
+| **Add logs** | Backend / CLI / long pipeline; async, concurrent, cross-process; rerunnable but not steppable; need to compare multiple runs | Browser UI / DOM / network bugs; range already 1-2 functions; throwaway script |
+| **chrome-devtools** | Browser / frontend: network failures, console errors, DOM / CSS state, SPA routing, frontend performance, JS runtime values | Non-browser scenarios; headless backend; CLI |
+
+Decision order:
+
+```text
+Is the failure in a browser page?
+  yes -> chrome-devtools (list_console_messages, list_network_requests,
+                          evaluate_script, take_snapshot ...)
+  no  -> Is the suspect range already 1-2 functions of pure logic?
+         yes -> read code
+         no  -> add diagnostic logs
+```
 
 ## Loading Guide
 

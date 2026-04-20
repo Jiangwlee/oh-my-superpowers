@@ -47,40 +47,58 @@ Hooks 是 Claude Code 的生命周期事件钩子。**Skill 通过 `hooks.json` 
 ## 项目结构
 
 ```
-skills/                   # Skill 单元（每个独立）
-├── markdown-to-anything/ # Markdown 转 PDF/PNG 等格式
-├── llm-wiki/             # Karpathy 风格 markdown wiki：omp wiki 能力层 + SOP skill
-├── round-table/          # 多 AI runtime 圆桌讨论（claude/codex/pi 并行）
-├── team/                 # 通用 tmux agent 编排（one-shot 驱动 claude/codex/pi）
+skills/                       # Skill 单元（每个独立）
+├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
+├── coding-orchestrator/      # Spec 驱动子代理编排（消费 S3 产物）
+├── skill-review/             # Skill 目录质量审查
+├── agent-review/             # Pi Agent markdown 文件审查
+├── code-review/              # 本地未提交/未推送代码改动审查
+├── debug/                    # 可复现 bug 的系统化根因调试
+├── handoff/                  # /compact 前生成上下文交接文件
+├── insight/                  # 项目记忆系统（recall/capture/evaluate/list）
+├── evolution/                # 基于跨项目使用数据演进 skills 与 CLAUDE.md
+├── deep-research/            # 多轮、多源、带验证的深度研究
+├── omp-agents/               # 通过 omp run 委托给注册的 Pi Agent
+├── team/                     # 一次性 tmux 派发到 claude/codex/pi
+├── round-table/              # 多 runtime 角色化圆桌辩论
+├── web-operator/             # Chrome CDP 浏览器自动化 / 搜索 / 抽取
+├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
+├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki + SOP
+├── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
 └── <skill-name>/
-    ├── SKILL.md          # 元数据 + CLI 命令文档（不写相对路径）
-    ├── hooks.json        # 可选：声明所需 Claude Code hooks（omp install 自动合并）
-    ├── scripts/          # 脚本（CLI 封装的实现，不直接被模型调用）
-    ├── references/       # 给 Agent 读的参考文档
-    └── assets/           # Generator / Inversion 模式的模板或骨架
+    ├── SKILL.md              # 元数据 + CLI 命令文档（不写相对路径）
+    ├── hooks.json            # 可选：声明所需 Claude Code hooks（omp install 自动合并）
+    ├── scripts/              # 脚本（CLI 封装的实现，不直接被模型调用）
+    ├── references/           # 给 Agent 读的参考文档
+    └── assets/               # Generator / Inversion 模式的模板或骨架
     # 注意：tests 不得放在 skill 目录下（会随 symlink 进 bundle）
 
-agents/                   # Pi Agent 定义（每个独立）
-├── skill-review.md       # Skill 质量审查官
-└── <name>.md             # Pi frontmatter + system prompt
+agents/                       # Pi Agent 定义（每个独立）+ agents.json 注册表
+├── agents.json               # 注册表：agent → 默认模型 + 绑定 skill 集合
+├── reviewer.md               # 通用质量审查官（自动路由 skill/agent/code review）
+├── researcher.md             # 通用研究员（多轮跨源研究）
+├── oss-researcher.md         # 开源代码研究分析师
+├── media-editor.md           # AI 领域媒体编辑（X.com / Reddit）
+├── ux-engineer.md            # UX 工程师（前端审计 + 设计）
+└── wps-assistant.md          # WPS 文档助理
 
-cli/                      # 工具 CLI 模块（typer apps）
-└── <tool>/main.py        # 每个 skill 对应一个 CLI 模块
+cli/                          # 工具 CLI 模块（typer apps，omp <tool> 路由）
+└── <tool>/main.py            # 每个工具一个 CLI 模块（PEP 723 inline deps）
 
-tests/                    # 所有测试的统一根（skill 测试不放 skill 目录下）
-└── skills/<skill-name>/  # 对应 skill 的 T1 静态测试
+tests/                        # 所有测试的统一根（skill 测试不放 skill 目录下）
+└── skills/<skill-name>/      # 对应 skill 的 T1 静态测试
 
 bin/
-└── omp                   # 项目 CLI（install/remove/list/test）
+└── omp                       # 项目 CLI（install/remove/list/run/test/upgrade + tool 路由）
 
 docs/
-├── specs/                # 项目级开发规范
-│   ├── 00_skills/        # Skills 规范
-│   ├── 01_agents/        # Pi Agent 规范
-│   └── 02_framework/     # 本框架规范（架构、安装、标准、评分表）
-└── brainstorming/        # brainstorming 输出
-    ├── specs/            # S3 设计文档（YYYY-MM-DD-<slug>.md）
-    └── discussions/      # S1 开放讨论记录
+├── specs/                    # 项目级开发规范
+│   ├── 00_skills/            # Skills 规范
+│   ├── 01_agents/            # Pi Agent 规范
+│   └── 02_framework/         # 本框架规范（架构、安装、标准、评分表）
+└── brainstorming/            # brainstorming 输出
+    ├── specs/                # S3 设计文档（YYYY-MM-DD-<slug>.md）
+    └── discussions/          # S1 开放讨论记录
 ```
 
 ---
@@ -220,7 +238,7 @@ BrainStorm → Plan → Code → Review → Test → Commit
 
 - **Skill 开发**：先读 `docs/specs/00_skills/README.md`，再用 `brainstorming` skill
 - **Agent 开发**：先读 `docs/specs/01_agents/README.md`，再用 `brainstorming` skill
-- **Review**：用 `skill-review`（已有）/ `agent-review`（待建）
+- **Review**：用 `skill-review` / `agent-review` / `code-review`（统一入口：`reviewer` agent 自动路由）
 - **测试分层**：T1 静态检查 → T2 E2E（`pi -p`）→ T3 LLM-as-judge
 
 ---
@@ -352,8 +370,8 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 
 ## Deep Research
 
-如果一个问题需要网络搜索/社交媒体等更多渠道的输入，请使用 `omp run researcher` 命令：
+如果一个问题需要网络搜索/社交媒体等更多渠道的输入，请使用 `omp run researcher` 命令（默认模型见 `agents/agents.json`，可用 `--model` 覆盖）：
 
 ```bash
-omp run researcher -m litellm-local/qwen3.5-27b --mode stream "请快速研究下Claude Code的记忆机制"
+omp run researcher --mode stream "请快速研究下Claude Code的记忆机制"
 ```

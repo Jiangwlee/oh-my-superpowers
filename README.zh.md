@@ -27,12 +27,32 @@ oh-my-superpowers 聚焦两件事：
 skills/                       # Skill 单元（各自独立）
 ├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
 ├── coding-orchestrator/      # 消费 S3 产物的 spec 驱动子代理编排
-├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki 数据层 + 合成 SOP
-├── skill-review/             # Skill 质量审查工具
+├── skill-review/             # Skill 目录质量审查
+├── agent-review/             # Pi Agent markdown 文件审查
+├── code-review/              # 本地未提交/未推送代码改动审查
+├── debug/                    # 可复现 bug 的系统化根因调试
+├── handoff/                  # /compact 前生成上下文交接文件
+├── insight/                  # 项目记忆系统：recall / capture / evaluate / list
+├── evolution/                # 基于跨项目使用数据演进 skills 与 CLAUDE.md
+├── deep-research/            # 多轮、多源、带验证的深度研究
+├── omp-agents/               # 把任务委托给 omp run 注册的 Pi Agent
+├── team/                     # 一次性 tmux 派发到 claude/codex/pi
+├── round-table/              # 多 runtime 角色化圆桌辩论
+├── web-operator/             # Chrome CDP 浏览、搜索、内容抽取
+├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
+├── llm-wiki/                 # 基于 omp wiki 的 Karpathy 风格 markdown wiki
 └── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
 
-agents/                       # Pi Agent 定义
-└── skill-review.md           # Skill 质量审查官
+agents/                       # Pi Agent 定义（+ agents.json 注册表）
+├── reviewer.md               # 通用质量审查官（自动选择审查路径）
+├── researcher.md             # 通用研究员（多轮深度研究）
+├── oss-researcher.md         # 开源代码研究分析师
+├── media-editor.md           # AI 领域媒体编辑（X.com / Reddit）
+├── ux-engineer.md            # UX 工程师（前端审计 + 设计）
+└── wps-assistant.md          # WPS 文档助理
+
+cli/                          # typer CLI 模块（每个 tool 一个，由 omp <tool> 路由）
+└── <tool>/main.py
 
 bin/
 └── omp                       # oh-my-superpowers CLI
@@ -86,29 +106,65 @@ omp list --global  # 全局
 |-------|------|------|
 | `brainstorming` | Router + Pipeline | 场景路由（S1 开放讨论 / S2 skill-agent / S3 feature）；S3 产出 story 骨架交接 `coding-orchestrator` |
 | `coding-orchestrator` | Orchestrator + Sub-agent | Spec 驱动的子代理编排；消费 S3 产物，JIT 分波执行 |
-| `llm-wiki` | Pipeline + Tool Wrapper | 基于 `omp wiki` 的 Karpathy 风格 markdown wiki 工作流 |
 | `skill-review` | Reviewer + Pipeline | Skill 目录质量审查 |
+| `agent-review` | Reviewer | Pi Agent markdown 文件的规范与设计审查 |
+| `code-review` | Reviewer | 本地未提交/未推送代码改动的质量审查 |
+| `debug` | Pipeline | 可复现 bug 的系统化根因调试 |
+| `handoff` | Pipeline | `/compact` 前生成 `.handover.md` 与压缩指令 |
+| `insight` | Pipeline | 项目记忆系统：recall / capture / evaluate / list |
+| `evolution` | Pipeline | 基于跨项目使用数据演进 skills 与 CLAUDE.md |
+| `deep-research` | Pipeline | 多轮、多源、带验证的深度研究 |
+| `omp-agents` | Router | 通过 `omp run` 把任务委托给注册的 Pi Agent |
+| `team` | Tool Wrapper | 一次性 tmux 派发任务到 claude/codex/pi |
+| `round-table` | Tool Wrapper | 多 runtime 角色化圆桌辩论 |
+| `web-operator` | Tool Wrapper | Chrome CDP 浏览器自动化、搜索、内容抽取 |
+| `media-editor` | Pipeline | 为 media-editor agent 提供归档/查询/提升能力 |
+| `llm-wiki` | Pipeline + Tool Wrapper | 基于 `omp wiki` 的 Karpathy 风格 markdown wiki 工作流 |
 | `markdown-to-anything` | Pipeline | Markdown 转 PDF、PNG 等格式 |
 
 ## 可用 Agents
 
+定义在 `agents/`，由 `agents/agents.json` 注册（绑定默认模型与 skill 集合）。
+
 | Agent | 角色 | 用途 |
 |-------|------|------|
-| `skill-review` | Skill 质量审查官 | 全面审计 Skill 目录：规范合规性、设计质量、证据质量 |
+| `reviewer` | 通用质量审查官 | 根据被审对象自动选择 skill-review / agent-review / code-review |
+| `researcher` | 通用研究员 | 多轮跨源研究、事实归纳、观点梳理 |
+| `oss-researcher` | 开源代码研究分析师 | 解答开源项目实现问题，沉淀分层 Obsidian 知识库 |
+| `media-editor` | AI 领域媒体编辑 | 探索 X.com / Reddit AI 内容，归档生成简报 |
+| `ux-engineer` | UX 工程师 | 前端 UI 审计与设计（基于 impeccable skill 集合）|
+| `wps-assistant` | WPS 文档助理 | 在 WPS / 金山文档空间内定位文档与回答问题 |
 
 ## omp 命令
 
 ```
-omp run   agent <name> --model <m> <prompt>   运行 Pi Agent（实时流式输出）
-omp list  [--global]                          列出已安装 Skills 和可用 Agents
-omp install skill <name> [--global]           安装 Skill（局部或全局）
-omp remove  skill <name> [--global]           卸载 Skill
-omp test skill <name>                         运行 Skill 的 T1 测试
-omp help                                      显示帮助
+omp install <skill|agent> <name> [--global]   安装 skill 或 agent（symlink）
+omp remove  <skill|agent> <name> [--global]   卸载
+omp list    [skill|agent] [--global]          列出已安装 skills 与 agents
+omp run     <agent> [--model M] [--mode …] <prompt>
+                                              运行 Pi Agent（text/stream/json/interactive）
+omp test    skill <name>                      运行 skill 的 T1 静态测试
+omp upgrade                                   拉取最新版并重新注册命令
+```
+
+Tool 子命令（每个路由到 `cli/<tool>/main.py`，使用 `omp <tool> --help` 查看）：
+
+```
+omp coding-orchestrator   Story / task 生命周期
+omp deep-research         初始化与构建 deep-research 工作区
+omp evolution             扫描 sessions / 查看演进历史
+omp handoff               compaction lifecycle 上下文交接
+omp insight               从 AI 对话中提取 memory 并提炼洞察
+omp media-editor          归档 / 查询 / 提升 media items
+omp round-table           多 AI 圆桌讨论
+omp skill-review          skill 目录的机械一致性检查
+omp team                  一次性 tmux agent 编排
+omp web-operator          浏览器自动化、搜索、内容抽取
+omp wiki                  Karpathy 风格 markdown wiki
 ```
 
 Skill 安装为 symlink，同时写入 `.agents/skills/`（Pi）和 `.claude/skills/`（Claude Code）。
-Agent 直接从源码运行，无需安装步骤。
+Agent 通过 `omp install agent <name>` 安装（同样基于 symlink）。
 
 ## 架构
 

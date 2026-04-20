@@ -10,7 +10,7 @@ description: >-
   directly.
 ---
 
-# Brainstorming: Methodology + Scenario Router
+# Brainstorming
 
 <!--
   Scenario files (load the one that matches):
@@ -29,34 +29,50 @@ description: >-
     - assets/spec-document-reviewer-prompt.md       Spec review subagent prompt
 -->
 
-Turn ideas into complete designs through collaborative dialogue. This file is **methodology + router**. The detailed SOP lives in `scenarios/`.
+Run a design-before-implementation pipeline through collaborative dialogue. This file defines the top-level workflow, routing, and guardrails. The detailed scenario SOP lives in `scenarios/`.
+
+## Hard Gate
 
 <HARD-GATE>
 Do NOT write code, scaffold a project, or take implementation action until the relevant scenario SOP has run and the user has approved the output. Fast mode (defined per scenario) exists for trivial tasks — it is not an excuse to skip brainstorming.
 </HARD-GATE>
 
-## Phase 0 — Scenario routing
+## Key Principles
 
-Before anything else, determine which scenario applies:
+- **One question at a time** — Ask at most one clarifying question per turn.
+- **Multiple choice first** — Use bounded choices whenever the answer space is known; use open-ended questions only when it is genuinely open.
+- **YAGNI ruthlessly** — Do not carry unrequested features, abstractions, or scope into the design.
+- **Validate incrementally** — Advance section by section; do not move forward until the current section is approved.
+- **Choose principles intentionally** — Select action principles to fit the scenario; do not apply a default set mechanically. Default set: TDD · Break-Don't-Bend · Zero-Context Entry. See `references/principles-library.md` for the catalog.
 
-- **S2** (skill/agent): user says "设计 skill / agent"、"新建 skill / agent"、"skill/agent brainstorm" — or the topic is clearly about designing a reusable capability / specialized role.
-- **S3** (feature/refactoring): user says "开发 / 实现 / 加功能 / 新增 / 修复 / 重构 / 改造 X" — or the topic is clearly an implementation job.
-- **S1** (open discussion): fallback for everything else — the user wants to think, explore, or align understanding with no immediate implementation intent.
+## Workflow
+
+### Step 0. Route the scenario
+
+Determine which scenario applies before doing anything else:
+
+| Scenario | Trigger | Meaning |
+|---|---|---|
+| **S2** | User says "设计 skill / agent"、"新建 skill / agent"、"skill/agent brainstorm" | The topic is about designing a reusable capability or specialized role |
+| **S3** | User says "开发 / 实现 / 加功能 / 新增 / 修复 / 重构 / 改造 X" | The topic is clearly an implementation job |
+| **S1** | Fallback for everything else | The user wants to think, explore, or align understanding with no immediate implementation intent |
 
 Matching order: **try S2 → try S3 → fall back to S1**. When the trigger is ambiguous (e.g. "I want X to be better"), **ask the user** which scenario applies; do not silently default.
 
-Once matched, the rest of this file is the common skeleton; scenario-specific steps live in `scenarios/<matched>.md` (those files use **Step N**; this file uses **Phase N** to avoid cross-file collision).
+Once the scenario is matched, continue through the common skeleton in this file, then hand off to `scenarios/<matched>.md`.
 
-## Mode selection
+### Step 1. Choose the mode
 
-Two cost branches exist within every scenario — pick before running the skeleton:
+Choose the cost branch before running the skeleton:
 
-- **Normal mode** — default. Full skeleton + full scenario SOP. Use for any non-trivial design.
-- **Fast mode** — compressed branch. SKILL.md's HARD-GATE still applies. Triggers and skip list live in each scenario file (S2 §Gotchas, S3 §Gotchas). Fast is **never** an excuse to skip brainstorming entirely; it is a lower-ceremony path for trivial scope.
+| Mode | Trigger | Behavior |
+|---|---|---|
+| **Normal mode** | Default; use for any non-trivial design | Run the full skeleton + full scenario SOP |
+| **Fast mode** | Trivial scope only; triggers and skip list live in each scenario file (S2 §Gotchas, S3 §Gotchas) | Use the compressed branch. SKILL.md's HARD-GATE still applies. Fast is **never** an excuse to skip brainstorming entirely; it is a lower-ceremony path |
 
 If uncertain which mode applies, default to Normal and let the scenario's Fast trigger escalate downward.
 
-## Common skeleton (all scenarios)
+### Step 2. Run the common skeleton
 
 ```mermaid
 flowchart TD
@@ -69,40 +85,67 @@ flowchart TD
     R -->|S1 fallback| O[scenarios/open.md]
 ```
 
-1. **Phase 1 — Explore project context** — files, recent commits, ecosystem relevant to the scenario.
-2. **Phase 2 — Ask clarifying questions** — purpose / scope baseline; further questions are heuristic.
-3. **Phase 3 — Challenge Gate** — strongest objection + 3 checks (see `references/challenge-gate.md`).
-4. **Phase 4 — Propose approaches** — Normal: 2-3 options with trade-offs; Fast branch: direct recommendation.
+#### Step 2.1 Explore
 
-### Clarifying questions: principle
+Inspect the project context relevant to the scenario: files, recent commits, and surrounding ecosystem.
 
-- **purpose** (what is this really trying to solve?) and **scope** (what is in / out?) are the **only preset baseline**.
-- All other questions must be **heuristic** — based on specific ambiguities / conflicts / risks you actually observed during Explore. Ask 1-3 targeted questions, not a checklist.
-- **Never ask preset scenario-specific questions.** Preset checklists kill brainstorming's core capability. Scenario files tell you what to **look at** during Explore, not what to **ask**.
+#### Step 2.2 Clarify
 
-### Ordering notes
+Ask only the questions needed to make the next design move defensible.
 
-- **Propose approaches before Risk & Spike.** Risk applies to specific proposals; risk without proposals is abstract anxiety. Risk & Spike lives inside each scenario's SOP (S2/S3), not in this common skeleton.
+| Question type | Rule |
+|---|---|
+| **Purpose** | Always allowed; baseline |
+| **Scope** | Always allowed; baseline |
+| **Other questions** | Must come from ambiguities, conflicts, or risks observed during Explore |
 
-## Key principles
+- Ask 1-3 targeted questions, not a checklist.
+- Never ask preset scenario-specific questions. Preset checklists kill brainstorming's core capability. Scenario files tell you what to **look at** during Explore, not what to **ask**.
 
-- **One question at a time** — MUST NOT ask multiple clarifying questions in one turn.
-- **Multiple choice first** — MUST offer enumerated choices when the answer space is bounded; open-ended only when genuinely open.
-- **YAGNI ruthlessly** — MUST remove unrequested features from all designs.
-- **Incremental validation** — scenarios MUST present design section-by-section; move to the next only after user approval.
-- **Action principles are the scenario's to pick** — default set: TDD · Break-Don't-Bend · Zero-Context Entry. See `references/principles-library.md` for the catalog.
+#### Step 2.3 Challenge
 
-## Producer contract (S3 only)
+Run **Challenge Gate**: surface the strongest objection, then apply the 3 checks in `references/challenge-gate.md`.
 
-S3's only deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`. brainstorming is its sole author and writes nothing else. Full detail in `scenarios/feature.md`.
+#### Step 2.4 Propose
 
-## Failure handling
+Present the proposal shape that should move the discussion forward.
 
-Explicit walk-off for each failure point; never silently proceed.
+| Mode | Proposal behavior |
+|---|---|
+| **Normal** | Present 2-3 options with trade-offs |
+| **Fast** | Give a direct recommendation |
 
-- **User refuses clarifying questions** — state which decisions are blocked, offer the smallest default you would otherwise infer, require explicit user OK before continuing.
-- **Challenge Gate standoff** (user rejects the strongest objection without a refutation) — pause. Record the disagreement in the design doc as an open risk and ask the user to either refute the objection or narrow scope; do NOT push to Propose approaches.
-- **Scenario routing ambiguous** (cannot pick S1 / S2 / S3) — MUST ask the user; never default silently.
-- **Unresolved 🔴 risk after max spike time-boxes** — halt. Report which assumption is still open and recommend either (a) splitting the story or (b) treating the unknown as a known risk handed to the downstream consumer; do NOT finalize design.
-- **Spec review loop exceeds 3 iterations** — stop iterating. Surface the outstanding blocking issues to the user and ask for a decision (accept as-is / redesign the contested section).
-- **Fast mode triggered but 🔴 risk appears mid-design** — MUST escalate to Normal mode and rerun from Risk & Spike; Fast mode cannot absorb 🔴.
+Risk follows proposals, not the other way around. Risk without a proposal is abstract anxiety. Risk & Spike runs inside the matched scenario SOP (S2/S3), not in this common skeleton.
+
+### Step 3. Hand off to the scenario SOP
+
+Continue in the matched scenario SOP after the common skeleton:
+
+| Scenario | Continue in |
+|---|---|
+| **S1** | `scenarios/open.md` |
+| **S2** | `scenarios/skill-agent.md` |
+| **S3** | `scenarios/feature.md` |
+
+### Step 4. Enforce output and stop conditions
+
+#### Output contract
+
+| Scenario | Deliverable | Notes |
+|---|---|---|
+| **S1** | No mandatory artifact | Optional discussion note only when the user explicitly asks to preserve conclusions, or the discussion reaches a reusable insight worth capturing |
+| **S2** | Design-first output | The detailed contract for design docs, spec review, and optional skeleton production lives in `scenarios/skill-agent.md` |
+| **S3** | Design doc only | Save to `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`; brainstorming writes nothing else |
+
+#### Stop conditions
+
+Stop explicitly at each failure point; never silently proceed.
+
+| Condition | Required response |
+|---|---|
+| **User refuses clarifying questions** | State which decisions are blocked, offer the smallest default you would otherwise infer, require explicit user OK before continuing |
+| **Challenge Gate standoff** | Pause. Record the disagreement in the design doc as an open risk and ask the user to either refute the objection or narrow scope; do NOT push to Propose approaches |
+| **Scenario routing ambiguous** | MUST ask the user; never default silently |
+| **Unresolved 🔴 risk after max spike time-boxes** | Halt. Report which assumption is still open and recommend either (a) splitting the story or (b) treating the unknown as a known risk handed to the downstream consumer; do NOT finalize design |
+| **Spec review loop exceeds 3 iterations** | Stop iterating. Surface the outstanding blocking issues to the user and ask for a decision (accept as-is / redesign the contested section) |
+| **Fast mode triggered but 🔴 risk appears mid-design** | MUST escalate to Normal mode and rerun from Risk & Spike; Fast mode cannot absorb 🔴 |

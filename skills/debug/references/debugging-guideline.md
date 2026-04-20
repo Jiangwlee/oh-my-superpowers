@@ -1,6 +1,6 @@
 # Debugging Guideline
 
-Log-driven debugging methodology for failing tests, runtime errors, and
+Evidence-driven debugging methodology for failing tests, runtime errors, and
 unexpected behavior.
 
 **Core principle: observe first, then act. Never guess.**
@@ -47,9 +47,36 @@ Bad:
 - "Something is wrong with state"
 - "Timing seems off"
 
-### Step 2: Add Diagnostic Logs
+### Step 2: Choose Your Observation Method
 
-Add logs at decision points and data boundaries.
+Three ways to gather evidence. Pick by **environment** + **suspect range**.
+
+| Method | Use when | Avoid when |
+|---|---|---|
+| **Read code** | Range already narrow; pure logic; config / type / typo; small recent change | Runtime-value dependent; concurrency; spread across many modules |
+| **Add logs** | Backend / CLI / long pipeline; async, concurrent, cross-process; rerunnable but not steppable | Browser UI; range already tiny; throwaway script |
+| **chrome-devtools** | Browser: console, network, DOM / CSS, SPA, performance, runtime values | Non-browser scenarios |
+
+Decision order:
+
+```text
+browser?               -> chrome-devtools
+narrow + pure logic?   -> read code
+otherwise              -> add diagnostic logs
+```
+
+#### Reading Code
+
+When the suspect range is small enough to read end-to-end:
+
+- Read the file or function completely, not just the line that crashes.
+- Read related tests, imports, and configuration.
+- Trace the real data flow and check actual call sites.
+- Check recent diffs (`git log -p <file>`) before assuming the code is correct.
+
+#### Adding Logs
+
+Log at decision points and data boundaries.
 
 Good:
 
@@ -74,6 +101,18 @@ Rules:
 - Log before and after important branches.
 - Tag logs with a component marker such as `[auth]` or `[db]`.
 - Prefer logs that can be removed cleanly after the fix.
+
+#### Using chrome-devtools
+
+For anything happening inside a browser page, prefer the chrome-devtools MCP
+over guessing or reloading blindly:
+
+- `list_console_messages` — JS errors, warnings, your own logs.
+- `list_network_requests` / `get_network_request` — failed XHR / fetch, status, payloads.
+- `evaluate_script` — read runtime values, call functions, inspect state stores.
+- `take_snapshot` — DOM tree with selectors for the next action.
+- `take_screenshot` — visual confirmation.
+- `performance_start_trace` / `performance_stop_trace` — slowness and jank.
 
 ### Step 3: Run And Read Logs
 
@@ -115,7 +154,9 @@ Remove every temporary debugging artifact.
 
 Use when the failure could be in many places.
 
-1. Add a log at the midpoint of the execution path.
+1. Pick a midpoint of the execution path and observe the data there
+   (log, `evaluate_script`, breakpoint, or direct read — whichever your
+   chosen method allows).
 2. If the data is correct there, the bug is later.
 3. If the data is wrong there, the bug is earlier.
 4. Repeat until the suspect area is small.
@@ -148,15 +189,17 @@ Use when the full system is too noisy.
 
 ## Frontend Rule
 
-For frontend issues, observe before editing.
+For frontend issues, observe with chrome-devtools before editing.
 
-1. Inspect the visible failure, console, and network behavior.
-2. Add targeted logs in the relevant component or handler.
-3. Narrow to the exact decision point.
-4. Fix.
-5. Verify the visual or behavioral result.
+1. `list_console_messages` and `list_network_requests` — find what failed and where.
+2. `take_snapshot` / `take_screenshot` — confirm visible state and get selectors.
+3. `evaluate_script` — read the actual runtime value at the suspect point.
+4. Narrow to the exact decision point.
+5. Fix.
+6. Verify the visual or behavioral result.
 
-Do not trial-and-error CSS or UI values without evidence.
+Do not trial-and-error CSS or UI values without evidence. Do not fall back to
+adding `console.log` when chrome-devtools can read the value directly.
 
 ## Prohibited Behaviors
 

@@ -27,12 +27,32 @@ It provides the meta-skills, specs, and CLI tooling needed to design, build, rev
 skills/                       # Skill units (each independent)
 ├── brainstorming/            # Scenario router: S1 open / S2 skill-agent / S3 feature
 ├── coding-orchestrator/      # Spec-driven sub-agent orchestration for S3 handoffs
-├── llm-wiki/                 # Karpathy-style markdown wiki SOP + omp wiki scripts
-├── skill-review/             # Skill quality audit tool
+├── skill-review/             # Skill quality audit
+├── agent-review/             # Pi Agent markdown audit
+├── code-review/              # Local uncommitted/unpushed code review
+├── debug/                    # Systematic debugging for reproducible bugs
+├── handoff/                  # Pre-/compact context handoff helper
+├── insight/                  # Project memory: recall / capture / evaluate / list
+├── evolution/                # Evolve project skills + CLAUDE.md from usage data
+├── deep-research/            # Multi-round, multi-source research workflow
+├── omp-agents/               # Delegate work to a registered Pi Agent via omp run
+├── team/                     # Stateless one-shot tmux dispatch (claude/codex/pi)
+├── round-table/              # Multi-runtime persona-driven roundtable debate
+├── web-operator/             # Chrome CDP browsing, search, content extraction
+├── media-editor/             # Archive / query / promote items for media-editor agent
+├── llm-wiki/                 # Karpathy-style markdown wiki on top of omp wiki
 └── markdown-to-anything/     # Convert Markdown to PDF/PNG
 
-agents/                       # Pi Agent definitions
-└── skill-review.md           # Skill Quality Auditor
+agents/                       # Pi Agent definitions (+ agents.json registry)
+├── reviewer.md               # Universal Quality Reviewer (auto-routes review path)
+├── researcher.md             # General Researcher (multi-round investigation)
+├── oss-researcher.md         # OSS Research Analyst (open-source code deep dives)
+├── media-editor.md           # AI Media Editor (X.com / Reddit AI digests)
+├── ux-engineer.md            # UX Engineer (frontend audit + design)
+└── wps-assistant.md          # WPS Document Assistant
+
+cli/                          # typer CLI modules (one per tool, routed via omp <tool>)
+└── <tool>/main.py
 
 bin/
 └── omp                       # oh-my-superpowers CLI
@@ -86,29 +106,65 @@ omp list --global  # global
 |-------|---------|---------|
 | `brainstorming` | Router + Pipeline | Scenario router (S1 open / S2 skill-agent / S3 feature); S3 outputs a story skeleton for `coding-orchestrator` |
 | `coding-orchestrator` | Orchestrator + Sub-agent | Spec-driven sub-agent orchestration; consumes S3 handoff, runs JIT wave-by-wave task execution |
-| `llm-wiki` | Pipeline + Tool Wrapper | Karpathy-style markdown wiki workflow on top of `omp wiki` |
 | `skill-review` | Reviewer + Pipeline | Quality audit for Skill directories |
+| `agent-review` | Reviewer | Spec/design audit for a Pi Agent markdown file |
+| `code-review` | Reviewer | Review uncommitted or unpushed local code changes |
+| `debug` | Pipeline | Systematic root-cause debugging for reproducible failures |
+| `handoff` | Pipeline | Generate `.handover.md` + `/compact` instruction before compaction |
+| `insight` | Pipeline | Project memory: recall / capture / evaluate / list |
+| `evolution` | Pipeline | Evolve skills and CLAUDE.md from cross-project usage data |
+| `deep-research` | Pipeline | Multi-round, multi-source research with validation |
+| `omp-agents` | Router | Delegate matching tasks to a registered Pi Agent via `omp run` |
+| `team` | Tool Wrapper | Stateless one-shot tmux dispatch to claude/codex/pi |
+| `round-table` | Tool Wrapper | Multi-runtime persona-driven roundtable debate |
+| `web-operator` | Tool Wrapper | Chrome CDP browser automation, search, content extraction |
+| `media-editor` | Pipeline | Archive / query / promote helpers for the media-editor agent |
+| `llm-wiki` | Pipeline + Tool Wrapper | Karpathy-style markdown wiki workflow on top of `omp wiki` |
 | `markdown-to-anything` | Pipeline | Convert Markdown to PDF, PNG, and other formats |
 
 ## Available Agents
 
+Defined in `agents/` and registered in `agents/agents.json` (binds default model + skill set).
+
 | Agent | Role | Purpose |
 |-------|------|---------|
-| `skill-review` | Skill Quality Auditor | Full audit of a Skill directory: spec compliance, design quality, evidence quality |
+| `reviewer` | Universal Quality Reviewer | Auto-routes to skill-review / agent-review / code-review based on the target file |
+| `researcher` | General Researcher | Multi-round cross-source investigation, fact synthesis, opinion review |
+| `oss-researcher` | OSS Research Analyst | Answers open-source implementation questions, builds layered Obsidian KB |
+| `media-editor` | AI Media Editor | Discovers AI content on X.com / Reddit, archives and produces digests |
+| `ux-engineer` | UX Engineer | Frontend UI audit and design (powered by impeccable skill set) |
+| `wps-assistant` | WPS Document Assistant | Locates and answers questions about documents in WPS / 金山文档 |
 
 ## omp CLI
 
 ```
-omp run   agent <name> --model <m> <prompt>   Run a Pi Agent (streaming)
-omp list  [--global]                          List skills and available agents
-omp install skill <name> [--global]           Install a skill (local or global)
-omp remove  skill <name> [--global]           Remove a skill installation
-omp test skill <name>                         Run T1 tests for a skill
-omp help                                      Show help
+omp install <skill|agent> <name> [--global]   Install a skill or agent (symlink)
+omp remove  <skill|agent> <name> [--global]   Remove an installation
+omp list    [skill|agent] [--global]          List installed skills and agents
+omp run     <agent> [--model M] [--mode …] <prompt>
+                                              Run a Pi Agent (text/stream/json/interactive)
+omp test    skill <name>                      Run T1 static tests for a skill
+omp upgrade                                   Pull latest version and re-register commands
+```
+
+Tool subcommands (each routes to `cli/<tool>/main.py`; run `omp <tool> --help`):
+
+```
+omp coding-orchestrator   Story / task lifecycle helpers
+omp deep-research         Initialize and build deep-research workspaces
+omp evolution             Scan sessions and view evolution history
+omp handoff               Context handoff helpers for compaction lifecycle
+omp insight               Extract memories from AI conversations and distill insights
+omp media-editor          Archive, query, and promote media items
+omp round-table           Multi-AI round table discussions
+omp skill-review          Mechanical consistency checks on a skill directory
+omp team                  One-shot tmux agent orchestration
+omp web-operator          Browser automation, search, and content extraction
+omp wiki                  Karpathy-style markdown wiki management
 ```
 
 Skills install as symlinks to both `.agents/skills/` (Pi) and `.claude/skills/` (Claude Code).
-Agents run directly from source — no install step needed.
+Agents install via `omp install agent <name>` (also symlink-based).
 
 ## Architecture
 
