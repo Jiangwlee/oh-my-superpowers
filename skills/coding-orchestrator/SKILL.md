@@ -48,8 +48,12 @@ as the system context in your dispatch call; the task-specific input is your pro
 
 1. **Write JIT Spec** — for this wave, before dispatching. Read `references/task-decomposition-rules.md` before writing any spec.
 2. **Execute** — dispatch coding tasks. Route/prompt protocol: `references/dispatch-routes.md`.
-3. **Checkpoint** — after each material state change, update `stories/<slug>/.handoff-context` with:
-   `omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
+3. **Checkpoint** — after each material state change:
+   - **If a sub-agent just returned** (coder or reviewer), capture usage BEFORE flipping status or writing handoff. Source: the `<usage>` block at the tail of the agent return payload (`input_tokens + output_tokens`, `tool_use` count, and wall-clock duration). Run:
+     `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --usage-kind <worker|reviewer> --model <name> --tokens <input+output> --tool-uses <N> --duration-ms <N>`
+     Skip only if the agent was interrupted before returning a usage block; note that in `story-memory.md` so the gap is auditable.
+   - **Then update** `stories/<slug>/.handoff-context`:
+     `omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
 4. **Review** — generate task context:
    `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--additional <str>]`
    Then dispatch the `code-reviewer` agent (see Agents table): read the agent file for the protocol, pass `<protocol body>\n\n<task context>` as the dispatch prompt. Apply orchestrator second judgment; workers make all code changes. Protocol: `references/dispatch-routes.md` § Review Protocol.
