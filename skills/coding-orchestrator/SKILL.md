@@ -23,6 +23,17 @@ The orchestrator may edit control-plane artifacts only: `tasks.yaml`,
 It MUST NOT edit implementation files or test files.
 </HARD-GATE>
 
+## Agents
+
+These agents are local to this skill. Paths are relative to the skill root.
+When dispatching: read the agent file to load the protocol (body), then pass it
+as the system context in your dispatch call; the task-specific input is your prompt.
+
+| Agent | Path | Role |
+|---|---|---|
+| code-reviewer | agents/code-reviewer.md | Review task implementation vs spec; cannot modify files |
+| task-skeleton-reviewer | agents/task-skeleton-reviewer.md | Audit task skeleton for merge/split/rewave; cannot modify files |
+
 ## Pipeline
 
 **Before starting**: read `references/constitution.md` — Karpathy's four principles, applies to all roles including the orchestrator.
@@ -31,7 +42,7 @@ It MUST NOT edit implementation files or test files.
 
 1. **Story Intake** — Initialize a story. Details: `references/story-intake.md`.
 2. **Task Breakdown** — Decompose into task skeleton; wave ≥ 2 leave `spec: null`. Protocol: `references/task-decomposition-rules.md`.
-3. **Skeleton Review Gate** — before dispatching wave 1, run the task-skeleton reviewer using `templates/task-skeleton-reviewer-prompt.md`. This gate is mandatory; brainstorming may suggest slicing, but orchestrator owns the final merge / split / rewave decision.
+3. **Skeleton Review Gate** — before dispatching wave 1, dispatch the `task-skeleton-reviewer` agent (see Agents table). Read the agent file to get the protocol, then dispatch with prompt: `Audit skeleton at stories/<slug>/tasks.yaml. Spec: <spec path>`. Apply the JSON result (merge / split / rewave). This gate is mandatory; orchestrator owns the final decision.
 
 ### Phase 2 — Wave Execution (loop until all tasks `status: completed`)
 
@@ -39,9 +50,9 @@ It MUST NOT edit implementation files or test files.
 2. **Execute** — dispatch coding tasks. Route/prompt protocol: `references/dispatch-routes.md`.
 3. **Checkpoint** — after each material state change, update `stories/<slug>/.handoff-context` with:
    `omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
-4. **Review** — generate a fixed review rubric with:
-   `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--template default|strict|minimal]`
-   Then dispatch review + apply orchestrator second judgment. The orchestrator judges and routes fixes; workers make all code changes. Protocol: `references/dispatch-routes.md` § Review Protocol.
+4. **Review** — generate task context:
+   `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--additional <str>]`
+   Then dispatch the `code-reviewer` agent (see Agents table): read the agent file for the protocol, pass `<protocol body>\n\n<task context>` as the dispatch prompt. Apply orchestrator second judgment; workers make all code changes. Protocol: `references/dispatch-routes.md` § Review Protocol.
 4. **Test & Debug** — run tests; on failure see `references/dispatch-routes.md` § Test & Debug. The orchestrator decides escalation; workers execute the fix.
 5. **Accept Task** — verify must_haves; mark passing tasks `completed`. Protocol: `references/acceptance.md`.
 6. **Feedback & Revise** — capture reusable feedback into `story-memory.md`. Protocol: `references/story-memory-guideline.md`.
