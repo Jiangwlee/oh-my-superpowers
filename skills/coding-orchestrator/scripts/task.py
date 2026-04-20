@@ -21,60 +21,30 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime
 from pathlib import Path
+
+from common import dump_yaml, load_yaml, now_iso, require_story_dir, today_date
 
 VALID_STATUSES = {
     "pending", "executing", "reviewing", "testing", "completed", "blocked",
 }
 
-
-def _now_iso() -> str:
-    return datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
+USAGE_KINDS = {"worker", "reviewer"}
 
 
-def _find_story_dir(story_root: Path, name: str) -> Path | None:
-    """Resolve a story directory by slug or ``YYYY-MM-DD-slug``."""
-    direct = story_root / name
-    if direct.is_dir():
-        return direct
-    matches = sorted(
-        d for d in story_root.iterdir()
-        if d.is_dir() and d.name.endswith(f"-{name}")
-    )
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        print(
-            f"[task] ambiguous story '{name}': {[m.name for m in matches]}",
-            file=sys.stderr,
-        )
-    return None
-
-
-def _load(tasks_file: Path):
-    import yaml
-    if not tasks_file.is_file():
-        raise SystemExit(f"[task] tasks.yaml not found: {tasks_file}")
-    data = yaml.safe_load(tasks_file.read_text(encoding="utf-8")) or {}
+def _load(tasks_file: Path) -> dict:
+    data = load_yaml(tasks_file)
     if "tasks" not in data or not isinstance(data["tasks"], list):
         raise SystemExit(f"[task] tasks.yaml missing 'tasks' list: {tasks_file}")
     return data
 
 
-def _dump(tasks_file: Path, data: dict) -> None:
-    import yaml
-    tasks_file.write_text(
-        yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
-
-
 def cmd_update(args: argparse.Namespace) -> int:
     story_root = Path(args.story_dir)
-    story_dir = _find_story_dir(story_root, args.story)
-    if story_dir is None:
-        print(f"[task] story not found under {story_root}: {args.story}", file=sys.stderr)
+    try:
+        story_dir = require_story_dir(story_root, args.story)
+    except SystemExit as exc:
+        print(str(exc), file=sys.stderr)
         return 2
 
     tasks_file = story_dir / "tasks.yaml"
@@ -105,9 +75,9 @@ def cmd_update(args: argparse.Namespace) -> int:
         prev = target.get("status")
         target["status"] = args.status
         if args.status == "executing" and not target.get("started"):
-            target["started"] = _now_iso()
+            target["started"] = now_iso()
         if args.status == "completed" and not target.get("completed"):
-            target["completed"] = _now_iso()
+            target["completed"] = now_iso()
         changed = changed or prev != args.status
 
     if args.worker is not None:
@@ -128,21 +98,47 @@ def cmd_update(args: argparse.Namespace) -> int:
         target["notes"] = args.note
         changed = True
 
+    usage_kind = getattr(args, "usage_kind", None)
+    model = getattr(args, "model", None)
+    tokens = getattr(args, "tokens", None)
+    tool_uses = getattr(args, "tool_uses", None)
+    duration_ms = getattr(args, "duration_ms", None)
+    usage_fields = [model, tokens, tool_uses, duration_ms]
+    if usage_kind is not None or any(value is not None for value in usage_fields):
+        if usage_kind not in USAGE_KINDS:
+            print(
+                f"[task] --usage-kind must be one of {sorted(USAGE_KINDS)}",
+                file=sys.stderr,
+            )
+            return 2
+        usage = target.setdefault("usage", {})
+        bucket = usage.setdefault(usage_kind, {})
+        if model is not None:
+            bucket["model"] = model
+        if tokens is not None:
+            bucket["total_tokens"] = tokens
+        if tool_uses is not None:
+            bucket["tool_uses"] = tool_uses
+        if duration_ms is not None:
+            bucket["duration_ms"] = duration_ms
+        changed = True
+
     if not changed:
         print("[task] no change", file=sys.stderr)
         return 0
 
-    data["updated"] = datetime.now().strftime("%Y-%m-%d")
-    _dump(tasks_file, data)
+    data["updated"] = today_date()
+    dump_yaml(tasks_file, data)
     print(f"[task] updated {tasks_file}:{args.id}", file=sys.stderr)
     return 0
 
 
 def cmd_show(args: argparse.Namespace) -> int:
     story_root = Path(args.story_dir)
-    story_dir = _find_story_dir(story_root, args.story)
-    if story_dir is None:
-        print(f"[task] story not found under {story_root}: {args.story}", file=sys.stderr)
+    try:
+        story_dir = require_story_dir(story_root, args.story)
+    except SystemExit as exc:
+        print(str(exc), file=sys.stderr)
         return 2
 
     data = _load(story_dir / "tasks.yaml")
@@ -187,6 +183,11 @@ def main() -> int:
     up.add_argument("--reviewer", help="Reviewer identifier.")
     up.add_argument("--commit", help="Commit hash to append.")
     up.add_argument("--note", help="Replace the notes field.")
+    up.add_argument("--usage-kind", help="Usage role (worker|reviewer).")
+    up.add_argument("--model", help="Model name used by the sub-agent.")
+    up.add_argument("--tokens", type=int, help="Total token count for the run.")
+    up.add_argument("--tool-uses", type=int, help="Tool call count for the run.")
+    up.add_argument("--duration-ms", type=int, help="Run duration in milliseconds.")
     up.set_defaults(func=cmd_update)
 
     sh = sub.add_parser("show", help="Show one task or the story's task list.")

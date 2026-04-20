@@ -26,6 +26,7 @@ SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "coding-orchestrato
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "feature-dispatch"
 FIXTURE_STORY = FIXTURE_ROOT / "stories" / "2026-04-19-fake"
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 def _load_task_module():

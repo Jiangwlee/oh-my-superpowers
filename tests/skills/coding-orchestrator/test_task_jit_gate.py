@@ -21,6 +21,7 @@ import yaml
 
 SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "coding-orchestrator"
 SCRIPTS_DIR = SKILL_DIR / "scripts"
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 def _load_task_module():

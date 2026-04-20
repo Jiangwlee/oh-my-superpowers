@@ -21,6 +21,8 @@ During the common-skeleton Explore step, pay attention to:
 
 Then in the common-skeleton Clarifying step, ask **heuristic** questions grounded in what you actually observed. Do not run through a preset checklist.
 
+When discussing execution shape, brainstorming may suggest likely task merges / splits / wave boundaries, but it does **not** enforce the final task skeleton. That enforcement belongs to coding-orchestrator's Phase 1 skeleton review gate.
+
 ## SOP
 
 ### Step 1 — Risk & Spike
@@ -37,7 +39,7 @@ Save to `docs/brainstorming/specs/YYYY-MM-DD-<slug>.md`.
 
 ### Step 4 — Spec review loop
 
-Dispatch spec-document-reviewer subagent per `../references/spec-document-reviewer-prompt.md`. Max 3 iterations.
+Dispatch spec-document-reviewer subagent per `../assets/spec-document-reviewer-prompt.md`. Max 3 iterations.
 
 ### Step 5 — Hand off to coding-orchestrator
 

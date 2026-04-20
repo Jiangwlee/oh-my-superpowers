@@ -15,6 +15,15 @@ Orchestrator writes every task spec. Both entry paths share the same JIT rule:
 
 In both paths, wave ≥ 2 specs are written JIT once prior waves complete, informed by their worker reports and the current `story-memory.md`.
 
+## Phase 1 Skeleton Review Gate
+
+Before wave 1 dispatch, run a skeleton review using `templates/task-skeleton-reviewer-prompt.md`.
+
+- Route this review to an L3 reviewer.
+- The reviewer returns JSON with `merge`, `split`, and `rewave`.
+- Orchestrator must apply or explicitly reject each proposed change before dispatching wave 1.
+- brainstorming may suggest better slicing, but this gate is the enforcement point.
+
 **Hard rule — enforced by `scripts/task.py`**: `status: executing` is rejected (exit 2) whenever the target task's `spec` is null, missing, or empty. Write the spec first.
 
 Before dispatching each wave:
@@ -195,5 +204,6 @@ Run through this checklist mentally:
 - [ ] If this is a fix loop, are batchable fixes batched? (Rule 3)
 - [ ] Are there standalone verification tasks that could be folded into implementation? (Rule 4)
 - [ ] Is each task a vertical slice ≤ 5 files? (Rule 5)
+- [ ] Did the skeleton review gate run, and did you resolve every merge / split / rewave suggestion?
 
 If any answer is "no" or "I don't know", revise the task list before dispatching.

@@ -1,26 +1,3 @@
 {
-  "hooks": {
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${OMP_HOME:-$HOME/.oh-my-superpowers}/bin/omp coding-orchestrator handoff --auto --story-dir ./stories",
-            "timeout": 10000
-          }
-        ]
-      }
-    ],
-    "PostCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${OMP_HOME:-$HOME/.oh-my-superpowers}/bin/omp coding-orchestrator restore --story-dir ./stories",
-            "timeout": 5000
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

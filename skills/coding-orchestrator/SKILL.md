@@ -28,12 +28,17 @@ implementation code, STOP — you are violating the orchestrator contract.
 
 1. **Story Intake** — Initialize a story. Details: `references/story-intake.md`.
 2. **Task Breakdown** — Decompose into task skeleton; wave ≥ 2 leave `spec: null`. Protocol: `references/task-decomposition-rules.md`.
+3. **Skeleton Review Gate** — before dispatching wave 1, run the task-skeleton reviewer using `templates/task-skeleton-reviewer-prompt.md`. This gate is mandatory; brainstorming may suggest slicing, but orchestrator owns the final merge / split / rewave decision.
 
 ### Phase 2 — Wave Execution (loop until all tasks `status: completed`)
 
 1. **Write JIT Spec** — for this wave, before dispatching. Read `references/task-decomposition-rules.md` before writing any spec.
 2. **Execute** — dispatch coding tasks. Route/prompt protocol: `references/dispatch-routes.md`.
-3. **Review** — dispatch code review + orchestrator second judgment. Protocol: `references/dispatch-routes.md` § Review Protocol.
+3. **Checkpoint** — after each material state change, update `stories/<slug>/.handoff-context` with:
+   `omp coding-orchestrator handoff update --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
+4. **Review** — generate a fixed review rubric with:
+   `omp coding-orchestrator review create --story <slug> --task-id <NN> [--template default|strict|minimal]`
+   Then dispatch review + apply orchestrator second judgment. Protocol: `references/dispatch-routes.md` § Review Protocol.
 4. **Test & Debug** — run tests; on failure see `references/dispatch-routes.md` § Test & Debug.
 5. **Accept Task** — verify must_haves; mark passing tasks `completed`. Protocol: `references/acceptance.md`.
 6. **Feedback & Revise** — capture reusable feedback into `story-memory.md`. Protocol: `references/story-memory-guideline.md`.
@@ -54,7 +59,7 @@ implementation code, STOP — you are violating the orchestrator contract.
 
 ## Compaction Recovery
 
-Read `<PROJECT_ROOT>/stories/.handoff-context`. Details: `references/handoff-guideline.md`.
+Read `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/.handoff-context`. Treat `next_action` as the first recovery signal. Details: `references/handoff-guideline.md`.
 
 ## Storage
 

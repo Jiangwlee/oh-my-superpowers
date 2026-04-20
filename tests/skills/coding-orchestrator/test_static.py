@@ -5,7 +5,7 @@
 - hooks.json 存在且结构正确
 - references/、worker-refs/、templates/ 文件存在
 - 所有脚本文件存在且通过语法检查（py_compile）
-- handoff/restore 脚本支持 --help
+- 新脚本入口支持 --help
 """
 
 import json
@@ -36,9 +36,13 @@ REQUIRED_TEMPLATES = [
     "task.md",
     "story.md",
     "tasks.yaml",
-    "handoff.md",
+    "handoff-context.yaml",
+    "task-skeleton-reviewer-prompt.md",
+    "review-rubric-default.md",
+    "review-rubric-strict.md",
+    "review-rubric-minimal.md",
 ]
-REQUIRED_SCRIPTS = ["handoff.py", "restore.py", "task.py", "archive.py"]
+REQUIRED_SCRIPTS = ["handoff.py", "task.py", "archive.py", "review.py", "story.py", "common.py"]
 FORBIDDEN_PATTERNS = [
     "bash scripts/",
     "python scripts/",
@@ -104,15 +108,10 @@ class TestHooksJson(unittest.TestCase):
             self.fail(f"hooks.json 不是合法 JSON：{e}")
         self.assertIn("hooks", data, "hooks.json 缺少 hooks 顶层键")
 
-    def test_hooks_has_precompact(self) -> None:
-        """hooks.json 必须包含 PreCompact 事件。"""
+    def test_hooks_is_mapping(self) -> None:
+        """hooks.json 的 hooks 字段必须是对象。"""
         data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
-        self.assertIn("PreCompact", data["hooks"], "hooks.json 缺少 PreCompact")
-
-    def test_hooks_has_postcompact(self) -> None:
-        """hooks.json 必须包含 PostCompact 事件。"""
-        data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
-        self.assertIn("PostCompact", data["hooks"], "hooks.json 缺少 PostCompact")
+        self.assertIsInstance(data["hooks"], dict)
 
 
 class TestReferences(unittest.TestCase):
@@ -214,14 +213,20 @@ class TestScriptSyntax(unittest.TestCase):
     def test_handoff_syntax(self) -> None:
         self._check_syntax("handoff.py")
 
-    def test_restore_syntax(self) -> None:
-        self._check_syntax("restore.py")
-
     def test_task_syntax(self) -> None:
         self._check_syntax("task.py")
 
     def test_archive_syntax(self) -> None:
         self._check_syntax("archive.py")
+
+    def test_review_syntax(self) -> None:
+        self._check_syntax("review.py")
+
+    def test_story_syntax(self) -> None:
+        self._check_syntax("story.py")
+
+    def test_common_syntax(self) -> None:
+        self._check_syntax("common.py")
 
 
 class TestScriptHelp(unittest.TestCase):
@@ -238,19 +243,25 @@ class TestScriptHelp(unittest.TestCase):
             timeout=10,
         )
         self.assertEqual(result.returncode, 0, f"{script_name} --help 返回非零：{result.stderr}")
-        self.assertIn("--story-dir", result.stdout, f"{script_name} --help 缺少 --story-dir")
+        self.assertTrue(
+            "--story-dir" in result.stdout or script_name == "common.py",
+            f"{script_name} --help 缺少 --story-dir",
+        )
 
     def test_handoff_help(self) -> None:
         self._check_help("handoff.py")
-
-    def test_restore_help(self) -> None:
-        self._check_help("restore.py")
 
     def test_task_help(self) -> None:
         self._check_help("task.py")
 
     def test_archive_help(self) -> None:
         self._check_help("archive.py")
+
+    def test_review_help(self) -> None:
+        self._check_help("review.py")
+
+    def test_story_help(self) -> None:
+        self._check_help("story.py")
 
 
 if __name__ == "__main__":

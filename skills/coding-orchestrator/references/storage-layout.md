@@ -20,13 +20,12 @@ Record the resolved `<PROJECT_ROOT>` in the first task you create and reuse it f
 
 ```
 <PROJECT_ROOT>/stories/             # MUST be in project's .gitignore
-├── .handoff-context                # PostCompact recovery file
 ├── archives/                       # auto-populated by `omp coding-orchestrator archive --story-dir <PROJECT_ROOT>/stories`
 │   └── <YYYY-MM-DD>-<slug>/        # aged or legacy stories land here
 └── <YYYY-MM-DD>-<slug>/            # active story (date prefix required)
     ├── story.md                    # story narrative (goal, context, scope)
     ├── tasks.yaml                  # single source of truth for task state
-    ├── handoff.md                  # handoff state (auto/manual)
+    ├── .handoff-context            # task-level structured checkpoint
     └── tasks/
         ├── task-01.md              # worker prompt only (no frontmatter)
         ├── task-02.md

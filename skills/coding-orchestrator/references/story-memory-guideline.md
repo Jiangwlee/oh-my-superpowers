@@ -1,6 +1,6 @@
 # Story Memory Guideline
 
-Per-story explicit learning log. Orthogonal to `handoff.md` (state snapshot).
+Per-story explicit learning log. Orthogonal to `.handoff-context` (state checkpoint).
 Read this when creating, appending to, or closing a `story-memory.md`.
 
 ---
@@ -64,7 +64,7 @@ Nothing is promoted silently; every promotion is an explicit orchestrator action
 
 ## Anti-patterns
 
-- ❌ **Raw log**: appending worker reports verbatim. Story-memory is a **digest**; if a reader needs raw history, they read handoff.md or git log.
+- ❌ **Raw log**: appending worker reports verbatim. Story-memory is a **digest**; if a reader needs raw history, they read `.handoff-context` or git log.
 - ❌ **Global memory in disguise**: writing entries that apply across all stories. Those belong in `CLAUDE.md` or `insight` memory, not in a per-story file.
 - ❌ **Worker self-append**: letting workers edit story-memory.md directly. Multiple writers without curation = drift + duplicates.
 - ❌ **Reading after archive**: once a story is archived, story-memory.md is frozen history. Cross-story reuse must happen via the promotion step before archive, not via grep over archived stories.
@@ -76,7 +76,7 @@ Nothing is promoted silently; every promotion is an explicit orchestrator action
 | `story.md` | Story narrative (what/how) | coding-orchestrator (from design doc, immutable after intake) |
 | `tasks.yaml` | Task state (SSOT) | coding-orchestrator + workers (via task.py) |
 | `tasks/task-NN.md` | Per-task spec | coding-orchestrator (JIT, wave by wave) |
-| `handoff.md` | Compaction-survival snapshot | PreCompact hook (auto) |
+| `.handoff-context` | Task-level recovery checkpoint | coding-orchestrator handoff update |
 | `story-memory.md` | Cross-task learning digest | coding-orchestrator (curated append only) |
 
 Each has a different scope and writer; do not blur them.

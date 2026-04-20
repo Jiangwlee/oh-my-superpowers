@@ -47,7 +47,7 @@ Save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md` using the select
 
 ### Step 5 — Spec review loop
 
-Dispatch spec-document-reviewer subagent per `../references/spec-document-reviewer-prompt.md`. Max 3 iterations. Address blocking issues; advisory recommendations are discretionary.
+Dispatch spec-document-reviewer subagent per `../assets/spec-document-reviewer-prompt.md`. Max 3 iterations. Address blocking issues; advisory recommendations are discretionary.
 
 ### Step 6 — Produce skeleton
 

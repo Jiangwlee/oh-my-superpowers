@@ -2,6 +2,28 @@
 
 Detailed protocol for the Execute step.
 
+## Capability Routing
+
+Route workers and reviewers by capability level, not by gut feel.
+
+| Level | Use for | Claude | Codex |
+|-------|---------|--------|-------|
+| L1 | templates, low-risk mechanical work | Haiku 4.5 | gpt-5.1-codex-mini |
+| L2 | standard coding and review | Sonnet 4.6 | gpt-5.2-codex or gpt-5.3-codex |
+| L3 | deep reasoning, concurrency, async boundaries, skeleton review gate | Opus 4.7 | gpt-5.2 or gpt-5.1-codex-max |
+| L4 | frontier-only coding spikes | — | gpt-5.4 or gpt-5.2-codex |
+
+Default to the same provider family for worker and reviewer. Cross-provider review is **off by default** and only enabled when the user explicitly requests it.
+
+## Task Type → Capability Level
+
+| Signal | Route |
+|--------|-------|
+| simple template / docs-only touch | L1 |
+| routine feature / fix within one subsystem | L2 |
+| concurrency, signals, async boundaries, lifecycle wiring, task-skeleton review | L3 |
+| novel frontier coding or investigation with no proven local pattern | L4 |
+
 ## Route Decision
 
 | Condition | Route | Example |
@@ -45,7 +67,9 @@ After each task's code is written:
 
 1. Flip status to `reviewing` before dispatching the reviewer:
    `omp coding-orchestrator task update --story <slug> --id <NN> --status reviewing --reviewer <id>`
-2. Copy `templates/review-prompt.md` to `/tmp/orchestrator-review-<NN>.md` and fill only the Spec / Changes / Diff sections. The rubric and output format are fixed — leave them as written. Dispatch using the same route decision as Execute. Prefer a reasoning-focused runtime for review.
+2. Generate the review prompt with:
+   `omp coding-orchestrator review create --story <slug> --task-id <NN> [--template default|strict|minimal]`
+   The rubric and output format are fixed by template. Dispatch using the same route decision as Execute. Prefer an L2+ reasoning-focused runtime for review.
 3. Orchestrator applies second judgment to the review result:
    - Confirmed issue → fix directly (small) or dispatch worker (large); flip back to `executing` while fix is in flight
    - False positive → ignore; add `--note "..."` explaining why

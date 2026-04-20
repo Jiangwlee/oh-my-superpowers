@@ -25,7 +25,7 @@ description: >-
     - references/skill-fundamentals.md     Skill identity criteria (S2)
     - references/agent-fundamentals.md     Agent identity criteria (S2)
     - references/design-patterns.md        Skill pattern catalog (S2)
-    - references/spec-document-reviewer-prompt.md   Spec review subagent prompt
+    - assets/spec-document-reviewer-prompt.md       Spec review subagent prompt
 -->
 
 Turn ideas into complete designs through collaborative dialogue. This file is **methodology + router**. The detailed SOP lives in `scenarios/`.

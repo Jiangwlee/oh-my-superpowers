@@ -2,6 +2,7 @@
 # - Add / remove / reorder tasks: edit this file directly.
 # - Flip status / attach commit / set worker: use `omp coding-orchestrator task update ...`
 #   (atomic, auto-maintains started / completed / story-level `updated`).
+# - Record sub-agent usage metrics with `omp coding-orchestrator task update --usage-*`.
 
 story: <story-slug>          # matches directory suffix: stories/<YYYY-MM-DD>-<story-slug>/
 created: <YYYY-MM-DD>
@@ -22,3 +23,14 @@ tasks:
     completed: null          # ISO 8601, auto-set when status becomes completed
     commits: []              # hashes appended via --commit
     notes: ""                # free-form note (--note overwrites)
+    usage:
+      worker:
+        model: ""
+        total_tokens: 0
+        tool_uses: 0
+        duration_ms: 0
+      reviewer:
+        model: ""
+        total_tokens: 0
+        tool_uses: 0
+        duration_ms: 0

@@ -4,13 +4,15 @@
 # ///
 """omp coding-orchestrator — Story / task lifecycle helpers.
 
-Three domains:
-  handoff / restore      → PreCompact and PostCompact hook entry points
-  archive                → move aged / legacy stories to stories/archives/
-  task update | show     → hot-path edits on tasks.yaml (status, worker, commits)
+Domains:
+  archive                 → move aged / legacy stories to stories/archives/
+  handoff update          → write task-level handoff context for one story
+  review create           → render a review prompt from story/task artifacts
+  story summarize         → aggregate task usage by wave / role / model
+  task update | show      → hot-path edits on tasks.yaml
 
-The orchestrator is free to edit tasks.yaml directly. These commands exist
-only to keep the high-frequency updates atomic and auditable.
+The orchestrator is free to edit story artifacts directly. These commands
+exist only to keep the high-frequency updates atomic and auditable.
 """
 from __future__ import annotations
 
@@ -30,12 +32,33 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+handoff_app = typer.Typer(
+    name="handoff",
+    help="Task-level handoff context helpers.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+review_app = typer.Typer(
+    name="review",
+    help="Review prompt generation helpers.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+story_app = typer.Typer(
+    name="story",
+    help="Story-level reporting helpers.",
+    no_args_is_help=True,
+    add_completion=False,
+)
 task_app = typer.Typer(
     name="task",
     help="Hot-path edits on tasks.yaml.",
     no_args_is_help=True,
     add_completion=False,
 )
+app.add_typer(handoff_app, name="handoff")
+app.add_typer(review_app, name="review")
+app.add_typer(story_app, name="story")
 app.add_typer(task_app, name="task")
 
 
@@ -44,31 +67,36 @@ def _run(script: str, args: list[str]) -> None:
     sys.exit(subprocess.call(["uv", "run", str(path), *args]))
 
 
-@app.command()
-def handoff(
-    auto: bool = typer.Option(False, "--auto", help="Scan all active stories."),
-    story: str | None = typer.Option(None, "--story", help="Process one story by name."),
+@handoff_app.command("update")
+def handoff_update(
+    story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
+    task_id: str = typer.Option(..., "--task-id", help="Task id, e.g. '01'."),
+    phase: str = typer.Option(..., "--phase", help="executing|reviewing|accepting|advancing."),
+    next_action: str = typer.Option(..., "--next-action", help="One-line concrete next step."),
+    worker_agent_id: str | None = typer.Option(None, "--worker-agent-id", help="Worker agent id."),
+    reviewer_agent_id: str | None = typer.Option(None, "--reviewer-agent-id", help="Reviewer agent id."),
+    commit: str | None = typer.Option(None, "--commit", help="Commit hash for the task."),
+    deviation: str | None = typer.Option(None, "--deviation", help="Accepted deviation note."),
     story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
 ) -> None:
-    """PreCompact: write handoff.md for active stories."""
-    args: list[str] = ["--story-dir", story_dir]
-    if auto:
-        args.append("--auto")
-    if story:
-        args += ["--story", story]
+    """Write the structured `.handoff-context` for one story/task."""
+    args = [
+        "--story-dir", story_dir,
+        "update",
+        "--story", story,
+        "--task-id", task_id,
+        "--phase", phase,
+        "--next-action", next_action,
+    ]
+    if worker_agent_id is not None:
+        args += ["--worker-agent-id", worker_agent_id]
+    if reviewer_agent_id is not None:
+        args += ["--reviewer-agent-id", reviewer_agent_id]
+    if commit is not None:
+        args += ["--commit", commit]
+    if deviation is not None:
+        args += ["--deviation", deviation]
     _run("handoff.py", args)
-
-
-@app.command()
-def restore(
-    story: str | None = typer.Option(None, "--story", help="Process one story by name."),
-    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
-) -> None:
-    """PostCompact: surface handoff.md so the orchestrator can resume."""
-    args: list[str] = ["--story-dir", story_dir]
-    if story:
-        args += ["--story", story]
-    _run("restore.py", args)
 
 
 @app.command()
@@ -84,6 +112,39 @@ def archive(
     _run("archive.py", args)
 
 
+@review_app.command("create")
+def review_create(
+    story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
+    task_id: str = typer.Option(..., "--task-id", help="Task id, e.g. '01'."),
+    additional: str | None = typer.Option(None, "--additional", help="Extra task-specific review instructions."),
+    template: str = typer.Option("default", "--template", help="default|strict|minimal."),
+    out: str | None = typer.Option(None, "--out", help="Output path for the rendered review prompt."),
+    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+) -> None:
+    """Render a review prompt from the task spec and tasks.yaml metadata."""
+    args = [
+        "--story-dir", story_dir,
+        "create",
+        "--story", story,
+        "--task-id", task_id,
+        "--template", template,
+    ]
+    if additional is not None:
+        args += ["--additional", additional]
+    if out is not None:
+        args += ["--out", out]
+    _run("review.py", args)
+
+
+@story_app.command("summarize")
+def story_summarize(
+    story: str = typer.Argument(..., help="Story slug or <YYYY-MM-DD>-<slug>."),
+    story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
+) -> None:
+    """Aggregate task usage by wave, role, and model."""
+    _run("story.py", ["--story-dir", story_dir, "summarize", "--story", story])
+
+
 @task_app.command("update")
 def task_update(
     story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
@@ -93,6 +154,11 @@ def task_update(
     reviewer: str | None = typer.Option(None, "--reviewer", help="Reviewer identifier."),
     commit: str | None = typer.Option(None, "--commit", help="Commit hash to append."),
     note: str | None = typer.Option(None, "--note", help="Replace the notes field."),
+    usage_kind: str | None = typer.Option(None, "--usage-kind", help="worker|reviewer."),
+    model: str | None = typer.Option(None, "--model", help="Model name for usage metrics."),
+    tokens: int | None = typer.Option(None, "--tokens", help="Total tokens for the run."),
+    tool_uses: int | None = typer.Option(None, "--tool-uses", help="Tool call count for the run."),
+    duration_ms: int | None = typer.Option(None, "--duration-ms", help="Duration in milliseconds."),
     story_dir: str = typer.Option("./stories", "--story-dir", help="Stories root."),
 ) -> None:
     """Flip status, attach a commit, set worker/reviewer, or leave a note."""
@@ -107,6 +173,16 @@ def task_update(
         args += ["--commit", commit]
     if note is not None:
         args += ["--note", note]
+    if usage_kind is not None:
+        args += ["--usage-kind", usage_kind]
+    if model is not None:
+        args += ["--model", model]
+    if tokens is not None:
+        args += ["--tokens", str(tokens)]
+    if tool_uses is not None:
+        args += ["--tool-uses", str(tool_uses)]
+    if duration_ms is not None:
+        args += ["--duration-ms", str(duration_ms)]
     _run("task.py", args)
 
 

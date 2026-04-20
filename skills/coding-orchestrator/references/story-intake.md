@@ -2,7 +2,7 @@
 
 Two entry paths for Pipeline step 1.
 
-## Path A — handoff from brainstorming (default)
+## Path A — intake from brainstorming (default)
 
 When brainstorming S3 has produced a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`, generate the story skeleton from it:
 
