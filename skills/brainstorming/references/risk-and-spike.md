@@ -6,7 +6,7 @@ Without this step, lifecycle / framework-integration / cross-module bugs only su
 
 ## Why this exists
 
-Brainstorming and orchestrator can both write perfect plans inside the bubble of "what we assume is true." Bugs born from **wrong assumptions** are invisible to both — they only show up when the running system contradicts the design. Spike retires those assumptions cheaply.
+Planners can write perfect-looking designs inside the bubble of "what we assume is true." Bugs born from **wrong assumptions** are invisible at design time — they only show up when the running system contradicts the design. Spike retires those assumptions cheaply.
 
 Real-world signal: any story whose verification phase needs more than 2 fix rounds usually means an unvalidated architectural assumption is leaking through every task. Spike kills it at the source.
 
@@ -47,6 +47,7 @@ Record each bet as a row in the Risk Register. Aim for 5-15 entries on a non-tri
 | Native widget behavior | "受控 textarea 在 mount 间切换时 value 行为" |
 | Data shape contracts | "API 返回字段始终包含 X" |
 | Browser/runtime quirks | "localStorage 在隐身模式可写" |
+| Incumbent write-path | "既有 sync / cache / 持久化层对本次触碰字段的写入语义（如 replace-all sync 会覆盖本地 refreshed 值、cache 回写时机、persistence 覆盖顺序）" |
 
 If a story doesn't touch any of these families, it probably doesn't need spikes — Risk Register may stay 🟢/🟡 only.
 
@@ -94,7 +95,7 @@ For each 🔴 risk, write a Spike entry:
    ```
    - S1: ✅ Provider unmount → store 销毁；必须 hoist 到 layout
    - S2: ✅ params 不自动 decode；冒号 %3A 原样传入
-   - S3: ❌ 时间盒超出，未得出结论 → 升级为 risk 传给 orchestrator
+   - S3: ❌ 时间盒超出，未得出结论 → 保留为 known risk 记入 Risk Register
    ```
 4. **跑完即删**：spike 代码立即丢弃（rm -rf 或 branch 删除）
 
@@ -115,11 +116,20 @@ Spike 结果回填后，重读 Risk Register + 设计方案，回答：
 ```markdown
 ## 假设与风险登记（Assumptions & Risks）
 
-| # | 假设/赌注 | 类别 | 错了的代价 | 处理 |
-|---|----------|------|-----------|------|
-| A1 | <一句话写清楚行为假设> | 🔴 / 🟡 / 🟢 | <blast radius> | Spike S1 / 读文档 / 跳过 |
-| A2 | ... | ... | ... | ... |
+| # | 假设/赌注 | 类别 | 错了的代价 | 验证手段 | 处理 |
+|---|----------|------|-----------|---------|------|
+| A1 | <一句话写清楚行为假设> | 🔴 / 🟡 / 🟢 | <blast radius> | unit / integration / runtime log / spike | Spike S1 / 读文档 / 跳过 |
+| A2 | ... | ... | ... | ... | ... |
 ```
+
+**验证手段填写规则**：
+
+- `unit` — 单测覆盖。**红旗信号**：若 assumption 涉及 env / fs / global / 外部 SDK 的 fallback 行为，"unit" 多半无法真正隔离，应升级为 integration 或 spike
+- `integration` — 集成 / E2E 测试覆盖真实边界（真实 env、真实 fs、受控网络）
+- `runtime log` — 无测试，依赖生产 / 灰度日志验证（仅用于无法构造测试条件的场景）
+- `spike` — 仅能通过一次性代码回答，必须进入 Spike Plan（见 Stage 3）
+
+这一列是一次反向检查：强迫声明"我用什么方法验证这条 assumption"时，常会暴露第二类 bug 源——**验证手段本身的隐含假设**（如 "unit test 能断言 SDK.hasAuth()"，但 SDK 有 env fallback）。廉价答案（如无差别 "unit"）是信号，不是终点。
 
 ## Spike Plan Template
 
@@ -141,7 +151,7 @@ Spike 结果回填后，重读 Risk Register + 设计方案，回答：
 
 - S1: ✅ Provider 在 page.tsx 切换时 unmount，store 销毁 → **设计修订**：Provider hoist 到 layout.tsx
 - S2: ✅ params 不自动 decode → **设计修订**：所有 useParams 经 safeDecode wrapper
-- S3: 🟡 部分得出结论，时间盒到 → 余下未知传给 orchestrator 作为 known risk
+- S3: 🟡 部分得出结论，时间盒到 → 余下未知保留为 known risk 记入 Risk Register
 ```
 
 ## Fast 模式

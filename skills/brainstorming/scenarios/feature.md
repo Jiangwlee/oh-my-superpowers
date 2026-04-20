@@ -2,7 +2,7 @@
 
 > You have completed the common skeleton (Explore → Clarifying → Challenge Gate → Propose approaches). This file is the S3 SOP.
 
-S3 covers implementing a feature, fixing a non-trivial bug, or refactoring. Its sole deliverable is a design doc that coding-orchestrator consumes to generate the story skeleton.
+S3 covers implementing a feature, fixing a non-trivial bug, or refactoring. Its sole deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`.
 
 ## When S3 applies
 
@@ -15,13 +15,13 @@ If ambiguous (e.g. "I want X to be better"), ask the user which scenario before 
 During the common-skeleton Explore step, pay attention to:
 
 - The code locations involved + recent commits touching them
-- Whether the change crosses multiple independent subsystems (→ should split into multiple stories)
+- Whether the change crosses multiple independent subsystems (→ should split into multiple design docs, one brainstorming pass each)
 - Whether an old implementation exists (default is Break-Don't-Bend: remove, no compat shim)
-- Related stories under `stories/` — similar slicing, gotchas already captured in their `story-memory.md`
+- Prior design docs under `docs/brainstorming/specs/` that touched similar code or captured related gotchas
 
 Then in the common-skeleton Clarifying step, ask **heuristic** questions grounded in what you actually observed. Do not run through a preset checklist.
 
-When discussing execution shape, brainstorming may suggest likely task merges / splits / wave boundaries, but it does **not** enforce the final task skeleton. That enforcement belongs to coding-orchestrator's Phase 1 skeleton review gate.
+When discussing execution shape, brainstorming may sketch likely task decomposition as design-time hints, but it does **not** enforce the final breakdown — that decision sits outside brainstorming's scope.
 
 ## SOP
 
@@ -41,22 +41,20 @@ Save to `docs/brainstorming/specs/YYYY-MM-DD-<slug>.md`.
 
 Dispatch spec-document-reviewer subagent per `../assets/spec-document-reviewer-prompt.md`. Max 3 iterations.
 
-### Step 5 — Hand off to coding-orchestrator
+### Step 5 — Deliver design doc
 
-Notify the user that the design doc is complete and provide its path (`docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`). Recommend coding-orchestrator take over to generate the story skeleton.
+Notify the user that the design doc is complete and provide its path (`docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`). brainstorming's deliverable ends here.
 
-Do **not** create `stories/<slug>/` or write any task artifacts — that is coding-orchestrator's job.
-
-## Producer / consumer contract
-
-- **brainstorming is the sole producer** of the design doc. brainstorming does not write anything under `stories/`.
-- **coding-orchestrator is the consumer** — it reads the design doc and generates the story skeleton (`story.md`, `tasks.yaml`, `tasks/task-NN.md`, `story-memory.md`) on its own.
-- If design rationale needs revision mid-execution, coding-orchestrator halts and returns control to brainstorming (which re-runs the spec review loop if needed).
+**Invariant**: brainstorming writes only the design doc under `docs/brainstorming/specs/`. Nothing else, no follow-up prescription — the caller decides what happens next.
 
 ## Gotchas
 
 - **Fast branch**: skip Steps 1-5 entirely; inline the recommendation or implement directly in the current session. Fast is a cost branch within S3, not a separate scenario. Triggers when **any** of the following holds:
   - single-file + unambiguous + zero 🔴 risk
   - estimated scope ≤ 3 tasks AND < 5 files touched
+
+  **Hard upgrade to Normal** (Fast disqualified regardless of the above) when the change touches either:
+  - 持久化 shape — DB schema / 磁盘文件格式 / 外部序列化契约的迁移
+  - auth / 权限路径 — credential lifecycle、token 传递、权限校验逻辑
 - **Cross-story scope**: if the Explore step shows the work spans multiple independent subsystems, recommend splitting into multiple stories (each with its own S3 pass), not one mega-story.
 - **Break, Don't Bend**: default position is to remove the old implementation; do not add compat shims, legacy aliases, or v1/v2 coexistence unless the user explicitly justifies it.

@@ -15,7 +15,7 @@ If the user's intent turns actionable mid-discussion, **re-run scenario routing*
 ## SOP
 
 1. Continue the dialogue until the user is satisfied (they say so, or they switch topic).
-2. **No mandatory artifacts**: no design doc, no tasks.yaml, no spec review loop.
+2. **No mandatory artifacts**: no design doc, no spec review loop.
 3. **Optional lightweight discussion note** — only if the user explicitly asks to preserve the conclusion, or the conversation reaches a reusable insight worth capturing:
    - Path: `docs/brainstorming/discussions/YYYY-MM-DD-<topic>.md`
    - Format: free-form markdown; include date, participants (if meaningful), the question, the conclusion. Not a design doc.

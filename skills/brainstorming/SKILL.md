@@ -94,7 +94,7 @@ flowchart TD
 
 ## Producer contract (S3 only)
 
-S3's only deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`. brainstorming is its sole author; coding-orchestrator consumes it and generates the story skeleton on its own. Full detail in `scenarios/feature.md`.
+S3's only deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`. brainstorming is its sole author and writes nothing else. Full detail in `scenarios/feature.md`.
 
 ## Failure handling
 
