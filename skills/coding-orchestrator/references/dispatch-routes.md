@@ -8,10 +8,10 @@ Route workers and reviewers by capability level, not by gut feel.
 
 | Level | Use for | Claude | Codex |
 |-------|---------|--------|-------|
-| L1 | templates, low-risk mechanical work | Haiku 4.5 | gpt-5.1-codex-mini |
-| L2 | standard coding and review | Sonnet 4.6 | gpt-5.2-codex or gpt-5.3-codex |
-| L3 | deep reasoning, concurrency, async boundaries, skeleton review gate | Opus 4.7 | gpt-5.2 or gpt-5.1-codex-max |
-| L4 | frontier-only coding spikes | — | gpt-5.4 or gpt-5.2-codex |
+| L1 | templates, low-risk mechanical work, subagents | Haiku 4.5 | gpt-5.4-mini |
+| L2 | standard coding and review | Sonnet 4.6 | gpt-5.4-mini or gpt-5.3-codex |
+| L3 | deep reasoning, concurrency, async boundaries, skeleton review gate | Opus 4.7 | gpt-5.4 |
+| L4 | frontier-only coding spikes | — | gpt-5.4 |
 
 Default to the same provider family for worker and reviewer. Cross-provider review is **off by default** and only enabled when the user explicitly requests it.
 
@@ -23,6 +23,10 @@ Default to the same provider family for worker and reviewer. Cross-provider revi
 | routine feature / fix within one subsystem | L2 |
 | concurrency, signals, async boundaries, lifecycle wiring, task-skeleton review | L3 |
 | novel frontier coding or investigation with no proven local pattern | L4 |
+
+For Codex specifically, prefer `gpt-5.4-mini` for high-volume narrow subtasks and
+`gpt-5.4` for the main reasoning-heavy worker/reviewer path. Use `gpt-5.3-codex`
+as an L2 fallback when you want a coding-specialized middle tier between those two.
 
 ## Route Decision
 
