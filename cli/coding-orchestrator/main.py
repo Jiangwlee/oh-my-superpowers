@@ -134,6 +134,27 @@ def review_create(
     _run("review.py", args)
 
 
+@story_app.command("init")
+def story_init(
+    slug: str = typer.Option(..., "--slug", help="Kebab-case slug; no date prefix."),
+    date: str | None = typer.Option(None, "--date", help="YYYY-MM-DD; defaults to today."),
+    design_doc: str | None = typer.Option(
+        None, "--design-doc", help="Optional brainstorming design doc path; inserted as backlink."
+    ),
+    force: bool = typer.Option(False, "--force", help="Allow init when dir exists but is empty."),
+    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
+) -> None:
+    """Create a new story directory under <story-dir>/<YYYY-MM-DD>-<slug>/."""
+    args = ["--story-dir", story_dir, "init", "--slug", slug]
+    if date is not None:
+        args += ["--date", date]
+    if design_doc is not None:
+        args += ["--design-doc", design_doc]
+    if force:
+        args.append("--force")
+    _run("story.py", args)
+
+
 @story_app.command("summarize")
 def story_summarize(
     story: str = typer.Argument(..., help="Story slug or <YYYY-MM-DD>-<slug>."),

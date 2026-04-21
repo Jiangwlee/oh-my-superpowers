@@ -74,7 +74,7 @@ coding-orchestrator/
 │
 └── scripts/                         # CLI backends (invoked via `omp coding-orchestrator`)
     ├── common.py                    # Shared utilities (load_yaml, require_story_dir)
-    ├── story.py                     # story summarize (usage by wave/kind/model)
+    ├── story.py                     # story init / summarize
     ├── task.py                      # task update / show
     ├── review.py                    # review create (outputs task context fragment)
     ├── handoff.py                   # handoff update
@@ -99,7 +99,9 @@ Dispatch pattern: read the agent file (body = protocol), then pass `<protocol bo
 ## Key CLI Commands
 
 ```bash
-# Story init is manual (template copy) — see references/story-intake.md.
+# Story init — create stories/<YYYY-MM-DD>-<slug>/ from templates
+omp coding-orchestrator story init --story-dir <PROJECT_ROOT>/stories --slug <name> \
+  [--date <YYYY-MM-DD>] [--design-doc <path>] [--force]
 
 # Task state
 omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> \
