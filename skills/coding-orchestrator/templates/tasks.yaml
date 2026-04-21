@@ -16,7 +16,7 @@ tasks:
     depends_on: []           # list of task ids, e.g. ["01"]
     spec: tasks/task-01.md   # worker prompt file (narrative only, no frontmatter)
     files_modified: []       # files this task will touch (conflict detection)
-    test_layer: integration  # unit | hook | component | integration | e2e
+    test_layer: e2e          # unit | hook | component | integration | e2e — see references/task-decomposition-rules.md Rule 1
     worker: ""               # filled on dispatch
     reviewer: ""             # filled on review
     started: null            # ISO 8601, auto-set when status first becomes executing

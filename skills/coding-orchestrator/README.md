@@ -8,7 +8,14 @@ For the executable protocol, read `SKILL.md`. This README is a human-facing map 
 
 ## Core Contract
 
-**The orchestrator never writes code.** It owns only control-plane artifacts:
+The orchestrator runs in one of two modes, chosen in Phase 1 after exploration:
+
+| Mode | Trigger | Orchestrator behavior |
+|---|---|---|
+| `inline` (default) | Files ≤ 10 or LOC ≤ 1000 | Writes code itself in a single wave; reviewer is still dispatched |
+| `multi_wave` | Files > 10 **and** LOC > 1000 | Never writes code; delegates all coding, testing, debugging to sub-agents |
+
+In both modes, the orchestrator owns only control-plane artifacts:
 
 | Artifact | Role |
 |---|---|
@@ -16,8 +23,9 @@ For the executable protocol, read `SKILL.md`. This README is a human-facing map 
 | `.handoff-context` | Structured checkpoint for compaction recovery |
 | `tasks/task-NN.md` | Worker prompt specs (narrative only, no state) |
 | `story-memory.md` | Accumulated patterns and gotchas for the story |
+| `story.md` | Story narrative, `## Exploration` section, recorded `Mode` |
 
-All implementation, testing, and debugging is delegated to sub-agents.
+Reviewer sub-agent is dispatched for every task in both modes — review is never inlined.
 
 > **Note — not the same as `skills/handoff/`.** That skill writes a session-level `.handover.md` to the project root before `/compact`. This orchestrator's `.handoff-context` is a **story-internal task checkpoint** written via `omp coding-orchestrator handoff update` on every material state change. Similar names, orthogonal mechanisms.
 
@@ -27,10 +35,10 @@ All implementation, testing, and debugging is delegated to sub-agents.
 
 ```
 Phase 1  Story Initialization
-  └── Story Intake → Task Skeleton → Skeleton Review Gate (mandatory)
+  └── Story Intake → Cheap Exploration → Mode Decision → Task Breakdown → Skeleton Review Gate
 
 Phase 2  Wave Execution  [loop until all tasks completed]
-  └── JIT Spec → Execute → Checkpoint → Review → Test → Accept → Advance Wave
+  └── JIT Spec → Execute (inline writes / multi_wave dispatches) → Checkpoint → Review → Test → Accept → Advance Wave
 
 Phase 3  E2E Testing & Acceptance
   └── E2E Test → Debug → Rerun → Accept

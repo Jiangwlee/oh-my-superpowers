@@ -86,7 +86,18 @@ Rules 4 and 5 address verification ownership and vertical sizing.
 
 ### How to enforce
 
-When writing a task spec, read the **acceptance criteria first**, then ask: "what's the lowest test layer that can falsify this criterion?" That is the required first-red-test layer. Set it as the `test_layer` field of the task's entry in `tasks.yaml` (see `templates/tasks.yaml`).
+**Default: E2E first.** Set `test_layer: e2e` unless the acceptance is a pure
+data transform E2E cannot reach. E2E (chrome-devtools MCP) is the only layer
+the user actually observes, and is the real DoD.
+
+**Unit / hook / component tests are worker-discretion.** Worker decides
+whether to add them based on task context (e.g., pure function logic E2E
+cannot falsify). Orchestrator does NOT mandate lower-layer tests up front.
+
+When acceptance is genuinely pure (pure function / data transform / no UI):
+read the **acceptance criteria first**, ask "what's the lowest test layer that
+can falsify this criterion?", and set `test_layer` to that layer in the task's
+entry in `tasks.yaml` (see `templates/tasks.yaml`).
 
 ---
 

@@ -14,14 +14,20 @@ description: >-
 
 # Coding Orchestrator: Spec-Driven Sub-Agent Orchestration
 
-<HARD-GATE>
-The orchestrator does NOT write code. Delegate all coding, design, testing,
-and debugging to sub-agents. If you catch yourself writing implementation
-code, STOP — you are violating the contract.
+## Hard Gate
 
-The orchestrator edits control-plane artifacts only: `tasks.yaml`,
-`.handoff-context`, task specs, review prompts, and `story-memory.md`.
-It MUST NOT edit implementation or test files.
+<HARD-GATE>
+Behavior is mode-dependent. Mode is chosen in Phase 1 step 3 and recorded at
+the top of `story.md`.
+
+**multi_wave** — orchestrator does NOT write implementation or test code.
+Delegate all coding, design, testing, and debugging to sub-agents. Orchestrator
+edits only control-plane artifacts: `tasks.yaml`, `.handoff-context`, task
+specs, review prompts, `story-memory.md`, `story.md`.
+
+**inline** — orchestrator MAY write implementation and test code itself within
+a single wave. Reviewer sub-agent MUST still be dispatched for every task —
+review is never inlined.
 </HARD-GATE>
 
 ## Agents
@@ -37,20 +43,44 @@ call; your task-specific input is the prompt.
 
 ## Pipeline
 
-Steps describe actions. Document reads are marked **[MANDATORY]** where a file is required to proceed; everything else is on-demand — see the References table below.
+Steps describe actions. Document reads marked **[MANDATORY]** must be read before proceeding; everything else is on-demand (see References).
+
+```mermaid
+flowchart TD
+    P1[Phase 1 — Story Init<br/>Intake → Explore → Mode → Breakdown → Skeleton Review]
+    P2M[Phase 2 — multi_wave<br/>dispatch workers + reviewer per task]
+    P2I[Phase 2 — inline<br/>orchestrator codes + reviewer per task]
+    P3[Phase 3 — E2E & Acceptance]
+    P1 -->|Mode=multi_wave| P2M
+    P1 -->|Mode=inline| P2I
+    P2M -.loop until all tasks completed.-> P2M
+    P2I --> P3
+    P2M --> P3
+    P3 -.loop until E2E passes.-> P3
+```
 
 ### Phase 1 — Story Initialization
 
 1. **Story Intake** — initialize the story. **[MANDATORY]** Read `references/storage-layout.md` and `references/story-intake.md` first.
-2. **Task Breakdown** — decompose into a task skeleton; wave ≥ 2 leave `spec: null`. **[MANDATORY]** Read `references/task-decomposition-rules.md` first.
-3. **Skeleton Review Gate** (mandatory gate) — dispatch `task-skeleton-reviewer` (see Agents). Read the agent file for the protocol, then pass prompt `Audit skeleton at stories/<slug>/tasks.yaml. Spec: <spec path>`. Apply the returned JSON (merge / split / rewave); orchestrator owns the final decision.
+2. **Cheap Exploration** — before breakdown, append a `## Exploration` section to `story.md` with three terse bullet lists. Use Grep/Glob directly; do NOT dispatch sub-agents:
+   - **Files** — paths this story will touch
+   - **Call chain** — key function calls across those files (guards against orphaned wiring — Rule 2)
+   - **Data flow** — data structures + direction of flow (flags schema changes)
+3. **Mode Decision** — choose execution mode based on Exploration. Record at the top of `story.md` as `Mode: inline` or `Mode: multi_wave`:
+   - **inline** (default) — orchestrator completes the work in one wave, writing code itself
+   - **multi_wave** — trigger only when Files > 10 **AND** estimated LOC > 1000
+   Thresholds are initial picks; adjust after real runs. Do not encode them as CLI or schema.
+4. **Task Breakdown** — decompose into a task skeleton; wave ≥ 2 leave `spec: null`. **[MANDATORY]** Read `references/task-decomposition-rules.md` first.
+5. **Skeleton Review Gate** (mandatory, both modes) — dispatch `task-skeleton-reviewer` (see Agents). Read the agent file for the protocol, then pass prompt `Audit skeleton at stories/<slug>/tasks.yaml. Spec: <spec path>`. Apply the returned JSON (merge / split / rewave); orchestrator owns the final decision.
 
-### Phase 2 — Wave Execution (loop until all tasks `status: completed`)
+### Phase 2 — Wave Execution
+
+Loop until every task reaches `status: completed`.
 
 1. **Write JIT Spec** for this wave before dispatching.
-2. **Execute** — dispatch coding tasks (native sub-agent or tmux).
+2. **Execute** — Mode=multi_wave: dispatch coding tasks (native sub-agent or tmux). Mode=inline: orchestrator writes code directly; skip dispatch.
 3. **Checkpoint** — after each material state change:
-   - **Capture usage first** when a sub-agent returns (coder or reviewer). Read the `<usage>` block at the tail of the agent payload (`input_tokens + output_tokens`, `tool_use` count, wall-clock duration). Run:
+   - **Capture usage first** on every sub-agent return (worker in multi_wave; reviewer in both modes). Read the `<usage>` block at the tail of the agent payload (`input_tokens + output_tokens`, `tool_use` count, wall-clock duration). Run:
      `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --usage-kind <worker|reviewer> --model <name> --tokens <input+output> --tool-uses <N> --duration-ms <N>`
      If the agent was interrupted before emitting usage, log the gap in `story-memory.md` so it stays auditable.
    - **Then update handoff**:
@@ -76,7 +106,7 @@ Steps describe actions. Document reads are marked **[MANDATORY]** where a file i
 3. **Rerun E2E** — repeat until passing.
 4. **Acceptance** — verify must-haves per task spec.
 
-## References (consult on demand)
+## References
 
 Consult these files only when their trigger fires. Do not preload; do not re-read within the same context unless the file may have changed.
 
@@ -89,10 +119,7 @@ Consult these files only when their trigger fires. Do not preload; do not re-rea
 | Dispatch via tmux to an external runtime | `references/commands.md` |
 | Populate a spec's `Worker Refs` for sub-agents (principles they must apply) | `references/constitution.md` |
 
-## Compaction Recovery
+## Recovery & Storage
 
-On resume, read `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/.handoff-context`. Trust `next_action` as the first recovery signal.
-
-## Storage
-
-`stories/` lives at `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/`.
+- **Storage**: `stories/` lives at `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/`.
+- **Compaction recovery**: on resume, read `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/.handoff-context`. Trust `next_action` as the first recovery signal.

@@ -63,13 +63,17 @@ Design: `<link to brainstorming design doc if applicable>`
 ## Worker Refs
 
 <!-- Files the sub agent MUST read at the start of execution.
-     These are behavioral protocols — the orchestrator passes paths,
-     sub agent reads them. constitution.md is always included. -->
+     Mode-dependent:
+     - Mode=multi_wave: worker sub-agent reads all listed files before coding.
+       Orchestrator pre-populates `../story-memory.md`; add the others as below.
+     - Mode=inline: no worker sub-agent exists. Orchestrator reads story-memory.md
+       itself; the rest of this section may be omitted. Delete this section or
+       mark it N/A when the task's story is Mode=inline. -->
 
-- `references/constitution.md` — coding principles (always include)
-- `worker-refs/worker-guideline.md` — worker behavioral protocol (always include)
-- `../story-memory.md` — this story's accumulated patterns / gotchas / known false positives (always include)
-- `worker-refs/debugging-guideline.md` — include only if task has complex test plan
+- `references/constitution.md` — coding principles (always include, multi_wave)
+- `worker-refs/worker-guideline.md` — worker behavioral protocol (always include, multi_wave)
+- `../story-memory.md` — this story's accumulated patterns / gotchas / known false positives (both modes)
+- `worker-refs/debugging-guideline.md` — include only if task has complex test plan (multi_wave)
 
 ## References
 
@@ -144,11 +148,7 @@ When stuck:
 ## Test Plan
 
 <!-- What to test and how. Sub agent executes these.
-     The FIRST red test must be at the layer declared in this task's `test_layer`
-     field in tasks.yaml. If acceptance describes user-observable behavior across
-     navigation/mount/async, the first test is integration (real Provider tree,
-     mocked router only) — NOT a hook unit test that will pass while the feature
-     breaks in browser. See references/task-decomposition-rules.md Rule 1. -->
+     Layer selection: see references/task-decomposition-rules.md Rule 1. -->
 
 - [ ] <first red test at acceptance layer> — verifies <observable behavior>
 - [ ] <supplemental lower-layer tests if useful> — verifies <internal contract>
