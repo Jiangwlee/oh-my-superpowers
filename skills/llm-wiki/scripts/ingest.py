@@ -138,10 +138,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--text", action="store_true", help="Read content from stdin.")
     parser.add_argument("--title", help="Explicit title for text ingest.")
     parser.add_argument("--project", help="Optional project metadata.")
-    parser.add_argument("--wiki-home", help="Override global wiki home.")
+    parser.add_argument("--path", help="Wiki home directory (default: <git-root>/wiki or global).")
     args = parser.parse_args(argv)
 
-    wiki_home = resolve_wiki_home(args.wiki_home)
+    wiki_home = resolve_wiki_home(args.path)
     raw_dir(wiki_home).mkdir(parents=True, exist_ok=True)
 
     try:

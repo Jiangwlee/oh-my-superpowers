@@ -70,11 +70,11 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
 
     parser = argparse.ArgumentParser(description="Show wiki status.")
-    parser.add_argument("--wiki-home", help="Override global wiki home.")
+    parser.add_argument("--path", help="Wiki home directory (default: <git-root>/wiki or global).")
     parser.add_argument("--json", action="store_true", help="Emit JSON output.")
     args = parser.parse_args(argv)
 
-    payload = build_nav_payload(resolve_wiki_home(args.wiki_home))
+    payload = build_nav_payload(resolve_wiki_home(args.path))
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0

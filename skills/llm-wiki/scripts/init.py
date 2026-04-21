@@ -79,10 +79,10 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
 
     parser = argparse.ArgumentParser(description="Initialize the global wiki home.")
-    parser.add_argument("--wiki-home", help="Override global wiki home.")
+    parser.add_argument("--path", help="Wiki home directory (default: <git-root>/wiki or global).")
     args = parser.parse_args(argv)
 
-    wiki_home = resolve_wiki_home(args.wiki_home)
+    wiki_home = resolve_wiki_home(args.path)
     ensure_wiki_home(wiki_home)
     print(f"Initialized wiki home at {wiki_home}")
     return 0

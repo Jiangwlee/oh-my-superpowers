@@ -83,11 +83,11 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint."""
 
     parser = argparse.ArgumentParser(description="Lint compiled wiki pages.")
-    parser.add_argument("--wiki-home", help="Override global wiki home.")
+    parser.add_argument("--path", help="Wiki home directory (default: <git-root>/wiki or global).")
     parser.add_argument("--json", action="store_true", help="Emit JSON output.")
     args = parser.parse_args(argv)
 
-    compiled_root = wiki_dir(resolve_wiki_home(args.wiki_home))
+    compiled_root = wiki_dir(resolve_wiki_home(args.path))
     issues = collect_issues(compiled_root)
     payload = {"issues": issues}
 

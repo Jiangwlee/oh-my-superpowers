@@ -1,27 +1,42 @@
 # Linting
 
-`omp wiki lint` is the wiki health check.
+`omp wiki lint` is the wiki health check. Two categories with different authority levels.
 
-## When To Run
+## Deterministic Checks (auto-fix)
 
-- After a synthesis pass (see `references/compile.md`).
-- The wiki has grown after several ingest/synthesis cycles.
-- Answers appear unstable or contradictory.
-- Links may be stale.
-- You suspect orphaned or low-quality compiled pages.
+Fix these automatically:
 
-## V1 Behavior
+**Broken wikilinks** — for every `[[...]]` link in wiki/ files:
+- Target does not exist → search wiki/ for a file with the same name elsewhere.
+  - Exactly one match → fix the path.
+  - Zero or multiple matches → report to user.
 
-Lint is report-only in v1.
+**Index consistency** — compare `wiki/index.md` against actual wiki/ files (excluding index.md and log.md):
+- File exists but missing from index → add entry with `(no summary)` placeholder.
+- Index entry points to nonexistent file → mark as `[MISSING]`. Do not delete; let user decide.
 
-It surfaces issues such as:
+**Raw references** — every link in a `Raw:` metadata field must point to an existing raw/ file:
+- Target does not exist → search raw/ for a file with the same name elsewhere.
+  - Exactly one match → fix the path.
+  - Zero or multiple matches → report to user.
 
-- broken wikilinks between wiki pages;
-- missing index sections;
-- obvious structural drift.
+## Heuristic Checks (report only)
 
-Wikilinks pointing into `raw/` (any depth of `../`, e.g. `../raw/foo.md` or
-`../../raw/foo.md`) are treated as valid when the raw file exists. Lint reports
-them as `missing raw target: …` only when the referenced raw file is gone.
+Report findings without auto-fixing:
+
+- Factual contradictions across concept pages
+- Outdated claims superseded by newer sources
+- Missing conflict annotations where sources disagree
+- Orphan pages with no inbound links from other wiki articles
+- Concepts frequently mentioned across sources but lacking a dedicated concept page
+- Archive pages whose cited source articles have been substantially updated since archival
+
+## Post-Lint
+
+Append to `wiki/log.md`:
+
+```
+- YYYY-MM-DD  lint | N issues found, M auto-fixed
+```
 
 Do not claim the wiki is healthy if lint reports unresolved issues.

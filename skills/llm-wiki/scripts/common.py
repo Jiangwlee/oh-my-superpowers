@@ -14,14 +14,32 @@ from typing import Any
 DEFAULT_WIKI_HOME = Path.home() / ".local" / "share" / "oh-my-superpowers" / "wiki"
 
 
+def detect_project_root() -> Path | None:
+    """Return the git repo root if inside a git repo, else None."""
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        return Path(result.stdout.strip())
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+
+
 def resolve_wiki_home(explicit: str | None = None) -> Path:
-    """Resolve the global wiki home from CLI override, env, or default."""
+    """Resolve wiki home: --path > WIKI_HOME env > <git-root>/wiki > global default."""
 
     if explicit:
         return Path(explicit).expanduser().resolve()
     env = os.environ.get("WIKI_HOME")
     if env:
         return Path(env).expanduser().resolve()
+    project_root = detect_project_root()
+    if project_root is not None:
+        return project_root / "wiki"
     return DEFAULT_WIKI_HOME
 
 
@@ -125,17 +143,8 @@ def strip_leading_title_heading(body: str, title: str) -> str:
 def detect_project_name() -> str | None:
     """Infer the current git repo name for ingest metadata."""
 
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
-    repo_root = Path(result.stdout.strip())
-    return repo_root.name if repo_root.name else None
+    root = detect_project_root()
+    return root.name if root and root.name else None
 
 
 def infer_project(explicit: str | None) -> str | None:

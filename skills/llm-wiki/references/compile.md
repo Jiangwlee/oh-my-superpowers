@@ -32,7 +32,7 @@ coverage detection works by simple filename equality.
 For each entry in `pending_synthesis`:
 
 1. Read `raw/<slug>.md`.
-2. Write `wiki/sources/<slug>.md` using `references/source-template.md`.
+2. Write `wiki/sources/<slug>.md` using `assets/source-template.md`.
 3. Keep the link back to raw: `[[../../raw/<slug>.md]]` — nav uses this as a coverage signal.
 4. Distill; do not copy the raw body verbatim. Use blockquotes sparingly for original phrasing worth preserving.
 
@@ -42,7 +42,7 @@ A concept page is justified when a term or idea is discussed across **two or mor
 
 1. Identify recurring terms across `wiki/sources/*.md`.
 2. For each qualifying concept, create or update `wiki/concepts/<concept-slug>.md` using
-   `references/concept-template.md`.
+   `assets/concept-template.md`.
 3. Cite the contributing source pages via wikilinks: `[[../sources/<slug>.md]]`.
 
 Do not create a concept page for a term mentioned in a single source.
@@ -55,28 +55,36 @@ Create or update `wiki/maps/<slug>.md` when:
 - There is a coherent narrative across several concepts/sources.
 - A reader new to the topic would benefit from an ordered entry point.
 
-Use `references/map-template.md`.
+Use `assets/map-template.md`.
 
-### 4. Cascade and contradictions
+### 4. Cascade updates
 
-When a new source contradicts or refines an existing concept page:
+After writing the primary source page, check for ripple effects:
 
-1. Update the concept page in place — do not leave two conflicting claims.
-2. Note the resolution in the "Contradictions / Open questions" section of the concept page.
+1. Scan `wiki/sources/` in the same topic area for pages affected by the new material.
+2. Scan `wiki/concepts/` for concept pages that reference overlapping ideas.
+3. Update every page whose content is materially affected; refresh its `Collected` or `Updated` metadata.
+
+Archive pages (pages with an `Archived:` metadata field) are never cascade-updated — they are point-in-time snapshots.
+
+### 5. Contradictions
+
+When the new source contradicts or refines existing content:
+
+1. Update the concept page in place — do not leave two conflicting claims side by side.
+2. Note the resolution under the "Contradictions / Open questions" section of the concept page.
 3. If the old claim is still worth preserving, move it under a clearly labeled history heading rather than deleting silently.
+4. If the conflicting content lives in a separate article, note the conflict in both and cross-link them.
 
-### 5. Index and log
+### 6. Log
 
-After writing/updating pages:
+After writing/updating pages, append one line to `wiki/log.md`:
 
-1. Update `wiki/index.md` so the new source/concept/map pages are reachable.
-2. Append one line to `wiki/log.md`:
+```
+- YYYY-MM-DD  synthesized N source(s), updated M concept(s), touched K map(s)
+```
 
-   ```
-   - YYYY-MM-DD  synthesized N source(s), updated M concept(s), touched K map(s)
-   ```
-
-### 6. Verify
+### 7. Verify
 
 Run `omp wiki lint` — fix broken wikilinks before stopping. Then re-run `omp wiki nav --json`
 and confirm `pending_synthesis` is now empty (or shorter, if you covered only a subset).
