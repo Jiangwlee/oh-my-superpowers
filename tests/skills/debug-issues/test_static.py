@@ -1,9 +1,9 @@
-"""T1 static checks for the debug skill."""
+"""T1 static checks for the debug-issues skill."""
 
 import unittest
 from pathlib import Path
 
-SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "debug"
+SKILL_DIR = Path(__file__).resolve().parents[3] / "skills" / "debug-issues"
 REFERENCES_DIR = SKILL_DIR / "references"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 
@@ -35,7 +35,7 @@ class TestSkillMd(unittest.TestCase):
         self.assertGreater(end, 0, "SKILL.md frontmatter not closed")
         block = content[3:end]
         self.assertIn("name:", block, "frontmatter missing name")
-        self.assertIn("debug", block, "frontmatter missing debug skill name")
+        self.assertIn("debug-issues", block, "frontmatter missing debug-issues skill name")
 
     def test_frontmatter_has_description(self) -> None:
         """Frontmatter must include a description."""

@@ -1,5 +1,5 @@
 ---
-name: debug
+name: debug-issues
 description: >-
   Systematic debugging for failing tests, runtime errors, and unexpected
   behavior. Use when you can reproduce a bug and need to find the root cause
@@ -7,7 +7,7 @@ description: >-
   orchestration, or speculative rewrites.
 ---
 
-# Debug
+# Debug Issues
 
 Use this skill when behavior is wrong and the next step is investigation, not
 feature work.
