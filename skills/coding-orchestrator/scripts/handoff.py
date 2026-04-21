@@ -15,12 +15,16 @@ from common import dump_yaml, load_yaml, now_iso, require_story_dir
 VALID_PHASES = {"executing", "reviewing", "accepting", "advancing"}
 
 
-def _task_status_for_phase(phase: str) -> str:
-    if phase == "accepting":
-        return "reviewed"
-    if phase == "advancing":
+def _last_commit(task: dict) -> str | None:
+    commits = task.get("commits") or []
+    return commits[-1] if commits else None
+
+
+def _wave_rollup_status(tasks_data: dict, wave: int) -> str:
+    siblings = [t for t in tasks_data.get("tasks", []) if int(t.get("wave", 0)) == wave]
+    if siblings and all(t.get("status") == "completed" for t in siblings):
         return "completed"
-    return "executing"
+    return "in-progress"
 
 
 def _load_context(path: Path, story_name: str) -> dict:
@@ -85,7 +89,7 @@ def cmd_update(args: argparse.Namespace) -> int:
         wave_key,
         {"status": "in-progress", "tasks": []},
     )
-    wave_entry["status"] = "completed" if args.phase == "advancing" else "in-progress"
+    wave_entry["status"] = _wave_rollup_status(tasks_data, wave)
 
     task_entries = wave_entry.setdefault("tasks", [])
     target = next(
@@ -95,22 +99,25 @@ def cmd_update(args: argparse.Namespace) -> int:
     if target is None:
         target = {
             "id": args.task_id,
-            "status": _task_status_for_phase(args.phase),
-            "worker_agent_id": None,
-            "reviewer_agent_id": None,
-            "commit": None,
+            "status": task.get("status"),
+            "worker_agent_id": task.get("worker") or None,
+            "reviewer_agent_id": task.get("reviewer") or None,
+            "commit": _last_commit(task),
             "pending_action": args.next_action,
         }
         task_entries.append(target)
 
-    target["status"] = _task_status_for_phase(args.phase)
+    target["status"] = task.get("status")
     target["pending_action"] = args.next_action
+    target["commit"] = args.commit if args.commit is not None else _last_commit(task)
     if args.worker_agent_id is not None:
         target["worker_agent_id"] = args.worker_agent_id
+    elif not target.get("worker_agent_id"):
+        target["worker_agent_id"] = task.get("worker") or None
     if args.reviewer_agent_id is not None:
         target["reviewer_agent_id"] = args.reviewer_agent_id
-    if args.commit is not None:
-        target["commit"] = args.commit
+    elif not target.get("reviewer_agent_id"):
+        target["reviewer_agent_id"] = task.get("reviewer") or None
 
     pending_dispatches = [
         item for item in context.get("pending_dispatches", [])

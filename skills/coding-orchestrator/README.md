@@ -74,11 +74,11 @@ coding-orchestrator/
 │
 └── scripts/                         # CLI backends (invoked via `omp coding-orchestrator`)
     ├── common.py                    # Shared utilities (load_yaml, require_story_dir)
-    ├── story.py                     # story init/list
-    ├── task.py                      # task update/list/show
+    ├── story.py                     # story summarize (usage by wave/kind/model)
+    ├── task.py                      # task update / show
     ├── review.py                    # review create (outputs task context fragment)
-    ├── handoff.py                   # handoff update/show
-    └── archive.py                   # archive completed stories
+    ├── handoff.py                   # handoff update
+    └── archive.py                   # archive aged / legacy stories (sweep)
 ```
 
 ---
@@ -99,25 +99,32 @@ Dispatch pattern: read the agent file (body = protocol), then pass `<protocol bo
 ## Key CLI Commands
 
 ```bash
-# Story
-omp coding-orchestrator story init --story-dir <PROJECT_ROOT>/stories --slug <name>
+# Story init is manual (template copy) — see references/story-intake.md.
 
 # Task state
-omp coding-orchestrator task update --story-dir <dir> --story <slug> --id <NN> \
+omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> \
   --status <pending|executing|reviewing|testing|completed|blocked> \
-  [--worker <id>] [--reviewer <id>] [--commit <sha>] [--note <str>]
+  [--worker <id>] [--reviewer <id>] [--commit <sha>] [--note <str>] \
+  [--usage-kind <worker|reviewer> --model <name> --tokens <N> --tool-uses <N> --duration-ms <N>]
+
+# Task inspection
+omp coding-orchestrator task show --story-dir <PROJECT_ROOT>/stories --story <slug> [--id <NN>]
 
 # Handoff checkpoint
-omp coding-orchestrator handoff update --story-dir <dir> --story <slug> \
+omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> \
   --task-id <NN> --phase <executing|reviewing|accepting|advancing> \
-  --next-action "<one sentence>"
+  --next-action "<one sentence>" \
+  [--worker-agent-id <id>] [--reviewer-agent-id <id>] [--commit <sha>] [--deviation <note>]
 
 # Review context fragment (dispatch to code-reviewer agent)
-omp coding-orchestrator review create --story-dir <dir> --story <slug> \
+omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> \
   --task-id <NN> [--additional <str>] [--out <path>]
 
-# Archive completed stories
-omp coding-orchestrator archive --story-dir <dir> --story <slug>
+# Story-level usage report (after acceptance)
+omp coding-orchestrator story summarize <slug> --story-dir <PROJECT_ROOT>/stories
+
+# Archive aged (>1d) or legacy (no YYYY-MM-DD prefix) stories — sweep, no --story arg
+omp coding-orchestrator archive --story-dir <PROJECT_ROOT>/stories [--threshold-days N] [--dry-run]
 ```
 
 ---
