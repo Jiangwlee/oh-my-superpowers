@@ -64,6 +64,10 @@ Did coding-supervisor improve coding quality? **[Y / N]**
 Token 消耗不统计 —— inline 模式编排者自身不可测，统一放弃。
 ```
 
+## 6. 矛盾条款
+
+在任务执行过程中，是否遇到了任何矛盾条款？
+
 ## Promotion
 
 写完后，回看 §3 / §4：

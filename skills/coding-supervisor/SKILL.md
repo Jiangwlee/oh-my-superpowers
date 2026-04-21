@@ -15,7 +15,7 @@ description: >-
 
 - 没有设计文档 → 立即终止，提示用户先用 brainstorming skill。
 - task `spec` 字段为 null/空 → 不得 dispatch worker 或开始编码（CLI 强制）。
-- 每个 task 完成后必须派遣 reviewer sub-agent，**inline 与 multi_wave 都强制**，review 不可内联。
+- Review 必须派 reviewer sub-agent，inline 与 multi_wave 都强制，不得内联自审。
 
 ## Modes
 
@@ -32,7 +32,7 @@ description: >-
 |---|---|---|
 | code-reviewer | `agents/code-reviewer.md` | Review implementation vs spec; cannot modify files |
 
-派遣时：读 agent 文件正文（= protocol），作为 system context；任务上下文（task.md + diff）作为 prompt。
+**派遣合同**：agent 文件正文 = system context（protocol）；`task.md` 内容 + 本轮 diff = prompt。
 
 ## Workflow
 
@@ -77,7 +77,7 @@ flowchart TD
    （CLI 校验 `spec` 已写入才允许 `executing`；status 翻转时自动记 `started` 时间。）
 3. **Execute**:
    - **inline**：supervisor 直接编辑代码，按 Acceptance Checklist 自检。
-   - **multi_wave**：派遣 worker sub-agent。task.md 是合同，**额外的 File Scope / Read First / 项目规范**通过派遣 prompt 动态拼接，不进 task.md。外部 runtime 见 `references/commands.md`。
+   - **multi_wave**：派遣 worker sub-agent。task.md 即合同；**File Scope / Read First / 项目规范**通过派遣 prompt 动态拼接，不写进 task.md。外部 runtime 见 `references/commands.md`。
 4. **Review**（两模式强制）— 派遣 reviewer sub-agent。Prompt = `<protocol body>\n\n<task.md 内容>\n\n<diff>`。reviewer 不修改文件，由 supervisor 决定是否回环修复，回环也走同一个 task。
 5. **Update story-memory.md** — 把跨 task 可复用的发现追加到 Patterns / Gotchas / Known False Positives。规则见 `references/story-memory-guideline.md`。
 6. **Accept Task** — 逐项验证 task.md 的 Acceptance Checklist。通过后:
@@ -86,7 +86,7 @@ flowchart TD
      --story <slug> --id <NN> --status completed
    ```
    （`completed` 时间自动写入。）
-7. **Advance Wave** — 当前 wave 全部 `completed` 后，回到步骤 1 进入下一 wave。下一 wave 的 task 由 step 2 写完 spec 后再翻到 `executing`。
+7. **Advance Wave** — 当前 wave 全部 `completed` 后回到步骤 1 进入下一 wave；下一 wave 各 task 必须先由 step 2 写入 spec，才能翻到 `executing`。
 
 ### Phase 3 — E2E & Self-Evaluation
 

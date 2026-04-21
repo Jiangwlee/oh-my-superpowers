@@ -26,9 +26,7 @@ If you have a native sub-agent mechanism AND the task runs in the same runtime, 
 ```bash
 PROMPT_FILE="/tmp/supervisor-task-${TASK_ID}.md"
 # supervisor writes the prompt content to this file
-
-# For review tasks, include the diff
-REVIEW_FILE="/tmp/supervisor-review-${TASK_ID}.md"
+# review prompts follow the same shape: protocol body + task.md + diff
 ```
 
 ## Spawn commands
