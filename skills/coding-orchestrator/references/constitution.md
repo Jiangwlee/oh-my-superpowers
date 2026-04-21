@@ -1,8 +1,8 @@
 # Coding Guideline
 
-Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
+Four principles derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
 
-**Every sub agent MUST read this file before writing any code.**
+**Every sub-agent MUST read this file before writing any code.**
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
@@ -66,7 +66,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Examples
 
-Real-world code examples demonstrating the four principles. Each example shows what LLMs commonly do wrong and how to fix it.
+One anti-pattern + corrected pattern per principle.
 
 ### Think Before Coding — Hidden Assumptions
 
@@ -91,7 +91,7 @@ def export_users(format='json'):
     return f"Exported {len(users)} users"
 ```
 
-Problems: Assumed ALL users (privacy?), assumed file location, assumed fields, assumed CSV fieldnames.
+Problems: assumed ALL users (privacy?), assumed file location, assumed fields, assumed CSV fieldnames.
 
 **✅ Correct (Surface Assumptions)**
 
@@ -146,7 +146,7 @@ def calculate_discount(amount: float, percent: float) -> float:
     return amount * (percent / 100)
 ```
 
-When to add complexity: Only when you actually need multiple discount types.
+Add complexity only when you actually need multiple discount types.
 
 ### Surgical Changes — Drive-by Refactoring
 
@@ -174,7 +174,7 @@ When to add complexity: Only when you actually need multiple discount types.
 +         raise ValueError("Username too short")
 ```
 
-Problems: "Improved" email validation, added username validation, changed comments, added docstring.
+Problems: "improved" email validation, added username validation, changed comments, added docstring.
 
 **✅ Correct (Surgical)**
 
@@ -238,6 +238,4 @@ Plan:
 
 ## Key Insight
 
-The "overcomplicated" examples aren't obviously wrong — they follow design patterns and best practices. The problem is **timing**: they add complexity before it's needed.
-
-**Good code is code that solves today's problem simply, not tomorrow's problem prematurely.**
+Every overcomplicated example above follows a real design pattern. The problem is **timing** — complexity added before it is needed. Good code solves today's problem simply.

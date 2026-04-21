@@ -159,20 +159,19 @@ When stuck:
 
 ## Template Usage Notes
 
-**Sizing**: one task = one vertical slice (model + API + UI for one feature). Prefer vertical over horizontal (all models, then all APIs). See `references/task-decomposition-rules.md` Rule 5 for the ≤5 files / vertical-only split rule.
+Cross-references live in `references/task-decomposition-rules.md`. Keep this section short.
 
-**Cross-layer wiring**: if a task adds a shared API (store action, hook return, context value), the SAME task must wire its first consumer + ship an integration test. Splitting "add API" from "use API" produces orphaned APIs — see Rule 2.
+| Topic | Rule |
+|---|---|
+| **Sizing** | One task = one vertical slice; ≤5 files; split vertically, not horizontally. See Rule 5. |
+| **Cross-layer wiring** | A task that adds a shared API must also wire its first consumer and ship an integration test. See Rule 2. |
+| **Test layer** | `test_layer` in `tasks.yaml` must match the highest layer the acceptance criteria touch. See Rule 1. |
+| **Fix batching** | Fix-loop tasks may combine ≤3 fixes, ≤30 lines each, sharing one verification cycle. See Rule 3. |
+| **Verification ownership** | The implementation task owns its E2E verification. Never spawn a separate "verify story" task. See Rule 4. |
 
-**Test layer**: the `test_layer` field in `tasks.yaml` declares the layer for the first red test. It MUST match the highest layer the acceptance criteria touch — see Rule 1.
+Other distinctions:
 
-**Fix batching**: surgical fix tasks (≤30 lines each, ≤3 fixes, sharing a single verification cycle) MAY be combined into one fix-batch task instead of running full ceremony per fix. See Rule 3.
-
-**Verification ownership**: the implementation task OWNS its E2E verification. Do not spawn a separate "verify story" task. See Rule 4.
-
-**Read First vs References**: Read First = mandatory pre-reading before any code change. References = optional additional context.
-
-**Must-Haves vs Test Plan**: Must-Haves define the goal (what must be true). Test Plan defines the method (how to verify). A task can pass all tests but fail must-haves if tests don't cover the actual goal.
-
-**Deviation Rules customization**: the four levels above are defaults. Orchestrator should adjust per task — a security-critical task may move "adding dependencies" from 🔴 to absolute prohibition.
-
-**Wave assignment**: Orchestrator assigns wave numbers. Same wave = can run in parallel (no file conflicts, no dependencies). Higher wave = depends on lower waves completing first.
+- **Read First vs References** — Read First is mandatory pre-reading before any code change; References is optional context.
+- **Must-Haves vs Test Plan** — Must-Haves define the goal; Test Plan defines the method. A task can pass every test and still fail acceptance if the test plan does not cover the goal.
+- **Deviation Rules** — the four levels above are defaults. Orchestrator may tighten per task (e.g., promote "add dependency" from 🔴 to absolute prohibition for a security-critical task).
+- **Wave assignment** — same wave = parallelizable (no file conflicts, no dependencies); higher wave = depends on lower waves completing first.

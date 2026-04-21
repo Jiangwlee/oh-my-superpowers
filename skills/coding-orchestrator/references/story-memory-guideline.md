@@ -1,35 +1,28 @@
 # Story Memory Guideline
 
-Per-story explicit learning log. Orthogonal to `.handoff-context` (state checkpoint).
-Read this when creating, appending to, or closing a `story-memory.md`.
+Per-story explicit learning log. Orthogonal to `.handoff-context` (state checkpoint). Read this when creating, appending to, or closing a `story-memory.md`.
 
 ---
 
 ## Purpose
 
-`story-memory.md` captures **cross-task, story-scoped discoveries** so that:
-
-- Workers dispatched to later tasks start pre-aware of the story's gotchas
-- Reviewers avoid re-flagging issues the team already debated and resolved
-- Patterns that emerge during execution are explicit, not trapped in the orchestrator's ephemeral context
-
-It exists because context compaction erases orchestrator memory; without an explicit file, every cross-task learning is re-derived or lost.
+`story-memory.md` captures **cross-task, story-scoped discoveries** so workers start pre-aware of gotchas and reviewers do not re-flag already-resolved issues. Context compaction erases orchestrator memory; without this file, every cross-task learning is re-derived or lost.
 
 ## Location
 
 `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story-memory.md`
 
-Created as an empty placeholder by **coding-orchestrator** during story intake; filled in as the story progresses.
+Created as an empty placeholder during story intake; filled in as the story progresses.
 
 ## Write Authority
 
-- **coding-orchestrator is the sole writer.** Workers and reviewers read only.
-- Workers surface candidate entries via their completion report (`### Deviations`, `### Issues Found`, `### Story-Memory Impact`). The orchestrator evaluates those candidates and decides what to promote into `story-memory.md`.
-- Writing through a single author is what keeps the file dense and curated — it is a **digest**, not a log.
+- **Orchestrator is the sole writer.** Workers and reviewers read only.
+- Workers surface candidate entries via their completion report (`### Deviations`, `### Issues Found`, `### Story-Memory Impact`). The orchestrator decides what to promote.
+- Single-writer curation is what keeps the file a **digest**, not a log.
 
 ## Structure
 
-Three sections, added as needed. Omit a section if there is nothing to record yet.
+Three sections, added as needed. Omit a section if nothing to record yet.
 
 ```markdown
 # Story Memory: <slug>
@@ -38,45 +31,48 @@ Three sections, added as needed. Omit a section if there is nothing to record ye
 - <cross-task reusable discovery>; seen in: task-NN, task-MM
 
 ## Gotchas
-- <subtle trap, with enough context that next task avoids it>
+- <subtle trap, with enough context that the next task avoids it>
 
 ## Known False Positives (for reviewers)
-- <check that looks wrong but is intentional, with link to the task that decided it>
+- <check that looks wrong but is intentional, with link to the deciding task>
 ```
 
 Each bullet must include:
-- **What** — the observation, specific enough to match in a different task
-- **Where / Why** — the task(s) that established it, or the rationale
-- **(optional) pointer** — to a commit, PR comment, or discussion if relevant
 
-Avoid: dated raw quotes, worker reports pasted in full, unstructured dumps.
+- **What** — the observation, specific enough to match in a different task.
+- **Where / Why** — the task(s) that established it, or the rationale.
+- **(optional) pointer** — a commit, PR comment, or discussion if relevant.
+
+Do not paste raw worker reports, dated quotes, or unstructured dumps.
 
 ## Lifecycle
 
-1. **Creation** — coding-orchestrator writes an empty placeholder during story intake (title + three empty section headers).
-2. **Accumulation** — after each wave completes, orchestrator reads worker reports (esp. `Story-Memory Impact` line), decides what is cross-task reusable, **paraphrases** it, and appends to the matching section. Raw copy-paste is forbidden.
-3. **Consumption** — every task spec's Worker Refs section lists `../story-memory.md` by default; workers read it before designing. Reviewers also read it before flagging issues.
-4. **Promotion at close** — when the story finishes, orchestrator re-reads `story-memory.md` and asks for each entry:
-   - **Cross-story reusable?** Promote to a nearby `CLAUDE.md` (for code-local rules) or to `insight` memory (for project-global principles).
-   - **Only this-story relevant?** Keep in place; story-memory.md is archived with the story directory.
+| Stage | Action |
+|---|---|
+| **Creation** | Orchestrator writes an empty placeholder during story intake (title + three empty section headers). |
+| **Accumulation** | After each wave, orchestrator reads worker reports (esp. `Story-Memory Impact`), **paraphrases** what is cross-task reusable, and appends to the matching section. Raw copy-paste is forbidden. |
+| **Consumption** | Every task spec's Worker Refs lists `../story-memory.md` by default. Workers read it before designing; reviewers read it before flagging issues. |
+| **Promotion at close** | Orchestrator re-reads each entry and asks: cross-story reusable → promote (`CLAUDE.md` for code-local rules, `insight` memory for project-global principles). Only this-story relevant → leave in place; archived with the story. |
 
 Nothing is promoted silently; every promotion is an explicit orchestrator action.
 
 ## Anti-patterns
 
-- ❌ **Raw log**: appending worker reports verbatim. Story-memory is a **digest**; if a reader needs raw history, they read `.handoff-context` or git log.
-- ❌ **Global memory in disguise**: writing entries that apply across all stories. Those belong in `CLAUDE.md` or `insight` memory, not in a per-story file.
-- ❌ **Worker self-append**: letting workers edit story-memory.md directly. Multiple writers without curation = drift + duplicates.
-- ❌ **Reading after archive**: once a story is archived, story-memory.md is frozen history. Cross-story reuse must happen via the promotion step before archive, not via grep over archived stories.
+| ❌ Don't | Why |
+|---|---|
+| Paste worker reports verbatim | Story-memory is a digest; raw history lives in `.handoff-context` and git log |
+| Write entries that apply across all stories | Those belong in `CLAUDE.md` or `insight` memory |
+| Let workers edit directly | Multi-writer → drift + duplicates |
+| Grep archived stories for cross-story reuse | Once archived, story-memory is frozen; reuse must happen via the promotion step |
 
 ## Relationship to other files
 
 | File | Role | Writer |
 |---|---|---|
-| `story.md` | Story narrative (what/how) | coding-orchestrator (from design doc, immutable after intake) |
-| `tasks.yaml` | Task state (SSOT) | coding-orchestrator + workers (via task.py) |
-| `tasks/task-NN.md` | Per-task spec | coding-orchestrator (JIT, wave by wave) |
-| `.handoff-context` | Task-level recovery checkpoint | coding-orchestrator handoff update |
-| `story-memory.md` | Cross-task learning digest | coding-orchestrator (curated append only) |
+| `story.md` | Story narrative (what/how) | Orchestrator (from design doc; immutable after intake) |
+| `tasks.yaml` | Task state (SSOT) | Orchestrator + workers (via `task.py`) |
+| `tasks/task-NN.md` | Per-task spec | Orchestrator (JIT, wave by wave) |
+| `.handoff-context` | Task-level recovery checkpoint | Orchestrator (`handoff update`) |
+| `story-memory.md` | Cross-task learning digest | Orchestrator (curated append only) |
 
-Each has a different scope and writer; do not blur them.
+Different scopes, different writers — do not blur them.

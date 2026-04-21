@@ -1,59 +1,62 @@
 # Task Decomposition Rules
 
-Read this when breaking a story into tasks, and when writing JIT specs wave by wave.
+Read this when breaking a story into tasks and when writing JIT specs wave by wave.
 
 ---
 
 ## JIT Spec Writing Protocol
 
-Task specs are written **wave by wave**, not all at once. Each wave's specs reflect what prior waves actually learned.
+Task specs are written **wave by wave**, not upfront. Each wave's specs reflect what prior waves actually learned.
 
-Orchestrator writes every task spec. Both entry paths share the same JIT rule:
+Orchestrator writes every spec. Both entry paths share the same JIT rule:
 
-- **Path A (handoff)**: derive wave 1 specs from the brainstorming design doc before dispatching wave 1. Leave wave ≥ 2 as `spec: null`.
-- **Path B (self-created)**: write wave 1 specs from the user's direct request before dispatching wave 1. Leave wave ≥ 2 as `spec: null`.
+| Entry path | Wave 1 spec source | Wave ≥ 2 |
+|---|---|---|
+| **A (handoff)** | Brainstorming design doc | `spec: null` until prior wave completes |
+| **B (self-created)** | User's direct request | `spec: null` until prior wave completes |
 
-In both paths, wave ≥ 2 specs are written JIT once prior waves complete, informed by their worker reports and the current `story-memory.md`.
+Wave ≥ 2 specs are written JIT once prior waves complete, informed by their worker reports and the current `story-memory.md`.
 
 ## Phase 1 Skeleton Review Gate
 
-Before wave 1 dispatch, dispatch the `task-skeleton-reviewer` agent (see SKILL.md Agents table).
+Before wave 1 dispatch, run the `task-skeleton-reviewer` agent (see SKILL.md Agents table).
 
 - Route this review to an L3 reviewer.
-- The reviewer returns JSON with `merge`, `split`, and `rewave`.
-- Orchestrator must apply or explicitly reject each proposed change before dispatching wave 1.
-- brainstorming may suggest better slicing, but this gate is the enforcement point.
+- The reviewer returns JSON with `merge`, `split`, `rewave`.
+- Orchestrator applies or explicitly rejects each proposed change before dispatching wave 1.
+- Brainstorming may suggest better slicing, but this gate is the enforcement point.
 
-**Hard rule — enforced by `scripts/task.py`**: `status: executing` is rejected (exit 2) whenever the target task's `spec` is null, missing, or empty. Write the spec first.
+**Hard rule — enforced by `scripts/task.py`**: flipping `status: executing` is rejected (exit 2) whenever the target task's `spec` is null, missing, or empty. Write the spec first.
 
 Before dispatching each wave:
-1. Read every completed prior-wave task's Worker Report (esp. `### Story-Memory Impact`, `### Deviations`, `### Issues Found`) and the current `story-memory.md`.
-2. Decide what to promote into `story-memory.md` (see `references/story-memory-guideline.md` — paraphrase, don't paste raw).
-3. Copy `templates/task.md` to `tasks/task-NN.md` for each task in the upcoming wave. Fill `Objective`, `Read First`, `File Scope`, `Deviation Rules`, `Must-Haves`, `Test Plan`. `Worker Refs` is pre-populated to include `../story-memory.md`.
-4. Update each task's `tasks.yaml` entry: set `spec: tasks/task-NN.md`.
-5. Now flip status to `executing`.
+
+1. Read every completed prior-wave Worker Report (esp. `### Story-Memory Impact`, `### Deviations`, `### Issues Found`) and the current `story-memory.md`.
+2. Decide what to promote into `story-memory.md` (see `references/story-memory-guideline.md` — paraphrase, never paste raw).
+3. Copy `templates/task.md` to `tasks/task-NN.md` for every task in the upcoming wave. Fill `Objective`, `Read First`, `File Scope`, `Deviation Rules`, `Must-Haves`, `Test Plan`. `Worker Refs` is pre-populated to include `../story-memory.md`.
+4. Set `spec: tasks/task-NN.md` on each task's `tasks.yaml` entry.
+5. Flip status to `executing`.
 
 ### tasks.yaml skeleton
 
-Entries must set: `id`, `title`, `wave`, `depends_on`, `spec`, `files_modified`, `test_layer`. `test_layer` = the lowest layer that can falsify acceptance (per Rule 1 below).
+Every entry must set: `id`, `title`, `wave`, `depends_on`, `spec`, `files_modified`, `test_layer`. `test_layer` = the lowest layer that can falsify acceptance (Rule 1).
 
-**Freedom note**: appending, reordering, or removing tasks is a direct `tasks.yaml` edit — the `omp` command is only for high-frequency fields (status/worker/reviewer/commit/note).
-
-**Sizing rule**: one task = one vertical slice. If a task touches more than 5 files, split it vertically (two smaller features), not horizontally (all stores, then all components). See Rule 5 below.
-
-**Self-check before dispatching each wave**: run the checklist at the bottom of this file against the wave's specs. Revise before dispatching if any answer is "no".
+- **Direct-edit fields**: appending, reordering, or removing tasks is a direct `tasks.yaml` edit. The `omp` command handles only high-frequency fields (status / worker / reviewer / commit / note).
+- **Sizing**: one task = one vertical slice. If a task touches more than 5 files, split it **vertically** (two smaller features), not **horizontally** (all stores, then all components). See Rule 5.
+- **Self-check**: before dispatching each wave, run the checklist at the bottom of this file. Revise if any answer is "no".
 
 ---
 
-## Why this exists
+## Rules
 
-Three recurring orchestrator mistakes have been observed:
+Rules 1–3 address three recurring orchestrator mistakes:
 
-1. **Test layer mismatch** — task spec says "TDD red test first", worker writes a hook unit test, but the acceptance criterion is integration-level. Result: tests pass but feature fails E2E.
-2. **Cross-layer wiring split** — orchestrator splits "add store API" and "wire it into component" into two tasks. Result: API ships orphaned, bug discovered rounds later.
-3. **Surgical-fix overhead inflation** — every 5-line bug fix runs the full task ceremony (spec / worker / review / handoff). Result: 70%+ of task time is overhead, not fixing.
+| Mistake | Symptom |
+|---|---|
+| **Test layer mismatch** | Spec says "TDD red test first"; worker writes a hook unit test; acceptance is integration-level. Tests pass but feature fails E2E. |
+| **Cross-layer wiring split** | "Add store API" and "wire it into component" land in separate tasks. API ships orphaned; bug surfaces rounds later. |
+| **Surgical-fix overhead inflation** | Every 5-line bug fix runs the full task ceremony. 70%+ of task time is overhead, not fixing. |
 
-The rules below close each.
+Rules 4 and 5 address verification ownership and vertical sizing.
 
 ---
 
@@ -183,27 +186,24 @@ Story-level merge readiness check (handoff doc + final test counts) MAY be a sep
 
 ## Rule 5: Vertical Slice Sizing
 
-(Existing rule from SKILL.md, restated for completeness.)
-
 One task = one vertical slice. A slice spans:
+
 - model / store / state layer
 - API / hook / transport layer
 - component / view layer
 - test (matching acceptance layer per Rule 1)
 
-If a task touches more than 5 files, split it — but split **vertically** (two smaller features), not **horizontally** (all stores, then all components). Horizontal splits violate Rule 2.
+If a task touches more than 5 files, split — but **vertically** (two smaller features), not **horizontally** (all stores, then all components). Horizontal splits violate Rule 2.
 
 ---
 
 ## Self-check before finalizing task breakdown
 
-Run through this checklist mentally:
-
 - [ ] Does each task's first red test match its acceptance layer? (Rule 1)
-- [ ] Are there any "add API" tasks without paired "consume API" in the same task? (Rule 2)
+- [ ] Any "add API" tasks without a paired "consume API" in the same task? (Rule 2)
 - [ ] If this is a fix loop, are batchable fixes batched? (Rule 3)
-- [ ] Are there standalone verification tasks that could be folded into implementation? (Rule 4)
+- [ ] Any standalone verification tasks that could fold into implementation? (Rule 4)
 - [ ] Is each task a vertical slice ≤ 5 files? (Rule 5)
-- [ ] Did the skeleton review gate run, and did you resolve every merge / split / rewave suggestion?
+- [ ] Did the skeleton review gate run, and is every merge / split / rewave suggestion resolved?
 
-If any answer is "no" or "I don't know", revise the task list before dispatching.
+If any answer is "no" or "I don't know", revise before dispatching.

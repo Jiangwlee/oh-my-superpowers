@@ -1,6 +1,6 @@
 # Acceptance
 
-How the orchestrator verifies that a completed task meets its spec.
+Orchestrator verification that a completed task meets its spec.
 
 ## Per-Task Verification
 

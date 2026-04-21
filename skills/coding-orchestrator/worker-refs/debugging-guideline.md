@@ -1,7 +1,6 @@
 # Debugging Guideline
 
-Log-driven debugging methodology for sub agents. Read this when tests fail
-or unexpected behavior is observed during task execution.
+Log-driven debugging methodology for sub-agents. Read this when tests fail or unexpected behavior is observed during task execution.
 
 **Core principle: observe first, then act. Never guess.**
 
@@ -9,36 +8,34 @@ or unexpected behavior is observed during task execution.
 
 ## Philosophy
 
-**You are the investigator, not the guesser.** The error message tells you
-what happened. The logs tell you where. The code tells you why. Follow the
-evidence — don't hypothesize without data.
+**You are the investigator, not the guesser.** The error message tells you what happened. The logs tell you where. The code tells you why. Follow the evidence — do not hypothesize without data.
 
-### Meta-Debugging: Your Own Code
+### Meta-debugging: your own code
 
-When debugging code you just wrote, you're fighting your own mental model.
+When debugging code you just wrote, you are fighting your own mental model.
 
-- **Treat your code as foreign** — read it as if someone else wrote it
-- **Question your design decisions** — your implementation decisions are hypotheses, not facts
-- **Admit your mental model might be wrong** — the code's behavior is truth; your model is a guess
-- **Prioritize code you touched** — if you modified 100 lines and something breaks, those are prime suspects
+- **Treat your code as foreign** — read it as if someone else wrote it.
+- **Question your design decisions** — implementation decisions are hypotheses, not facts.
+- **Admit your mental model might be wrong** — the code's behavior is truth; your model is a guess.
+- **Prioritize code you touched** — if you modified 100 lines and something breaks, those are the prime suspects.
 
 The hardest admission: "I implemented this wrong."
 
-### Cognitive Biases to Watch
+### Cognitive biases to watch
 
 | Bias | Trap | Antidote |
-|------|------|----------|
-| **Confirmation** | Only looking for evidence supporting your theory | "What would prove me wrong?" |
+|---|---|---|
+| **Confirmation** | Only looking for evidence that supports your theory | Ask: "what would prove me wrong?" |
 | **Anchoring** | First explanation becomes your anchor | Generate 3+ hypotheses before investigating |
-| **Sunk Cost** | Spent an hour on one path, keep going | "If I started fresh, is this still the path?" |
+| **Sunk cost** | Spent an hour on one path, keep going | Ask: "if I started fresh, is this still the path?" |
 
 ## The 6-Step Method
 
-### Step 1: List Possible Causes
+### Step 1: List possible causes
 
-**Before writing any code or making changes:**
+**Before writing any code or making changes.**
 
-List 3-7 possible causes with their diagnostic method. Be specific and falsifiable.
+List 3–7 possible causes with their diagnostic method. Be specific and falsifiable.
 
 ```
 Possible causes:
@@ -57,9 +54,9 @@ Possible causes:
 - "User state resets because component remounts on route change"
 - "API call completes after unmount, causing state update on unmounted component"
 
-### Step 2: Add Diagnostic Logs
+### Step 2: Add diagnostic logs
 
-**Insert targeted logs at key points in the execution path.**
+Insert targeted logs at key points in the execution path.
 
 ```python
 # Strategic — logs at decision points
@@ -71,91 +68,85 @@ logger.debug(f"entering function")  # Useless without context
 ```
 
 Rules:
-- Log at decision points (before/after conditionals, at function boundaries)
-- Include actual values, not just "entering function"
-- Log to file, not stdout (avoid polluting test output)
-- Tag logs with component name: `[auth]`, `[db]`, `[api]`
 
-### Step 3: Run and Read Logs
+- Log at decision points (before/after conditionals, at function boundaries).
+- Include actual values, not just "entering function".
+- Log to file, not stdout (avoid polluting test output).
+- Tag logs with the component name: `[auth]`, `[db]`, `[api]`.
 
-Execute the failing operation and read the log output.
+### Step 3: Run and read logs
 
-**Look for:**
-- Last successful log before failure (narrows the location)
-- Unexpected values (narrows the cause)
-- Missing logs (code path not reached — the bug is earlier)
+Execute the failing operation and read the log output. Look for:
 
-### Step 4: Narrow Scope, Then Read Code
+- Last successful log before failure (narrows the location).
+- Unexpected values (narrows the cause).
+- Missing logs (code path not reached — the bug is earlier).
 
-Now that logs have narrowed the problem to a specific file/function:
+### Step 4: Narrow scope, then read code
 
-1. Read the code in that area COMPLETELY (not just "relevant" lines)
-2. Read imports, configuration, related tests
-3. Trace the actual data flow through the code
-4. Identify the root cause — not just "what fails" but "WHY it fails"
+Once logs have narrowed the problem to a specific file/function:
 
-### Step 5: Fix and Verify
+1. Read the code in that area COMPLETELY (not just "relevant" lines).
+2. Read imports, configuration, related tests.
+3. Trace the actual data flow through the code.
+4. Identify the root cause — not just "what fails" but "WHY it fails".
 
-1. Make the SMALLEST change that addresses the root cause
-2. Run the original failing test — it should pass now
-3. Run related tests — no regressions
-4. If fix doesn't work, go back to Step 1 with new information
+### Step 5: Fix and verify
 
-### Step 6: Clean Up
+1. Make the SMALLEST change that addresses the root cause.
+2. Run the original failing test — it should pass now.
+3. Run related tests — no regressions.
+4. If the fix does not work, return to Step 1 with new information.
 
-**Remove ALL diagnostic logs you added.** Every single one.
+### Step 6: Clean up
 
-- Remove temporary logging statements
-- Remove debug print statements
-- Revert any temporary configuration changes
-- The codebase should look like you were never debugging
+**Remove every diagnostic log you added.** Leave no debug prints, no temporary config changes. The codebase must look like you were never debugging.
 
 ---
 
 ## Investigation Techniques
 
-### Binary Search
+### Binary search
 
-**When:** Large codebase, many possible failure points.
+**Use when:** large codebase, many possible failure points.
 
 Cut the problem space in half repeatedly:
-1. Add log at midpoint of execution path
-2. Is data correct at midpoint? YES → bug is after. NO → bug is before
-3. Repeat until isolated
 
-**Example:** API returns wrong data
-- Data leaves database correctly? YES
-- Data reaches frontend correctly? NO
-- Data leaves API route correctly? YES
-- Data survives serialization? NO → Bug in serialization
+1. Add a log at the midpoint of the execution path.
+2. Is the data correct at midpoint? YES → bug is after. NO → bug is before.
+3. Repeat until isolated.
 
-### Working Backwards
+Example — API returns wrong data:
 
-**When:** You know the correct output but aren't getting it.
+- Data leaves database correctly? YES.
+- Data reaches frontend correctly? NO.
+- Data leaves API route correctly? YES.
+- Data survives serialization? NO → bug in serialization.
 
-1. What function produces the output?
-2. Test that function with expected input — correct output?
-   - YES → bug is earlier (wrong input)
-   - NO → bug is here
-3. Repeat backwards through call stack
+### Working backwards
 
-### Differential Debugging
+**Use when:** you know the correct output but are not getting it.
 
-**When:** Something used to work and now doesn't.
+1. Identify the function that produces the output.
+2. Test it with the expected input. Correct output? YES → bug is earlier (wrong input). NO → bug is here.
+3. Repeat backwards through the call stack.
+
+### Differential debugging
+
+**Use when:** something used to work and now does not.
 
 - What changed in code? (`git diff`, `git log`)
 - What changed in environment? (versions, config)
 - What changed in data?
-- Test each difference in isolation
+- Test each difference in isolation.
 
-### Minimal Reproduction
+### Minimal reproduction
 
-**When:** Complex system, unclear which part fails.
+**Use when:** complex system, unclear which part fails.
 
-1. Copy failing code to isolated context
-2. Remove one piece at a time
-3. Still fails? Keep removing. Stops failing? Put that piece back
-4. Repeat until bare minimum that reproduces the bug
+1. Copy failing code into an isolated context.
+2. Remove one piece at a time. Still fails? Keep removing. Stops failing? Put that piece back.
+3. Repeat until the bare minimum reproduces the bug.
 
 ---
 
@@ -163,24 +154,24 @@ Cut the problem space in half repeatedly:
 
 **Only for frontend/browser issues.** Use in this order:
 
-1. **Observe** — take screenshot, check console, inspect network
-2. **Log** — add diagnostic logs in the relevant components
-3. **Narrow** — use logs to find the specific component/function
-4. **Fix** — apply the fix
-5. **Verify** — take screenshot again, confirm visual fix
+1. **Observe** — take a screenshot, check console, inspect network.
+2. **Log** — add diagnostic logs in the relevant components.
+3. **Narrow** — use logs to find the specific component/function.
+4. **Fix** — apply the fix.
+5. **Verify** — take a screenshot again; confirm the visual fix.
 
-**Do NOT** use DevTools to trial-and-error CSS changes. That's YOLO fixing.
+Do NOT use DevTools to trial-and-error CSS changes. That is YOLO fixing.
 
 ---
 
 ## Prohibited Behaviors
 
-- **YOLO fixing**: changing code based on guesses without diagnostic evidence
-- **Shotgun debugging**: changing multiple things at once hoping one works
-- **Trial-and-error loops**: repeatedly tweaking values without understanding why
-- **Leaving debug artifacts**: forgetting to remove diagnostic logs after fixing
-- **Skipping reproduction**: fixing without first confirming you can trigger the bug
-- **Fixing unrelated issues**: scope creep during debugging (note them, don't fix them)
+- **YOLO fixing** — changing code based on guesses without diagnostic evidence.
+- **Shotgun debugging** — changing multiple things at once, hoping one works.
+- **Trial-and-error loops** — tweaking values without understanding why.
+- **Leaving debug artifacts** — forgetting to remove diagnostic logs after fixing.
+- **Skipping reproduction** — fixing without first confirming you can trigger the bug.
+- **Fixing unrelated issues** — scope creep during debugging. Note them; do not fix them.
 
 ---
 

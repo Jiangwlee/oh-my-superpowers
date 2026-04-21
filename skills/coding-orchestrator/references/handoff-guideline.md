@@ -1,16 +1,16 @@
 # Handoff Guideline
 
-How the orchestrator preserves execution state inside one story.
-Read this when updating or recovering `stories/<slug>/.handoff-context`.
+Execution-state checkpoint for one story. Read this when writing or recovering `stories/<slug>/.handoff-context`.
 
 ---
 
 ## Overview
 
-`stories/<YYYY-MM-DD>-<slug>/.handoff-context` is the orchestrator's structured checkpoint file.
-It is updated at task granularity so recovery does not depend on replaying long chat history.
+`stories/<YYYY-MM-DD>-<slug>/.handoff-context` is the orchestrator's structured checkpoint. Updated at task granularity so recovery does not depend on replaying chat history.
 
-Write it with:
+Canonical schema: `templates/handoff-context.yaml`.
+
+## Write Command
 
 ```bash
 omp coding-orchestrator handoff update \
@@ -21,44 +21,39 @@ omp coding-orchestrator handoff update \
   --next-action "<one-line next step>"
 ```
 
-Optional fields:
+Optional flags: `--worker-agent-id`, `--reviewer-agent-id`, `--commit`, `--deviation`.
 
-- `--worker-agent-id`
-- `--reviewer-agent-id`
-- `--commit`
-- `--deviation`
+## Update Timing
 
-The canonical schema lives in `templates/handoff-context.yaml`.
+Update whenever any of these happens:
+
+1. A worker is dispatched.
+2. A reviewer is dispatched.
+3. A review judgment changes the next step.
+4. A task is accepted, or a wave advances.
 
 ## Recovery Protocol
 
 When resuming a story:
 
-1. Read `stories/<slug>/.handoff-context`
-2. Trust `next_action` first
-3. Check `current_phase` and the current wave entry
-4. Resume only the in-flight task; do not rediscover already accepted deviations
-
-## Update Timing
-
-Update the handoff context whenever any of these happens:
-
-1. A worker is dispatched
-2. A reviewer is dispatched
-3. A review judgment changes the next step
-4. A task is accepted or a wave advances
+1. Read `stories/<slug>/.handoff-context`.
+2. Trust `next_action` first.
+3. Check `current_phase` and the active wave entry.
+4. Resume only the in-flight task; do not re-open accepted deviations.
 
 ## Field Intent
 
-- `current_wave` / `current_phase`: where the orchestrator is right now
-- `wave_state`: compact ledger for the active and completed waves
-- `pending_dispatches`: sub-agents currently in flight
-- `deviations_accepted`: approved spec drift so recovery does not reopen closed decisions
-- `next_action`: the first sentence the recovered orchestrator should act on
+| Field | Meaning |
+|---|---|
+| `current_wave` / `current_phase` | Where the orchestrator is right now |
+| `wave_state` | Compact ledger for the active and completed waves |
+| `pending_dispatches` | Sub-agents currently in flight |
+| `deviations_accepted` | Approved spec drift — recovery must not re-judge these |
+| `next_action` | First sentence the recovered orchestrator should act on |
 
 ## Best Practices
 
-1. **Keep the file task-granular** — this is a checkpoint ledger, not a narrative report.
-2. **Prefer concrete next actions** — `next_action` should be executable without rereading the whole story.
-3. **Record accepted deviations once** — don't force a recovered session to re-judge the same scope change.
-4. **Do not duplicate `tasks.yaml` wholesale** — copy only the state needed for recovery.
+- **Keep it task-granular.** This is a ledger, not a narrative report.
+- **Make `next_action` executable** without re-reading the whole story.
+- **Record accepted deviations once.** Do not force a recovered session to re-judge closed decisions.
+- **Do not duplicate `tasks.yaml`.** Copy only the state needed for recovery.
