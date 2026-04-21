@@ -1,8 +1,8 @@
 # State Schema
 
-`state.json` 在 `init` 时创建，在 `build-report` 时更新为终态。
+`state.json` 在 `init` 时创建，`build-report` 时更新为终态。
 
-## init 时
+## init 后
 
 ```json
 {
@@ -37,10 +37,10 @@
 }
 ```
 
-## sources 字段说明
+## `sources` 字段
 
 | 字段 | 必填 | 说明 |
-|------|------|------|
+|---|---|---|
 | `url` | 是 | 来源 URL |
 | `title` | 否 | 来源标题 |
 | `platform` | 否 | 来源平台（google / github / reddit / x 等） |

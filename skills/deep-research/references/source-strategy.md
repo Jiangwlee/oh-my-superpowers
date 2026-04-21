@@ -2,7 +2,7 @@
 
 ## Source Priority
 
-默认优先级：
+默认优先级（越靠后越适合补视角，不适合作唯一证据）：
 
 1. 官方文档 / 官方博客 / 原始仓库 / 原始论文
 2. 权威研究机构 / 行业报告 / 可靠媒体
@@ -10,64 +10,64 @@
 4. 社区讨论（Reddit / HN / 论坛）
 5. 社交媒体（X 等）
 
-越靠后，越适合补充视角，不适合作为唯一证据。
+## Query 类型混搭
 
-## What To Search For
+每轮搜索优先混合以下类型，不要只用一种：
 
-研究时不要只搜一种类型的 query。优先混合：
-- 概览型：`what is`, `overview`, `state of`
-- 事实型：`statistics`, `data`, `market size`, `benchmarks`
-- 对比型：`vs`, `comparison`, `alternatives`
-- 案例型：`case study`, `implementation`, `adoption`
-- 批判型：`limitations`, `criticism`, `risks`
-- 时效型：`2026`, `latest`, `recent`
+| 类型 | 示例关键词 |
+|---|---|
+| 概览型 | `what is`, `overview`, `state of` |
+| 事实型 | `statistics`, `data`, `market size`, `benchmarks` |
+| 对比型 | `vs`, `comparison`, `alternatives` |
+| 案例型 | `case study`, `implementation`, `adoption` |
+| 批判型 | `limitations`, `criticism`, `risks` |
+| 时效型 | `2026`, `latest`, `recent` |
 
-## When To Read Full Content
+## 何时读全文
 
-满足以下条件时，优先读全文：
-- 来源看起来权威
-- snippet 无法回答关键问题
-- 包含数据、案例、技术细节
-- 是多个来源反复提到的关键节点
+满足任一条件时优先读全文，不只看 snippet：
 
-读全文统一使用：
+- 来源权威
+- snippet 回答不了关键问题
+- 含数据、案例、技术细节
+- 多来源反复提到的关键节点
+
+统一命令：
 
 ```bash
 omp web-operator read-url <url> --limit 15000
 ```
 
-该命令自动处理动态渲染页面，已适配站点（reddit/x/xueqiu/taoguba）走专用提取路径。不要手动拼凑 cdp 命令或使用 curl 读取页面。
+自动处理动态渲染；reddit / x / xueqiu / taoguba 走专用提取路径。不要手搓 CDP 或 curl。
 
-## Multi-Language Search
+## 多语言覆盖
 
-同一主题必须用中文和英文各搜至少一次。不同语言社区的信息差异往往很大。
+**同一主题中文和英文各搜至少一次**，不同语言社区信息差异往往很大。
 
-规则：
-- 英文 query 优先用 Google + GitHub + Reddit + X
-- 中文 query 优先用 Baidu + 微信搜狗
-- 如果主题涉及特定语言社区（日文、韩文等），也要覆盖
-- 不要只用一种语言就停下来——即使搜到了足够多的结果
+- 英文：Google + GitHub + Reddit + X
+- 中文：Baidu + 微信搜狗
+- 日文 / 韩文等：涉及时也要覆盖
+- 搜到足够结果也不能只停在一种语言
 
-## Platform Selection Matrix
+## 平台选择矩阵
 
-根据主题类型选择互补平台组合：
+按主题类型组合互补平台：
 
-| 主题类型 | 推荐平台组合 |
-|---------|-------------|
-| 技术/开源 | Google + GitHub + Reddit + X |
+| 主题类型 | 推荐组合 |
+|---|---|
+| 技术 / 开源 | Google + GitHub + Reddit + X |
 | 中文财经 | Baidu + 雪球 + 淘股吧 |
-| 中文时事/政策 | Baidu + 微信搜狗 |
+| 中文时事 / 政策 | Baidu + 微信搜狗 |
 | 社交舆论 | X + Reddit |
 | 通用研究 | Google + Baidu + DuckDuckGo |
 
-不确定时，至少选一个英文平台 + 一个中文平台。
+不确定时至少一个英文平台 + 一个中文平台。
 
-## Prefer search-multi
+## 优先 search-multi
 
-每轮搜索优先使用 `omp web-operator search-multi` 一次覆盖 2-3 个互补平台，而不是逐个平台串行搜索。
+每轮用 `omp web-operator search-multi` 一次覆盖 2-3 个互补平台，不要逐平台串行搜。
 
 ```bash
-# 示例：技术主题
 omp web-operator search-multi \
   --google "Claude Code memory" \
   --github "Claude Code memory" \
@@ -76,14 +76,15 @@ omp web-operator search-multi \
   --limit 5
 ```
 
-只在需要对单个平台做精确搜索（翻页、特殊参数）时才用单平台 search。
+只有单平台精确搜索（翻页、特殊参数）才退到单平台 `search`。
 
-## Cross-Source Validation
+## 跨来源校验
 
-结论写入报告前，优先检查：
-- 是否有至少两个独立来源支持
-- 是否只是单一社区或单一作者的说法
+结论写入报告前检查：
+
+- 是否至少两个独立来源支持
+- 是否只是单一社区 / 单一作者的说法
 - 是否存在明显矛盾
-- 是否已经过时
+- 是否已过时
 
-如果只有单一来源支持，应在报告里标记为未充分验证。
+只有单一来源支持时，报告里必须标记"未充分验证"。

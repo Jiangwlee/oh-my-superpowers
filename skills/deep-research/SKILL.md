@@ -9,63 +9,55 @@ description: >-
 
 # deep-research Skill
 
-深度研究工作流。核心目标是把"搜一搜"升级为：
-- 先拆研究目标
-- 再做 broad exploration
-- 再做 targeted deep dive
-- 再做 diversity / validation
-- 最后输出 `brief` 与可审计的 `full report`
+把"搜一搜"升级为"有节奏的多轮研究"：拆目标 → broad 探索 → 定向深挖 → 补反方 → 输出可审计的 `brief` + `full report`。
 
-它适合多轮研究，不适合一次性的临时搜索或单页总结。
+**适用**：需要跨多角度、多来源、多轮验证才能下结论。
+**不适用**：一次性临时搜索、单页总结、单一事实查询。
 
-## 统一入口
+## 工作流骨架
+
+| Phase | 产出 | 详见 |
+|---|---|---|
+| 0. Clarify Goal | `plan.md`（3-6 条子问题，带 checkbox） | `references/methodology.md` |
+| 1. Broad Exploration | 维度地图、关键词、关键实体 | 同上 |
+| 2. Deep Dive | 关键全文 + Pre-search Reasoning 块 | 同上 |
+| 3. Diversity & Validation | 反方、限制、替代、风险 | 同上 |
+| 4. Synthesis Check | `[Round N Synthesis]` 状态块，更新 plan | `references/stop-criteria.md` |
+| Report | `brief.md` + `full-report.md` | `references/reporting.md` |
+
+未覆盖多角度、缺关键全文来源、缺反方 / 限制信息 → 不得提前停止。
+
+## CLI 入口
 
 ```bash
 omp deep-research <subcommand> [args]
 ```
 
-两个命令：
-- `init` — 创建 workspace
-- `build-report` — 写入报告并持久化 sources 列表
+| 命令 | 作用 |
+|---|---|
+| `init` | 创建 workspace（`--topic` / `--slug` / `--mode`） |
+| `build-report` | 写入 brief + full report，并把 sources 持久化到 `state.json` |
 
-详细参数不要硬记，按需读取 `references/cli.md`。
+不确定参数先跑 `omp deep-research <subcommand> --help`，或查 `references/cli.md`。
 
-> 不确定参数时，先运行 `omp deep-research <subcommand> --help` 查看完整用法。
+## 搜索工具
 
-## 研究 SOP
+**优先** `omp web-operator`：`search-multi` 一次覆盖多个互补平台，`read-url` 读全文（已适配 reddit / x / xueqiu / taoguba 等动态站点）。失败再降级到 WebSearch / WebFetch。不要手搓 CDP 或用 curl 抓页面。
 
-推荐的使用顺序：
-
-1. 先澄清研究目标和子问题
-2. 做 broad exploration，识别关键维度和关键词
-3. 对关键维度做 deep dive，读关键全文而不是只看 snippet
-4. 主动补齐不同类型的证据和反方/限制信息
-5. 每轮结束做 synthesis check，判断是否继续
-6. 最终生成两层产物：`brief` + `full report`
-
-如果研究还没有覆盖多个角度、缺乏关键来源、或缺少反方/限制信息，就不应过早结束。
-
-## 搜索与信息获取
-
-使用`omp web-operator`进行搜索和信息获取，使用`omp web-operator --help`了解`omp web-operator`的详细参数和用法。
-
----
+来源优先级、中英文覆盖、平台矩阵 → `references/source-strategy.md`。
 
 ## 数据目录
 
-默认路径：`~/.local/share/oh-my-superpowers/deep-research/`
+默认：`~/.local/share/oh-my-superpowers/deep-research/`，可用 `DEEP_RESEARCH_DATA_DIR` 覆盖。workspace 结构 → `references/workspace.md`；`state.json` schema → `references/state-schema.md`。
 
-可通过环境变量 `DEEP_RESEARCH_DATA_DIR` 覆盖。
+## 按需加载
 
-## 何时加载详细文档
-
-详细文档索引：`references/README.md`
-
-只在需要时加载：
-- 研究流程与阶段目标：`references/methodology.md`
-- 来源优先级与搜索策略：`references/source-strategy.md`
-- 停止条件：`references/stop-criteria.md`
-- 报告格式与审计要求：`references/reporting.md`
-- CLI 详细参数：`references/cli.md`
-- state.json 结构：`references/state-schema.md`
-- workspace 目录结构：`references/workspace.md`
+| 何时读 | 文档 |
+|---|---|
+| 理解完整流程和每个 Phase 的产物 | `references/methodology.md` |
+| 决定搜什么、信什么来源 | `references/source-strategy.md` |
+| 判断是否停止本轮研究 | `references/stop-criteria.md` |
+| 写 brief / full report | `references/reporting.md` |
+| CLI 子命令与参数 | `references/cli.md` |
+| `state.json` 结构 | `references/state-schema.md` |
+| workspace 目录结构 | `references/workspace.md` |
