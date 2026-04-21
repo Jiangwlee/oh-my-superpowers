@@ -61,3 +61,19 @@ The heading tree should tell the reader what the file is trying to do.
 If a file is a pipeline, it should look like a pipeline.
 If a file is a template, it should look like a template.
 If a file is a reference index, it should look like a reference index.
+
+### 5. Do not replace a coherent structure just because another one is plausible
+
+If the current structure is already coherent, preserve it.
+
+Do not replace:
+
+- `Hard Gate / Key Principles / Workflow`
+
+with:
+
+- `Hard Gate / File Map / Global Rules / Workflow`
+
+unless the original structure is actually broken.
+
+Refine the existing structure first. Rebuild structure only when the current one is genuinely confusing, mixed-level, or missing a main line.

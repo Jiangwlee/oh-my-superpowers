@@ -54,6 +54,19 @@ Avoid overusing:
 - "it can be helpful"
 - "generally speaking"
 
+### 5. Tighten wording without changing modality
+
+Preserve obligation strength while refining the sentence.
+
+Do not silently change:
+
+- optional -> required
+- required -> optional
+- several options -> one recommendation
+- one allowed path -> multiple allowed paths
+
+Weak but faithful refinement is better than sharp wording with semantic drift.
+
 ## Tone target
 
 The target voice is:

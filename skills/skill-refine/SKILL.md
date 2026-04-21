@@ -11,12 +11,12 @@ description: >-
 
 # Skill Refine
 
-Refine the Markdown in a skill directory by rewriting files directly. This skill improves structure and expression. It does not produce a review report and it does not fix code.
+Refine the Markdown in a skill directory by rewriting files directly. This skill improves structure and expression without changing behavior. It does not produce a review report and it does not fix code.
 
 ## Hard Gate
 
 <HARD-GATE>
-Only change Markdown files inside the target skill directory. Do NOT change scripts, code, hooks, tests, JSON, or product behavior. Improve structure and expression without changing the intended meaning or workflow.
+Only change Markdown files inside the target skill directory. Do NOT change scripts, code, hooks, tests, JSON, or product behavior. Do NOT change workflow meaning, routing logic, option counts, output contracts, thresholds, or required/optional semantics. Improve structure and expression without changing the intended meaning or workflow.
 </HARD-GATE>
 
 ## Key Principles
@@ -78,7 +78,21 @@ Load references as needed:
 - Directory consistency → `references/directory-consistency.md`
 - Rewrite sequence → `assets/rewrite-playbook.md`
 
-### Step 3. Choose rewrite strategy
+### Step 3. Lock semantic invariants
+
+Before choosing any rewrite move, identify what must not change.
+
+| Invariant type | Examples |
+|---|---|
+| **Workflow logic** | routing order, downgrade / upgrade logic, handoff sequence |
+| **Branch semantics** | fast vs normal behavior, branch triggers, stop conditions |
+| **Contracts** | output contract, required deliverables, sole deliverable rules |
+| **Quantitative rules** | counts, caps, thresholds, limits, maximum rounds |
+| **Modality** | required vs optional, may vs must, can vs do not |
+
+If a structural improvement would require changing one of these invariants, preserve the invariant and choose a smaller rewrite.
+
+### Step 4. Choose rewrite strategy
 
 Before editing, decide what kind of rewrite each file needs.
 
@@ -91,9 +105,16 @@ Before editing, decide what kind of rewrite each file needs.
 | Wrong file placement | Move detail to `references/` or `assets/`; keep `SKILL.md` lean |
 | Repeated content across files | Keep one source of truth and delete or compress the duplicate |
 
-Do not drift into freeform editing. Pick a rewrite move, then execute it.
+Two rewrite modes exist:
 
-### Step 4. Rewrite the files
+| Mode | Use when | Constraint |
+|---|---|---|
+| **Structure + expression** | The current structure is genuinely broken | Rebuild structure, but preserve semantic invariants |
+| **Expression-only** | The current structure is already coherent | Do not invent a new organizing model; improve wording, density, and medium choice only |
+
+Do not drift into freeform editing. Pick a rewrite move and a rewrite mode, then execute them.
+
+### Step 5. Rewrite the files
 
 Rewrite the Markdown directly.
 
@@ -104,7 +125,7 @@ Rewrite the Markdown directly.
 - Keep examples only when they materially improve execution.
 - Keep templates out of `SKILL.md` unless they are short and always needed.
 
-### Step 5. Check directory-level consistency
+### Step 6. Check directory-level consistency
 
 After rewriting individual files, review the skill directory as a system.
 
@@ -116,7 +137,7 @@ After rewriting individual files, review the skill directory as a system.
 | **No accidental duplication** | The same rule or template is not maintained in multiple places without reason |
 | **Style coherence** | Markdown across the directory feels like one skill, not multiple authors fighting each other |
 
-### Step 6. Report what changed
+### Step 7. Report what changed
 
 After editing, give a short summary:
 

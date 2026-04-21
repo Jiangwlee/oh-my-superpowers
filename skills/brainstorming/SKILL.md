@@ -29,7 +29,7 @@ description: >-
     - assets/spec-document-reviewer-prompt.md       Spec review subagent prompt
 -->
 
-Run a design-before-implementation pipeline through collaborative dialogue. This file defines the top-level workflow, routing, and guardrails. The detailed scenario SOP lives in `scenarios/`.
+Run a design-before-implementation pipeline through collaborative dialogue. This file owns top-level routing, global guardrails, and the shared workflow skeleton. Scenario-specific SOP lives in `scenarios/`.
 
 ## Hard Gate
 
@@ -43,13 +43,13 @@ Do NOT write code, scaffold a project, or take implementation action until the r
 - **Multiple choice first** — Use bounded choices whenever the answer space is known; use open-ended questions only when it is genuinely open.
 - **YAGNI ruthlessly** — Do not carry unrequested features, abstractions, or scope into the design.
 - **Validate incrementally** — Advance section by section; do not move forward until the current section is approved.
-- **Choose principles intentionally** — Select action principles to fit the scenario; do not apply a default set mechanically. Default set: TDD · Break-Don't-Bend · Zero-Context Entry. See `references/principles-library.md` for the catalog.
+- **Choose principles intentionally** — Select action principles to fit the scenario; do not apply a default set mechanically. Default set: TDD · Break-Don't-Bend · Zero-Context Entry. See `references/principles-library.md` for the full library.
 
 ## Workflow
 
 ### Step 0. Route the scenario
 
-Determine which scenario applies before doing anything else:
+Determine the scenario before doing anything else:
 
 | Scenario | Trigger | Meaning |
 |---|---|---|
@@ -57,7 +57,7 @@ Determine which scenario applies before doing anything else:
 | **S3** | User says "开发 / 实现 / 加功能 / 新增 / 修复 / 重构 / 改造 X" | The topic is clearly an implementation job |
 | **S1** | Fallback for everything else | The user wants to think, explore, or align understanding with no immediate implementation intent |
 
-Matching order: **try S2 → try S3 → fall back to S1**. When the trigger is ambiguous (e.g. "I want X to be better"), **ask the user** which scenario applies; do not silently default.
+Matching order: **try S2 → try S3 → fall back to S1**. When the trigger is ambiguous (for example, "I want X to be better"), **ask the user** which scenario applies; do not default silently.
 
 Once the scenario is matched, continue through the common skeleton in this file, then hand off to `scenarios/<matched>.md`.
 
@@ -68,7 +68,7 @@ Choose the cost branch before running the skeleton:
 | Mode | Trigger | Behavior |
 |---|---|---|
 | **Normal mode** | Default; use for any non-trivial design | Run the full skeleton + full scenario SOP |
-| **Fast mode** | Trivial scope only; triggers and skip list live in each scenario file (S2 §Gotchas, S3 §Gotchas) | Use the compressed branch. SKILL.md's HARD-GATE still applies. Fast is **never** an excuse to skip brainstorming entirely; it is a lower-ceremony path |
+| **Fast mode** | Trivial scope only; triggers and skip list live in each scenario file (S2 §Gotchas, S3 §Gotchas) | Use the compressed branch. `HARD-GATE` still applies. Fast is **never** an excuse to skip brainstorming entirely; it is a lower-ceremony path |
 
 If uncertain which mode applies, default to Normal and let the scenario's Fast trigger escalate downward.
 
@@ -100,11 +100,11 @@ Ask only the questions needed to make the next design move defensible.
 | **Other questions** | Must come from ambiguities, conflicts, or risks observed during Explore |
 
 - Ask 1-3 targeted questions, not a checklist.
-- Never ask preset scenario-specific questions. Preset checklists kill brainstorming's core capability. Scenario files tell you what to **look at** during Explore, not what to **ask**.
+- Never ask preset scenario-specific questions. Scenario files tell you what to **look at** during Explore, not what to **ask**.
 
 #### Step 2.3 Challenge
 
-Run **Challenge Gate**: surface the strongest objection, then apply the 3 checks in `references/challenge-gate.md`.
+Run **Challenge Gate**: surface the strongest objection, then apply the three checks in `references/challenge-gate.md`.
 
 #### Step 2.4 Propose
 
@@ -115,11 +115,11 @@ Present the proposal shape that should move the discussion forward.
 | **Normal** | Present 2-3 options with trade-offs |
 | **Fast** | Give a direct recommendation |
 
-Risk follows proposals, not the other way around. Risk without a proposal is abstract anxiety. Risk & Spike runs inside the matched scenario SOP (S2/S3), not in this common skeleton.
+Risk follows proposals, not the other way around. Risk without a proposal is abstract anxiety. Risk & Spike runs inside the matched scenario SOP (`S2` / `S3`), not in this common skeleton.
 
 ### Step 3. Hand off to the scenario SOP
 
-Continue in the matched scenario SOP after the common skeleton:
+After the common skeleton, continue in the matched scenario SOP:
 
 | Scenario | Continue in |
 |---|---|
@@ -139,7 +139,7 @@ Continue in the matched scenario SOP after the common skeleton:
 
 #### Stop conditions
 
-Stop explicitly at each failure point; never silently proceed.
+Stop explicitly at each failure point; never proceed silently.
 
 | Condition | Required response |
 |---|---|
