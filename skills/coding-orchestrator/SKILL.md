@@ -1,15 +1,11 @@
 ---
 name: coding-orchestrator
 description: >-
-  Use when coordinating multi-agent coding work on a feature, refactor, or bug
-  that requires multiple tasks dispatched to sub-agents in sequential waves —
-  even if the user doesn't say "orchestrate." Typical signals: "break this into
-  tasks for different agents", "work in parallel", "manage a complex multi-file
-  project end-to-end", or any request implying spec → dispatch → review → test
-  cycles across multiple sub-agents.
-  Do NOT trigger for tasks spanning ≤ 1 wave or ≤ 5 files — recommend direct
-  coding with the main agent instead. Do NOT trigger if the user is still in
-  the design/brainstorming phase — use the brainstorming skill first.
+  Use when a feature, refactor, or bug needs structured story-driven coding:
+  exploration → tasks → review → waves → E2E. Signals: "plan end-to-end",
+  "break into tasks", "manage multi-file change", "coordinate sub-agents".
+  Skip for trivial fixes (~3 files) or when still in design/brainstorming —
+  use the brainstorming skill first.
 ---
 
 # Coding Orchestrator: Spec-Driven Sub-Agent Orchestration
@@ -79,12 +75,16 @@ Loop until every task reaches `status: completed`.
 
 1. **Write JIT Spec** for this wave before dispatching.
 2. **Execute** — Mode=multi_wave: dispatch coding tasks (native sub-agent or tmux). Mode=inline: orchestrator writes code directly; skip dispatch.
-3. **Checkpoint** — after each material state change:
-   - **Capture usage first** on every sub-agent return (worker in multi_wave; reviewer in both modes). Read the `<usage>` block at the tail of the agent payload (`input_tokens + output_tokens`, `tool_use` count, wall-clock duration). Run:
-     `omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --usage-kind <worker|reviewer> --model <name> --tokens <input+output> --tool-uses <N> --duration-ms <N>`
-     If the agent was interrupted before emitting usage, log the gap in `story-memory.md` so it stays auditable.
-   - **Then update handoff**:
-     `omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"`
+3. **Checkpoint** — after each material state change, run two updates in order:
+   1. **Capture usage** on every sub-agent return (worker in multi_wave; reviewer in both modes). Read the `<usage>` block at the tail of the agent payload (`input_tokens + output_tokens`, `tool_use` count, wall-clock duration), then:
+      ```
+      omp coding-orchestrator task update --story-dir <PROJECT_ROOT>/stories --story <slug> --id <NN> --usage-kind <worker|reviewer> --model <name> --tokens <input+output> --tool-uses <N> --duration-ms <N>
+      ```
+      If the agent was interrupted before emitting usage, log the gap in `story-memory.md` so it stays auditable.
+   2. **Update handoff**:
+      ```
+      omp coding-orchestrator handoff update --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> --phase <executing|reviewing|accepting|advancing> --next-action "<...>"
+      ```
 4. **Review** — generate the task context fragment:
    `omp coding-orchestrator review create --story-dir <PROJECT_ROOT>/stories --story <slug> --task-id <NN> [--additional <str>]`
    Dispatch `code-reviewer` with `<protocol body>\n\n<task context>` as the prompt. Apply orchestrator second judgment; workers make all code changes.

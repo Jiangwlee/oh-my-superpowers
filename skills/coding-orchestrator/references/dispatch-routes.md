@@ -15,6 +15,12 @@ Route workers and reviewers by capability level, not by gut feel.
 
 Default to the same provider family for worker and reviewer. Cross-provider review is **off by default** — enable only when the user explicitly requests it.
 
+Codex model guidance:
+
+- `gpt-5.4-mini` — high-volume narrow subtasks.
+- `gpt-5.4` — main reasoning-heavy worker/reviewer path.
+- `gpt-5.3-codex` — L2 fallback; coding-specialized middle tier.
+
 ## Task type → capability level
 
 | Signal | Route |
@@ -23,12 +29,6 @@ Default to the same provider family for worker and reviewer. Cross-provider revi
 | Routine feature / fix within one subsystem | L2 |
 | Concurrency, signals, async boundaries, lifecycle wiring, task-skeleton review | L3 |
 | Novel frontier coding or investigation with no proven local pattern | L4 |
-
-Codex-specific guidance:
-
-- `gpt-5.4-mini` — high-volume narrow subtasks.
-- `gpt-5.4` — main reasoning-heavy worker/reviewer path.
-- `gpt-5.3-codex` — L2 fallback; coding-specialized middle tier.
 
 ## Route decision
 

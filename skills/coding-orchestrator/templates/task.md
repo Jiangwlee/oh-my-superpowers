@@ -63,12 +63,9 @@ Design: `<link to brainstorming design doc if applicable>`
 ## Worker Refs
 
 <!-- Files the sub agent MUST read at the start of execution.
-     Mode-dependent:
-     - Mode=multi_wave: worker sub-agent reads all listed files before coding.
-       Orchestrator pre-populates `../story-memory.md`; add the others as below.
-     - Mode=inline: no worker sub-agent exists. Orchestrator reads story-memory.md
-       itself; the rest of this section may be omitted. Delete this section or
-       mark it N/A when the task's story is Mode=inline. -->
+     - Mode=multi_wave: list all required refs; worker reads them before coding.
+     - Mode=inline: no worker sub-agent exists; orchestrator reads
+       `../story-memory.md` itself. Delete this section or mark N/A. -->
 
 - `references/constitution.md` — coding principles (always include, multi_wave)
 - `worker-refs/worker-guideline.md` — worker behavioral protocol (always include, multi_wave)
