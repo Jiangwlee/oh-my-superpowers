@@ -49,7 +49,8 @@ Hooks 是 Claude Code 的生命周期事件钩子。**Skill 通过 `hooks.json` 
 ```
 skills/                       # Skill 单元（每个独立）
 ├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
-├── coding-orchestrator/      # Spec 驱动子代理编排（消费 S3 产物）
+├── coding-orchestrator/      # Spec 驱动子代理编排（消费 S3 产物，逐步废弃，由 coding-supervisor 替代）
+├── coding-supervisor/        # 轻量化 design→code：JIT spec + story memory + 默认 inline，>10 文件且 >1000 LOC 才走 multi_wave
 ├── skill-review/             # Skill 目录质量审查
 ├── agent-review/             # Pi Agent markdown 文件审查
 ├── code-review/              # 本地未提交/未推送代码改动审查
