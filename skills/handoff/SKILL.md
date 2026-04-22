@@ -23,8 +23,8 @@ guardrail. For Key Decisions: include all decisions made this session,
 including implicit choices Claude made without explicit user confirmation.
 
 **Step 3 — Write file**
-Write to `.handover.md` in the project root (overwrite if exists).
-`pending` in frontmatter must be `false` at write time.
+If `.handover.md` exists in the project root, `Read` it once, then `Write`
+(overwrite). `pending` in frontmatter must be `false` at write time.
 
 **Step 4 — Output action sequence**
 Extract 3–5 keywords from Key Decisions + Remaining Tasks to form a
