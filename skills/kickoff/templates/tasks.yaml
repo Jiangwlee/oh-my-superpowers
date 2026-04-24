@@ -1,0 +1,41 @@
+# Single source of truth for task state.
+# - Add / remove / reorder tasks: edit this file directly.
+# - Flip status / attach commit: use `omp kickoff task update --story-dir <PROJECT_ROOT>/stories ...`
+#   (atomic, auto-maintains started / completed / story-level `updated`).
+# - Append a wave snapshot at wave close: `omp kickoff task wave-update ...` writes into `waves[]`.
+#
+# Phase 1 Task Breakdown writes the SKELETON only: id / title / wave / depends_on /
+# files_modified / test_layer / est_loc. spec stays null until JIT spec is written
+# at the start of that task's wave.
+
+story: <story-slug>          # matches directory suffix: stories/<YYYY-MM-DD>-<story-slug>/
+created: <YYYY-MM-DD>
+updated: <YYYY-MM-DD>        # story-level activity stamp; archive.py uses this
+
+tasks: []
+# Each task entry shape:
+#   - id: "01"
+#     title: <action-oriented task title>
+#     status: pending          # pending | executing | completed | blocked
+#     wave: 1                  # higher wave depends on lower; sequential within a wave
+#     depends_on: []           # list of task ids
+#     spec: null               # tasks/task-NN.md once JIT spec is written (CLI gates executing on non-null)
+#     files_modified: []       # files this task will touch (estimate)
+#     est_loc: 0               # estimated LOC (used for wave packing)
+#     test_layer: e2e          # unit | hook | component | integration | e2e
+#     worker: ""               # "inline" / "<sub-agent-id>" / "tmux:<runtime>"
+#     reviewer: ""             # always set when completed
+#     started: null            # auto-set on first executing
+#     completed: null          # auto-set on completed
+#     commits: []
+#     notes: ""
+
+waves: []
+# Each wave entry shape (appended via `omp kickoff task wave-update`):
+#   - number: 1
+#     completed_at: <ISO8601>
+#     key_decisions:           # decisions made during this wave that affect future waves
+#       - "..."
+#     open_questions:          # unresolved items handed to next wave or to the user
+#       - "..."
+#     next_focus: "..."        # one-liner: what the next wave should prioritise
