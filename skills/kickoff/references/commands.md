@@ -1,35 +1,35 @@
 # Worker Dispatch Commands
 
-How to spawn coding workers in tmux sessions, wait for completion, and collect output. Read this when you need to dispatch to an external runtime (Tmux mode in `## Execution Mode`).
+当 orchestrator 需要用 tmux 派发外部 runtime 时，读取本文件。它只解决一件事：**如何启动 worker、等待结束、收集输出。**
 
----
+## When to Read
 
-## When to read this file
+满足任一条件时读取：
 
-- You have no native sub-agent mechanism (you are running in Codex, Pi, or a non-Claude environment).
-- OR you need a different runtime from your own (e.g., you are Claude but need Codex to code).
+- 当前环境没有原生 sub-agent 机制
+- 需要切换到不同 runtime（例如你在 Claude，但要用 Codex）
 
-If you have a native sub-agent mechanism AND the task runs in the same runtime, use that instead.
+如果当前 runtime 自带 sub-agent，且任务也打算在同一 runtime 里完成，优先用原生机制，不要绕到 tmux。
 
-## Runtime matrix
+## Runtime Matrix
 
 | Runtime | Prompt source | Model override |
 |---|---|---|
 | Claude | stdin pipe | `--model <name>` |
-| Codex | stdin pipe (`exec -`) | controlled by Codex config |
+| Codex | stdin pipe (`exec -`) | 由 Codex 配置控制 |
 | Pi | `@${PROMPT_FILE}` | `--model <name>` |
 
-## Prompt preparation
+## Prompt Preparation
 
-**All prompts MUST be written to a file first.** Never pass prompts as bash arguments.
+所有 prompt 必须先写入文件，禁止直接作为 bash 参数传递。
 
 ```bash
 PROMPT_FILE="/tmp/kickoff-task-${TASK_ID}.md"
-# write the prompt content to this file before spawning
-# review prompts follow the same shape: protocol body + task.md + diff
+# 先把 prompt 写到文件，再启动 worker
+# review prompt 也同理：protocol + task.md + diff
 ```
 
-## Spawn commands
+## Spawn Commands
 
 ### Claude
 
@@ -42,7 +42,7 @@ tmux new-session -d -s "$SESSION" -c "$CWD" \
   "cat ${PROMPT_FILE} | claude -p --no-session-persistence --dangerously-skip-permissions 2>&1 | tee ${OUTPUT}; exit"
 ```
 
-With model override:
+带 model override：
 
 ```bash
 tmux new-session -d -s "$SESSION" -c "$CWD" \
@@ -56,7 +56,7 @@ tmux new-session -d -s "$SESSION" -c "$CWD" \
   "cat ${PROMPT_FILE} | codex exec - --dangerously-bypass-approvals-and-sandbox 2>&1 | tee ${OUTPUT}; exit"
 ```
 
-`codex exec` reads the prompt from stdin. Model is controlled by Codex config.
+`codex exec` 从 stdin 读取 prompt；模型由 Codex 配置决定。
 
 ### Pi
 
@@ -65,14 +65,14 @@ tmux new-session -d -s "$SESSION" -c "$CWD" \
   "pi --no-session -p @${PROMPT_FILE} 2>&1 | tee ${OUTPUT}; exit"
 ```
 
-With model override:
+带 model override：
 
 ```bash
 tmux new-session -d -s "$SESSION" -c "$CWD" \
   "pi --no-session -p @${PROMPT_FILE} --model ${MODEL} 2>&1 | tee ${OUTPUT}; exit"
 ```
 
-## Wait for completion
+## Wait for Completion
 
 ```bash
 TIMEOUT=300
@@ -90,18 +90,18 @@ while tmux has-session -t "$SESSION" 2>/dev/null; do
 done
 ```
 
-## Collect output
+## Collect Output
 
 ```bash
 cat "$OUTPUT"
 
-# Clean ANSI escapes if needed
+# 如需去掉 ANSI 转义
 sed 's/\x1b\[[0-9;]*m//g' "$OUTPUT" > "${OUTPUT}.clean"
 ```
 
-## Parallel execution
+## Parallel Execution
 
-Spawn multiple sessions (independent tasks only) and wait for all:
+只在任务彼此独立时并行。
 
 ```bash
 tmux new-session -d -s "worker-01" -c ".worktrees/w01" \
@@ -116,14 +116,14 @@ while tmux has-session -t "worker-01" 2>/dev/null || \
 done
 ```
 
-### Worktree setup
+### Worktree Setup
 
 ```bash
 git worktree add .worktrees/w01 -b kickoff/task-01
 git worktree add .worktrees/w03 -b kickoff/task-03
 ```
 
-### Worktree merge
+### Worktree Merge
 
 ```bash
 git merge --no-ff kickoff/task-01
@@ -134,20 +134,20 @@ git worktree remove .worktrees/w03
 git branch -d kickoff/task-01 kickoff/task-03
 ```
 
-On merge conflict, STOP and report to the user. Do not auto-resolve.
+发生 merge conflict 时，立即停止并报告用户。不要自动解冲突。
 
-## Adding a new runtime
+## Adding a New Runtime
 
-Append a section under **Spawn commands** using this shape:
+新增 runtime 时，在 **Spawn Commands** 下追加同形态章节：
 
 ```bash
 tmux new-session -d -s "$SESSION" -c "$CWD" \
   "<command-that-reads-prompt-from-file-and-writes-output> 2>&1 | tee ${OUTPUT}; exit"
 ```
 
-A runtime command must:
+新增命令必须满足：
 
-1. Read the prompt from a file (stdin pipe or `@file` syntax).
-2. Write output to stdout (captured by `tee`).
-3. Run non-interactively (no human confirmation prompts).
-4. Exit when done (tmux session auto-closes).
+1. 从文件读取 prompt（stdin pipe 或 `@file` 都可以）
+2. 输出写到 stdout，便于 `tee` 捕获
+3. 可非交互运行
+4. 结束后自动退出，使 tmux session 关闭

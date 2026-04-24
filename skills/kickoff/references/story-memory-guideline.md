@@ -1,29 +1,34 @@
 # Story Memory Guideline
 
-Per-story explicit learning log. Read this when creating, appending to, or closing a `story-memory.md`.
-
----
+`story-memory.md` 是每个 story 的显式学习摘要。创建、追加或收尾这个文件时，读取本指南。
 
 ## Purpose
 
-`story-memory.md` captures **cross-task, story-scoped discoveries** so the next task's spec is informed by prior waves' lessons and reviewers do not re-flag already-resolved issues. Context compaction (which the user performs between waves) erases your memory; without this file, every cross-task learning is re-derived or lost.
+`story-memory.md` 记录**跨 task、但仍局限于当前 story** 的发现，避免在新 wave 里重复踩坑、重复推导、重复被 reviewer 误报。
 
 ## Location
 
+固定路径：
+
 `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story-memory.md`
 
-Created as an empty placeholder during story init; filled in as the story progresses.
+该文件在 `story init` 时创建为空壳，随着 story 推进逐步补全。
 
 ## Write Authority
 
-- **You (kickoff) are the sole writer.** Sub-agents and reviewers read only.
-- After each task you complete inline, distill the cross-task reusable lessons.
-- For sub-agent tasks, the sub-agent surfaces candidates via its completion report's `deviations`, `next-task-hint`, and `story-memory-impact` lines (see `references/execution.md` for the full report contract); you decide what to promote.
-- Single-writer curation is what keeps the file a **digest**, not a log.
+只允许 orchestrator 写入。
+
+| 角色 | 权限 |
+|---|---|
+| orchestrator | 唯一写者；负责筛选、压缩、追加 |
+| sub-agent | 只读；可在 completion report 中给候选 |
+| reviewer | 只读；可消费 `Known False Positives` |
+
+单写者是为了让它保持 **digest**，而不是流水账。
 
 ## Structure
 
-Three sections, added as needed. Omit a section if nothing to record yet.
+最多三个 section；没有内容就省略该 section。
 
 ```markdown
 # Story Memory: <slug>
@@ -38,42 +43,44 @@ Three sections, added as needed. Omit a section if nothing to record yet.
 - <check that looks wrong but is intentional, with link to the deciding task>
 ```
 
-Each bullet must include:
+每条 entry 至少包含：
 
-- **What** — the observation, specific enough to match in a different task.
-- **Where / Why** — the task(s) that established it, or the rationale.
-- **(optional) pointer** — a commit, PR comment, or discussion if relevant.
+| 字段 | 要求 |
+|---|---|
+| What | 观察本身，要具体到别的 task 可以复用 |
+| Where / Why | 建立该结论的 task 或理由 |
+| Pointer | 可选；必要时给 commit、讨论或 PR 注释 |
 
-Do not paste raw worker reports, dated quotes, or unstructured dumps.
+禁止粘贴原始 worker 报告、长段引用或无结构 dump。
 
 ## Lifecycle
 
-| Stage | Action |
+| 阶段 | 动作 |
 |---|---|
-| **Creation** | `omp kickoff story init` writes an empty placeholder (title + three empty section headers). |
-| **Accumulation** | After each task, paraphrase cross-task reusable findings and append to the matching section. Raw copy-paste is forbidden. |
-| **Consumption** | At the start of each wave you MUST read this file BEFORE writing the next wave's JIT specs. When dispatching a sub-agent worker, inject this file's contents into the dispatch prompt. |
-| **Promotion at close** | Phase 5 Self-Evaluation re-reads each entry: cross-story reusable → promote (`CLAUDE.md` for code-local rules, `insight` memory for project-global principles). Only this-story relevant → leave in place; archived with the story. |
+| **Creation** | `omp kickoff story init` 写入空占位（标题 + 三个空 section） |
+| **Accumulation** | 每个 task 完成后，用自己的话提炼跨 task 可复用发现，再追加到对应 section |
+| **Consumption** | 每个 wave 开始前必须先读；派 sub-agent 时把相关内容注入 prompt |
+| **Promotion at close** | 在 Phase 5 重新审视每条 entry：跨 story 可复用的提议晋升；仅本 story 相关的留在归档里 |
 
-Nothing is promoted silently; every promotion is an explicit kickoff action.
+任何 promotion 都必须是显式动作，不能静默发生。
 
-## Anti-patterns
+## Anti-Patterns
 
-| ❌ Don't | Why |
+| 不要这样做 | 原因 |
 |---|---|
-| Paste worker reports verbatim | Story-memory is a digest; raw history lives in git log and per-task spec |
-| Write entries that apply across all stories | Those belong in `CLAUDE.md` or `insight` memory |
-| Let workers edit directly | Multi-writer → drift + duplicates |
-| Grep archived stories for cross-story reuse | Once archived, story-memory is frozen; reuse must happen via the promotion step |
+| 逐字粘贴 worker 报告 | `story-memory.md` 是摘要，不是日志 |
+| 写“适用于所有 story”的规则 | 那些应进入 `CLAUDE.md` 或 `insight` |
+| 让 worker 直接编辑 | 多写者必然带来漂移与重复 |
+| 依赖归档 story 反查跨 story 经验 | 归档后内容冻结；复用应通过 promotion 完成 |
 
-## Relationship to other files
+## Relationship to Other Files
 
 | File | Role | Writer |
 |---|---|---|
-| `story.md` | Story narrative (what/how) | You (from user requirement; immutable after Phase 1) |
-| `tasks.yaml` | Task state + wave snapshots (SSOT) | You + sub-agents (via `omp kickoff task` CLI) |
-| `tasks/task-NN.md` | Per-task spec (Objective / Protocol / Acceptance) | You (JIT, wave by wave) |
-| `story-memory.md` | Cross-task learning digest | You (curated append only) |
-| `story-summary.md` | Phase 5 self-evaluation report | You (once, at story close) |
+| `story.md` | Story 叙事：Goal / Context / Scope / Explore Result | orchestrator |
+| `tasks.yaml` | 任务状态与 `waves[]` 快照的 SSOT | orchestrator + sub-agents（经 CLI） |
+| `tasks/task-NN.md` | 单 task 的 JIT spec | orchestrator |
+| `story-memory.md` | 跨 task 学习摘要 | orchestrator |
+| `story-summary.md` | Phase 5 自评报告 | orchestrator |
 
-Different scopes, different writers — do not blur them.
+文件边界必须清晰，不要混写。

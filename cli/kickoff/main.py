@@ -92,21 +92,15 @@ def task_update(
     id: str = typer.Option(..., "--id", help="Task id, e.g. '01'."),
     status: str | None = typer.Option(None, "--status", help="pending|executing|completed|blocked."),
     worker: str | None = typer.Option(None, "--worker", help="Worker identifier ('inline' or sub-agent id)."),
-    reviewer: str | None = typer.Option(None, "--reviewer", help="Reviewer identifier."),
-    commit: str | None = typer.Option(None, "--commit", help="Commit hash to append."),
     note: str | None = typer.Option(None, "--note", help="Replace the notes field."),
     story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
 ) -> None:
-    """Flip status, attach a commit, set worker/reviewer, or leave a note."""
+    """Flip task status, set worker, or leave a note. (Reviewer + commit are wave-scope — see wave-update.)"""
     args = ["--story-dir", story_dir, "update", "--story", story, "--id", id]
     if status is not None:
         args += ["--status", status]
     if worker is not None:
         args += ["--worker", worker]
-    if reviewer is not None:
-        args += ["--reviewer", reviewer]
-    if commit is not None:
-        args += ["--commit", commit]
     if note is not None:
         args += ["--note", note]
     _run("task.py", args)
@@ -129,6 +123,12 @@ def task_show(
 def task_wave_update(
     story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
     number: int = typer.Option(..., "--number", help="Wave number, e.g. 1."),
+    reviewer: str | None = typer.Option(
+        None, "--reviewer", help="Reviewer identifier for this wave's single review."
+    ),
+    commit: str | None = typer.Option(
+        None, "--commit", help="Commit hash for this wave's single commit."
+    ),
     key_decision: list[str] = typer.Option(
         None, "--key-decision",
         help="Repeatable: a key decision made during this wave.",
@@ -147,6 +147,10 @@ def task_wave_update(
         "--story-dir", story_dir,
         "wave-update", "--story", story, "--number", str(number),
     ]
+    if reviewer is not None:
+        args += ["--reviewer", reviewer]
+    if commit is not None:
+        args += ["--commit", commit]
     for d in key_decision or []:
         args += ["--key-decision", d]
     for q in open_question or []:

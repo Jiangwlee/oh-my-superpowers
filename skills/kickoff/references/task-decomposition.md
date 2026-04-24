@@ -1,96 +1,117 @@
 # Task Decomposition
 
-Read this in Phase 3 (Task Breakdown) and at the start of each wave when writing JIT specs.
+在两个时机读取本文件：
 
----
+1. Phase 3 做任务分解时
+2. 每个 wave 开头写 JIT spec 时
+
+## Job of This File
+
+本文只定义两类约束：
+
+| 主题 | 内容 |
+|---|---|
+| Breakdown skeleton | `tasks.yaml` 在 Phase 3 必须先写什么、不能先写什么 |
+| Decomposition rules | `test_layer`、API wiring、vertical slice、wave packing 的硬规则 |
 
 ## JIT Spec Protocol
 
-Specs are written **wave by wave**, not upfront. Each wave's specs reflect what prior waves actually learned.
+spec 必须**按 wave 编写**，不能在 story 一开始全部写完。
 
-| Stage | What is filled |
+| 阶段 | 必须产出 |
 |---|---|
-| **Phase 3 — Breakdown (skeleton only)** | `tasks.yaml` entries: `id / title / wave / depends_on / files_modified（estimate）/ est_loc / test_layer`. `spec: null`, no `tasks/task-NN.md` file. |
-| **Phase 4 — JIT Spec (per wave)** | Copy `skills/kickoff/templates/task.md` to `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/tasks/task-NN.md`. Fill `Objective / Protocol / Acceptance Checklist`. Set `spec: tasks/task-NN.md` in `tasks.yaml`. |
+| **Phase 3 - Breakdown** | 只写 `tasks.yaml` 骨架：`id / title / wave / depends_on / files_modified / est_loc / test_layer / spec: null` |
+| **Phase 4 - JIT Spec** | 复制 `skills/kickoff/templates/task.md` 到 `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/tasks/task-NN.md`，填写 `Objective / Protocol / Acceptance Checklist`，并把 `spec: tasks/task-NN.md` 写回 `tasks.yaml` |
 
-**Hard rule** (enforced by the `omp kickoff task update` CLI): flipping `status: executing` is rejected when `spec` is null/empty. Write the JIT spec first.
+硬规则：
 
-Before writing each wave's specs:
+- `spec` 为空时，`omp kickoff task update --status executing` 会被 CLI 拒绝
+- 所以先写 JIT spec，再切到 `executing`
 
-1. Read `story-memory.md` (mandated at the start of every wave).
-2. Re-read prior wave's reviewer reports in case any deferred decision affects this wave's contract.
-3. Then write the spec.
+写每个 wave 的 spec 前，按这个顺序做：
 
----
+1. 读 `story-memory.md`
+2. 回看前一 wave 的 reviewer 报告，确认没有延迟生效的决策
+3. 再写本 wave 的 spec
 
-## tasks.yaml skeleton fields
+## tasks.yaml Skeleton Fields
 
-Every entry MUST set: `id`, `title`, `wave`, `depends_on`, `spec` (null at breakdown), `files_modified`, `est_loc`, `test_layer`.
+每个 task 都必须包含以下字段：
 
-`test_layer` = the lowest layer that can falsify acceptance (Rule 1).
-`est_loc` = estimated lines-of-code delta. Used by Phase 3 to pack tasks into ≤500-LOC waves.
+- `id`
+- `title`
+- `wave`
+- `depends_on`
+- `spec`（Phase 3 时必须为 `null`）
+- `files_modified`
+- `est_loc`
+- `test_layer`
 
-- **Direct-edit fields**: appending, reordering, or removing tasks is a direct `tasks.yaml` edit. The `omp kickoff task` command handles only high-frequency state fields (status / worker / reviewer / commit / note / wave snapshot).
-- **Sizing**: one task = one vertical slice. If a task touches more than 5 files, split **vertically** (two smaller features), not **horizontally** (all stores, then all components). See Rule 3.
-- **Wave packing**: after the task list is dependency-ordered, pack adjacent independent tasks into the same wave while cumulative `est_loc` stays ≤ 500. The moment cumulative LOC would exceed 500, open a new wave. A single task whose `est_loc > 500` occupies its own wave (do NOT subdivide a vertical slice just to fit the budget).
+补充规则：
 
----
+| 规则 | 要求 |
+|---|---|
+| `test_layer` | 选择**最早能证伪 acceptance** 的层级；默认 `e2e` |
+| `est_loc` | 估算代码改动行数；供 wave 打包使用 |
+| 直接编辑字段 | task 的增删改排是直接改 `tasks.yaml`；CLI 只维护高频状态字段 |
+| sizing | 一个 task = 一个 vertical slice |
+| wave packing | 依赖排序后，把相邻 task 打包到累计 `<= 500 LOC` 的 wave；一旦超出就开新 wave；单 task `> 500` 时独占一 wave |
 
 ## Rule 1: Test Layer Match
 
-**The first red test in a task MUST be at the highest layer the acceptance criteria touch.**
+**第一个 red test 必须出现在 acceptance 能被证伪的最高层。**
 
-| Acceptance describes | Required first-red-test layer |
-|----------------------|-------------------------------|
-| pure function input/output | unit |
-| React hook state transitions | hook test |
-| component rendering / interaction | component test |
-| user observes URL/store/UI synchronized across navigation, mount, async | integration |
-| browser-only behavior (lifecycle, focus, scroll, animation) | E2E |
+| Acceptance 描述 | 首选 first-red-test layer |
+|---|---|
+| 纯函数输入 / 输出 | unit |
+| React hook 状态转换 | hook test |
+| 组件渲染 / 交互 | component test |
+| 用户可观察到 URL / store / UI / async 的协同 | integration |
+| 浏览器专属行为（focus / scroll / animation / lifecycle） | E2E |
 
-**Default: E2E first.** Set `test_layer: e2e` unless acceptance is a pure data transform E2E cannot reach. E2E is the only layer the user actually observes — it is the real DoD.
+默认值：**E2E first**。
 
-Lower-layer tests are worker (or inline editor) discretion based on context.
-
----
+只有当 acceptance 是 E2E 无法到达的纯数据变换时，才降到更低层。
 
 ## Rule 2: Cross-Layer API Wiring (No Orphans)
 
-**Adding a shared API and wiring its consumer must happen in the same task.**
+**新增共享 API，与接线到首个 consumer，必须放在同一个 task 里。**
 
-A "shared API" = any function/state/event that crosses module boundaries — store action, hook return value, context provider, event emitter, etc.
+共享 API 指任何跨模块边界的函数、状态或事件，例如：
+- store action
+- hook return value
+- context provider
+- event emitter
 
-### Hard rules
+硬规则：
 
-1. **Forbidden**: task A "add `setDraftInput(id, text)` to store"; task B "wire ChatInput to use it".
-2. **Required**: task "add cross-entity draft persistence" — touches store + ChatInput + integration test, all in one.
-3. **Exception**: if API has 2+ consumers, task may add API + first consumer + integration test; subsequent consumers are separate tasks but each is its own vertical slice.
+1. 禁止把“新增 API”与“接入第一个 consumer”拆成两个 task
+2. 必须在同一个 task 中完成 API + consumer + 对应测试
+3. 例外：当 API 有 2 个以上 consumer 时，可把“API + 第一个 consumer + 测试”放在首 task，其余 consumer 各自独立成 vertical slice
 
-### Audit before finalizing breakdown
-
-Scan the proposed task list. If any task description matches `add X to <module>` without a co-task `consume X in <component>` in the same task → **merge them**.
-
----
+做 breakdown 前，主动扫一遍 task list：
+- 如果出现“add X to module”但同 task 里没有“consume X” -> 合并
 
 ## Rule 3: Vertical Slice Sizing
 
-One task = one vertical slice. A slice spans:
+一个 task 必须是一个 vertical slice，通常横跨：
 
-- model / store / state layer
-- API / hook / transport layer
-- component / view layer
-- test (matching acceptance layer per Rule 1)
+- model / store / state
+- API / hook / transport
+- component / view
+- 与 acceptance 对应的测试层
 
-If a task touches more than 5 files, split — but **vertically** (two smaller features), not **horizontally** (all stores, then all components). Horizontal splits violate Rule 2.
+如果一个 task 触及文件数 **> 5**：
+- 要拆
+- 但必须**纵向拆**
+- 不能按 layer 水平拆
 
----
+水平拆分会直接违反 Rule 2。
 
-## Self-check before dispatching a wave
+## Self-Check Before Dispatch
 
-- [ ] Does each task's first red test match its acceptance layer? (Rule 1)
-- [ ] Any "add API" tasks without a paired "consume API" in the same task? (Rule 2)
-- [ ] Is each task a vertical slice ≤ 5 files? (Rule 3)
-- [ ] Cumulative `est_loc` of the wave's tasks ≤ 500 (or single task >500 occupies its own wave)?
-- [ ] Has `story-memory.md` been read for the latest gotchas?
-
-If any answer is "no", revise before dispatching.
+- [ ] 每个 task 的 first red test 都匹配 acceptance layer
+- [ ] 没有孤儿 API task
+- [ ] 每个 task 都是 `<= 5` 文件的 vertical slice
+- [ ] 每个 wave 的累计 `est_loc <= 500`，或单 task `> 500` 时独占一 wave
+- [ ] 写本 wave spec 前已经读过 `story-memory.md`

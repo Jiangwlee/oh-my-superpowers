@@ -5,9 +5,10 @@
 # ///
 """Convenience CLI for the hot-path edits of tasks.yaml.
 
-Covers status flips, worker/reviewer assignment, commit pinning, free-form
-notes, and per-wave snapshot append. Adding, removing, or reordering tasks
-is NOT the hot path; edit tasks.yaml directly for those.
+Covers task status flips, worker assignment, free-form notes, and per-wave
+snapshot append (reviewer + commit live in the wave snapshot, not on the task).
+Adding, removing, or reordering tasks is NOT the hot path; edit tasks.yaml
+directly for those.
 
 Auto-maintains:
   - tasks[*].started     (first time status becomes executing)
@@ -80,16 +81,6 @@ def cmd_update(args: argparse.Namespace) -> int:
         target["worker"] = args.worker
         changed = True
 
-    if args.reviewer is not None:
-        target["reviewer"] = args.reviewer
-        changed = True
-
-    if args.commit:
-        commits = target.setdefault("commits", [])
-        if args.commit not in commits:
-            commits.append(args.commit)
-            changed = True
-
     if args.note is not None:
         target["notes"] = args.note
         changed = True
@@ -155,6 +146,8 @@ def cmd_wave_update(args: argparse.Namespace) -> int:
     entry = {
         "number": args.number,
         "completed_at": now_iso(),
+        "reviewer": args.reviewer or "",
+        "commit": args.commit or "",
         "key_decisions": list(args.key_decision or []),
         "open_questions": list(args.open_question or []),
         "next_focus": args.next_focus or "",
@@ -194,8 +187,6 @@ def main() -> int:
     up.add_argument("--id", required=True, help="Task id, e.g. '01'.")
     up.add_argument("--status", help=f"New status ({'|'.join(sorted(VALID_STATUSES))}).")
     up.add_argument("--worker", help="Worker identifier.")
-    up.add_argument("--reviewer", help="Reviewer identifier.")
-    up.add_argument("--commit", help="Commit hash to append.")
     up.add_argument("--note", help="Replace the notes field.")
     up.set_defaults(func=cmd_update)
 
@@ -210,6 +201,8 @@ def main() -> int:
     )
     wu.add_argument("--story", required=True, help="Story slug or <YYYY-MM-DD>-<slug>.")
     wu.add_argument("--number", type=int, required=True, help="Wave number, e.g. 1.")
+    wu.add_argument("--reviewer", help="Reviewer identifier for this wave's review.")
+    wu.add_argument("--commit", help="Commit hash for this wave's single commit.")
     wu.add_argument(
         "--key-decision", action="append",
         help="Repeatable: a key decision made during this wave.",

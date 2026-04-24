@@ -1,16 +1,22 @@
 # Self-Evaluation Guideline
 
-Phase 5: write `story-summary.md` to retrospect this story and feed back into kickoff itself. Self-evaluation is **knowingly biased** (you grading yourself), but it is the only retrospective signal available — treat it as input, not verdict.
+自评Story执行过程和结果，按照`story-summary.md`模板输出。
 
----
+## When
 
-## File location
+只在以下条件同时满足后写：
+
+1. E2E 已通过
+2. Acceptance 已通过
+3. story 已接近关闭
+
+不要在调试中途写。
+
+## Where
+
+文件位置固定：
 
 `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/story-summary.md`
-
-## When to write
-
-Only after E2E + Acceptance has passed (Phase 5 part 1). Don't write while debugging — wait until the story is closeable.
 
 ## Template
 
@@ -34,15 +40,14 @@ If "N" anywhere: which task should have used a different mode and why? Suggest t
 
 Did kickoff improve coding quality? **[Y / N]**
 
-<理由：与"不用 kickoff 直接写代码"对比，列出具体的质量增益（如 bug 拦截、测试覆盖完备、接口清晰）或额外开销（过度 ceremony、上下文切换成本）。
-量化能量化的（避免/产生 bug 数、返工次数），定性的写具体场景。>
+<理由：与“不用 kickoff 直接写代码”对比，写清具体质量增益或额外开销。
+能量化就量化：例如拦截 bug 数、返工次数、上下文切换成本。>
 
 ## 3. Positive Mechanisms
 
 哪些条款和机制起到了正面作用？
 
 - **<mechanism name>**: <how it helped, with task-NN reference>
-- ...
 
 例：JIT Spec — task-03 的 spec 因为读了 task-01/02 的 story-memory，提前规避了 X 问题。
 
@@ -51,7 +56,6 @@ Did kickoff improve coding quality? **[Y / N]**
 哪些条款和机制起到了负面作用？
 
 - **<mechanism name>**: <where it hurt, with task-NN reference, suggested fix>
-- ...
 
 例：reviewer 强制派遣 — task-05 是 3 行改动，reviewer 往返耗时 > 修复本身，建议增加微小改动豁免门。
 
@@ -62,8 +66,8 @@ Did kickoff improve coding quality? **[Y / N]**
 | 01 | ... | inline | <iso> | <iso> | <hh:mm:ss> |
 | 02 | ... | sub-agent | <iso> | <iso> | <hh:mm:ss> |
 
-数据来源：`tasks.yaml` 中各 task 的 `started` / `completed` / `worker`（CLI 自动维护）。
-Token 消耗不统计 —— 跨 mode 不可比，统一放弃。
+数据来源：`tasks.yaml` 中各 task 的 `started` / `completed` / `worker`。
+Token 消耗不统计，跨 mode 不可比。
 
 ## 6. 矛盾条款
 
@@ -72,11 +76,13 @@ Token 消耗不统计 —— 跨 mode 不可比，统一放弃。
 
 ## Promotion
 
-写完后，回看 §3 / §4 / §6：
+写完后，重新检查 §3 / §4 / §6，并按下面规则处理：
 
-- **跨 story 可复用**的正面机制 → 加固到 SKILL.md 主流程或 references/。
-- **跨 story 反复出现**的负面信号 → 调整阈值、删除条款、或重构对应 reference。
-- §6 的矛盾条款 → 必须当场提给用户，决定是修订还是接受冲突。
-- 仅本 story 相关的发现留在 story-summary.md，随归档一起冻结。
+| 来源 | 动作 |
+|---|---|
+| 跨 story 可复用的正面机制 | 提议加固到 `SKILL.md` 或 `references/` |
+| 跨 story 反复出现的负面机制 | 提议调整阈值、删除条款或重构 reference |
+| §6 中的矛盾条款 | 必须提给用户决定，不能静默接受 |
+| 仅本 story 相关的发现 | 留在 `story-summary.md`，随归档冻结 |
 
-调整建议直接在对话中提给用户决定，不要静默修改 skill 本体。
+不要静默修改 kickoff 本体。调整建议需要在对话中明确提出。
