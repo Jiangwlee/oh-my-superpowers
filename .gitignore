@@ -29,3 +29,5 @@ claude-sub-agent/
 
 # Orchestrator working files (per coding-orchestrator SKILL.md storage spec)
 skills/*/stories/
+
+.handover.md
