@@ -38,6 +38,7 @@ Sections: 审查对象 | Layer A | Layer B | Label Rules | Severity Guide
 - [ ] `name` 与父目录名一致
 - [ ] `name` 格式合规：1-64 字符，小写字母+数字+连字符，无前后缀或连续连字符
 - [ ] `description` 非空，≤ 1024 字符
+- [ ] `description` 的描述简单、准确，不暴露skill的实现细节、内部逻辑，不耦合其他skill.
 - [ ] 可选字段（`license` / `compatibility` / `metadata` / `allowed-tools`）若存在则结构合法
 
 证据来源：脚本输出（frontmatter 检查项）+ 文件系统状态。优先使用脚本输出。
