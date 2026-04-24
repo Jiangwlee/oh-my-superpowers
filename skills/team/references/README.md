@@ -1,6 +1,6 @@
 # Team References
 
-> 编排模式速查 + 场景->模式映射。Orchestrator 从这里开始。
+> 编排模式速查 + 场景->模式映射。用于需要直接基于 `team` 原语手工编排时快速查阅。
 
 ## 模式速查
 
@@ -15,7 +15,7 @@
 
 | 场景 | 文档 | 状态 |
 |------|------|------|
-| 编码与评审 | scenarios/code-and-review.md | ⚠️ DEPRECATED → 使用 `coding-orchestrator` skill |
+| 编码与评审 | scenarios/code-and-review.md | 示例：使用 `team` 原语手工编排编码与评审流水线 |
 | 正反辩论 | scenarios/debate.md | ⚠️ DEPRECATED → 使用 `round-table` skill |
 
 ## Prompt 框架

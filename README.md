@@ -26,7 +26,6 @@ It provides the meta-skills, specs, and CLI tooling needed to design, build, rev
 ```
 skills/                       # Skill units (each independent)
 ├── brainstorming/            # Scenario router: S1 open / S2 skill-agent / S3 feature
-├── coding-orchestrator/      # Spec-driven sub-agent orchestration for S3 handoffs
 ├── skill-review/             # Skill quality audit
 ├── agent-review/             # Pi Agent markdown audit
 ├── code-review/              # Local uncommitted/unpushed code review
@@ -96,7 +95,7 @@ omp list --global  # global
 # In Claude Code or Pi — triggers the brainstorming workflow
 # "I need to design a new skill"   → routes to S2 (skill-agent scenario)
 # "I need to design a new agent"   → routes to S2 (skill-agent scenario)
-# "Add feature X" / "Refactor Y"   → routes to S3 (hands off to coding-orchestrator)
+# "Add feature X" / "Refactor Y"   → routes to S3 (produces a design doc and implementation plan)
 # "Let's discuss / explore ..."    → routes to S1 (open discussion)
 ```
 
@@ -104,8 +103,7 @@ omp list --global  # global
 
 | Skill | Pattern | Purpose |
 |-------|---------|---------|
-| `brainstorming` | Router + Pipeline | Scenario router (S1 open / S2 skill-agent / S3 feature); S3 outputs a story skeleton for `coding-orchestrator` |
-| `coding-orchestrator` | Orchestrator + Sub-agent | Spec-driven sub-agent orchestration; consumes S3 handoff, runs JIT wave-by-wave task execution |
+| `brainstorming` | Router + Pipeline | Scenario router (S1 open / S2 skill-agent / S3 feature); S3 produces the design doc and implementation plan for feature work |
 | `skill-review` | Reviewer + Pipeline | Quality audit for Skill directories |
 | `agent-review` | Reviewer | Spec/design audit for a Pi Agent markdown file |
 | `code-review` | Reviewer | Review uncommitted or unpushed local code changes |
@@ -150,7 +148,6 @@ omp upgrade                                   Pull latest version and re-registe
 Tool subcommands (each routes to `cli/<tool>/main.py`; run `omp <tool> --help`):
 
 ```
-omp coding-orchestrator   Story / task lifecycle helpers
 omp deep-research         Initialize and build deep-research workspaces
 omp evolution             Scan sessions and view evolution history
 omp handoff               Context handoff helpers for compaction lifecycle

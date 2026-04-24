@@ -1,11 +1,9 @@
 # Code and Review
 
-> **DEPRECATED**: 编码编排场景已由独立 skill `coding-orchestrator` 承担，
-> 提供完整的 task spec 体系、worker protocol 和 compaction recovery。
-> 本文档保留作为 team 原语层的 pipeline 用法示例。
+> 使用 `team` 原语手工编排编码与代码评审流水线的示例。
 
 > pattern: pipeline
-> 编码与代码评审循环。Orchestrator 构建上下文、划分任务、编排编码和 review。
+> 编码与代码评审循环。Coordinator 构建上下文、划分任务、编排编码和 review。
 
 ## 参与者配置
 
@@ -16,7 +14,7 @@
 
 ### Phase 1: 准备
 
-1. Orchestrator 收集上下文（项目结构、相关代码、设计文档、需求）
+1. Coordinator 收集上下文（项目结构、相关代码、设计文档、需求）
 2. 划分任务，确定依赖顺序（无依赖的任务可并行）
 3. 为每个任务准备 prompt（使用 `prompts/coding-task.md` 模板）
 
@@ -36,7 +34,7 @@
    ```
 
    - 通过 `--cwd .worktrees/worker-N` 将 worker 隔离到独立目录
-   - 非 git 目录跳过此步骤，直接共享目录执行（可能有并发写入风险，orchestrator 应通过任务划分避免文件重叠）
+   - 非 git 目录跳过此步骤，直接共享目录执行（可能有并发写入风险，coordinator 应通过任务划分避免文件重叠）
    - 单个 worker 执行时不需要 worktree
 
 5. 执行编码任务：
@@ -114,31 +112,31 @@ omp team run claude --prompt-file review-task.md
 ## 示例编排序列
 
 ```
-[Orchestrator] 收集上下文 + 划分 3 个任务（task-1 无依赖, task-2 依赖 task-1, task-3 无依赖）
+[Coordinator] 收集上下文 + 划分 3 个任务（task-1 无依赖, task-2 依赖 task-1, task-3 无依赖）
 
-[Orchestrator] 在 git repo 中创建 worktree:
+[Coordinator] 在 git repo 中创建 worktree:
   git worktree add .worktrees/worker-1 -b team/worker-1
   git worktree add .worktrees/worker-3 -b team/worker-3
 
-[Orchestrator] 并行执行 task-1 和 task-3（隔离到各自 worktree）:
+[Coordinator] 并行执行 task-1 和 task-3（隔离到各自 worktree）:
   omp team run codex --prompt-file task-1.md --output-file out-1.txt --cwd .worktrees/worker-1 &
   omp team run codex --prompt-file task-3.md --output-file out-3.txt --cwd .worktrees/worker-3 &
   wait
 
-[Orchestrator] Merge worktree:
+[Coordinator] Merge worktree:
   git merge --no-ff team/worker-1
   git merge --no-ff team/worker-3
   git worktree remove .worktrees/worker-1 && git worktree remove .worktrees/worker-3
 
-[Orchestrator] 检查退出码，task-1 成功 → 执行 task-2:
+[Coordinator] 检查退出码，task-1 成功 → 执行 task-2:
   omp team run codex --prompt-file task-2.md --output-file out-2.txt --cwd ./project
 
-[Orchestrator] 构造 review prompt（包含 task-1/2/3 输出和 diff）:
+[Coordinator] 构造 review prompt（包含 task-1/2/3 输出和 diff）:
   omp team run claude --prompt-file review-all.md --output-file review-out.txt
 
-[Orchestrator] 解析 review → REQUEST_CHANGES (1 CRITICAL in task-2)
+[Coordinator] 解析 review → REQUEST_CHANGES (1 CRITICAL in task-2)
 
-[Orchestrator] Verify-Fix 循环（轮次 1/3）:
+[Coordinator] Verify-Fix 循环（轮次 1/3）:
   构造修复 prompt（包含 review 的 issue 列表）→ omp team run codex
   再次 review → APPROVE → 完成
 ```

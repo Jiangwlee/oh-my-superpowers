@@ -26,7 +26,6 @@ oh-my-superpowers 聚焦两件事：
 ```
 skills/                       # Skill 单元（各自独立）
 ├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
-├── coding-orchestrator/      # 消费 S3 产物的 spec 驱动子代理编排
 ├── skill-review/             # Skill 目录质量审查
 ├── agent-review/             # Pi Agent markdown 文件审查
 ├── code-review/              # 本地未提交/未推送代码改动审查
@@ -96,7 +95,7 @@ omp list --global  # 全局
 # 在 Claude Code 或 Pi 中触发对应工作流
 # "我需要设计一个 skill"    → 路由到 S2（skill-agent 场景）
 # "我需要设计一个 agent"    → 路由到 S2（skill-agent 场景）
-# "加功能 X" / "重构 Y"    → 路由到 S3（产物交接 coding-orchestrator）
+# "加功能 X" / "重构 Y"    → 路由到 S3（产出设计文档与实现计划）
 # "我们聊聊 / 探索一下 ..."  → 路由到 S1（开放讨论）
 ```
 
@@ -104,8 +103,7 @@ omp list --global  # 全局
 
 | Skill | 模式 | 用途 |
 |-------|------|------|
-| `brainstorming` | Router + Pipeline | 场景路由（S1 开放讨论 / S2 skill-agent / S3 feature）；S3 产出 story 骨架交接 `coding-orchestrator` |
-| `coding-orchestrator` | Orchestrator + Sub-agent | Spec 驱动的子代理编排；消费 S3 产物，JIT 分波执行 |
+| `brainstorming` | Router + Pipeline | 场景路由（S1 开放讨论 / S2 skill-agent / S3 feature）；S3 为 feature 工作产出设计文档与实现计划 |
 | `skill-review` | Reviewer + Pipeline | Skill 目录质量审查 |
 | `agent-review` | Reviewer | Pi Agent markdown 文件的规范与设计审查 |
 | `code-review` | Reviewer | 本地未提交/未推送代码改动的质量审查 |
@@ -150,7 +148,6 @@ omp upgrade                                   拉取最新版并重新注册命�
 Tool 子命令（每个路由到 `cli/<tool>/main.py`，使用 `omp <tool> --help` 查看）：
 
 ```
-omp coding-orchestrator   Story / task 生命周期
 omp deep-research         初始化与构建 deep-research 工作区
 omp evolution             扫描 sessions / 查看演进历史
 omp handoff               compaction lifecycle 上下文交接
