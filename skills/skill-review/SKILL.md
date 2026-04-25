@@ -45,6 +45,8 @@ scaffold 包含：审查头信息、机械检查 JSON、按 13 个维度展开�
 
 不重新发明机械检查，不跳过此步。
 
+Done when: 输出文件已生成，且包含「机械检查 JSON」与 13 个维度章节。
+
 ### Step 2：填写 scaffold
 
 加载 `references/rubric.md`，对照 scaffold 的每条 checkbox 逐一填写：
@@ -66,6 +68,8 @@ scaffold 包含：审查头信息、机械检查 JSON、按 13 个维度展开�
 | B2 / B3 | `references/agent-skills-best-practices.md` |
 | B5   | `references/how-to-use-scripts-in-skills.md` |
 
+Done when: scaffold 中每条 checkbox 都已改为 `[✓]` / `[✗]` / `[—]`，且每条 finding 都附带证据。
+
 ### Step 3：验证完整性
 
 ```
@@ -74,9 +78,13 @@ omp skill-review validate /tmp/review-<skill>.md
 
 退出非零 → 按报错行号补全 → 重跑直到退出 0。
 
+Done when: `omp skill-review validate /tmp/review-<skill>.md` 退出 0。
+
 ### Step 4：输出报告
 
 填好的 scaffold 文件即最终报告。把内容直接交付。
+
+Done when: 已交付通过 `validate` 的最终报告，且报告中不再包含未填写 checkbox 或占位符。
 
 ## 失败处理
 

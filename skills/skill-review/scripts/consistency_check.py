@@ -43,7 +43,14 @@ _SEMANTIC_DEP_VERB_PATTERNS: list[re.Pattern[str]] = [
 _SEMANTIC_DEP_STOPWORDS = {
     "this", "that", "the", "a", "an", "any", "every", "some",
     "such", "all", "various", "these", "those", "other", "another",
+    "x", "y", "z",
 }
+_INLINE_BACKTICK_PATTERN = re.compile(r"`[^`\n]*`")
+
+
+def _strip_inline_backticks(line: str) -> str:
+    """Drop inline backtick spans so rubric-style rule citations are ignored."""
+    return _INLINE_BACKTICK_PATTERN.sub("", line)
 
 
 def parse_frontmatter_name(content: str) -> str:
@@ -193,10 +200,14 @@ def extract_linked_references(content: str) -> set[str]:
 
 
 def find_force_load_syntax(content: str) -> list[dict]:
-    """Detect force-load syntax such as @skills/foo/SKILL.md."""
+    """Detect force-load syntax such as @skills/foo/SKILL.md.
+
+    Inline backticks are stripped before matching so rule citations like
+    a backticked @skills/... in the rubric are not flagged.
+    """
     findings: list[dict] = []
     for i, line in enumerate(content.splitlines(), 1):
-        match = _FORCE_LOAD_PATTERN.search(line)
+        match = _FORCE_LOAD_PATTERN.search(_strip_inline_backticks(line))
         if match:
             findings.append({
                 "line": i,
@@ -242,11 +253,12 @@ def find_cross_skill_references(content: str, skill_name: str) -> list[dict]:
     """
     findings: list[dict] = []
     for lineno, line in _body_lines(content):
-        for m in _CROSS_SKILL_PATH_PATTERN.finditer(line):
+        scan_line = _strip_inline_backticks(line)
+        for m in _CROSS_SKILL_PATH_PATTERN.finditer(scan_line):
             target = m.group(1)
             if target == skill_name:
                 continue
-            if line[: m.start()].rstrip().endswith("@"):
+            if scan_line[: m.start()].rstrip().endswith("@"):
                 continue
             findings.append({
                 "type": "cross_skill_path",
@@ -256,7 +268,7 @@ def find_cross_skill_references(content: str, skill_name: str) -> list[dict]:
             })
         matched_target: str | None = None
         for pattern in _SEMANTIC_DEP_VERB_PATTERNS:
-            m = pattern.search(line)
+            m = pattern.search(scan_line)
             if not m:
                 continue
             candidate = m.group(1).lower()
@@ -624,6 +636,8 @@ def check_cli_requirement(
         r"(?:python3?|bash)\s+scripts/[\w.\-/]+",
     )
     for _, rel, content in review_files:
+        if _has_external_doc_note(content):
+            continue
         in_code_block = False
         for i, line in enumerate(content.splitlines(), 1):
             stripped = line.strip()
@@ -643,6 +657,19 @@ def check_cli_requirement(
                 })
 
     return findings
+
+
+def _has_external_doc_note(content: str) -> bool:
+    """Detect an `外部资料` note in the first 30 lines.
+
+    Convention: external teaching docs declare themselves with a blockquote
+    Note containing the phrase `外部资料` or `external`. Such files are
+    exempt from cli_violations and similar cross-file consistency checks.
+    """
+    head = "\n".join(content.splitlines()[:30])
+    if not re.search(r"^\s*>\s*\*\*Note\*\*", head, re.MULTILINE):
+        return False
+    return "外部资料" in head or "external" in head.lower()
 
 
 def run_checks(skill_dir: Path) -> dict:
@@ -694,6 +721,9 @@ def run_checks(skill_dir: Path) -> dict:
     linked_references: set[str] = set()
 
     for _, rel, content in review_files:
+        external_doc = _has_external_doc_note(content)
+        if external_doc:
+            continue
         for item in find_force_load_syntax(content):
             item["source_file"] = rel
             issues["force_load_syntax"].append(item)
