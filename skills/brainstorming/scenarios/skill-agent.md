@@ -1,17 +1,12 @@
 # Scenario S2: Skill / Agent Development
 
-> You have completed the common skeleton (Explore → Clarifying → Challenge Gate → Propose approaches). This file is the S2 SOP.
-
-S2 covers the design of a new skill or agent (or a non-trivial redesign of one).
+S2 covers the design of a new skill or agent, or a non-trivial redesign of one. 进入本文件前必须已走完公共骨架（Phase 1-4）。
 
 ## When S2 applies
 
-Explicit triggers:
-- "设计 skill / skill 设计 / 新建 skill / skill brainstorm"
-- "设计 agent / agent 设计 / 新建 agent / agent brainstorm"
-- User describes wanting to build a reusable capability or specialized role
+S2 适用于：用户要设计一个可复用能力（skill）或专职角色（agent）。歧义时（如"I want better memory handling"）必须明问，不得默认 S2。
 
-If ambiguous (e.g. "I want better memory handling"), ask the user which scenario before proceeding. Do not default to S2.
+> Note：触发短语清单在 `SKILL.md` description 中统一定义；本段只描述 routing 判据。
 
 ## Scenario exploration focus
 
@@ -43,11 +38,11 @@ Present each section to the user, get approval before moving to the next: identi
 
 ### Step 4 — Write design doc
 
-Save to `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md` using the selected template (`skill-design-template.md` or `agent-design-template.md`).
+Save to `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md` using the selected template (`skill-design-template.md` or `agent-design-template.md`).
 
 ### Step 5 — Spec review loop
 
-Dispatch spec-document-reviewer subagent per `../assets/spec-document-reviewer-prompt.md`. Max 3 iterations. Address blocking issues; advisory recommendations are discretionary.
+派遣 spec-document-reviewer 按 `../references/dispatch.md`（reviewer prompt 见 `../assets/spec-document-reviewer-prompt.md`）。最多 3 轮。处理 blocking issue；advisory 由主线判断是否采纳。
 
 ### Step 6 — Produce skeleton
 
@@ -64,6 +59,6 @@ Offer two paths for code implementation:
 
 ## Gotchas
 
-- Do not silently proceed with Path B when the identity audit fails — downgrade explicitly and tell the user why.
-- The skeleton in Step 6 is **empty** by design; filling it is an execution concern, not a design concern.
-- **Fast mode** applies here when the skill is trivial (single-purpose, < 50 lines SKILL.md, no references, no assets). In Fast mode, skip Steps 2-5 and go straight to inline implementation with a one-paragraph recommendation. Fast is a cost branch within S2, not a separate scenario.
+- Path B identity audit 失败时，显式降级到 Path A 并告知用户原因，禁止静默继续。
+- Step 6 skeleton 是**空骨架**——填充是执行任务，不是设计任务。
+- **Fast mode** 触发：skill 单一职责、SKILL.md < 50 行、无 references、无 assets。Fast 跳过 Steps 2-5，直接 inline 实现 + 一段话推荐。

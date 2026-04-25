@@ -2,6 +2,8 @@
 > Fetch the complete documentation index at: https://agentskills.io/llms.txt
 > Use this file to discover all available pages before exploring further.
 
+> **Note**: 本文件来自 agentskills.io 官方教学，命令、路径和文件名仅作概念演示。本仓库实际调用一律使用 `omp <skill> ...`，文件路径以 SKILL.md 为准。审查时不得把本文件中的示例当作 cross-file 不一致证据。
+
 # Best practices for skill creators
 
 > How to write skills that are well-scoped and calibrated to the task.

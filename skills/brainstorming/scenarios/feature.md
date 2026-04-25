@@ -1,14 +1,12 @@
 # Scenario S3: Feature / Refactoring
 
-> You have completed the common skeleton (Explore → Clarifying → Challenge Gate → Propose approaches). This file is the S3 SOP.
-
-S3 covers implementing a feature, fixing a non-trivial bug, or refactoring. Its sole deliverable is a design doc at `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`.
+S3 覆盖实现一个 feature、修 non-trivial bug、或重构。唯一交付物：`docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`。进入本文件前必须已走完公共骨架（Phase 1-4）。
 
 ## When S3 applies
 
-Explicit triggers: "开发 / 实现 / 加功能 / 新增 / 修复 / 重构 / 改造 X"
+S3 适用于：用户要实现一个 feature、修 non-trivial bug 或重构。歧义时（如"I want X to be better"）必须明问，不得默认 S3。
 
-If ambiguous (e.g. "I want X to be better"), ask the user which scenario before proceeding. Do not default to S3.
+> Note：触发短语清单在 `SKILL.md` description 中统一定义；本段只描述 routing 判据。
 
 ## Scenario exploration focus
 
@@ -21,7 +19,7 @@ During the common-skeleton Explore step, pay attention to:
 
 Then in the common-skeleton Clarifying step, ask **heuristic** questions grounded in what you actually observed. Do not run through a preset checklist.
 
-When discussing execution shape, brainstorming may sketch likely task decomposition as design-time hints, but it does **not** enforce the final breakdown — that decision sits outside brainstorming's scope.
+在 design doc 里可以 sketch 任务拆解作为设计提示，但不强制最终拆分——执行层自定。
 
 ## SOP
 
@@ -39,13 +37,13 @@ Save to `docs/brainstorming/specs/YYYY-MM-DD-<slug>.md`.
 
 ### Step 4 — Spec review loop
 
-Dispatch spec-document-reviewer subagent per `../assets/spec-document-reviewer-prompt.md`. Max 3 iterations.
+派遣 spec-document-reviewer 按 `../references/dispatch.md`（reviewer prompt 见 `../assets/spec-document-reviewer-prompt.md`）。最多 3 轮。处理 blocking issue；advisory 由主线判断是否采纳。
 
 ### Step 5 — Deliver design doc
 
-Notify the user that the design doc is complete and provide its path (`docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`). brainstorming's deliverable ends here.
+通知用户 design doc 完成，附上路径（`docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`）。Brainstorming 的交付到此为止。
 
-**Invariant**: brainstorming writes only the design doc under `docs/brainstorming/specs/`. Nothing else, no follow-up prescription — the caller decides what happens next.
+**Invariant**: brainstorming 只写 `docs/brainstorming/specs/` 下的 design doc，不做后续编排，由调用方决定下一步。
 
 ## Gotchas
 
@@ -53,8 +51,9 @@ Notify the user that the design doc is complete and provide its path (`docs/brai
   - single-file + unambiguous + zero 🔴 risk
   - estimated scope ≤ 3 tasks AND < 5 files touched
 
-  **Hard upgrade to Normal** (Fast disqualified regardless of the above) when the change touches either:
+  **Hard upgrade to Normal**（Fast 直接失格）— 改动触碰任一条即必须 Normal：
   - 持久化 shape — DB schema / 磁盘文件格式 / 外部序列化契约的迁移
   - auth / 权限路径 — credential lifecycle、token 传递、权限校验逻辑
+  - 跨独立子系统 — 同一改动横跨 ≥ 2 个独立模块/服务（拆 story 优先）
 - **Cross-story scope**: if the Explore step shows the work spans multiple independent subsystems, recommend splitting into multiple stories (each with its own S3 pass), not one mega-story.
 - **Break, Don't Bend**: default position is to remove the old implementation; do not add compat shims, legacy aliases, or v1/v2 coexistence unless the user explicitly justifies it.

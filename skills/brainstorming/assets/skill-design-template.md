@@ -15,8 +15,8 @@
 
 ## CLI 化方案（有 scripts/ 则必须）
 
-- CLI 名称：`omp-<skill-name>`（文件路径：`scripts/omp-<skill-name>`）
-- 命令接口：`omp-<skill-name> <args>` → `<output format>`
+- CLI 名称：`omp <skill-name>`（实现路径：`cli/<skill-name>/main.py`，由 `omp` 统一路由）
+- 命令接口：`omp <skill-name> <args>` → `<output format>`
 - 子命令/参数：<列出主要 flags>
 - 禁止：SKILL.md 中不得出现 `bash scripts/` 或 `python scripts/` 调用
 

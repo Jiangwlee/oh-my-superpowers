@@ -542,14 +542,15 @@ def find_cross_file_command_variants(
 
     findings: list[dict] = []
     for head, occurrences in variants.items():
-        distinct_flag_sets = {tuple(o["flags"]) for o in occurrences}
-        distinct_files = {o["source_file"] for o in occurrences}
+        flagged_occurrences = [o for o in occurrences if o["flags"]]
+        distinct_flag_sets = {tuple(o["flags"]) for o in flagged_occurrences}
+        distinct_files = {o["source_file"] for o in flagged_occurrences}
         if len(distinct_flag_sets) > 1 or (
-            len(distinct_files) > 1 and len(occurrences) > 1
+            len(distinct_files) > 1 and len(flagged_occurrences) > 1
         ):
             findings.append({
                 "command": head,
-                "variants": occurrences,
+                "variants": flagged_occurrences,
             })
     return findings
 

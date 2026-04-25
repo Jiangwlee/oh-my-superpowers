@@ -9,7 +9,7 @@
 | Skill design | `assets/skill-design-template.md` |
 | Agent design | `assets/agent-design-template.md` |
 
-Save to: `docs/brainstorming/specs/YYYY-MM-DD-<topic>-design.md`
+Save to: `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`
 
 ## Required structure
 
@@ -64,10 +64,7 @@ For significant changes (architecture changes, interface changes, directory rest
 
 ## Spec review loop (Normal mode only)
 
-After writing the document:
-1. Dispatch spec-document-reviewer subagent (see `spec-document-reviewer-prompt.md` in this directory)
-2. Fix any blocking issues and re-dispatch
-3. If loop exceeds 3 iterations, surface to the user
+派遣规则与命令模板见 `dispatch.md`；reviewer prompt 全文位于 `../assets/spec-document-reviewer-prompt.md`。最多 3 轮，超出停止并报用户。
 
 ## Working in existing codebases
 

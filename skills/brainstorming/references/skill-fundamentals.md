@@ -1,6 +1,6 @@
 # Skill 基础知识
 
-Skill 设计的核心原则和判断标准。在 Phase 0 能力检验时参照本文件。
+Skill 设计的核心原则和判断标准。在 S2 Path A Capability check（`scenarios/skill-agent.md` Step 1）时参照本文件。
 
 ---
 
@@ -65,7 +65,7 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 |--|-------|-------|
 | 身份 | 无（工具/工作流） | 有（职业/职能角色） |
 | 依赖 | 自身目录 | Skills + 自身 system prompt |
-| 调用方式 | 被 Agent/Claude 加载 | 独立运行 |
+| 调用方式 | 被 Agent 或 LLM runtime 加载 | 独立运行 |
 | 决策归属 | 跟随调用方 | 自主决策 |
 
 如果一个需求有明确角色身份、自主决策权、对结果负责 → Agent，不是 Skill。
@@ -103,7 +103,7 @@ Skill 的价值在于封装**模型自身无法直接完成**的能力：
 
 ### 自治检验补充项
 
-- [ ] scripts/ 下的所有脚本是否已合并进一个 `omp-<skill-name>` CLI？
+- [ ] scripts/ 下的所有脚本是否已合并进一个 `omp <skill-name>` 子命令（实现路径 `cli/<skill-name>/main.py`）？
 - [ ] SKILL.md 中是否没有任何 `bash scripts/` 或 `python scripts/` 调用？
 
 ---

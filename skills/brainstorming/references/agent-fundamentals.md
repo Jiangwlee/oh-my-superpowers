@@ -1,6 +1,6 @@
 # Agent 基础知识
 
-Agent 设计的核心原则和判断标准。在 Phase 0 身份审问时参照本文件。
+Agent 设计的核心原则和判断标准。在 S2 Path B Identity audit（`scenarios/skill-agent.md` Step 1）时参照本文件。
 
 ---
 
@@ -22,7 +22,7 @@ Agent 是有明确角色（职业/职能）的任务执行者。没有身份的�
 | 身份 | 有（职业/职能角色） | 无（工具/工作流） |
 | 判断 | 需要无法脚本化的语义判断 | 可以完全脚本化或模板化 |
 | 所有权 | 对结果负责，有署名输出 | 跟随调用方，无独立产出 |
-| 调用方式 | `omp run agent` 独立运行 | 被 Agent 或 Claude 加载 |
+| 调用方式 | `omp run agent` 独立运行 | 被 Agent 或 LLM runtime 加载 |
 
 **三维判断（Role × Agency × Ownership）**：
 - Role = 0（无法描述角色）→ 降级为 Skill
@@ -79,6 +79,8 @@ System prompt 从这里开始...
 ---
 
 ## 5. agents.json 配置要求
+
+> 注：本节展示 Pi `agents.json` 的注册语法（含 `@skills/...` 占位符），用于说明 Agent 如何声明 skill 依赖。brainstorming skill 自身的 SKILL.md / references 不得使用 `@` force-load 语法。
 
 每个 Agent 必须在 `agents/agents.json` 中注册：
 

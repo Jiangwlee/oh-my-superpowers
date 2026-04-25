@@ -1,14 +1,6 @@
 # Risk Register & Spike Loop
 
-This step runs **after Challenge Gate, before Propose approaches**. Its purpose is to identify which design assumptions can only be answered by running code, then run minimal throwaway code to answer them — **before** committing to a design that bets on unknowns.
-
-Without this step, lifecycle / framework-integration / cross-module bugs only surface during E2E acceptance, costing 3-5x the time to fix because the architecture is already built around the wrong assumption.
-
-## Why this exists
-
-Planners can write perfect-looking designs inside the bubble of "what we assume is true." Bugs born from **wrong assumptions** are invisible at design time — they only show up when the running system contradicts the design. Spike retires those assumptions cheaply.
-
-Real-world signal: any story whose verification phase needs more than 2 fix rounds usually means an unvalidated architectural assumption is leaking through every task. Spike kills it at the source.
+在 Challenge Gate 之后、Propose approaches 之前跑。目的：识别"只有跑代码才能回答"的假设，写最小一次性代码回答它们，再决定是否把设计押在该假设上。
 
 ## Workflow
 
@@ -23,7 +15,7 @@ flowchart TD
     R5 -->|no| OUT[Propose approaches]
 ```
 
-Stages 1-5 run inside brainstorming. The spike code never enters the main branch. (Named **Stage** to avoid collision with scenario **Step N** and SKILL.md **Phase N**.)
+Stages 1-5 在 brainstorming 内部跑完，spike 代码不得进主分支。
 
 ## Stage 1: Risk Extraction
 
@@ -42,7 +34,7 @@ Record each bet as a row in the Risk Register. Aim for 5-15 entries on a non-tri
 | Lifecycle | "Provider 在 sibling page 切换时存活" |
 | Framework quirks | "Next.js dynamic route param 自动 URL-decode" |
 | State persistence | "Zustand store 在 router.push 后保留" |
-| Cross-module wiring | "新增 store API 会被组件自然消费" |
+| Cross-module wiring | "新增 store API 会被组件正确接入" |
 | Race / concurrency | "URL 同步与用户点击不会双触发" |
 | Native widget behavior | "受控 textarea 在 mount 间切换时 value 行为" |
 | Data shape contracts | "API 返回字段始终包含 X" |
@@ -91,7 +83,7 @@ For each 🔴 risk, write a Spike entry:
 
 1. **一次只跑一个 spike**：避免互相干扰
 2. **严格时间盒**：超时即停，结果记为 "未消除"，明示给后续阶段
-3. **结果必须落字**：每个 spike 跑完，向 Spike Results section 回填一行：
+3. **结果必须写入文档**：每个 spike 跑完，向 Spike Results section 回填一行：
    ```
    - S1: ✅ Provider unmount → store 销毁；必须 hoist 到 layout
    - S2: ✅ params 不自动 decode；冒号 %3A 原样传入
@@ -163,11 +155,13 @@ Fast 模式下（单文件、明确无歧义任务）：
 - 0 个 🔴 → skip Spike Plan / Spike Results section
 - ≥ 1 个 🔴 → 升级为 Normal mode，不允许 Fast mode 跳过 spike
 
-理由：Fast mode 的前提是"行为已知"，出现 🔴 等于前提不成立。
+Fast mode 的前提是"行为已知"，出现 🔴 等于前提不成立。
+
+**Scenario-specific 硬升级**：S3 还有改动类型驱动的升级条件（持久化 / 权限路径 / 跨子系统），见 `scenarios/feature.md` Gotchas。
 
 ## 与 Challenge Gate 的关系
 
 - Challenge Gate 质疑 **方向**（你在解错的问题吗？）
 - Risk Register 质疑 **假设**（你赌的行为对吗？）
 
-两者顺序不能颠倒：先确认方向对，再为方向中的假设买保险。Challenge Gate 通过的方案，仍可能因为假设错而崩塌——Spike Loop 是这层防御。
+两者顺序不能颠倒：先确认方向对，再验证方向内的假设。Challenge Gate 通过的方案仍可能因假设错误而失败——Spike Loop 是这层防御。
