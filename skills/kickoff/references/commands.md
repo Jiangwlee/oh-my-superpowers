@@ -1,6 +1,6 @@
 # Worker Dispatch Commands
 
-当 orchestrator 需要用 tmux 派发外部 runtime 时，读取本文件。它只解决一件事：**如何启动 worker、等待结束、收集输出。**
+通过 tmux 启动外部 runtime worker、等待完成、收集输出的命令参考。
 
 ## When to Read
 

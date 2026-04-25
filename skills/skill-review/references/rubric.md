@@ -7,6 +7,12 @@ Sections: 审查对象 | Layer A | Layer B | Label Rules | Severity Guide
 
 ---
 
+## Hard Gate
+
+- **不得跳过**Checklist中的任何检查项，必须逐一执行
+
+---
+
 ## 审查对象
 
 审查范围覆盖 skill 目录下所有会在运行时被 agent 加载或执行的内容：
@@ -311,8 +317,10 @@ skill 目录下所有受审文件之间不得存在冲突指令。因为 referen
 
 **Checklist**
 
-基础表达（8 条，违反 → WARNING，每条附建议改写）：
+基础表达（违反 → WARNING，每条附建议改写）：
 
+- [ ] 过度解释：SKILL是菜谱/说明书，而不是课本
+- [ ] 不良措辞与废话：比如：`只解决一件事` 这种无意义的表达
 - [ ] 无元评注：无 "本节介绍..." / "以下是关于 X 的..." / "值得注意的是..."
 - [ ] 约束用硬语言：NO / NEVER / MUST / 禁止 / 不得；不用"尽量 / 建议 / try to / if possible / generally"
 - [ ] 指令以祈使动词开头（运行 / 加载 / 检查）；不用被动语态或"你应该..."

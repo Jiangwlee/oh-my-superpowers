@@ -1,17 +1,24 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["pyyaml"]
+# dependencies = []
 # ///
-"""Story directory bootstrap for kickoff."""
+"""Story directory bootstrap for kickoff.
+
+Creates the minimal story skeleton:
+  <story-dir>/<YYYY-MM-DD>-<slug>/
+    ├── story.md          (rendered from templates/story.md)
+    └── story-memory.md   (empty placeholder)
+
+`story-summary.md` is written by the orchestrator at Phase 3 close, not at init.
+"""
 from __future__ import annotations
 
 import argparse
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
-
-from common import today_date
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-")
@@ -23,6 +30,10 @@ MEMORY_PLACEHOLDER = (
     "## Gotchas\n\n"
     "## Known False Positives\n"
 )
+
+
+def today_date() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 def _render_story_md(slug: str, design_doc: str | None) -> str:
@@ -37,11 +48,6 @@ def _render_story_md(slug: str, design_doc: str | None) -> str:
         insert_at += 1
     lines.insert(insert_at, f"\n> Design: {design_doc}\n")
     return "".join(lines)
-
-
-def _render_tasks_yaml(slug: str, date: str) -> str:
-    src = (TEMPLATES_DIR / "tasks.yaml").read_text(encoding="utf-8")
-    return src.replace("<story-slug>", slug).replace("<YYYY-MM-DD>", date)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -84,12 +90,9 @@ def cmd_init(args: argparse.Namespace) -> int:
             )
             return 2
 
-    (story_dir / "tasks").mkdir(parents=True, exist_ok=True)
+    story_dir.mkdir(parents=True, exist_ok=True)
     (story_dir / "story.md").write_text(
         _render_story_md(slug, args.design_doc), encoding="utf-8"
-    )
-    (story_dir / "tasks.yaml").write_text(
-        _render_tasks_yaml(slug, date), encoding="utf-8"
     )
     (story_dir / "story-memory.md").write_text(MEMORY_PLACEHOLDER, encoding="utf-8")
 

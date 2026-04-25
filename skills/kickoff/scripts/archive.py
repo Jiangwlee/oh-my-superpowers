@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["pyyaml"]
+# dependencies = []
 # ///
 """Move aged / legacy stories into stories/archives/.
 
@@ -9,8 +9,9 @@ Called before creating a new story to keep the active stories/ directory
 free of context noise. Three archive rules (any match triggers a move):
 
   1. Legacy: directory name does NOT match ``^\\d{4}-\\d{2}-\\d{2}-``.
-  2. Missing state: no tasks.yaml, OR tasks.yaml has no ``updated`` field.
-  3. Aged: ``today - tasks.yaml.updated > --threshold-days``.
+  2. Missing skeleton: no ``story.md``.
+  3. Aged: latest mtime of any file in the story dir is older than
+     ``--threshold-days`` days.
 
 Usage:
     uv run scripts/archive.py --story-dir /repo/stories [--threshold-days 1] [--dry-run]
@@ -27,38 +28,26 @@ from pathlib import Path
 DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}-")
 
 
-def _load_updated(tasks_file: Path) -> date | None:
-    if not tasks_file.is_file():
+def _latest_mtime(story_dir: Path) -> date | None:
+    """Return the most recent file mtime under story_dir, as a local date."""
+    mtimes = [f.stat().st_mtime for f in story_dir.rglob("*") if f.is_file()]
+    if not mtimes:
         return None
-    import yaml
-    try:
-        data = yaml.safe_load(tasks_file.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError:
-        return None
-    raw = data.get("updated")
-    if isinstance(raw, date):
-        return raw
-    if isinstance(raw, str):
-        try:
-            return datetime.strptime(raw, "%Y-%m-%d").date()
-        except ValueError:
-            return None
-    return None
+    return datetime.fromtimestamp(max(mtimes)).date()
 
 
 def _should_archive(story_dir: Path, today: date, threshold: int) -> tuple[bool, str]:
     if not DATE_PREFIX.match(story_dir.name):
         return True, "legacy name (no YYYY-MM-DD prefix)"
 
-    tasks_file = story_dir / "tasks.yaml"
-    if not tasks_file.is_file():
-        return True, "no tasks.yaml"
+    if not (story_dir / "story.md").is_file():
+        return True, "no story.md"
 
-    updated = _load_updated(tasks_file)
-    if updated is None:
-        return True, "tasks.yaml missing 'updated'"
+    latest = _latest_mtime(story_dir)
+    if latest is None:
+        return True, "empty story dir"
 
-    age = (today - updated).days
+    age = (today - latest).days
     if age > threshold:
         return True, f"aged {age}d (> {threshold}d)"
     return False, f"fresh ({age}d)"
@@ -75,7 +64,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--threshold-days", type=int, default=1,
-        help="Stories with updated older than this many days are archived (default: 1).",
+        help="Stories whose latest file mtime is older than this many days are archived (default: 1).",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
