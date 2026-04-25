@@ -103,6 +103,16 @@ S1 没有强制 artifact。SOP：
 
 不确定时默认 Normal。
 
+## Output Contract
+
+| Scenario | 主产出物 | 落盘位置 | 说明 |
+|---|---|---|---|
+| **S1** | 对话结论 | 不强制落盘 | 仅当用户明确要求保留结论，或对话产生可复用洞察时，写 discussion note |
+| **S2** | design doc | `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md` | 文档中必须写明 skill / agent 的设计选型决策 |
+| **S3** | design doc | `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md` | 只交付设计文档，不做实现编排 |
+
+Mode 只影响流程压缩程度与文档粒度，不改变主产出物类型。
+
 ## Storage
 
 - Design doc：`<PROJECT_ROOT>/docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md`

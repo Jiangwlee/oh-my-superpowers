@@ -40,25 +40,13 @@ Present each section to the user, get approval before moving to the next: identi
 
 Save to `docs/brainstorming/specs/<YYYY-MM-DD>-<slug>.md` using the selected template (`skill-design-template.md` or `agent-design-template.md`).
 
+The design doc must record the chosen skill / agent design direction and why it was selected.
+
 ### Step 5 — Spec review loop
 
 派遣 spec-document-reviewer 按 `../references/dispatch.md`（reviewer prompt 见 `../assets/spec-document-reviewer-prompt.md`）。最多 3 轮。处理 blocking issue；advisory 由主线判断是否采纳。
 
-### Step 6 — Produce skeleton
-
-Create the empty skill/agent skeleton so the user can start implementing:
-
-- **Skill:** `skills/<name>/{SKILL.md frontmatter-only stub, references/, assets/}`
-- **Agent:** `agents/<name>.md` with frontmatter + identity section filled, body as TODO
-
-### Step 7 — Recommend execution
-
-Offer two paths for code implementation:
-- **Inline** — if the skill/agent is simple, implement in the current session
-- **Hand off to S3** — if implementation is substantial (multi-file, multi-phase), proceed as a feature story
-
 ## Gotchas
 
 - Path B identity audit 失败时，显式降级到 Path A 并告知用户原因，禁止静默继续。
-- Step 6 skeleton 是**空骨架**——填充是执行任务，不是设计任务。
-- **Fast mode** 触发：skill 单一职责、SKILL.md < 50 行、无 references、无 assets。Fast 跳过 Steps 2-5，直接 inline 实现 + 一段话推荐。
+- **Fast mode** 触发：skill 单一职责、SKILL.md < 50 行、无 references、无 assets。Fast 压缩 Steps 2-5，但仍需产出 design doc；不得写实现代码。

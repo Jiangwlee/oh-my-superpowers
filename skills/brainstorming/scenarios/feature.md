@@ -47,7 +47,7 @@ Save to `docs/brainstorming/specs/YYYY-MM-DD-<slug>.md`.
 
 ## Gotchas
 
-- **Fast branch**: skip Steps 1-5 entirely; inline the recommendation or implement directly in the current session. Fast is a cost branch within S3, not a separate scenario. Triggers when **any** of the following holds:
+- **Fast branch**: compress Steps 1-5, but still keep the same design-doc output contract. Fast is a cost branch within S3, not a separate scenario. Triggers when **any** of the following holds:
   - single-file + unambiguous + zero 🔴 risk
   - estimated scope ≤ 3 tasks AND < 5 files touched
 
