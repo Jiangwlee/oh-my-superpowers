@@ -356,6 +356,7 @@ with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
 - [CLI Checklist](docs/specs/02_framework/cli-checklist.md)：新增/修改 CLI 时逐项确认
 - [Release Guide](docs/specs/02_framework/release.md)：版本管理、发布流程、omp upgrade
 - [CDP 开发指南](docs/specs/00_skills/cdp-development-guide.md)：web-operator CDP 架构、开发模式、踩坑经验
+- [web-operator 开发指南](skills/web-operator/README.md)：SOP 开发方法论（network-first、调查清单、纯 HTTP 优先于 UI 自动化、已知陷阱）
 
 ---
 

@@ -65,6 +65,8 @@ Load site references for website-specific workflows:
   `x.com` search and post-extraction workflows.
 - [references/sites/xueqiu/workflows.md](references/sites/xueqiu/workflows.md)
   `xueqiu.com` search, hot-post list, and post-plus-comments workflows.
+- [references/sites/feishu/workflows.md](references/sites/feishu/workflows.md)
+  `feishu.cn` admin backend workflows: approval data export to ZIP/Excel.
 
 ## Core Rules
 
@@ -77,6 +79,7 @@ Load site references for website-specific workflows:
 - For bundled sites with dedicated workflows, prefer the site workflow over raw HTTP fetching. Do not use `curl` to read main content from `reddit.com`, `x.com`, `xueqiu.com`, `tgb.cn` / `taoguba.com.cn`, or `365.kdocs.cn`; these sites rely on dynamic rendering, login state, or anti-bot defenses, and raw HTTP usually returns shell HTML or incomplete content.
 - Treat `google.com` and `weixin.sogou.com` the same way for search tasks: prefer `omp web-operator search ...` over `curl`, because the browser workflow is far more reliable for rendered results, anti-bot handling, and stable extraction.
 - For `365.kdocs.cn`, prefer `omp web-operator kdocs ask-ai` when the task is question answering, summarization, document lookup, or cross-document synthesis. Use `kdocs search`, `open-doc`, and `find-in-doc` when the task explicitly needs direct document inspection or keyword verification.
+- For `feishu.cn` admin backend (approval / 审批后台), the user must already be signed in as administrator on any `feishu.cn` tab. The CLI calls Feishu admin internal HTTP APIs from inside the tab (cookies + CSRF carried automatically) and does not interact with any UI element.
 
 ## read-url 参数说明
 
@@ -103,5 +106,6 @@ When a supported site appears in the task, start from these commands before cons
 | 雪球 / Xueqiu | `omp web-operator search xueqiu <query> [limit]`、`omp web-operator xueqiu hot [limit]`、`omp web-operator open-post xueqiu <url> [comment_limit]` |
 | 淘股吧 / Taoguba / TGB | `omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
 | 金山文档 / KDocs / WPS 365 | `omp web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
+| 飞书审批 / Feishu Approval / 审批数据导出 | `omp web-operator feishu approval export --start <YYYY-MM-DD> --end <YYYY-MM-DD>`（前置：任一 feishu.cn tab 已登录管理员账号） |
 
 > 不确定参数时，先运行 `omp web-operator <subcommand> --help` 查看完整用法。

@@ -396,6 +396,58 @@ def x_for_you(
 
 
 # ---------------------------------------------------------------------------
+# feishu (admin backend)
+# ---------------------------------------------------------------------------
+
+feishu_app = typer.Typer(
+    name="feishu",
+    help="Feishu admin backend workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(feishu_app, name="feishu")
+
+feishu_approval_app = typer.Typer(
+    name="approval",
+    help="Feishu approval admin workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+feishu_app.add_typer(feishu_approval_app, name="approval")
+
+
+@feishu_approval_app.command("export")
+def feishu_approval_export(
+    start: str = typer.Option(..., "--start", help="Submit-time start date (YYYY-MM-DD)."),
+    end: str = typer.Option(..., "--end", help="Submit-time end date (YYYY-MM-DD); span <= 90 days."),
+    extract_to: str | None = typer.Option(None, "--extract-to", help="Where to unzip; default ~/Downloads/<zip-basename>/."),
+    target: str | None = typer.Option(None, "--target", help="CDP target prefix; auto-discovered if omitted."),
+    timeout: int = typer.Option(300, "--timeout", help="Max seconds to wait for export completion."),
+) -> None:
+    """Export approval data from Feishu admin backend to ZIP/Excel.
+
+    Pre-requisite: open https://www.feishu.cn/approval/admin/dataExportV2/dataQuery
+    in Chrome, sign in as administrator, and set the Submit-time range to the
+    same --start..--end window before running.
+
+    Example:
+        omp web-operator feishu approval export --start 2026-04-01 --end 2026-04-26
+    """
+    cmd = [
+        "bash",
+        str(SITES_DIR / "feishu" / "approval-export.sh"),
+        "--start", start,
+        "--end", end,
+        "--timeout", str(timeout),
+    ]
+    if extract_to:
+        cmd += ["--extract-to", extract_to]
+    if target:
+        cmd += ["--target", target]
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
 # test
 # ---------------------------------------------------------------------------
 
