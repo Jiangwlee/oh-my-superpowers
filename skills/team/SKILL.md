@@ -1,21 +1,24 @@
 ---
 name: team
 description: >-
-  Dispatch tasks to external AI runtimes (claude/codex/pi) via tmux.
-  Stateless one-shot execution: spawn → wait → return output.
-  Do NOT use for interactive/multi-turn sessions.
+  Multi-runtime orchestration patterns and prompt templates for composing
+  pipelines / fan-out / discussion / batch workflows over `omp dispatch`.
+  Use when planning multi-step or multi-agent workflows across claude/codex/pi.
+  Do NOT use for single one-off calls (call `omp dispatch run` directly).
 ---
 
-# Team: AI Runtime Dispatch Protocol
+# Team: Multi-Runtime Orchestration Patterns
 
 ## Protocol
 
-`omp team run` is a **stateless transport primitive**. It spawns one AI runtime in a tmux session, waits for completion, and returns the output. No state is persisted between calls.
+`omp dispatch run` is the **stateless transport primitive** under everything in this skill — it spawns one AI runtime in a tmux session, waits for completion, and returns ANSI-clean output. No state is persisted between calls.
+
+The team skill layers on top: orchestration patterns (pipeline / fan-out / discussion / batch), prompt templates, and runtime selection guidance.
 
 ### Interface
 
 ```
-omp team run <runtime> [prompt] [options] → stdout (worker output)
+omp dispatch run <runtime> [prompt] [options] → stdout (worker output)
 ```
 
 | Parameter | Required | Description |
@@ -54,15 +57,15 @@ See `references/runtime-reference.md` for per-runtime CLI flags and known limita
 
 ```bash
 # One-shot execution
-omp team run <runtime> --prompt-file <path>
-omp team run <runtime> "<short prompt>"
+omp dispatch run <runtime> --prompt-file <path>
+omp dispatch run <runtime> "<short prompt>"
 
 # Status and cleanup
-omp team status [session-name]
-omp team clean <file>
+omp dispatch status [session-name]
+omp dispatch clean <file>
 ```
 
-> Run `omp team <subcommand> --help` for full usage.
+> Run `omp dispatch <subcommand> --help` for full usage.
 
 ## Runtime Selection
 
@@ -84,7 +87,7 @@ One-shot execution has no retry loop — the prompt must be right the first time
 
 ## Orchestration Patterns
 
-> How to compose multiple `omp team run` calls. Load on demand.
+> How to compose multiple `omp dispatch run` calls. Load on demand.
 
 | Pattern | Document | Topology | When to use |
 |---------|----------|----------|-------------|
@@ -95,14 +98,21 @@ One-shot execution has no retry loop — the prompt must be right the first time
 
 ### Parallel Dispatch (all fan-out patterns)
 
-`omp team run` is synchronous. Achieve parallelism via shell background jobs:
+Use `omp dispatch spawn` (returns session id immediately) + `omp dispatch wait --mode all` (or `any`):
 
 ```bash
-omp team run claude --prompt-file task-a.md --output-file /tmp/a.md &
-omp team run codex --prompt-file task-b.md --output-file /tmp/b.md &
-wait
-# Collect results from /tmp/a.md and /tmp/b.md
+SID_A=$(omp dispatch spawn claude --prompt-file task-a.md --session-name task-a)
+SID_B=$(omp dispatch spawn codex  --prompt-file task-b.md --session-name task-b)
+
+# Wait for all to finish
+omp dispatch wait "$SID_A" "$SID_B" --mode all --timeout 600
+
+# Collect outputs
+omp dispatch tail "$SID_A"
+omp dispatch tail "$SID_B"
 ```
+
+Use `--mode any` to return as soon as the first finishes (others keep running).
 
 ## Prompt Templates
 

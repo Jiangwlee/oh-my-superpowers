@@ -48,50 +48,50 @@ Default: **Sub agent**. Switch to tmux only when user explicitly requests.
 
 Use Claude Code Agent tool to dispatch review in an isolated sub-context. Pass the assembled prompt as the agent's task.
 
-### tmux codex — custom prompt
+### omp dispatch — custom prompt (codex / claude)
+
+Write the assembled review prompt to a temp file, then dispatch:
 
 ```bash
-# 1. Write prompt to temp file
-# 2. Launch tmux session
-tmux new-session -d -s code-review \
-  'cat /tmp/code-review-prompt.md | codex exec --ephemeral --dangerously-bypass-approvals-and-sandbox'
+omp dispatch run codex --prompt-file /tmp/code-review-prompt.md --timeout 600
+# or
+omp dispatch run claude --prompt-file /tmp/code-review-prompt.md --timeout 600
 ```
 
-### tmux codex ��� built-in review
+ANSI-clean output goes to stdout. Exit codes: `0` success, `124` timeout, `1` worker error.
+
+### Live observation (optional)
+
+Spawn first, then tail/wait separately if you want to watch progress:
 
 ```bash
-# For uncommitted changes:
-tmux new-session -d -s code-review \
-  'codex exec review --uncommitted --ephemeral --dangerously-bypass-approvals-and-sandbox'
-
-# For specific commit:
-tmux new-session -d -s code-review \
-  'codex exec review --commit <SHA> --ephemeral --dangerously-bypass-approvals-and-sandbox'
+SID=$(omp dispatch spawn codex --prompt-file /tmp/code-review-prompt.md --session-name code-review)
+omp dispatch tail "$SID" --follow &
+omp dispatch wait "$SID" --timeout 600
 ```
 
-### tmux claude
+### codex built-in review (no custom prompt)
+
+`codex exec review` is a Codex-native subcommand and not driven by a prompt file, so dispatch does not wrap it. Run it directly via tmux when needed:
 
 ```bash
-tmux new-session -d -s code-review \
-  'cat /tmp/code-review-prompt.md | claude -p --no-session-persistence --dangerously-skip-permissions'
+# Uncommitted changes:
+tmux new-session -d -s code-review-builtin \
+  'codex exec review --uncommitted --ephemeral --dangerously-bypass-approvals-and-sandbox; exit'
+
+# Specific commit:
+tmux new-session -d -s code-review-builtin \
+  'codex exec review --commit <SHA> --ephemeral --dangerously-bypass-approvals-and-sandbox; exit'
 ```
 
-### tmux session management
-
-- **Poll status** every 30s: `tmux has-session -t code-review 2>/dev/null && echo running || echo done`
-- **Capture output**: redirect to file for large reviews (preferred over `tmux capture-pane` which truncates at ~2000 lines):
-  ```bash
-  tmux new-session -d -s code-review \
-    'cat /tmp/code-review-prompt.md | claude -p --no-session-persistence --dangerously-skip-permissions > /tmp/code-review-result.md 2>&1'
-  ```
-- **Cleanup**: `tmux kill-session -t code-review 2>/dev/null; rm -f /tmp/code-review-prompt.md`
+Cleanup: `tmux kill-session -t code-review-builtin 2>/dev/null; rm -f /tmp/code-review-prompt.md`
 
 ## Degradation Strategy
 
 When an executor fails, degrade and inform the user:
 
 ```
-tmux fails (launch error / timeout / crash)
+omp dispatch fails (spawn error / timeout / worker error)
   → Inform user, degrade to sub agent
     → Sub agent fails
       → Inform user, initiator performs review directly (load checklist, review inline)

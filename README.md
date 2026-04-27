@@ -155,7 +155,7 @@ omp insight               Extract memories from AI conversations and distill ins
 omp media-editor          Archive, query, and promote media items
 omp round-table           Multi-AI round table discussions
 omp skill-review          Mechanical consistency checks on a skill directory
-omp team                  One-shot tmux agent orchestration
+omp dispatch              Tmux dispatch primitive (claude/codex/pi spawn/wait/tail)
 omp web-operator          Browser automation, search, and content extraction
 omp wiki                  Karpathy-style markdown wiki management
 ```

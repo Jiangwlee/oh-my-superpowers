@@ -506,7 +506,6 @@ cmd_watch() {
   current_round=$(jq -r '.current_round' "$meta")
   local topic
   topic=$(jq -r '.topic' "$meta")
-  local tmux_session="rt-${sid}"
 
   # 解析参数
   local round="$current_round"
@@ -541,15 +540,12 @@ cmd_watch() {
     runtime=$(jq -r ".participants[$i].runtime" "$meta")
     model=$(jq -r ".participants[$i].model" "$meta")
     local ofile="$responses_dir/round-${round}-${role_id}.md"
+    local dispatch_session="omp-rt-${sid}-${role_id}"
 
-    # 检查 tmux window 是否活跃
+    # 每个参与者一个独立 dispatch session
     local status_icon="❌"
-    if tmux has-session -t "$tmux_session" 2>/dev/null; then
-      if tmux list-windows -t "$tmux_session" -F '#{window_name}' 2>/dev/null | grep -qx "$role_id"; then
-        status_icon="✍️"
-      elif [[ -f "$ofile" ]] && [[ -s "$ofile" ]]; then
-        status_icon="✅"
-      fi
+    if tmux has-session -t "$dispatch_session" 2>/dev/null; then
+      status_icon="✍️"
     elif [[ -f "$ofile" ]] && [[ -s "$ofile" ]]; then
       status_icon="✅"
     fi
@@ -591,17 +587,37 @@ cmd_attach() {
   local meta="$session_dir/meta.json"
   local sid
   sid=$(jq -r '.session_id' "$meta")
-  local tmux_session="rt-${sid}"
 
-  if ! tmux has-session -t "$tmux_session" 2>/dev/null; then
-    echo "错误：tmux session '$tmux_session' 不存在（参与者可能已全部完成）。" >&2
+  # 每个参与者一个独立 dispatch session：列出当前还活跃的，让用户选 attach 一个
+  local participant_count
+  participant_count=$(jq '.participants | length' "$meta")
+  local active=()
+  for i in $(seq 0 $((participant_count - 1))); do
+    local role_id name
+    role_id=$(jq -r ".participants[$i].id" "$meta")
+    name=$(jq -r ".participants[$i].name" "$meta")
+    local dispatch_session="omp-rt-${sid}-${role_id}"
+    if tmux has-session -t "$dispatch_session" 2>/dev/null; then
+      active+=("$dispatch_session  ($name)")
+    fi
+  done
+
+  if [[ ${#active[@]} -eq 0 ]]; then
+    echo "错误：没有活跃的参与者 session（可能已全部完成）。" >&2
     echo "提示：使用 omp round-table round watch 查看已完成的输出。" >&2
     exit 1
   fi
 
-  echo "正在连接 tmux session: $tmux_session"
-  echo "提示：Ctrl+B D 退出（不终止参与者）"
-  exec tmux attach -t "$tmux_session"
+  echo "活跃参与者 dispatch session："
+  for s in "${active[@]}"; do
+    echo "  $s"
+  done
+  echo ""
+  echo "选一个 attach（不终止参与者用 Ctrl+B D 退出）："
+  echo "  tmux attach -t omp-rt-${sid}-<role_id>"
+  echo ""
+  echo "或用 omp dispatch tail 流式观察："
+  echo "  omp dispatch tail omp-rt-${sid}-<role_id> --follow"
 }
 
 # --- 主入口 ---

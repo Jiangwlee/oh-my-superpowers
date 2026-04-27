@@ -23,47 +23,45 @@ Reviewer 接收三段串接内容：
 
 ## Spawn Commands
 
-所有命令的 prompt 必须先写入文件，再喂给 worker。
+Prompt 必须先写入文件，再喂给 worker。
 
 ```bash
 PROMPT_FILE="/tmp/brainstorm-review-${SLUG}.md"
-OUTPUT="/tmp/brainstorm-review-out-${SLUG}.txt"
-SESSION="brainstorm-review-${SLUG}"
 CWD="$(git rev-parse --show-toplevel)"
 ```
 
 `PROMPT_FILE` 内容 = reviewer prompt + design doc + 可选附加，三段拼接。
 
+`omp dispatch run` 一步完成 spawn → wait → 输出 ANSI-clean 结果到 stdout，session 名带 `omp-` 前缀且全局唯一，不会与其他派遣冲突。
+
 ### Claude
 
 ```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "cat ${PROMPT_FILE} | claude -p --no-session-persistence --dangerously-skip-permissions 2>&1 | tee ${OUTPUT}; exit"
+omp dispatch run claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
 ```
 
 ### Codex
 
 ```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "cat ${PROMPT_FILE} | codex exec - --dangerously-bypass-approvals-and-sandbox 2>&1 | tee ${OUTPUT}; exit"
+omp dispatch run codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
 ```
 
 ### Pi
 
 ```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "pi --no-session -p @${PROMPT_FILE} 2>&1 | tee ${OUTPUT}; exit"
+omp dispatch run pi --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
 ```
 
-### Wait & Collect
+退出码：`0` = PASS/REVISE 已写入 stdout；`124` = 超时；`1` = worker 错误。
+
+### Live Observation（可选）
+
+如需边等边看 reviewer 输出，先 spawn 再 tail：
 
 ```bash
-TIMEOUT=300; ELAPSED=0
-while tmux has-session -t "$SESSION" 2>/dev/null; do
-  [ $ELAPSED -ge $TIMEOUT ] && { tmux kill-session -t "$SESSION"; echo "TIMEOUT" > "$OUTPUT"; break; }
-  sleep 5; ELAPSED=$((ELAPSED + 5))
-done
-cat "$OUTPUT"
+SID=$(omp dispatch spawn claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --session-name "brainstorm-review-${SLUG}")
+omp dispatch tail "$SID" --follow &
+omp dispatch wait "$SID" --timeout 300
 ```
 
 ## Verdict Loop

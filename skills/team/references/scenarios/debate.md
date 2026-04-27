@@ -29,9 +29,9 @@
 3. 并行执行各方辩论：
 
 ```bash
-omp team run claude --prompt-file debate-pro.md --output-file debate-side-1.txt &
-omp team run codex --prompt-file debate-con.md --output-file debate-side-2.txt &
-omp team run pi --prompt-file debate-neutral.md --output-file debate-side-3.txt &
+omp dispatch run claude --prompt-file debate-pro.md --output-file debate-side-1.txt &
+omp dispatch run codex --prompt-file debate-con.md --output-file debate-side-2.txt &
+omp dispatch run pi --prompt-file debate-neutral.md --output-file debate-side-3.txt &
 wait
 ```
 
@@ -46,7 +46,7 @@ wait
 6. 执行综合分析：
 
 ```bash
-omp team run claude --prompt-file synthesis.md --output-file synthesis-out.txt
+omp dispatch run claude --prompt-file synthesis.md --output-file synthesis-out.txt
 ```
 
 ### Phase 4: 多轮深化（可选）

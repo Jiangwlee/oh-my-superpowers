@@ -40,7 +40,7 @@
 5. 执行编码任务：
 
 ```bash
-omp team run codex --prompt-file coding-task-1.md --cwd .worktrees/worker-1
+omp dispatch run codex --prompt-file coding-task-1.md --cwd .worktrees/worker-1
 ```
 
 6. 检查退出码：
@@ -79,7 +79,7 @@ git branch -d team/worker-1 team/worker-3
 7. 执行审查：
 
 ```bash
-omp team run claude --prompt-file review-task.md
+omp dispatch run claude --prompt-file review-task.md
 ```
 
 8. 解析 review 结果，关注 Verdict 字段：
@@ -119,8 +119,8 @@ omp team run claude --prompt-file review-task.md
   git worktree add .worktrees/worker-3 -b team/worker-3
 
 [Coordinator] 并行执行 task-1 和 task-3（隔离到各自 worktree）:
-  omp team run codex --prompt-file task-1.md --output-file out-1.txt --cwd .worktrees/worker-1 &
-  omp team run codex --prompt-file task-3.md --output-file out-3.txt --cwd .worktrees/worker-3 &
+  omp dispatch run codex --prompt-file task-1.md --output-file out-1.txt --cwd .worktrees/worker-1 &
+  omp dispatch run codex --prompt-file task-3.md --output-file out-3.txt --cwd .worktrees/worker-3 &
   wait
 
 [Coordinator] Merge worktree:
@@ -129,14 +129,14 @@ omp team run claude --prompt-file review-task.md
   git worktree remove .worktrees/worker-1 && git worktree remove .worktrees/worker-3
 
 [Coordinator] 检查退出码，task-1 成功 → 执行 task-2:
-  omp team run codex --prompt-file task-2.md --output-file out-2.txt --cwd ./project
+  omp dispatch run codex --prompt-file task-2.md --output-file out-2.txt --cwd ./project
 
 [Coordinator] 构造 review prompt（包含 task-1/2/3 输出和 diff）:
-  omp team run claude --prompt-file review-all.md --output-file review-out.txt
+  omp dispatch run claude --prompt-file review-all.md --output-file review-out.txt
 
 [Coordinator] 解析 review → REQUEST_CHANGES (1 CRITICAL in task-2)
 
 [Coordinator] Verify-Fix 循环（轮次 1/3）:
-  构造修复 prompt（包含 review 的 issue 列表）→ omp team run codex
+  构造修复 prompt（包含 review 的 issue 列表）→ omp dispatch run codex
   再次 review → APPROVE → 完成
 ```

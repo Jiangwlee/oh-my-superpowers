@@ -38,7 +38,7 @@ TASKS=("fix bug in auth.py" "fix bug in cache.py" "fix bug in db.py")
 PIDS=()
 
 for i in "${!TASKS[@]}"; do
-  omp team run codex "${TASKS[$i]}" \
+  omp dispatch run codex "${TASKS[$i]}" \
     --output-file "/tmp/batch-${i}.md" \
     --cwd /project \
     --timeout 120 &
@@ -70,7 +70,7 @@ for ((start=0; start<${#TASKS[@]}; start+=BATCH_SIZE)); do
   # 启动一批
   PIDS=()
   for ((i=start; i<start+BATCH_SIZE && i<${#TASKS[@]}; i++)); do
-    omp team run codex "${TASKS[$i]}" --output-file "/tmp/batch-${i}.md" &
+    omp dispatch run codex "${TASKS[$i]}" --output-file "/tmp/batch-${i}.md" &
     PIDS+=($!)
   done
   # 等待本批完成

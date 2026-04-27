@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# t1_static.sh — T1 static checks for the team skill
+# t1_static.sh — T1 static checks for the team skill (orchestration patterns)
 #
-# Validates: directory structure, SKILL.md content, script shebangs,
-#            no relative path calls, CLI entry point.
+# Validates: directory structure, SKILL.md content, references files,
+#            and that all dispatch references point to omp dispatch (not omp team).
 #
-# Usage: bash skills/team/tests/t1_static.sh
+# Usage: bash tests/skills/team/t1_static.sh
 
 set -euo pipefail
 
-SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SKILL_DIR="$PROJECT_ROOT/skills/team"
 PASS=0
 FAIL=0
 
@@ -22,10 +23,17 @@ echo "=== Team Skill T1 Static Checks ==="
 echo ""
 echo "--- Directory Structure ---"
 
-for dir in scripts references references/patterns references/scenarios references/prompts tests; do
+for dir in references references/patterns references/scenarios references/prompts; do
   desc="directory exists: $dir"
   check test -d "$SKILL_DIR/$dir"
 done
+
+desc="scripts/ directory removed (logic lives in lib/dispatch)"
+if [[ -d "$SKILL_DIR/scripts" ]]; then
+  fail "$desc"
+else
+  pass "$desc"
+fi
 
 # ── 2. Required files ────────────────────────────────
 echo ""
@@ -33,9 +41,6 @@ echo "--- Required Files ---"
 
 REQUIRED_FILES=(
   "SKILL.md"
-  "scripts/run.sh"
-  "scripts/clean.sh"
-  "scripts/status.sh"
   "references/README.md"
   "references/runtime-reference.md"
   "references/patterns/pipeline.md"
@@ -58,23 +63,18 @@ done
 echo ""
 echo "--- CLI Entry Point ---"
 
-BIN_FILE="$SKILL_DIR/../../bin/omp"
+BIN_FILE="$PROJECT_ROOT/bin/omp"
 desc="bin/omp exists"
 check test -f "$BIN_FILE"
 
 desc="bin/omp is executable"
 check test -x "$BIN_FILE"
 
-# ── 4. Script shebangs ───────────────────────────────
-echo ""
-echo "--- Script Shebangs ---"
+DISPATCH_CLI="$PROJECT_ROOT/cli/dispatch/main.py"
+desc="cli/dispatch/main.py exists (team underlying primitive)"
+check test -f "$DISPATCH_CLI"
 
-for script in scripts/run.sh scripts/clean.sh scripts/status.sh; do
-  desc="$script has bash shebang"
-  check grep -q '#!/usr/bin/env bash' "$SKILL_DIR/$script"
-done
-
-# ── 5. SKILL.md content checks ───────────────────────
+# ── 4. SKILL.md content checks ───────────────────────
 echo ""
 echo "--- SKILL.md Content ---"
 
@@ -89,16 +89,20 @@ check grep -q '^name:' "$SKILL_MD"
 desc="SKILL.md has description field"
 check grep -q '^description:' "$SKILL_MD"
 
-desc="SKILL.md references omp team run"
-check grep -q 'omp team run' "$SKILL_MD"
+desc="SKILL.md references omp dispatch run"
+check grep -q 'omp dispatch run' "$SKILL_MD"
 
-desc="SKILL.md references omp team status"
-check grep -q 'omp team status' "$SKILL_MD"
+desc="SKILL.md references omp dispatch spawn (parallel)"
+check grep -q 'omp dispatch spawn' "$SKILL_MD"
 
-desc="SKILL.md references omp team clean"
-check grep -q 'omp team clean' "$SKILL_MD"
+desc="SKILL.md no longer references omp team run (renamed)"
+if grep -q 'omp team run' "$SKILL_MD"; then
+  fail "$desc"
+else
+  pass "$desc"
+fi
 
-# ── 6. No relative path calls in SKILL.md ────────────
+# ── 5. No relative path calls in SKILL.md ────────────
 echo ""
 echo "--- No Relative Path Calls ---"
 
@@ -117,24 +121,15 @@ for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
   fi
 done
 
-# ── 7. run.sh uses safe prompt passing ───────────────
+# ── 6. No omp team residue across team docs ──────────
 echo ""
-echo "--- Safe Prompt Passing ---"
+echo "--- omp team → omp dispatch migration completeness ---"
 
-RUN_SH="$SKILL_DIR/scripts/run.sh"
-
-desc="run.sh uses 'cat file | claude -p' (not \$(cat))"
-check grep -q 'cat.*| claude -p' "$RUN_SH"
-
-desc="run.sh uses 'cat file | codex exec -' (not \$(cat))"
-check grep -q 'cat.*| codex exec' "$RUN_SH"
-
-desc="run.sh uses pi @file syntax"
-check grep -q '@${prompt_file}' "$RUN_SH"
-
-desc="run.sh has no \$(cat) argument embedding"
-if grep -qE '\$\(cat [^)]+\)' "$RUN_SH"; then
+residues=$(grep -rn "omp team " "$SKILL_DIR" 2>/dev/null || true)
+desc="no 'omp team ' references remain in skills/team/"
+if [[ -n "$residues" ]]; then
   fail "$desc"
+  echo "$residues" | sed 's/^/    /' >&2
 else
   pass "$desc"
 fi

@@ -1,6 +1,6 @@
 # Worker Dispatch Commands
 
-通过 tmux 启动外部 runtime worker、等待完成、收集输出的命令参考。
+通过 `omp dispatch` 启动外部 runtime worker、等待完成、收集输出的命令参考。
 
 ## When to Read
 
@@ -9,15 +9,17 @@
 - 当前环境没有原生 sub-agent 机制
 - 需要切换到不同 runtime（例如你在 Claude，但要用 Codex）
 
-如果当前 runtime 自带 sub-agent，且任务也打算在同一 runtime 里完成，优先用原生机制，不要绕到 tmux。
+如果当前 runtime 自带 sub-agent，且任务也打算在同一 runtime 里完成，优先用原生机制，不要绕到 `omp dispatch`。
 
 ## Runtime Matrix
 
-| Runtime | Prompt source | Model override |
+| Runtime | Prompt 传递 | 模型覆盖 |
 |---|---|---|
-| Claude | stdin pipe | `--model <name>` |
-| Codex | stdin pipe (`exec -`) | 由 Codex 配置控制 |
-| Pi | `@${PROMPT_FILE}` | `--model <name>` |
+| Claude | stdin pipe（`omp dispatch` 内部处理） | `--model <name>` |
+| Codex | stdin pipe（`omp dispatch` 内部处理） | `--model <name>`（透传 `-m`） |
+| Pi | `@${PROMPT_FILE}`（`omp dispatch` 内部处理） | `--model <name>` |
+
+`omp dispatch` 默认带：claude `--no-session-persistence`、codex `--ephemeral`、pi `--no-session`，避免污染本地会话历史。
 
 ## Prompt Preparation
 
@@ -29,91 +31,61 @@ PROMPT_FILE="/tmp/kickoff-task-${TASK_ID}.md"
 # review prompt 也同理：protocol + task.md + diff
 ```
 
-## Spawn Commands
+## Single Worker (spawn + wait)
 
-### Claude
+`omp dispatch run` 一步完成：spawn → wait → ANSI-clean 输出到 stdout。
 
 ```bash
-SESSION="worker-${TASK_ID}"
-OUTPUT="/tmp/kickoff-out-${TASK_ID}.txt"
 CWD="/path/to/project"
 
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "cat ${PROMPT_FILE} | claude -p --no-session-persistence --dangerously-skip-permissions 2>&1 | tee ${OUTPUT}; exit"
+# Claude
+omp dispatch run claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
+
+# Claude with model override
+omp dispatch run claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --model sonnet --timeout 300
+
+# Codex
+omp dispatch run codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
+
+# Pi
+omp dispatch run pi --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
+
+# Pi with model override
+omp dispatch run pi --prompt-file "$PROMPT_FILE" --cwd "$CWD" --model "$MODEL" --timeout 300
 ```
 
-带 model override：
+退出码：`0` = 成功（output 在 stdout），`124` = 超时，`1` = worker 错误。
+
+## Live Observation
+
+需要边等边看 worker 输出时，先 spawn 拿到 session id，再 tail/wait 分开：
 
 ```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "cat ${PROMPT_FILE} | claude -p --no-session-persistence --dangerously-skip-permissions --model sonnet 2>&1 | tee ${OUTPUT}; exit"
-```
-
-### Codex
-
-```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "cat ${PROMPT_FILE} | codex exec - --dangerously-bypass-approvals-and-sandbox 2>&1 | tee ${OUTPUT}; exit"
-```
-
-`codex exec` 从 stdin 读取 prompt；模型由 Codex 配置决定。
-
-### Pi
-
-```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "pi --no-session -p @${PROMPT_FILE} 2>&1 | tee ${OUTPUT}; exit"
-```
-
-带 model override：
-
-```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "pi --no-session -p @${PROMPT_FILE} --model ${MODEL} 2>&1 | tee ${OUTPUT}; exit"
-```
-
-## Wait for Completion
-
-```bash
-TIMEOUT=300
-ELAPSED=0
-POLL=5
-
-while tmux has-session -t "$SESSION" 2>/dev/null; do
-  if [ $ELAPSED -ge $TIMEOUT ]; then
-    tmux kill-session -t "$SESSION" 2>/dev/null
-    echo "TIMEOUT" > "$OUTPUT"
-    break
-  fi
-  sleep $POLL
-  ELAPSED=$((ELAPSED + POLL))
-done
-```
-
-## Collect Output
-
-```bash
-cat "$OUTPUT"
-
-# 如需去掉 ANSI 转义
-sed 's/\x1b\[[0-9;]*m//g' "$OUTPUT" > "${OUTPUT}.clean"
+SID=$(omp dispatch spawn codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --session-name "worker-${TASK_ID}")
+omp dispatch tail "$SID" --follow &
+omp dispatch wait "$SID" --timeout 300
 ```
 
 ## Parallel Execution
 
-只在任务彼此独立时并行。
+只在任务彼此独立时并行。每个 worker 给一个唯一 session 名，最后用 `omp dispatch wait --mode all`（或 `any`）等待。
 
 ```bash
-tmux new-session -d -s "worker-01" -c ".worktrees/w01" \
-  "cat /tmp/task-01.md | codex exec - --dangerously-bypass-approvals-and-sandbox 2>&1 | tee /tmp/out-01.txt; exit"
+SID1=$(omp dispatch spawn codex --prompt-file /tmp/task-01.md --cwd .worktrees/w01 --session-name "worker-01")
+SID3=$(omp dispatch spawn codex --prompt-file /tmp/task-03.md --cwd .worktrees/w03 --session-name "worker-03")
 
-tmux new-session -d -s "worker-03" -c ".worktrees/w03" \
-  "cat /tmp/task-03.md | codex exec - --dangerously-bypass-approvals-and-sandbox 2>&1 | tee /tmp/out-03.txt; exit"
+# 等所有完成
+omp dispatch wait "$SID1" "$SID3" --mode all --timeout 600
 
-while tmux has-session -t "worker-01" 2>/dev/null || \
-      tmux has-session -t "worker-03" 2>/dev/null; do
-  sleep 5
-done
+# 或：等任一完成（其余继续后台运行）
+# omp dispatch wait "$SID1" "$SID3" --mode any --timeout 600
+```
+
+各 worker 输出可单独取：
+
+```bash
+omp dispatch tail "$SID1"
+omp dispatch tail "$SID3"
 ```
 
 ### Worktree Setup
@@ -136,16 +108,23 @@ git branch -d kickoff/task-01 kickoff/task-03
 
 发生 merge conflict 时，立即停止并报告用户。不要自动解冲突。
 
-## Adding a New Runtime
-
-新增 runtime 时，在 **Spawn Commands** 下追加同形态章节：
+## Status / Cleanup
 
 ```bash
-tmux new-session -d -s "$SESSION" -c "$CWD" \
-  "<command-that-reads-prompt-from-file-and-writes-output> 2>&1 | tee ${OUTPUT}; exit"
+omp dispatch status                    # 列出所有活跃 omp- session
+omp dispatch status worker-01          # 查询单个
+omp dispatch kill omp-worker-01        # 显式清理
 ```
 
-新增命令必须满足：
+## Adding a New Runtime
+
+新增 runtime 时，扩展 `lib/dispatch/runtime.py` 的 `build_runtime_command()`：
+
+1. 在 `VALID_RUNTIMES` 中加入新名称
+2. 在 `build_runtime_command()` 增加 `case` 分支，构造 `cat $prompt_file | <new-runtime> ...` 命令
+3. 在 `tests/lib/dispatch/test_runtime.py` 加测试
+
+新 runtime 的 CLI 必须满足：
 
 1. 从文件读取 prompt（stdin pipe 或 `@file` 都可以）
 2. 输出写到 stdout，便于 `tee` 捕获

@@ -155,7 +155,7 @@ omp insight               从 AI 对话中提取 memory 并提炼洞察
 omp media-editor          归档 / 查询 / 提升 media items
 omp round-table           多 AI 圆桌讨论
 omp skill-review          skill 目录的机械一致性检查
-omp team                  一次性 tmux agent 编排
+omp dispatch              tmux 派遣原语（claude/codex/pi 的 spawn/wait/tail）
 omp web-operator          浏览器自动化、搜索、内容抽取
 omp wiki                  Karpathy 风格 markdown wiki
 ```

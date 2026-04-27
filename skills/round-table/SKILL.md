@@ -32,7 +32,7 @@ omp round-table session messages [msg-id]          # 获取消息记录
 omp round-table round spawn                        # 并行启动参与者（自动推断轮次）
 omp round-table round collect                      # 收集参与者回复并写入 session
 omp round-table round watch [-f]                    # 实时查看参与者输出
-omp round-table round attach                       # 连接 tmux session 直接观看
+omp round-table round attach                       # 列出活跃参与者 dispatch session（用 tmux attach 或 omp dispatch tail 观看）
 
 # post-message 在 session 命名空间下
 omp round-table session post-message <role> <file> --round N --name "<name>" --action "<action>" --summary "<summary>"
