@@ -112,7 +112,7 @@ git branch -d kickoff/task-01 kickoff/task-03
 
 ```bash
 omp dispatch status                    # 列出所有活跃 omp- session
-omp dispatch status worker-01          # 查询单个
+omp dispatch status omp-worker-01      # 查询单个（注意要带 omp- 前缀）
 omp dispatch kill omp-worker-01        # 显式清理
 ```
 

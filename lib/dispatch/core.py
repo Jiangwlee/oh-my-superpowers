@@ -1,10 +1,22 @@
-"""High-level orchestration: spawn / wait / run / tail / status / kill."""
+"""High-level orchestration: spawn / wait / run / tail / status / kill.
+
+Each spawn writes three sidecar files keyed by session_id:
+    /tmp/{sid}.cmd.sh    — bash script that runs the runtime under pipefail
+    /tmp/{sid}.meta.json — metadata (output_file, prompt_file, runtime, ...)
+    /tmp/{sid}.exit      — written by the script after pipeline finishes
+
+The metadata sidecar lets `omp dispatch wait <sid>` (called from the CLI with
+just a session id string) resolve the actual output_file path even when the
+caller used `--output-file /custom/path` at spawn time.
+"""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import secrets
+import shlex
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -40,6 +52,49 @@ class SessionStatus:
     last_activity_epoch: int
 
 
+# ── sidecar paths ────────────────────────────────────────────────────────────
+
+
+def _meta_path(session_id: str) -> str:
+    return f"/tmp/{session_id}.meta.json"
+
+
+def _exit_path(session_id: str) -> str:
+    return f"/tmp/{session_id}.exit"
+
+
+def _script_path(session_id: str) -> str:
+    return f"/tmp/{session_id}.cmd.sh"
+
+
+def _default_paths(session_id: str) -> tuple[str, str]:
+    return (
+        f"/tmp/{session_id}-prompt.md",
+        f"/tmp/{session_id}-output.txt",
+    )
+
+
+def read_metadata(session_id: str) -> dict | None:
+    """Load the metadata sidecar for a session, or None if absent."""
+    try:
+        return json.loads(Path(_meta_path(session_id)).read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def resolve_output_file(session_id: str, override: str | None = None) -> str:
+    """Resolve a session's output_file: explicit override > metadata > default."""
+    if override:
+        return override
+    meta = read_metadata(session_id)
+    if meta and "output_file" in meta:
+        return meta["output_file"]
+    return _default_paths(session_id)[1]
+
+
+# ── id generation ────────────────────────────────────────────────────────────
+
+
 def _generate_session_id(custom: str | None = None) -> str:
     if custom:
         clean = _SAFE_NAME.sub("-", custom).strip("-")
@@ -51,11 +106,7 @@ def _generate_session_id(custom: str | None = None) -> str:
     return f"{SESSION_PREFIX}{ts}-{rand}"
 
 
-def _default_paths(session_id: str) -> tuple[str, str]:
-    return (
-        f"/tmp/{session_id}-prompt.md",
-        f"/tmp/{session_id}-output.txt",
-    )
+# ── core operations ──────────────────────────────────────────────────────────
 
 
 def spawn(
@@ -98,10 +149,39 @@ def spawn(
         output_file = default_output
     Path(output_file).touch()
 
-    cmd = build_runtime_command(
-        runtime, prompt_file=prompt_file, output_file=output_file, model=model
+    pipeline = build_runtime_command(runtime, prompt_file=prompt_file, model=model)
+    exit_file = _exit_path(session_id)
+
+    # Stale exit file from a previous session reusing this id would lie about status.
+    Path(exit_file).unlink(missing_ok=True)
+
+    script_path = _script_path(session_id)
+    script = (
+        "#!/usr/bin/env bash\n"
+        "set -o pipefail\n"
+        f"{pipeline} 2>&1 | tee {shlex.quote(output_file)}\n"
+        f"echo $? > {shlex.quote(exit_file)}\n"
     )
-    tmux.new_session(session_id, cmd, cwd=cwd)
+    Path(script_path).write_text(script)
+    os.chmod(script_path, 0o755)
+
+    started_at = time.time()
+    Path(_meta_path(session_id)).write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "runtime": runtime,
+                "output_file": output_file,
+                "prompt_file": prompt_file,
+                "exit_file": exit_file,
+                "script_path": script_path,
+                "cwd": cwd,
+                "started_at": started_at,
+            }
+        )
+    )
+
+    tmux.new_session(session_id, f"bash {shlex.quote(script_path)}", cwd=cwd)
 
     return SessionHandle(
         session_id=session_id,
@@ -109,7 +189,7 @@ def spawn(
         output_file=output_file,
         prompt_file=prompt_file,
         cwd=cwd,
-        started_at=time.time(),
+        started_at=started_at,
     )
 
 
@@ -127,7 +207,7 @@ def wait(
         path = handle_or_id.output_file
     else:
         sid = handle_or_id
-        path = output_file or _default_paths(sid)[1]
+        path = resolve_output_file(sid, output_file)
     return wait_for_session(
         sid, path, timeout=timeout, poll_interval=poll_interval, on_progress=on_progress
     )
@@ -178,12 +258,8 @@ def tail(
     follow: bool = False,
     poll_interval: float = 1.0,
 ) -> Iterator[str]:
-    """Yield ANSI-stripped output as it appears in the session's tee file.
-
-    With follow=True, blocks until the tmux session ends; otherwise yields
-    whatever is already on disk and returns.
-    """
-    path = output_file or _default_paths(session_id)[1]
+    """Yield ANSI-stripped output as it appears in the session's tee file."""
+    path = resolve_output_file(session_id, output_file)
     pos = 0
 
     def _read_new() -> str:
@@ -228,5 +304,8 @@ def status(session_id: str | None = None) -> list[SessionStatus]:
 
 
 def kill(session_id: str) -> bool:
-    """Kill a session. Returns True if it existed and was killed."""
-    return tmux.kill_session(session_id)
+    """Kill a session and clean up its sidecar files. Returns True if it existed."""
+    result = tmux.kill_session(session_id)
+    for path in (_meta_path(session_id), _exit_path(session_id), _script_path(session_id)):
+        Path(path).unlink(missing_ok=True)
+    return result

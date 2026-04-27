@@ -1,4 +1,4 @@
-"""Session-wait primitives with heartbeat stall detection."""
+"""Session-wait primitives with heartbeat + exit-code propagation."""
 
 from __future__ import annotations
 
@@ -14,12 +14,22 @@ from .clean import strip_ansi
 
 @dataclass
 class WaitResult:
-    """Outcome of waiting on a tmux session."""
+    """Outcome of waiting on a tmux session.
+
+    Status semantics:
+        completed — session ended naturally and worker exit code was 0 (or
+                    the exit sidecar was missing, which we treat as success
+                    so externally-spawned sessions don't false-fail).
+        error    — session ended naturally and worker exit code was non-zero.
+        timeout  — we killed the session after exceeding the timeout.
+        pending  — wait_for_many `any`-mode survivor that wasn't waited for.
+    """
 
     session_id: str
-    status: str  # 'completed' | 'timeout' | 'pending' (wait_many any-mode survivors)
+    status: str
     duration_secs: float
     output: str  # ANSI-stripped
+    exit_code: int | None = None  # None when status is timeout/pending or sidecar missing
 
 
 def _read_output(path: str) -> str:
@@ -37,6 +47,26 @@ def _file_size(path: str) -> int:
         return 0
 
 
+def _read_exit_code(session_id: str) -> int | None:
+    """Read /tmp/{sid}.exit (written by the dispatch script under pipefail)."""
+    try:
+        raw = Path(f"/tmp/{session_id}.exit").read_text().strip()
+    except FileNotFoundError:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _final_status(session_id: str) -> tuple[str, int | None]:
+    """Map worker exit code to a status label after a session ends."""
+    code = _read_exit_code(session_id)
+    if code is None or code == 0:
+        return "completed", code
+    return "error", code
+
+
 def wait_for_session(
     session_id: str,
     output_file: str,
@@ -46,19 +76,7 @@ def wait_for_session(
     stall_threshold: int = 6,
     on_progress: Callable[[dict], None] | None = None,
 ) -> WaitResult:
-    """Block until a tmux session ends, hits timeout, or vanishes.
-
-    Args:
-        session_id: tmux session name.
-        output_file: path the worker tees its output to (used for heartbeat).
-        timeout: seconds before the session is killed and a TIMEOUT result
-            is returned.
-        poll_interval: seconds between polls.
-        stall_threshold: number of consecutive polls with no output growth
-            before `on_progress` reports `stalled=True`.
-        on_progress: optional callback invoked every poll with
-            `{elapsed, size, stalled}`.
-    """
+    """Block until a tmux session ends, hits timeout, or vanishes."""
     start = time.time()
     elapsed = 0
     last_size = 0
@@ -90,7 +108,10 @@ def wait_for_session(
         time.sleep(poll_interval)
         elapsed += poll_interval
 
-    return WaitResult(session_id, "completed", time.time() - start, _read_output(output_file))
+    status, exit_code = _final_status(session_id)
+    return WaitResult(
+        session_id, status, time.time() - start, _read_output(output_file), exit_code=exit_code
+    )
 
 
 def wait_for_many(
@@ -101,12 +122,7 @@ def wait_for_many(
     timeout: int = 300,
     poll_interval: int = 5,
 ) -> list[WaitResult]:
-    """Wait on multiple sessions with `all` or `any` semantics.
-
-    `all` blocks until every session ends or timeout fires (survivors are
-    killed). `any` returns as soon as the first session ends; remaining
-    sessions are left running and reported with status='pending'.
-    """
+    """Wait on multiple sessions with `all` or `any` semantics."""
     if mode not in ("all", "any"):
         raise ValueError(f"mode must be 'all' or 'any', got {mode!r}")
     if not session_ids:
@@ -121,8 +137,13 @@ def wait_for_many(
             if sid in finished:
                 continue
             if not tmux.has_session(sid):
+                status, exit_code = _final_status(sid)
                 finished[sid] = WaitResult(
-                    sid, "completed", time.time() - start, _read_output(output_files[sid])
+                    sid,
+                    status,
+                    time.time() - start,
+                    _read_output(output_files[sid]),
+                    exit_code=exit_code,
                 )
 
         if mode == "any" and finished:

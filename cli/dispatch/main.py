@@ -33,6 +33,7 @@ from dispatch import (  # noqa: E402
     VALID_RUNTIMES,
     WaitResult,
     kill as _kill,
+    resolve_output_file,
     run as _run,
     spawn as _spawn,
     status as _status,
@@ -109,6 +110,9 @@ def run(
     if result.status == "timeout":
         typer.echo(f"\n[dispatch] TIMEOUT after {timeout}s", err=True)
         raise typer.Exit(124)
+    if result.status == "error":
+        typer.echo(f"\n[dispatch] worker exit {result.exit_code}", err=True)
+        raise typer.Exit(1)
     typer.echo(f"\n[dispatch] {result.status}", err=True)
     raise typer.Exit(1)
 
@@ -183,7 +187,9 @@ def wait(
         if output_file:
             typer.echo("error: --output-file only valid with a single session", err=True)
             raise typer.Exit(2)
-        files = {sid: f"/tmp/{sid}-output.txt" for sid in sessions}
+        # Resolve each session's real output file from its metadata sidecar
+        # (falls back to default convention for sessions spawned outside dispatch).
+        files = {sid: resolve_output_file(sid) for sid in sessions}
         results = wait_for_many(
             sessions, files, mode=mode, timeout=timeout, poll_interval=5
         )
@@ -196,6 +202,7 @@ def wait(
                         "session_id": r.session_id,
                         "status": r.status,
                         "duration_secs": round(r.duration_secs, 2),
+                        "exit_code": r.exit_code,
                         "output": r.output,
                     }
                     for r in results
@@ -205,7 +212,10 @@ def wait(
     else:
         for r in results:
             if len(results) > 1:
-                typer.echo(f"=== {r.session_id} [{r.status}] ===", err=True)
+                label = f"[{r.status}]"
+                if r.exit_code is not None:
+                    label += f" exit={r.exit_code}"
+                typer.echo(f"=== {r.session_id} {label} ===", err=True)
             typer.echo(r.output, nl=False)
 
     exit_code = 0
