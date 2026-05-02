@@ -28,7 +28,7 @@ import { resolve } from 'path';
 import { spawn } from 'child_process';
 import net from 'net';
 
-const TIMEOUT = 15000;
+const TIMEOUT = 120000;
 const NAVIGATION_TIMEOUT = 30000;
 const IDLE_TIMEOUT = 20 * 60 * 1000;
 const DAEMON_CONNECT_RETRIES = 20;
