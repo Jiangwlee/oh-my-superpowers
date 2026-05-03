@@ -447,6 +447,45 @@ def feishu_approval_export(
     sys.exit(subprocess.call(cmd))
 
 
+feishu_attendance_app = typer.Typer(
+    name="attendance",
+    help="Feishu attendance admin workflows.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+feishu_app.add_typer(feishu_attendance_app, name="attendance")
+
+
+@feishu_attendance_app.command("export")
+def feishu_attendance_export(
+    start: str = typer.Option(..., "--start", help="Report start date (YYYY-MM-DD)."),
+    end: str = typer.Option(..., "--end", help="Report end date (YYYY-MM-DD); span <= 31 days."),
+    out_dir: str | None = typer.Option(None, "--out-dir", help="Where to save the xlsx; default ~/Downloads/."),
+    target: str | None = typer.Option(None, "--target", help="CDP target prefix; auto-discovered if omitted."),
+    timeout: int = typer.Option(300, "--timeout", help="Max seconds to wait for export completion."),
+) -> None:
+    """Export the Monthly-report attendance data from Feishu admin backend to xlsx.
+
+    Pre-requisite: signed in to oa.feishu.cn as an attendance administrator on
+    any Chrome tab; the script reuses an oa.feishu.cn tab or opens one.
+
+    Example:
+        omp web-operator feishu attendance export --start 2026-04-01 --end 2026-04-27
+    """
+    cmd = [
+        "bash",
+        str(SITES_DIR / "feishu" / "attendance-export.sh"),
+        "--start", start,
+        "--end", end,
+        "--timeout", str(timeout),
+    ]
+    if out_dir:
+        cmd += ["--out-dir", out_dir]
+    if target:
+        cmd += ["--target", target]
+    sys.exit(subprocess.call(cmd))
+
+
 # ---------------------------------------------------------------------------
 # test
 # ---------------------------------------------------------------------------
