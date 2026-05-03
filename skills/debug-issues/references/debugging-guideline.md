@@ -53,14 +53,16 @@ Three ways to gather evidence. Pick by **environment** + **suspect range**.
 
 | Method | Use when | Avoid when |
 |---|---|---|
-| **Read code** | Range already narrow; pure logic; config / type / typo; small recent change | Runtime-value dependent; concurrency; spread across many modules |
-| **Add logs** | Backend / CLI / long pipeline; async, concurrent, cross-process; rerunnable but not steppable | Browser UI; range already tiny; throwaway script |
 | **chrome-devtools** | Browser: console, network, DOM / CSS, SPA, performance, runtime values | Non-browser scenarios |
+| **curl direct probe** | Verify upstream HTTP service; isolate frontend / proxy / SDK layers | Pure compute; stateful pipelines |
+| **Add logs** | Backend / CLI / long pipeline; async, concurrent, cross-process; rerunnable but not steppable | Browser UI; range already tiny; throwaway script |
+| **Read code** | Range already narrow (1-2 files, gate-locked); pure logic; config / type / typo; small recent change | Runtime-value dependent; concurrency; spread across many modules |
 
 Decision order:
 
 ```text
 browser?               -> chrome-devtools
+upstream HTTP suspect? -> curl direct probe (mind proxy env)
 narrow + pure logic?   -> read code
 otherwise              -> add diagnostic logs
 ```
@@ -114,6 +116,18 @@ over guessing or reloading blindly:
 - `take_screenshot` — visual confirmation.
 - `performance_start_trace` / `performance_stop_trace` — slowness and jank.
 
+#### Using curl direct probe
+
+When the suspect is the boundary between the app and an upstream HTTP service,
+hit the upstream directly with `curl` to isolate which layer breaks:
+
+- Run the same request the app sends; compare status, headers, body, latency.
+- Strip auth / proxy / SDK abstractions one at a time to find the failing layer.
+- For local / LAN endpoints, confirm proxy env is bypassed:
+  `curl --noproxy '*' ...` or `env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY curl ...`.
+- For streaming endpoints, add `--no-buffer` and watch chunks arrive in real time.
+- For TLS / certificate issues, add `-v` and inspect the handshake.
+
 ### Step 3: Run And Read Logs
 
 Execute the failing path and inspect the output.
@@ -126,12 +140,21 @@ Look for:
 
 ### Step 4: Narrow Scope, Then Read Code
 
+<HARD-GATE>
+Do NOT read code until the suspect range is narrowed to 1-2 files or a single
+function. Wide-scope code reading is the most common failure mode in
+LLM-driven debugging.
+</HARD-GATE>
+
 Once the evidence points to a specific area:
 
 1. Read that file or function completely.
 2. Read related tests, imports, and configuration.
 3. Trace the real data flow.
 4. Identify the root cause, not just the line that crashes.
+
+If the range is still wide, return to Step 2 and pick a different observation
+method. Do not "read everything to get a feel" — that is shotgun reading.
 
 ### Step 5: Fix And Verify
 
