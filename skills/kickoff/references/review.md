@@ -6,10 +6,10 @@
 
 Review 必须在**隔离上下文**中运行。
 
-| 优先级 | 方式 | 说明 |
+| 形态 | 选 | 说明 |
 |---|---|---|
-| 1 | **跨工具 Tmux** | 默认。claude → openai，codex → claude，按 `commands.md` 派遣 Codex / Pi / Claude |
-| 2 | **Sub Agent** | 跨工具派遣失败时降级使用，派 `agents/code-reviewer.md` |
+| **全 diff review**（多文件 + 跨 spec / story） | **Sub Agent** | 默认。派 `agents/code-reviewer.md`。跨工具 dispatch 在多文件 review 上易 timeout（实测 codex 4 commit / 170 行 review 跑 41 tool use 仍未出 verdict） |
+| **单点深度查询**（具体函数 / 单文件代码问题） | **跨工具 Tmux** | claude → openai，codex → claude，按 `commands.md` 派遣 Codex / Pi / Claude；适合"窄而深"的问题 |
 
 主上下文自评禁止。Orchestrator 可以修复 reviewer 反馈，但不得自任 reviewer。
 
@@ -58,6 +58,18 @@ Reviewer 检查四件事：
 | **LOW** | 次要备注，留给 orchestrator 参考 |
 
 只有在**零 CRITICAL / 零 HIGH** 时，verdict 才能是 `PASS`。
+
+## Orchestrator Triage
+
+Reviewer finding **不等于**已确认 bug。Reviewer 在隔离上下文里基于 plausible 的代码读法提出问题，可能基于错误的代码假设、过时的 schema 认知、或漏看的现有约束。Orchestrator 必须先 L3 验证再进入修复讨论。
+
+每个 CRITICAL / HIGH / MEDIUM finding 处理顺序：
+
+1. **L3 验证**：grep 实际代码 / cat schema 文件 / inspect 类型定义，确认 reviewer 描述的代码状态属实
+2. **属实 → 进入修复讨论**：与用户讨论 fix 方案与优先级
+3. **不属实 → 直接 dismiss**：在 review 报告里记一句 "L3 verified: <claim> not present, dismissed"，**不**把 plausible-but-wrong 的 finding 转给用户选 fix
+
+未经 L3 验证就把 reviewer claim 当成 fact 提给用户，会污染决策且浪费用户精力。
 
 ## Verdict Loop
 
