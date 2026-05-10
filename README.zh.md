@@ -40,7 +40,8 @@ skills/                       # Skill 单元（各自独立）
 ├── web-operator/             # Chrome CDP 浏览、搜索、内容抽取
 ├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
 ├── llm-wiki/                 # 基于 omp wiki 的 Karpathy 风格 markdown wiki
-└── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
+├── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
+└── docs-contract/            # 为 MVP 项目补建文档骨架与维护契约
 
 agents/                       # Pi Agent 定义（+ agents.json 注册表）
 ├── reviewer.md               # 通用质量审查官（自动选择审查路径）
@@ -119,6 +120,7 @@ omp list --global  # 全局
 | `media-editor` | Pipeline | 为 media-editor agent 提供归档/查询/提升能力 |
 | `llm-wiki` | Pipeline + Tool Wrapper | 基于 `omp wiki` 的 Karpathy 风格 markdown wiki 工作流 |
 | `markdown-to-anything` | Pipeline | Markdown 转 PDF、PNG 等格式 |
+| `docs-contract` | Inversion + Generator + Reviewer | 为已运行 MVP 项目补建文档骨架与维护契约，附三层 lint |
 
 ## 可用 Agents
 
@@ -158,6 +160,7 @@ omp skill-review          skill 目录的机械一致性检查
 omp dispatch              tmux 派遣原语（claude/codex/pi 的 spawn/wait/tail）
 omp web-operator          浏览器自动化、搜索、内容抽取
 omp wiki                  Karpathy 风格 markdown wiki
+omp docs-contract         为 MVP 项目补建文档骨架与维护契约（scaffold/lint/inventory）
 ```
 
 Skill 安装为 symlink，同时写入 `.agents/skills/`（Pi）和 `.claude/skills/`（Claude Code）。

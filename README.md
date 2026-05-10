@@ -40,7 +40,8 @@ skills/                       # Skill units (each independent)
 ├── web-operator/             # Chrome CDP browsing, search, content extraction
 ├── media-editor/             # Archive / query / promote items for media-editor agent
 ├── llm-wiki/                 # Karpathy-style markdown wiki on top of omp wiki
-└── markdown-to-anything/     # Convert Markdown to PDF/PNG
+├── markdown-to-anything/     # Convert Markdown to PDF/PNG
+└── docs-contract/            # Documentation skeleton + maintenance contract for MVP projects
 
 agents/                       # Pi Agent definitions (+ agents.json registry)
 ├── reviewer.md               # Universal Quality Reviewer (auto-routes review path)
@@ -119,6 +120,7 @@ omp list --global  # global
 | `media-editor` | Pipeline | Archive / query / promote helpers for the media-editor agent |
 | `llm-wiki` | Pipeline + Tool Wrapper | Karpathy-style markdown wiki workflow on top of `omp wiki` |
 | `markdown-to-anything` | Pipeline | Convert Markdown to PDF, PNG, and other formats |
+| `docs-contract` | Inversion + Generator + Reviewer | Build a documentation skeleton with maintenance contracts and 3-layer lint for MVP-stage projects |
 
 ## Available Agents
 
@@ -158,6 +160,7 @@ omp skill-review          Mechanical consistency checks on a skill directory
 omp dispatch              Tmux dispatch primitive (claude/codex/pi spawn/wait/tail)
 omp web-operator          Browser automation, search, and content extraction
 omp wiki                  Karpathy-style markdown wiki management
+omp docs-contract         Build a documentation skeleton with maintenance contracts (scaffold/lint/inventory)
 ```
 
 Skills install as symlinks to both `.agents/skills/` (Pi) and `.claude/skills/` (Claude Code).

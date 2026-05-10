@@ -64,6 +64,7 @@ skills/                       # Skill 单元（每个独立）
 ├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
 ├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki + SOP
 ├── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
+├── docs-contract/            # 为 MVP 项目补建文档骨架与维护契约（scaffold + 三层 lint + inventory）
 └── <skill-name>/
     ├── SKILL.md              # 元数据 + CLI 命令文档（不写相对路径）
     ├── hooks.json            # 可选：声明所需 Claude Code hooks（omp install 自动合并）
