@@ -7,10 +7,11 @@
 
 Creates the minimal story skeleton:
   <story-dir>/<YYYY-MM-DD>-<slug>/
-    ├── story.md          (rendered from templates/story.md)
-    └── story-memory.md   (empty placeholder)
+    ├── story.md     (rendered from templates/story.md)
+    └── journal.md   (copied from templates/journal.md)
 
-`story-summary.md` is written by the orchestrator at Phase 3 close, not at init.
+story.md is pre-rendered with the ``## Summary`` section as an empty skeleton;
+its sub-sections are filled in at Phase 3 close, not at init.
 """
 from __future__ import annotations
 
@@ -24,12 +25,6 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
-MEMORY_PLACEHOLDER = (
-    "# Story Memory\n\n"
-    "## Patterns\n\n"
-    "## Gotchas\n\n"
-    "## Known False Positives\n"
-)
 
 
 def today_date() -> str:
@@ -94,7 +89,9 @@ def cmd_init(args: argparse.Namespace) -> int:
     (story_dir / "story.md").write_text(
         _render_story_md(slug, args.design_doc), encoding="utf-8"
     )
-    (story_dir / "story-memory.md").write_text(MEMORY_PLACEHOLDER, encoding="utf-8")
+    (story_dir / "journal.md").write_text(
+        (TEMPLATES_DIR / "journal.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
     print(str(story_dir))
     return 0

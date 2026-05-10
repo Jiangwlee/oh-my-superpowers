@@ -1,15 +1,15 @@
-# Worker Dispatch Commands
+# Reviewer Dispatch Commands
 
-通过 `omp dispatch` 启动外部 runtime worker、等待完成、收集输出的命令参考。
+通过 `omp dispatch` 把 reviewer 派到隔离 runtime（codex / claude / pi）做 cross review 时读本文件。
 
 ## When to Read
 
 满足任一条件时读取：
 
 - 当前环境没有原生 sub-agent 机制
-- 需要切换到不同 runtime（例如你在 Claude，但要用 Codex）
+- 需要切换到不同 runtime（例如你在 Claude，但要让 codex review）
 
-如果当前 runtime 自带 sub-agent，且任务也打算在同一 runtime 里完成，优先用原生机制，不要绕到 `omp dispatch`。
+如果当前 runtime 自带 sub-agent 且任务也打算在同一 runtime 完成，优先用原生机制，不要绕到 `omp dispatch`。多文件 review 默认走 sub-agent（codex / pi 在大 diff 上易 timeout）。
 
 ## Runtime Matrix
 
@@ -23,97 +23,53 @@
 
 ## Prompt Preparation
 
-所有 prompt 必须先写入文件，禁止直接作为 bash 参数传递。
+reviewer prompt 必须先写入文件，禁止直接作为 bash 参数传递。
 
 ```bash
-PROMPT_FILE="/tmp/kickoff-task-${TASK_ID}.md"
-# 先把 prompt 写到文件，再启动 worker
-# review prompt 也同理：protocol + task.md + diff
+PROMPT_FILE="/tmp/kickoff-review-${STORY_SLUG}.md"
+# 三段串接写入：protocol body + story 上下文 + diff
 ```
 
-## Single Worker (spawn + wait)
+参考 `review.md` §Reviewer Input 了解 prompt 三段构成。
+
+## Single Reviewer (spawn + wait)
 
 `omp dispatch run` 一步完成：spawn → wait → ANSI-clean 输出到 stdout。
 
 ```bash
 CWD="/path/to/project"
 
-# Claude
-omp dispatch run claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
-
-# Claude with model override
-omp dispatch run claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --model sonnet --timeout 300
-
 # Codex
 omp dispatch run codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
 
+# Codex with model override
+omp dispatch run codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --model gpt-5.5 --timeout 300
+
+# Claude
+omp dispatch run claude --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
+
 # Pi
 omp dispatch run pi --prompt-file "$PROMPT_FILE" --cwd "$CWD" --timeout 300
-
-# Pi with model override
-omp dispatch run pi --prompt-file "$PROMPT_FILE" --cwd "$CWD" --model "$MODEL" --timeout 300
 ```
 
 退出码：`0` = 成功（output 在 stdout），`124` = 超时，`1` = worker 错误。
 
 ## Live Observation
 
-需要边等边看 worker 输出时，先 spawn 拿到 session id，再 tail/wait 分开：
+需要边等边看 reviewer 输出时（大 diff 可能跑较久），先 spawn 拿到 session id，再 tail / wait 分开：
 
 ```bash
-SID=$(omp dispatch spawn codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --session-name "worker-${TASK_ID}")
+SID=$(omp dispatch spawn codex --prompt-file "$PROMPT_FILE" --cwd "$CWD" --session-name "review-${STORY_SLUG}")
 omp dispatch tail "$SID" --follow &
-omp dispatch wait "$SID" --timeout 300
+omp dispatch wait "$SID" --timeout 600
 ```
-
-## Parallel Execution
-
-只在任务彼此独立时并行。每个 worker 给一个唯一 session 名，最后用 `omp dispatch wait --mode all`（或 `any`）等待。
-
-```bash
-SID1=$(omp dispatch spawn codex --prompt-file /tmp/task-01.md --cwd .worktrees/w01 --session-name "worker-01")
-SID3=$(omp dispatch spawn codex --prompt-file /tmp/task-03.md --cwd .worktrees/w03 --session-name "worker-03")
-
-# 等所有完成
-omp dispatch wait "$SID1" "$SID3" --mode all --timeout 600
-
-# 或：等任一完成（其余继续后台运行）
-# omp dispatch wait "$SID1" "$SID3" --mode any --timeout 600
-```
-
-各 worker 输出可单独取：
-
-```bash
-omp dispatch tail "$SID1"
-omp dispatch tail "$SID3"
-```
-
-### Worktree Setup
-
-```bash
-git worktree add .worktrees/w01 -b kickoff/task-01
-git worktree add .worktrees/w03 -b kickoff/task-03
-```
-
-### Worktree Merge
-
-```bash
-git merge --no-ff kickoff/task-01
-git merge --no-ff kickoff/task-03
-
-git worktree remove .worktrees/w01
-git worktree remove .worktrees/w03
-git branch -d kickoff/task-01 kickoff/task-03
-```
-
-发生 merge conflict 时，立即停止并报告用户。不要自动解冲突。
 
 ## Status / Cleanup
 
 ```bash
-omp dispatch status                    # 列出所有活跃 omp- session
-omp dispatch status omp-worker-01      # 查询单个（注意要带 omp- 前缀）
-omp dispatch kill omp-worker-01        # 显式清理
+omp dispatch status                  # 列出所有活跃 omp- session
+omp dispatch status omp-review-xxx   # 查询单个（注意带 omp- 前缀）
+omp dispatch kill omp-review-xxx     # 显式清理
 ```
 
 ## Adding a New Runtime

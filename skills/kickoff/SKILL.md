@@ -1,172 +1,172 @@
 ---
 name: kickoff
 description: >-
-  Story-scoped workflow that carries a clarified requirement to shipped code,
-  with state that survives `/compact`. Trigger only when the user explicitly
-  types `/kickoff` or says "kickoff". Skip when the requirement is still ambiguous —
+  Use when the user is ready to ship a clarified requirement and needs state
+  that survives `/compact`. Trigger only when the user explicitly types
+  `/kickoff` or says "kickoff". Skip when the requirement is still ambiguous —
   kickoff does not clarify requirements.
 ---
 
 # Kickoff
 
-把**已澄清**的需求推进到上线。通过`Cross Review` 和 `E2E Gate` 确保质量。通过`story-memory.md` 让经验跨 commit、跨 session 复用。
+Carry a clarified requirement to shipped code. Drive review with a task state machine. Survive `/compact` by writing journal entries at every task boundary.
 
-**角色约定**：You are **orchestrator**. 你负责执行、接受独立评审、维护 story 记忆。
+## Role
+
+You are the **developer**. Implement, commit, maintain `journal.md`, and advance task state. Dispatch a **reviewer** to push `done` tasks to `reviewed`. Dispatch a sub-agent only for narrow, read-only exploration.
+
+Reviewer dispatch:
+
+- Default: sub-agent (`agents/code-reviewer.md`)
+- Fallback: cross-runtime tmux to codex (see `references/commands.md`)
 
 ## Hard Gate
 
-| 条件 | 动作 |
+| Condition | Action |
 |---|---|
-| 需求未澄清（Goal / Context / Scope 不清） | 立即停下，让用户先澄清 |
-| 进入 Phase 3，但仍有未 review 的 commit | 禁止；先在 Phase 2 把所有 commit 走 review pass |
-| 准备声明"完成"，但未跑真机 E2E | 禁止声明完成；必须真机端到端验证通过 |
-| Reviewer 试图在主上下文里自评 | 禁止；review 必须用 sub-agent 或 tmux 隔离执行 |
-| Review verdict = `NEEDS_FIX` 连续 3 次仍未 PASS | 停下，把 review 报告 + 当前 diff 提给用户决定 |
-| Review verdict = `BLOCKED` | 先处理 reviewer 的 blocker（缺 context / spec 不清），再重新派 |
-| E2E 测试失败 | 修复并重跑；不得带着 E2E 失败声明完成 |
-| `omp kickoff` 子命令退出码非零 | 读取 stderr 处理；不要静默吞错继续 |
+| Goal / Out of Scope / Task plan unclear | Stop. Ask the user to clarify. |
+| Entering Phase 3 with any task ∉ {reviewed, dropped} | Block. |
+| Task jumps from `in_progress` to `reviewed` (skips `done`) | Block. |
+| Task declared complete without review | Block. |
+| `in_progress` task missing any of the four evidence fields (`assumption / verify / fact / edit target`) | Block edits. |
+| Reviewer self-evaluates inside the developer's main context | Forbidden. Use a sub-agent or tmux. |
+| Reviewer returns `NEEDS_FIX` three times in a row without `PASS` | Stop. Hand the report and current diff to the user. |
+| Reviewer returns `BLOCKED` | Resolve the blocker (missing context / spec gap), then redispatch. |
+| E2E test fails | Fix and re-run. Never declare done with a failing E2E. |
+| `omp kickoff` subcommand exits non-zero | Read stderr and act. Do not swallow the error. |
 
 ## Core Principles
 
-- **Story 是最小状态容器**：跨 session 的事实落在 `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/`。 `story.md`、`story-memory.md`、`story-summary.md` 是核心文档。文档与对话冲突时，以文档为准。
-- **Cross Review**：编写者不评，评审者不写。Review 必须在独立上下文执行。
-- **E2E 是完成门槛**：声明完成前必须真机端到端验证，不接受 mock 绿灯。
-- **发现即反馈**：发现历史缺陷、流程矛盾、潜在 scope 偏移时，立即告诉用户；不要静默修复，不要绕开。
+- **The story is the smallest state container.** Persist cross-session facts under `<PROJECT_ROOT>/stories/<YYYY-MM-DD>-<slug>/`. `story.md` (static contract) and `journal.md` (event log) are the source of truth. **When chat memory disagrees with the file, the file wins** — base every decision on `omp kickoff status` or a journal grep, never on "I remember".
+- **Persist state continuously, not only at the end.** Write the four evidence fields + `decision / gotcha / diff` at every task boundary. Do not rely on a pre-`/compact` recap. After `/compact`, run `omp kickoff status` first, then read `story.md` and the tail of `journal.md`.
+- **Cross review.** The author does not review; the reviewer does not write. Run every review in an isolated context (sub-agent or cross-runtime tmux).
+- **Let the state machine drive review timing.** The developer chooses when to dispatch — one task or a batch. The only invariant: every task is `reviewed` or `dropped` before Phase 3.
+- **Real-system E2E gates completion.** Verify on real machines, real gateways, real providers. Mock-green does not count as done.
+- **Surface friction immediately.** When you find prior defects, contradictory rules, or scope drift, tell the user. Do not patch silently. Do not work around.
+
+## Task State Machine
+
+```
+planned ─┬─→ in_progress ─┬─→ done ─┬─→ reviewed (terminal)
+         │                │         │
+         │                │         └─→ needs_fix ─→ done (loop)
+         │                │
+         └────────────────┴─→ dropped (terminal)
+```
+
+The seven legal transitions, evidence rules, and current-state query rule live in `references/state-machine.md`. `omp kickoff status` flags any bypass (e.g., `planned → reviewed`, `in_progress → reviewed`) as an illegal transition and blocks Phase 3.
 
 ## Workflow
 
 ```mermaid
 flowchart TD
-    S1[Phase 1 初始化 Story] --> S2[Phase 2 实现 + Review Gate]
-    S2 --> S2
-    S2 --> S3[Phase 3 E2E Gate + 收尾]
+    P1[Phase 1 Story init] --> P2[Phase 2 Implementation + state-machine review]
+    P2 --> P2
+    P2 --> P3[Phase 3 E2E + Summary]
 ```
 
-**注意**：
+Cross-session resume: run `omp kickoff status` → read `story.md` → read the tail of `journal.md` → continue the active `in_progress` task.
 
-1. Story 跨 session 时，新会话开始立即读 `story-memory.md`
-2. 所有 commit 必须 review 通过后才进入 Phase 3
+### Phase 1. Initialize the story
 
-### Phase 1. 初始化 Story
+Goal: persist the requirement as a static contract.
 
-目标：建立 story 骨架，把需求落盘成事实源。
-
-1. 归档过期 story：
+1. Archive stale stories:
    ```bash
    omp kickoff archive --story-dir <PROJECT_ROOT>/stories
    ```
-2. 创建新 story：
+2. Create the new story:
    ```bash
    omp kickoff story init \
      --story-dir <PROJECT_ROOT>/stories \
-     --slug <slug> --date <YYYY-MM-DD>
+     --slug <slug> --date <YYYY-MM-DD> [--design-doc <path>]
    ```
-3. 填写 `story.md` 的 `Goal / Context / Scope`。
+3. Fill `story.md`: Goal / Scope (In/Out) / References / Required reading / Test environment / Redlines / Task plan. The skeleton renders from `templates/story.md`; replace each HTML-comment placeholder.
+4. Leave `journal.md` empty. The skeleton (`templates/journal.md`) carries field documentation. Append entries during Phase 2.
 
-真实示例：
+**Done when**
 
-```bash
-omp kickoff story init \
-  --story-dir /home/me/myrepo/stories \
-  --slug add-login --date 2026-04-25
-# -> /home/me/myrepo/stories/2026-04-25-add-login/
-```
+- [ ] Stale stories moved to `archives/` (if any)
+- [ ] New story dir contains `story.md` and `journal.md`
+- [ ] `story.md` has Goal, Out of Scope, Required reading, and Task plan filled
 
-**验收**
+### Phase 2. Implementation + state-machine review loop
 
-- [ ] 旧 story 已迁入 `archives/`
-- [ ] 新 story 目录与骨架文件已建立
-- [ ] `story.md` 的 `Goal / Context / Scope` 三段已填写
+Goal: write code, commit, advance every task to `reviewed` or `dropped`. The developer chooses review timing.
 
-### Phase 2. 实现 + Review Gate
+For each task:
 
-目标：写代码，commit，过 review，循环到 story 全部代码完成。节奏由 orchestrator 控制——可以一次完成，也可以拆多个 commit。
+1. Enter `[in_progress]`. Write the four evidence fields (`assumption / verify / fact / edit target`) in `journal.md`. **Do not edit code until all four are filled.**
+2. Implement and commit.
+3. Enter `[done]`. Write `decision / gotcha / diff` in `journal.md`.
+4. Advance to `[reviewed]` (one task or batched) by dispatching a reviewer.
+   - `PASS` → `reviewed`.
+   - `NEEDS_FIX` → `needs_fix`. Fix, commit, return to `done`, redispatch.
+   - `BLOCKED` → resolve the blocker, then redispatch.
 
-**Review 规则**：
+Run `omp kickoff status` at any time to check current state, evidence completeness, open issues, and Phase 3 readiness.
 
-- 所有进入 Phase 3 的 commit 必须经过 review
-- 一次 review 可覆盖多个 commit，单次范围 ≤ **10 个 commit / 500 行 diff**
-- review 不通过的改动用新 commit 修复后再次 review；不要 revert 已 commit
+Load on demand:
 
-每个 commit：
+- Task state semantics, evidence rules, legal transitions: `references/state-machine.md`
+- Journal entry fields, append rules, grep patterns: `references/journal-protocol.md`
+- Reviewer dispatch, verdict handling: `references/review.md`
+- Cross-runtime tmux dispatch (codex / pi): `references/commands.md`
 
-1. 跑项目自测（单测 / typecheck / lint 等项目约定的 command）
-2. 创建 commit
+**Done when** (check once before Phase 3)
 
-每个 review 单元（自上次 review pass 以来的全部 commit）：
+- [ ] Every task is `reviewed` or `dropped`
+- [ ] `omp kickoff status` reports `Phase 3 ready: YES`
+- [ ] Every open ISSUE is handled (fixed / dismissed / promoted to a task)
 
-1. 派独立 reviewer：
-   - 优先跨工具 Review：claude -> openai，codex -> claude。参考 `references/commands.md`，使用 tmux 派遣Codex / Pi / Claude 执行 code review。
-   - 跨工具 Review 失败时，派遣 sub-agent —— `agents/code-reviewer.md`
-2. 处理 verdict（失败上限与升级条件见 Hard Gate）：
-   - `PASS` → 把本轮关键决策、坑点、review false positive 追加到 `story-memory.md`
-   - `NEEDS_FIX` → 用新 commit 修复 → 重新 review
-   - `BLOCKED` → 处理 blocker → 重新 dispatch
+### Phase 3. E2E gate + summary
 
-按需加载：
+Goal: verify on real systems, sync surrounding docs, write the summary.
 
-- review verdict 与 reviewer 输入：`references/review.md`
-- 经验是否进 `story-memory.md`：`references/story-memory-guideline.md`
-- tmux 派外部 runtime：`references/commands.md`
+1. Run E2E on real machine, real gateway, real provider. Reject mock-green.
+2. On failure: fix, re-run; reopen Phase 2 with new tasks if needed.
+3. Sync surrounding docs touched by this story: architecture, README, backlog.
+4. Fill the four sub-sections of `## Summary` (the skeleton is already in `story.md`):
+   - **Outcome.** What shipped, commit range, key decisions.
+   - **Friction.** What slowed the kickoff (estimation drift, process friction, tooling blockers).
+   - **Open items.** Follow-ups for next time (fix tasks, scope creep, debt registry, unresolved ISSUEs).
+   - **Promotion candidates.** Concrete kickoff / CLAUDE.md / project rule changes worth promoting. Write "none" if there are none.
 
-**验收**（每个 review 单元）
+**Done when**
 
-- [ ] 自上次 review 以来的全部 commit 已通过项目自测
-- [ ] Review verdict = `PASS`
-- [ ] 本轮可复用经验已追加到 `story-memory.md`（无可记内容时明确 skip）
-
-### Phase 3. E2E Gate + 收尾
-
-目标：真机端到端验证，同步外围文档，出 story summary。
-
-1. 跑 E2E：真机 / 真 gateway / 真 provider，不接受 mock 绿灯
-2. 失败 → 修复 → 重跑；必要时回 Phase 2 再 commit
-3. 同步外围文档（仅同步本 story 影响到的部分）：
-   - 架构文档（如 `docs/architecture/**`）
-   - README
-   - Backlog / 缺陷登记
-4. 写 `<story-dir>/story-summary.md`，**记四段**：
-   - **结论**：本 story 做了什么、commit 范围、关键决策
-   - **负面机制**：本次 kickoff 哪里不顺（估算偏差、流程摩擦、工具卡点）
-   - **未决项**：留给下一次的 follow-up（fix task、scope creep、技术债登记）
-   - **Promotion 候选**：本次暴露出 kickoff / CLAUDE.md / 项目流程**应当改进**的具体条款，留给用户决定是否升级；若无可改进，明确写"无"
-
-按需加载：`references/story-summary.md`
-
-**验收**
-
-- [ ] E2E 真机验证通过
-- [ ] 受影响的架构文档 / README / Backlog 已更新
-- [ ] `story-summary.md` 四段全部完成（含 Promotion 候选段，无可改进时明确写"无"）
+- [ ] E2E passes on real systems
+- [ ] Affected architecture docs / README / backlog updated
+- [ ] All four sub-sections of `## Summary` filled
 
 ## Storage
 
-`stories/` 必须位于**目标项目根目录**（`git rev-parse --show-toplevel`），不能放在 skill repo 也不能放在当前 cwd。无法解析项目根时，停下问用户。首次接入新项目时，确认 `stories/` 已加入 `.gitignore`。
+`stories/` must live at the target project root (`git rev-parse --show-toplevel`). Never write it inside the skill repo or the current `cwd`. Stop and ask the user when the project root cannot be resolved. The first time you onboard a project, confirm `stories/` is in `.gitignore`.
 
 ```text
 <PROJECT_ROOT>/stories/
 ├── archives/
 └── <YYYY-MM-DD>-<slug>/
-    ├── story.md            # Goal / Context / Scope（需求快照）
-    ├── story-memory.md     # 跨 /compact 的决策、坑点、review 发现
-    └── story-summary.md    # Phase 3 收尾，四段式短总结
+    ├── story.md     # Static contract: Goal / Scope / Required reading / Test env / Redlines / Task plan / Summary (skeleton at init, filled at Phase 3)
+    └── journal.md   # Event log: append-only TASK / ISSUE entries in time order
 ```
+
+For legacy stories (containing `story-memory.md` / `story-summary.md` / `tasks.yaml`), run `omp kickoff archive`. Do not migrate.
 
 ## CLI Reference
 
 | Command | Description |
 |---|---|
-| `omp kickoff archive --story-dir <root> [--threshold-days N] [--dry-run]` | 归档过期或 legacy story |
-| `omp kickoff story init --story-dir <root> --slug <slug> [--date YYYY-MM-DD] [--design-doc <path>] [--force]` | 创建 story 目录与骨架文件 |
-
+| `omp kickoff archive --story-dir <root> [--threshold-days N] [--dry-run]` | Archive stale or legacy stories |
+| `omp kickoff story init --story-dir <root> --slug <slug> [--date YYYY-MM-DD] [--design-doc <path>] [--force]` | Create a story directory with `story.md` + `journal.md` skeleton |
+| `omp kickoff status --story-dir <root> [--story <slug or YYYY-MM-DD-slug>]` | Report current state: tasks, evidence completeness, open ISSUEs, Phase 3 readiness |
 
 ## References
 
-按需加载，不预读；同一上下文内除非文件可能变更，不重复读取。
+Load on demand. Within a single context, do not re-read unless the file may have changed.
 
-| 需要做什么 | 读取文件 |
+| Task | File |
 |---|---|
-| 派 reviewer、解释 review verdict、判断 NEEDS_FIX vs BLOCKED | `references/review.md` |
-| 判断本轮经验是否值得进 `story-memory.md` | `references/story-memory-guideline.md` |
-| 用 tmux 派外部 runtime（Codex / Pi） | `references/commands.md` |
-| 写 `story-summary.md` 四段 | `references/story-summary.md` |
+| Understand task states, legal transitions, evidence rules | `references/state-machine.md` |
+| Write a journal entry, query current state, find grep patterns | `references/journal-protocol.md` |
+| Dispatch reviewer, interpret verdict, handle `NEEDS_FIX` vs `BLOCKED` | `references/review.md` |
+| Cross-runtime tmux dispatch (codex / pi) for review | `references/commands.md` |

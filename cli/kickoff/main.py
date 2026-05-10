@@ -2,16 +2,17 @@
 # /// script
 # dependencies = ["typer"]
 # ///
-"""omp kickoff — Story / task lifecycle helpers for the kickoff skill.
+"""omp kickoff — Story / journal lifecycle helpers for the kickoff skill.
 
 Domains:
-  archive            → move aged / legacy stories to stories/archives/
-  story init         → create a new story directory from templates
-  task update | show → hot-path edits on tasks.yaml (status / worker / commit / note)
-  task wave-update   → append (or replace by --number) one wave snapshot at wave close
+  archive     → move aged / legacy stories to stories/archives/
+  story init  → create a new story directory with story.md + journal.md skeleton
+  status      → report current state of a story (task statuses, Evidence,
+                open ISSUE, Phase 3 ready)
 
-Kickoff is free to edit story artifacts directly. These commands exist
-only to keep the high-frequency updates atomic and auditable.
+These commands keep high-frequency operations atomic and auditable. Free-form
+journal updates are made directly by the developer; only state queries and
+bootstrap go through the CLI.
 """
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ SCRIPTS = OMP_HOME / "skills" / "kickoff" / "scripts"
 
 app = typer.Typer(
     name="kickoff",
-    help="Story / task lifecycle helpers for the kickoff skill.",
+    help="Story / journal lifecycle helpers for the kickoff skill.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -37,14 +38,7 @@ story_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-task_app = typer.Typer(
-    name="task",
-    help="Hot-path edits on tasks.yaml.",
-    no_args_is_help=True,
-    add_completion=False,
-)
 app.add_typer(story_app, name="story")
-app.add_typer(task_app, name="task")
 
 
 def _run(script: str, args: list[str]) -> None:
@@ -86,78 +80,24 @@ def story_init(
     _run("story.py", args)
 
 
-@task_app.command("update")
-def task_update(
-    story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
-    id: str = typer.Option(..., "--id", help="Task id, e.g. '01'."),
-    status: str | None = typer.Option(None, "--status", help="pending|executing|completed|blocked."),
-    worker: str | None = typer.Option(None, "--worker", help="Worker identifier ('inline' or sub-agent id)."),
-    note: str | None = typer.Option(None, "--note", help="Replace the notes field."),
+@app.command()
+def status(
     story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
+    story: str | None = typer.Option(
+        None, "--story",
+        help="Story slug or '<YYYY-MM-DD>-<slug>'. Omit to use the most recent active story.",
+    ),
 ) -> None:
-    """Flip task status, set worker, or leave a note. (Reviewer + commit are wave-scope — see wave-update.)"""
-    args = ["--story-dir", story_dir, "update", "--story", story, "--id", id]
-    if status is not None:
-        args += ["--status", status]
-    if worker is not None:
-        args += ["--worker", worker]
-    if note is not None:
-        args += ["--note", note]
-    _run("task.py", args)
+    """Report the current state of a story.
 
-
-@task_app.command("show")
-def task_show(
-    story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
-    id: str | None = typer.Option(None, "--id", help="Show one task; omit to list all."),
-    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
-) -> None:
-    """List tasks for a story, or show one task's full record."""
-    args = ["--story-dir", story_dir, "show", "--story", story]
-    if id is not None:
-        args += ["--id", id]
-    _run("task.py", args)
-
-
-@task_app.command("wave-update")
-def task_wave_update(
-    story: str = typer.Option(..., "--story", help="Story slug or <YYYY-MM-DD>-<slug>."),
-    number: int = typer.Option(..., "--number", help="Wave number, e.g. 1."),
-    reviewer: str | None = typer.Option(
-        None, "--reviewer", help="Reviewer identifier for this wave's single review."
-    ),
-    commit: str | None = typer.Option(
-        None, "--commit", help="Commit hash for this wave's single commit."
-    ),
-    key_decision: list[str] = typer.Option(
-        None, "--key-decision",
-        help="Repeatable: a key decision made during this wave.",
-    ),
-    open_question: list[str] = typer.Option(
-        None, "--open-question",
-        help="Repeatable: an unresolved item handed to next wave or to the user.",
-    ),
-    next_focus: str | None = typer.Option(
-        None, "--next-focus", help="One-liner: what the next wave should prioritise."
-    ),
-    story_dir: str = typer.Option(..., "--story-dir", help="Resolved project stories root."),
-) -> None:
-    """Append (or replace by --number) a wave snapshot at wave close."""
-    args = [
-        "--story-dir", story_dir,
-        "wave-update", "--story", story, "--number", str(number),
-    ]
-    if reviewer is not None:
-        args += ["--reviewer", reviewer]
-    if commit is not None:
-        args += ["--commit", commit]
-    for d in key_decision or []:
-        args += ["--key-decision", d]
-    for q in open_question or []:
-        args += ["--open-question", q]
-    if next_focus is not None:
-        args += ["--next-focus", next_focus]
-    _run("task.py", args)
+    Prints task list with current state, Evidence completeness for the active
+    in_progress task, open ISSUE list, uncommitted git changes, and a Phase 3
+    ready judgment.
+    """
+    args = ["--story-dir", story_dir]
+    if story is not None:
+        args += ["--story", story]
+    _run("status.py", args)
 
 
 if __name__ == "__main__":
