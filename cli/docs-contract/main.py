@@ -21,6 +21,14 @@ ASSETS_DIR = SKILL_DIR / "assets"
 sys.path.insert(0, str(SKILL_DIR))
 
 from scripts.config import load as load_config  # noqa: E402
+from scripts.inventory import (  # noqa: E402
+    ALL_CATEGORIES,
+    MANAGED,
+    SKIPPED,
+    SUGGESTED,
+    UNMANAGED,
+    inventory as build_inventory,
+)
 from scripts.lint import lint_all, lint_with_semantic  # noqa: E402
 from scripts.scaffold import (  # noqa: E402
     ScaffoldPlan,
@@ -202,13 +210,51 @@ def cmd_lint(
         raise typer.Exit(code=1)
 
 
+_CATEGORY_COLOR = {
+    MANAGED: "green",
+    UNMANAGED: "yellow",
+    SUGGESTED: "cyan",
+    SKIPPED: "dim",
+}
+
+
 @app.command("inventory")
 def cmd_inventory(
     root: Path = typer.Option(Path.cwd(), "--root", "-r", help="Project root."),
 ) -> None:
-    """Inventory existing docs (full implementation lands in PR5)."""
+    """Inventory existing docs at the predicted skeleton paths.
+
+    Categorizes each slot into managed / unmanaged / suggested / skipped.
+    Inventory does not scan the whole repo; it inspects only the canonical
+    skeleton paths, so README / CHANGELOG / LICENSE are never flagged.
+    """
+    report = build_inventory(root)
+
+    table = Table(title=f"Inventory for {root}")
+    table.add_column("doc-type")
+    table.add_column("target")
+    table.add_column("category")
+    table.add_column("detail")
+    for entry in report.entries:
+        rel = entry.target.relative_to(report.project_root).as_posix()
+        color = _CATEGORY_COLOR.get(entry.category, "white")
+        table.add_row(
+            entry.doc_type.value,
+            rel,
+            f"[{color}]{entry.category}[/{color}]",
+            entry.detail,
+        )
+    console.print(table)
+
+    counts = {cat: len(report.by_category(cat)) for cat in ALL_CATEGORIES}
+    summary = " | ".join(
+        f"[{_CATEGORY_COLOR[cat]}]{cat}={counts[cat]}[/{_CATEGORY_COLOR[cat]}]"
+        for cat in ALL_CATEGORIES
+    )
+    console.print(f"\nSummary: {summary}")
     console.print(
-        f"[yellow]inventory[/yellow] for {root}: full implementation lands in PR5."
+        "\n[dim]Hint: run `omp docs-contract scaffold --apply` to create suggested files. "
+        "Existing files (managed + unmanaged) are skipped by default.[/dim]"
     )
 
 
