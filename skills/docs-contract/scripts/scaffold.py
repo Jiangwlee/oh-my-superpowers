@@ -92,8 +92,12 @@ def plan(
         target = project_root / default_target
         tmpl_name = TEMPLATE_NAMES[dt]
         template = (assets_dir / tmpl_name) if tmpl_name else None
+        # For directory-typed entries, "exists" means the dir holds any
+        # user-authored content (we ignore .gitkeep / dot-files); for file
+        # templates, "exists" is just file presence. apply() uses the same
+        # rule, so the dry-run table matches reality.
         if tmpl_name is None:
-            exists = target.parent.is_dir() and any(target.parent.iterdir())
+            exists = _dir_has_user_content(target.parent)
         else:
             exists = target.exists()
         entries.append(
@@ -113,11 +117,22 @@ def plan(
     )
 
 
+def _dir_has_user_content(dir_path: Path) -> bool:
+    """Return True if dir exists and contains any non-dot, non-.gitkeep file."""
+    if not dir_path.is_dir():
+        return False
+    return any(
+        child.name != ".gitkeep" and not child.name.startswith(".")
+        for child in dir_path.iterdir()
+    )
+
+
 def apply(plan_obj: ScaffoldPlan, *, force: bool = False) -> tuple[list[Path], list[Path]]:
     """Apply a scaffold plan; return (written, skipped) absolute paths.
 
     Skip-if-exists is the default; pass ``force=True`` to overwrite. Directory-
-    typed entries write a `.gitkeep` to seed the empty directory.
+    typed entries write a ``.gitkeep`` to seed an empty directory but skip
+    when the directory already holds user content (matches plan() semantics).
     """
     written: list[Path] = []
     skipped: list[Path] = []
@@ -128,6 +143,9 @@ def apply(plan_obj: ScaffoldPlan, *, force: bool = False) -> tuple[list[Path], l
 
         if entry.template is None:
             target_dir = entry.target.parent
+            if _dir_has_user_content(target_dir) and not force:
+                skipped.append(entry.target)
+                continue
             target_dir.mkdir(parents=True, exist_ok=True)
             if entry.target.exists() and not force:
                 skipped.append(entry.target)

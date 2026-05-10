@@ -45,6 +45,10 @@ def call_pi_via_dispatch(prompt: str, model: str | None, timeout: int) -> str:
     Returns the runtime's stdout. Raises ``subprocess.CalledProcessError`` on
     non-zero exit. The caller is responsible for handling the error
     (typically by recording a Finding rather than aborting the lint run).
+
+    Note: ``omp dispatch run`` does not expose a ``--no-session`` flag because
+    headless dispatch sessions are managed internally and never persist to
+    the user's session pool — this matches the project convention for Pi.
     """
     cmd = ["omp", "dispatch", "run", "pi", prompt]
     if model:
@@ -138,10 +142,12 @@ def parse_response(text: str, file: Path) -> list[SemanticFinding]:
 
 
 def changed_md_files(project_root: Path) -> set[Path] | None:
-    """Return absolute paths of .md files changed since HEAD~1, or None on error.
+    """Return absolute paths of .md files with uncommitted changes vs HEAD.
 
-    None signals "git unavailable / no commits / etc"; caller should fall
-    back to lint-all behavior.
+    Uses ``git diff --name-only HEAD`` so the caller catches edits made
+    between commits — matching the on-diff trigger's intent of "lint what
+    the developer just touched". Returns None when git is unavailable so
+    the caller can fall back to lint-all behavior.
     """
     if not (project_root / ".git").exists():
         return None

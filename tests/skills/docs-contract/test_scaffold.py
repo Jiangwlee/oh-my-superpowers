@@ -111,6 +111,24 @@ def test_apply_creates_dir_typed_gitkeep_when_suggested(tmp_path: Path) -> None:
     assert (tmp_path / "docs/architecture/modules/.gitkeep").is_file()
 
 
+def test_apply_dir_typed_skips_when_dir_has_user_content(tmp_path: Path) -> None:
+    """If the dir already holds user-authored content, apply must not write
+    .gitkeep — and plan() must report exists=True so dry-run matches reality.
+    """
+    modules_dir = tmp_path / "docs/architecture/modules"
+    modules_dir.mkdir(parents=True)
+    (modules_dir / "agent.md").write_text("# Agent module\n", encoding="utf-8")
+
+    plan_obj = build_plan(tmp_path, ASSETS_DIR, include=[DocType.MODULE])
+    by_type = {e.doc_type: e for e in plan_obj.entries}
+    assert by_type[DocType.MODULE].exists is True
+
+    written, skipped = apply_scaffold(plan_obj)
+    gitkeep = modules_dir / ".gitkeep"
+    assert not gitkeep.exists()
+    assert gitkeep in skipped
+
+
 def test_template_files_exist_for_every_template_name() -> None:
     """Each non-None TEMPLATE_NAMES entry must point at a real asset."""
     for dt, name in TEMPLATE_NAMES.items():

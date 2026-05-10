@@ -77,7 +77,7 @@ L3 报告 What/Why vs How 的判定。这是修剪过度下沉到代码细节的
 # docs/.docs-contract.yml
 exempt_paths:
   - docs/architecture/archived/**     # 历史归档不审
-  - docs/brainstorming/**             # brainstorming 临时材料
+  - docs/design-drafts/**             # 设计期临时材料
 must_not_contain_extra:
   PROJECT.md: ["TODO"]                # 临时收紧 PROJECT.md 的硬规则
 ```

@@ -45,3 +45,41 @@ def test_known_pattern_labels_are_unique() -> None:
 def test_adr_has_no_default_constraints() -> None:
     """ADR 是历史事实记录，默认不施加 must-not-contain。"""
     assert default_for(DocType.ADR) == ()
+
+
+# ---------------------------------------------------------------------------
+# Templates ↔ default_rules consistency
+# ---------------------------------------------------------------------------
+
+
+def test_templates_must_not_contain_matches_default_rules() -> None:
+    """Each shipped template's frontmatter must-not-contain must equal
+    default_for(doc_type). Drift between templates and default_rules.py
+    breaks the "single source of truth for label sets" intent.
+    """
+    import yaml  # noqa: PLC0415 — local import keeps test deps minimal
+
+    from scripts.scaffold import TARGET_PATHS, TEMPLATE_NAMES  # noqa: PLC0415
+
+    repo_root = Path(__file__).resolve().parents[3]
+    assets_dir = repo_root / "skills" / "docs-contract" / "assets"
+
+    drift: list[str] = []
+    for dt in DocType:
+        tmpl_name = TEMPLATE_NAMES[dt]
+        if tmpl_name is None:
+            continue  # directory-typed entries have no template
+        tmpl_path = assets_dir / tmpl_name
+        text = tmpl_path.read_text(encoding="utf-8")
+        # Extract the YAML between the first two `---` lines
+        parts = text.split("---", 2)
+        if len(parts) < 3:
+            drift.append(f"{tmpl_name}: missing frontmatter")
+            continue
+        fm = yaml.safe_load(parts[1]) or {}
+        actual = tuple(fm.get("must-not-contain", []))
+        expected = default_for(dt)
+        if actual != expected:
+            drift.append(f"{tmpl_name}: template={actual} default_rules={expected}")
+
+    assert not drift, "templates drifted from default_rules:\n  " + "\n  ".join(drift)
