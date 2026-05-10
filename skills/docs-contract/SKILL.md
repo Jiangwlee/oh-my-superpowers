@@ -75,6 +75,17 @@ L1+L2 默认随 lint 一起跑；L3 按需触发。豁免语法与配置文件 s
 - 项目级配置：`docs/.docs-contract.yml`（可选，未知字段忽略）
 - 默认规则集：`scripts/default_rules.py`（硬编码）
 
+## CLI
+
+| 命令 | 作用 |
+|---|---|
+| `omp docs-contract scaffold --root <dir>` | 默认 dry-run，列骨架候选 + 现状 |
+| `omp docs-contract scaffold --root <dir> --apply` | 写盘；已存在文件默认 skip，`--force` 覆盖 |
+| `omp docs-contract scaffold ... --include LANGUAGE,DESIGN` | 强制纳入；`--exclude` 反向 |
+| `omp docs-contract lint --root <dir>` | L1 结构校验 + L2 模式（L2 在 PR3 上线） |
+| `omp docs-contract lint --root <dir> --semantic` | 追加 L3 语义校验（PR4 上线） |
+| `omp docs-contract inventory --root <dir>` | 盘点现有文档（PR5 上线） |
+
 ## References
 
 | 需要做什么 | 读取文件 |
