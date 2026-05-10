@@ -21,13 +21,14 @@ ASSETS_DIR = SKILL_DIR / "assets"
 sys.path.insert(0, str(SKILL_DIR))
 
 from scripts.config import load as load_config  # noqa: E402
-from scripts.lint import lint_all  # noqa: E402
+from scripts.lint import lint_all, lint_with_semantic  # noqa: E402
 from scripts.scaffold import (  # noqa: E402
     ScaffoldPlan,
     apply as apply_scaffold,
     plan as build_plan,
 )
 from scripts.schema import DocType  # noqa: E402
+from scripts.semantic_lint import resolve_model  # noqa: E402
 
 app = typer.Typer(
     name="docs-contract",
@@ -127,22 +128,41 @@ def _print_plan(plan_obj: ScaffoldPlan) -> None:
 def cmd_lint(
     root: Path = typer.Option(Path.cwd(), "--root", "-r", help="Project root."),
     semantic: bool = typer.Option(
-        False, "--semantic", help="Also run L3 semantic lint via LLM (PR4)."
+        False, "--semantic", help="Also run L3 semantic lint via LLM."
+    ),
+    model: str = typer.Option(
+        "", "--model", help="Override LLM model for L3 (default: config / OMP_DEFAULT_MODEL_PI)."
+    ),
+    timeout: int = typer.Option(
+        300, "--timeout", help="L3 LLM-call timeout in seconds."
     ),
 ) -> None:
-    """Run L1 structural lint (L2 lands in PR3, L3 in PR4)."""
+    """Run L1 structural + L2 pattern lint (and optionally L3 semantic)."""
     cfg = load_config(root)
     for w in cfg.warnings:
         console.print(f"[yellow]config warning:[/yellow] {w}")
 
-    findings = lint_all(
-        root,
-        exempt_paths=cfg.exempt_paths,
-        must_not_contain_extra=cfg.must_not_contain_extra,
-    )
+    run_l3 = semantic or cfg.semantic_lint.trigger == "on-diff"
+    only_changed = (not semantic) and cfg.semantic_lint.trigger == "on-diff"
 
-    if semantic:
-        console.print("[yellow]--semantic ignored: L3 lands in PR4.[/yellow]")
+    if run_l3:
+        resolved_model = resolve_model(model or None, cfg.semantic_lint.model)
+        if resolved_model:
+            console.print(f"[dim]L3 model: {resolved_model}[/dim]")
+        findings = lint_with_semantic(
+            root,
+            exempt_paths=cfg.exempt_paths,
+            must_not_contain_extra=cfg.must_not_contain_extra,
+            model=resolved_model,
+            timeout=timeout,
+            only_changed=only_changed,
+        )
+    else:
+        findings = lint_all(
+            root,
+            exempt_paths=cfg.exempt_paths,
+            must_not_contain_extra=cfg.must_not_contain_extra,
+        )
 
     if not findings:
         console.print("[green]docs-contract lint: clean.[/green]")

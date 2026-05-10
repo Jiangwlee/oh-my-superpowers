@@ -28,6 +28,14 @@ from scripts.schema import (
     DocType,
     parse,
 )
+from scripts.semantic_lint import (
+    LLMCaller,
+    build_prompt,
+    call_pi_via_dispatch,
+    changed_md_files,
+    parse_response,
+    resolve_model,
+)
 
 
 @dataclass(frozen=True)
@@ -244,6 +252,105 @@ def lint_all(
             project_root,
             exempt_paths=exempt_paths,
             must_not_contain_extra=must_not_contain_extra,
+        ),
+    ]
+
+
+def lint_l3(
+    project_root: Path,
+    *,
+    exempt_paths: tuple[str, ...] = (),
+    model: str | None = None,
+    timeout: int = 300,
+    only_changed: bool = False,
+    llm: LLMCaller = call_pi_via_dispatch,
+) -> list[Finding]:
+    """Run L3 semantic lint (LLM-based) over docs-contract managed files.
+
+    Args:
+        project_root: Project root.
+        exempt_paths: Glob patterns to skip.
+        model: Override default model (else fall back to env / dispatch default).
+        timeout: Seconds per LLM call.
+        only_changed: If True and git diff is available, lint only changed .md files.
+        llm: Injectable LLM caller — defaults to omp dispatch run pi.
+
+    Returns Finding objects with rule ``L3.<category>`` (e.g. ``L3.how-leak``).
+    LLM-call failures are recorded as a single LOW finding per file rather
+    than aborting the run.
+    """
+    findings: list[Finding] = []
+    docs = _discover_docs(project_root, exempt_paths)
+
+    changed: set[Path] | None = None
+    if only_changed:
+        changed = changed_md_files(project_root)
+
+    for path, parsed in docs:
+        if not isinstance(parsed, ContractBlock):
+            continue
+        if changed is not None and path.resolve() not in changed:
+            continue
+
+        try:
+            _, body = read_frontmatter(path)
+        except FrontmatterError:
+            continue
+
+        prompt = build_prompt(path, parsed.doc_type.value, body)
+        try:
+            response = llm(prompt, model, timeout)
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully on any LLM error
+            findings.append(
+                Finding(
+                    severity="LOW",
+                    file=path,
+                    line=None,
+                    rule="L3.unavailable",
+                    message=f"LLM call failed: {type(exc).__name__}",
+                )
+            )
+            continue
+
+        for sf in parse_response(response, path):
+            severity = sf.severity if sf.severity in {"CRITICAL", "HIGH", "MEDIUM", "LOW"} else "MEDIUM"
+            findings.append(
+                Finding(
+                    severity=severity,
+                    file=sf.file,
+                    line=sf.line,
+                    rule=f"L3.{sf.category}",
+                    message=f"{sf.snippet} — {sf.suggestion}",
+                )
+            )
+
+    return findings
+
+
+def lint_with_semantic(
+    project_root: Path,
+    *,
+    exempt_paths: tuple[str, ...] = (),
+    must_not_contain_extra: dict[str, tuple[str, ...]] | None = None,
+    model: str | None = None,
+    timeout: int = 300,
+    only_changed: bool = False,
+    llm: LLMCaller = call_pi_via_dispatch,
+) -> list[Finding]:
+    """Run L1 + L2 + L3 lint and return combined findings."""
+    return [
+        *lint_all(
+            project_root,
+            exempt_paths=exempt_paths,
+            must_not_contain_extra=must_not_contain_extra,
+        ),
+        *lint_l3(
+            project_root,
+            exempt_paths=exempt_paths,
+            model=model,
+            timeout=timeout,
+            only_changed=only_changed,
+            llm=llm,
         ),
     ]
 
