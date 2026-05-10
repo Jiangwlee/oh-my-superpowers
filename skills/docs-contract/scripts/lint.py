@@ -3,7 +3,8 @@
 Layer 1 (structural): frontmatter compliance, source-of-truth uniqueness,
 defer-to link validity, doc-type/location matching, skeleton completeness.
 
-Layer 2 (pattern) lands in PR3; layer 3 (semantic) lands in PR4.
+Layer 2 (pattern): per-document regex / AST scans of must-not-contain labels;
+respects inline exemptions. Layer 3 (semantic) lands in PR4.
 """
 
 from __future__ import annotations
@@ -15,6 +16,12 @@ from pathlib import Path
 from typing import Iterable
 
 from scripts.frontmatter import FrontmatterError, read_frontmatter
+from scripts.patterns import (
+    DETECTORS,
+    Match,
+    is_exempt,
+    parse_exemptions,
+)
 from scripts.schema import (
     ContractBlock,
     ContractValidationError,
@@ -160,6 +167,85 @@ def lint_l1(
             )
 
     return findings
+
+
+def lint_l2(
+    project_root: Path,
+    *,
+    exempt_paths: tuple[str, ...] = (),
+    must_not_contain_extra: dict[str, tuple[str, ...]] | None = None,
+) -> list[Finding]:
+    """Run L2 pattern lint over docs-contract managed files.
+
+    Each document's ``must-not-contain`` labels (frontmatter + per-file
+    extras from config) are checked. Inline exemption markers
+    (``<!-- docs-contract: allow-<label> -->``) suppress findings within
+    their paragraph scope.
+
+    Unknown labels (not in ``patterns.DETECTORS``) are silently ignored;
+    they may originate from forward-compat config and lint refuses to fail
+    on them.
+    """
+    must_not_contain_extra = must_not_contain_extra or {}
+    findings: list[Finding] = []
+
+    for path, parsed in _discover_docs(project_root, exempt_paths):
+        if not isinstance(parsed, ContractBlock):
+            continue
+
+        labels = list(parsed.must_not_contain)
+        rel_name = path.relative_to(project_root).as_posix()
+        for extra in (
+            must_not_contain_extra.get(rel_name, ())
+            or must_not_contain_extra.get(path.name, ())
+        ):
+            if extra not in labels:
+                labels.append(extra)
+        if not labels:
+            continue
+
+        try:
+            _, body = read_frontmatter(path)
+        except FrontmatterError:
+            continue
+
+        exemptions = parse_exemptions(body)
+
+        for label in labels:
+            detector = DETECTORS.get(label)
+            if detector is None:
+                continue
+            for match in detector(body):
+                if is_exempt(label, match.line, exemptions):
+                    continue
+                findings.append(
+                    Finding(
+                        severity="MEDIUM",
+                        file=path,
+                        line=match.line,
+                        rule=f"L2.{label}",
+                        message=f"{match.snippet} — {match.hint}",
+                    )
+                )
+
+    return findings
+
+
+def lint_all(
+    project_root: Path,
+    *,
+    exempt_paths: tuple[str, ...] = (),
+    must_not_contain_extra: dict[str, tuple[str, ...]] | None = None,
+) -> list[Finding]:
+    """Run L1 + L2 lint and return combined findings."""
+    return [
+        *lint_l1(project_root, exempt_paths=exempt_paths),
+        *lint_l2(
+            project_root,
+            exempt_paths=exempt_paths,
+            must_not_contain_extra=must_not_contain_extra,
+        ),
+    ]
 
 
 def _discover_docs(

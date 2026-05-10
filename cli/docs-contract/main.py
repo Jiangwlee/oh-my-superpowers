@@ -21,7 +21,7 @@ ASSETS_DIR = SKILL_DIR / "assets"
 sys.path.insert(0, str(SKILL_DIR))
 
 from scripts.config import load as load_config  # noqa: E402
-from scripts.lint import lint_l1  # noqa: E402
+from scripts.lint import lint_all  # noqa: E402
 from scripts.scaffold import (  # noqa: E402
     ScaffoldPlan,
     apply as apply_scaffold,
@@ -135,7 +135,11 @@ def cmd_lint(
     for w in cfg.warnings:
         console.print(f"[yellow]config warning:[/yellow] {w}")
 
-    findings = lint_l1(root, exempt_paths=cfg.exempt_paths)
+    findings = lint_all(
+        root,
+        exempt_paths=cfg.exempt_paths,
+        must_not_contain_extra=cfg.must_not_contain_extra,
+    )
 
     if semantic:
         console.print("[yellow]--semantic ignored: L3 lands in PR4.[/yellow]")
