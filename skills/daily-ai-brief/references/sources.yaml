@@ -1,0 +1,77 @@
+# Daily AI Brief - Source Configuration
+#
+# Three source types: x (X/Twitter accounts), blog (official blogs), community (HN, etc.)
+# weight: 1-3 (higher = prioritize in case of tie)
+#
+# X accounts: scan recent posts from each person, no keyword filtering.
+# Search strategy: "from:<handle>" sorted by recency.
+
+x_accounts:
+  - handle: karpathy
+    weight: 3
+  - handle: demishassabis
+    weight: 3
+  - handle: bcherny
+    weight: 3
+  - handle: lijigang
+    weight: 3
+  - handle: simonw
+    weight: 3
+  - handle: fchollet
+    weight: 3
+  - handle: Khazix0918
+    weight: 2
+  - handle: swyx
+    weight: 2
+  - handle: hardmaru
+    weight: 2
+  - handle: jerryjliu0
+    weight: 2
+  - handle: shreyar
+    weight: 2
+  - handle: alexalbert__
+    weight: 2
+  - handle: eugeneyan
+    weight: 2
+  - handle: hwchase17
+    weight: 2
+  - handle: sqs
+    weight: 2
+  - handle: jeremyphoward
+    weight: 2
+  - handle: OfficialLoganK
+    weight: 2
+  - handle: steipete
+    weight: 3
+  - handle: addyosmani
+    weight: 3
+  - handle: thorstenball
+    weight: 3
+  - handle: rasbt
+    weight: 3
+  - handle: mattshumer_
+    weight: 3
+  - handle: sdand
+    weight: 1
+  - handle: deedydas
+    weight: 1
+
+blogs:
+  - name: OpenAI Blog
+    url: https://openai.com/news/
+    weight: 3
+  - name: Anthropic Blog
+    url: https://www.anthropic.com/news
+    weight: 3
+  - name: Simon Willison
+    url: https://simonwillison.net/
+    weight: 2
+  - name: Google DeepMind
+    url: https://deepmind.google/discover/blog/
+    weight: 1
+
+community:
+  - name: Hacker News
+    url: https://news.ycombinator.com/
+    weight: 2
+    filter: "AI LLM agent"

@@ -49,11 +49,21 @@ wait_for_x_article() {
   read -r -d '' expr <<'EOF' || true
 (async () => {
   const deadline = Date.now() + LIMIT_MS;
+  // Phase 1: wait for stale content to clear (SPA navigation resets DOM)
+  const hadOldEmpty = !!document.querySelector('[data-testid="empty_state_header_text"]');
+  if (hadOldEmpty) {
+    while (Date.now() < deadline) {
+      if (!document.querySelector('[data-testid="empty_state_header_text"]')) break;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+  // Phase 2: wait for new content (article or fresh empty state)
   while (Date.now() < deadline) {
     if (document.querySelector('article')) return 'READY';
+    if (document.querySelector('[data-testid="empty_state_header_text"]')) return 'EMPTY';
     await new Promise(resolve => setTimeout(resolve, 250));
   }
-  throw new Error('Timed out waiting for x.com article content');
+  return 'TIMEOUT';
 })()
 EOF
   expr="${expr/LIMIT_MS/${limit}}"
