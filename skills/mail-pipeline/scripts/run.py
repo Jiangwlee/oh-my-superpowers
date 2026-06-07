@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import argparse
 import base64
+import imaplib
 import json
+import os
 import sqlite3
+import ssl
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from common import data_dir, events_dir, load_processors, select_processors, state_dir
-from parser import parse_file
+from common import data_dir, events_dir, load_accounts, load_processors, select_accounts, select_processors, state_dir
+from parser import parse_bytes, parse_file
 
 
 def _classify(message: dict, processor_names: set[str]) -> dict:
@@ -40,6 +43,32 @@ def _classify(message: dict, processor_names: set[str]) -> dict:
         reason = "Matched category is not selected; routed to available processor."
         confidence = min(confidence, 0.5)
     return {"category": category, "confidence": confidence, "reason": reason}
+
+
+def _fetch_imap(account, limit: int) -> list[dict]:
+    """Fetch the most recent inbox messages for one account, read-only."""
+    password = os.environ.get(account.password_env) if account.password_env else None
+    if not password:
+        raise ValueError(f"missing password env: {account.password_env or '<unset>'} for account {account.id!r}")
+    context = ssl.create_default_context()
+    messages: list[dict] = []
+    with imaplib.IMAP4_SSL(account.host, account.port, ssl_context=context, timeout=30) as client:
+        client.login(account.username, password)
+        status, _ = client.select(account.inbox, readonly=True)
+        if status != "OK":
+            raise ValueError(f"select failed for inbox {account.inbox!r} on account {account.id!r}")
+        status, data = client.uid("search", None, "ALL")
+        if status != "OK":
+            raise ValueError(f"uid search failed on account {account.id!r}")
+        uids = data[0].split()
+        for uid in uids[-limit:]:
+            status, msg_data = client.uid("fetch", uid, "(BODY.PEEK[])")
+            if status != "OK" or not msg_data or msg_data[0] is None:
+                continue
+            raw = msg_data[0][1]
+            messages.append(parse_bytes(raw, account_id=account.id, mailbox=account.inbox, imap_uid=uid.decode()))
+        client.logout()
+    return messages
 
 
 def _init_state(db_path: Path) -> sqlite3.Connection:
@@ -156,19 +185,26 @@ def main() -> None:
         print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
         raise SystemExit(1)
 
-    if not args.fixture_dir:
-        print(json.dumps({"status": "error", "error": "IMAP fetch is not implemented yet; use --fixture-dir for local E2E."}, ensure_ascii=False, indent=2), file=sys.stderr)
-        raise SystemExit(1)
+    if args.fixture_dir:
+        fixture_dir = Path(args.fixture_dir).expanduser()
+        paths = sorted(fixture_dir.glob("*.eml"))[: args.limit]
+        messages = [parse_file(path, account_id=args.account if args.account != "all" else "fixture") for path in paths]
+    else:
+        try:
+            accounts = select_accounts(load_accounts(root), args.account)
+            messages = []
+            for account in accounts:
+                messages.extend(_fetch_imap(account, args.limit))
+        except Exception as exc:
+            print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+            raise SystemExit(1)
 
-    fixture_dir = Path(args.fixture_dir).expanduser()
-    messages = sorted(fixture_dir.glob("*.eml"))[: args.limit]
     processor_names = {processor.name for processor in processors}
     processors_by_name = {processor.name: processor for processor in processors}
     conn = _init_state(state_dir(root) / "processed.sqlite") if args.apply else None
     events = []
     skipped = 0
-    for path in messages:
-        message = parse_file(path, account_id=args.account if args.account != "all" else "fixture")
+    for message in messages:
         classification = _classify(message, processor_names)
         processor = processors_by_name[classification["category"]]
         processed_at = datetime.now(timezone.utc).isoformat()
