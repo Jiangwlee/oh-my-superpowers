@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- REPLACE: title with "邮件处理简报 · YYYY-MM-DD" -->
+<title>邮件处理简报 · YYYY-MM-DD</title>
+<style>
+/* ══ DO NOT MODIFY CSS ══ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@600;700&display=swap');
+:root {
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --ink: #1a1a1a;
+  --secondary: #555;
+  --tertiary: #888;
+  --border: #e8e8e4;
+  --accent: #0f61ff;
+  --accent-bg: #eef4ff;
+  --invoice: #0d7c4a;
+  --invoice-bg: #ecfdf3;
+  --ad: #c2410c;
+  --ad-bg: #fff7ed;
+  --notice: #0369a1;
+  --notice-bg: #f0f9ff;
+  --uncertain: #7c3aed;
+  --uncertain-bg: #f3f0ff;
+  --alert: #b91c1c;
+  --alert-bg: #fef2f2;
+  --radius: 10px;
+  --sans: 'Inter', -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif;
+  --serif: 'Noto Serif SC', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+.header { background: #111; color: #fff; padding: 28px 0 24px; }
+.header-inner { max-width: 1060px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: space-between; align-items: flex-end; }
+.header-title { font-family: var(--serif); font-size: 28px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+.header-sub { margin-top: 6px; font-size: 13px; color: rgba(255,255,255,.55); font-family: var(--mono); }
+.header-stats { display: flex; gap: 20px; }
+.stat { text-align: right; }
+.stat-num { font-size: 22px; font-weight: 700; line-height: 1; }
+.stat-label { font-size: 11px; color: rgba(255,255,255,.5); font-family: var(--mono); margin-top: 3px; }
+.shell { max-width: 1060px; margin: 0 auto; padding: 24px 24px 64px; }
+.section { margin-top: 32px; }
+.section:first-child { margin-top: 0; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.section-label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--tertiary); padding-left: 2px; }
+.section-total { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--invoice); }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.02em; white-space: nowrap; }
+.tag-invoice { color: var(--invoice); background: var(--invoice-bg); }
+.tag-ad { color: var(--ad); background: var(--ad-bg); }
+.tag-notice { color: var(--notice); background: var(--notice-bg); }
+.tag-uncertain { color: var(--uncertain); background: var(--uncertain-bg); }
+.tag-alert { color: var(--alert); background: var(--alert-bg); }
+.action-list { display: flex; flex-direction: column; gap: 12px; }
+.action-item { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--alert); border-radius: var(--radius); padding: 18px 22px; }
+.action-item.mild { border-left-color: var(--notice); }
+.action-title { font-family: var(--serif); font-size: 17px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.action-body { font-size: 14px; color: var(--secondary); line-height: 1.65; }
+.action-todo { margin-top: 10px; font-size: 13px; color: var(--ink); border-left: 3px solid var(--alert); padding-left: 12px; }
+.action-item.mild .action-todo { border-left-color: var(--notice); }
+.invoice-table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: 13px; }
+.invoice-table th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--tertiary); font-weight: 500; text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); background: #fcfcfa; }
+.invoice-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.invoice-table tr:last-child td { border-bottom: none; }
+.invoice-table tr:hover td { background: #fafaf6; }
+.inv-num { font-family: var(--mono); font-size: 12px; color: var(--secondary); }
+.inv-amount { font-family: var(--mono); font-weight: 600; text-align: right; white-space: nowrap; }
+.inv-file { font-family: var(--mono); font-size: 11px; color: var(--tertiary); word-break: break-all; margin-top: 2px; }
+.done-list { display: flex; flex-direction: column; gap: 10px; }
+.done-item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.done-title { font-size: 14px; font-weight: 600; }
+.done-note { font-size: 13px; color: var(--tertiary); }
+.done-action { font-family: var(--mono); font-size: 11px; color: var(--secondary); white-space: nowrap; }
+.footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--tertiary); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.footer .mono { font-family: var(--mono); font-size: 11px; }
+@media (max-width: 768px) {
+  .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .header-stats { align-self: flex-start; }
+  .invoice-table { font-size: 12px; }
+  .done-item { grid-template-columns: auto 1fr; }
+  .done-action { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TEMPLATE INSTRUCTIONS
+
+     Replace ALL sample content below with this run's real data.
+     Keep the HTML structure and class names intact. CSS is fixed.
+
+     Sections (action-first order, fixed):
+       1. needs-action  — action-required items; class "mild" for
+                          reminder-level items. Omit section if empty.
+       2. invoices      — one row per UNIQUE invoice_number (dedupe!),
+                          section-total shows the sum of `amount`.
+                          Omit section if no invoices this day.
+       3. done          — everything else handled: one row per message,
+                          tag = scenario, note = agent's reason.
+
+     Tag classes: tag-invoice | tag-ad | tag-notice | tag-uncertain | tag-alert
+
+     Same-day rule: one page per day. If today's page exists, merge its
+     rows with this run before rendering (do not drop earlier rows).
+     ══════════════════════════════════════════════════════════════ -->
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-title">邮件处理简报</div>
+      <!-- REPLACE: date · account · run count -->
+      <div class="header-sub">YYYY-MM-DD &middot; qq &middot; 第 N 次运行</div>
+    </div>
+    <div class="header-stats">
+      <!-- REPLACE: four stats -->
+      <div class="stat"><div class="stat-num">12</div><div class="stat-label">处理邮件</div></div>
+      <div class="stat"><div class="stat-num">3</div><div class="stat-label">发票归档</div></div>
+      <div class="stat"><div class="stat-num">¥888.00</div><div class="stat-label">价税合计</div></div>
+      <div class="stat"><div class="stat-num">2</div><div class="stat-label">清理</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- ── Section 1: needs action (omit when empty) ── -->
+  <div class="section" id="needs-action">
+    <div class="section-head"><div class="section-label">Needs Your Action · 需要你处理</div></div>
+    <div class="action-list">
+      <!-- REPLACE: one .action-item per item; "mild" class for reminders -->
+      <div class="action-item">
+        <div class="action-title"><span class="tag tag-alert">安全</span>示例：账号异常登录提醒</div>
+        <div class="action-body">示例正文：说明邮件内容与判断依据。</div>
+        <div class="action-todo">建议动作：示例动作说明。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: invoices (omit when empty) ── -->
+  <div class="section" id="invoices">
+    <div class="section-head">
+      <div class="section-label">Invoices · 发票归档</div>
+      <div class="section-total">价税合计 ¥888.00</div>
+    </div>
+    <table class="invoice-table">
+      <thead><tr><th>开票日期</th><th>发票号码</th><th>卖方</th><th>内容</th><th>税率</th><th style="text-align:right">金额</th></tr></thead>
+      <tbody>
+        <!-- REPLACE: one row per unique invoice; file path in .inv-file under seller -->
+        <tr>
+          <td>2026-01-01</td>
+          <td class="inv-num">00000000000000000000</td>
+          <td>示例卖方公司<div class="inv-file">/path/to/archived.pdf</div></td>
+          <td>示例内容</td>
+          <td>6%</td>
+          <td class="inv-amount">¥888.00</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Section 3: everything else handled ── -->
+  <div class="section" id="done">
+    <div class="section-head"><div class="section-label">Handled · 其他已处理</div></div>
+    <div class="done-list">
+      <!-- REPLACE: one row per message -->
+      <div class="done-item">
+        <span class="tag tag-ad">广告</span>
+        <div><div class="done-title">示例：营销邮件主题</div><div class="done-note">示例：判断理由</div></div>
+        <div class="done-action">→ 垃圾箱</div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <!-- REPLACE: run meta -->
+    <div>mail-pipeline · 账号 qq · 运行于 YYYY-MM-DD HH:MM</div>
+    <div class="mono">events: ~/.local/share/oh-my-superpowers/mail-pipeline/events/</div>
+  </footer>
+
+</div>
+</body>
+</html>

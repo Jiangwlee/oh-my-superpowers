@@ -22,6 +22,7 @@ judges every message by content.
 | Mailbox credentials are requested in config or chat | Stop. Passwords come from environment variables only. |
 | User asks for MCP integration | Explain that v1 is an IMAP pipeline; MCP is out of scope. |
 | A script would judge message content (classify, pick what to flag or move) | Stop. Scripts never call an LLM; classification and every mailbox action are agent decisions. |
+| html-serve container not running when rendering the report | Tell user: `cd ~/Dockers/html-serve && docker compose up -d`; deliver the chat summary regardless. |
 
 ## Main Loop
 
@@ -38,8 +39,17 @@ judges every message by content.
    `omp mail-pipeline show --account qq --uid 1581` for the full body. Load
    the matched SOP file and execute from its Step 1. After the SOP finishes,
    continue with the next message.
-4. Report results: one row per message (uid → scenario → actions →
-   artifacts), with uncertain items in a "needs your decision" section.
+4. Render the report page from `assets/report-template.html` (replace the
+   sample markers with this run's data; follow the template's section and
+   merge rules) and write it to
+   `~/Dockers/html-serve/data/mail-brief/<YYYY-MM-DD>-mail-brief.html` —
+   one page per day, merged across same-day runs. Give the user both URLs:
+   - `http://ubuntu-gem12.tail82a434.ts.net:8888/mail-brief/<date>-mail-brief.html`
+   - `http://192.168.5.140:8888/mail-brief/<date>-mail-brief.html`
+
+   Summarize the same content briefly in chat: action items first, then
+   counts. Do not generate a Markdown archive — `events/*.jsonl` is the
+   factual record.
 
 Done when: every listed message has a scenario, a completed SOP, and is
 marked read (or moved); `omp mail-pipeline status` shows zero pending
@@ -83,6 +93,7 @@ Override with `MAIL_PIPELINE_DATA_DIR`.
 | Need | File |
 |---|---|
 | Scenario SOPs (routed from Scenario Routing) | `references/sops/` |
+| Report page template (Main Loop step 4) | `assets/report-template.html` |
 | Interface flow and safety defaults | `references/pipeline.md` |
 | Account and processor config | `references/config.md` |
 | JSONL schemas | `references/schemas.md` |
