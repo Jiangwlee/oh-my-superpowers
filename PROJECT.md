@@ -63,6 +63,7 @@ skills/                       # Skill 单元（每个独立）
 ├── web-operator/             # Chrome CDP 浏览器自动化 / 搜索 / 抽取
 ├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
 ├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki + SOP
+├── mail-pipeline/            # 多邮箱 IMAP 到 JSONL / 附件 / 状态的结构化处理管道
 ├── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
 ├── docs-contract/            # 为 MVP 项目补建文档骨架与维护契约（scaffold + 三层 lint + inventory）
 └── <skill-name>/
