@@ -61,4 +61,5 @@ Optional processor fields:
   links from krystore@service.alibaba.com, redirect straight to the PDF).
   URLs from emails are never fetched unless
   their host matches a registered provider; provider requests bypass
-  environment proxies. Link fetch only runs under `--apply`.
+  environment proxies. Link fetch runs inside `stage` for the single
+  agent-judged message.

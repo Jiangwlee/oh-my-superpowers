@@ -21,18 +21,13 @@ config/
 events/
   all.jsonl
   invoices.jsonl
-  spam_ads.jsonl
-  important.jsonl
-  needs_review.jsonl
-  errors.jsonl
 files/
   <account-id>/
     invoices/
-    receipts/
-    attachments/
-    needs_review/
 state/
   processed.sqlite
+  pending/
+    <pending-id>.json
 logs/
   runs.jsonl
 ```

@@ -10,52 +10,47 @@ description: >-
 
 # mail-pipeline
 
-Process multiple IMAP mailboxes through a conservative local pipeline. AI may
-classify and extract fields, but scripts perform mailbox access, file writes,
-dedupe, and audit output.
+Triage IMAP mailboxes in an agent-driven loop. Scripts provide deterministic
+interfaces (fetch, stage, finalize, mailbox actions); the calling agent
+judges every message by content.
 
 ## Hard Gates
 
 | Condition | Action |
 |---|---|
-| User wants to send, reply, forward, or delete mail | Stop. This skill is read/organize only. Organize means flags (`\Seen`) and folder moves (e.g. trash), never permanent deletion. |
-| Mailbox credentials are requested in config or chat | Stop. Use password environment variables. |
+| User wants to send, reply, forward, or delete mail | Stop. Read/organize only: `\Seen` flags and folder moves, never permanent deletion. |
+| Mailbox credentials are requested in config or chat | Stop. Passwords come from environment variables only. |
 | User asks for MCP integration | Explain that v1 is an IMAP pipeline; MCP is out of scope. |
-| Action would modify mailbox state without `--apply` | Stop. Default is dry-run/read-only. |
+| A script would judge message content (classify, pick what to flag or move) | Stop. Scripts never call an LLM; classification and every mailbox action are agent decisions. |
 
-## Workflow
+## Main Loop
 
-1. Initialize storage and templates with `omp mail-pipeline init`.
-2. Configure accounts in `config/accounts.yaml`; secrets stay in environment variables.
-3. Validate account connectivity with `omp mail-pipeline accounts check`.
-4. Run a dry-run ingest with `omp mail-pipeline run --account <id> --limit <n>`;
-   add `--since YYYY-MM-DD` to bound the date range.
-5. Review JSONL decisions and only then rerun with `--apply`.
-6. For each entry in the `pending` list of the `run --apply` output: Read the
-   staged PDF yourself, extract the invoice fields, then call
-   `omp mail-pipeline submit --id <pending_id> --fields '<json>'` with
-   `invoice_date` (YYYY-MM-DD), `invoice_number`, `amount` (价税合计),
-   `tax_rate` (keep face markers like `*` verbatim), `purchase_content`,
-   `seller`, and optional `confidence`.
-7. When a message staged multiple PDFs, add `--invoice-file <filename>` so the
-   invoice itself gets the clean rendered name.
-8. If `submit` rejects a duplicate invoice number, verify it is the same
-   invoice, then drop the pending item with
-   `omp mail-pipeline submit --id <id> --discard --reason '<why>'`.
-9. If a PDF is unreadable or fields are uncertain, skip the submit and tell
-   the user; the manifest stays pending and is listed by `status`.
-10. Review the `messages` summary from `run` output (and message bodies when
-    needed): judge each message by content, then mark fully-handled messages
-    read with `omp mail-pipeline mailbox mark-read --account <id> --uid <uid>
-    --reason '<why>'` and move ads/spam with `omp mail-pipeline mailbox move
-    --account <id> --uid <uid> --to trash --reason '<why>'`. The keyword
-    `category` in the summary is a routing hint, never a decision.
-11. Use `omp mail-pipeline status` to inspect runs, counts, errors, and
-    pending extractions.
+1. Ensure storage exists: `omp mail-pipeline init --apply` (plain `init` only
+   previews). Configure accounts per `references/config.md`; validate with
+   `omp mail-pipeline accounts check`.
+2. Fetch the work queue: `omp mail-pipeline list --account qq --since 2026-05-01`.
+   Unread messages are the queue; read means handled. Add `--include-seen`
+   only to revisit handled mail.
+3. For each message: classify it by content against the Scenario Routing
+   table. When subject and snippet are not enough, run
+   `omp mail-pipeline show --account qq --uid 1581` for the full body. Load
+   the matched SOP file and execute from its Step 1. After the SOP finishes,
+   continue with the next message.
+4. Report results: one row per message (uid → scenario → actions →
+   artifacts), with uncertain items in a "needs your decision" section.
 
-Cognition is the agent's job: scripts stage PDFs, validate submitted fields,
-and execute explicitly requested mailbox actions, but never call an LLM and
-never decide which messages to flag or move.
+Done when: every listed message has a scenario and a completed SOP (or is
+reported as uncertain), `omp mail-pipeline status` shows zero pending
+extractions, and the report is delivered.
+
+## Scenario Routing
+
+| Scenario | Judge by | SOP |
+|---|---|---|
+| invoice | Formal invoice delivery: pdf/zip invoice attachment, or a link from an invoice provider (nuonuo, xforceplus, keruyun) | `references/sops/invoice.md` |
+| ad | Marketing, promotion, newsletter, or subscription noise with no personal or business value | `references/sops/ad.md` |
+| notification | Service-generated notices (security alerts, billing reminders, account notices) that inform but deliver no formal invoice | `references/sops/notification.md` |
+| anything else / uncertain | Fits no scenario above, or judgment is uncertain | `references/sops/default.md` |
 
 ## CLI
 
@@ -65,14 +60,14 @@ omp mail-pipeline <subcommand> [args]
 
 | Command | Purpose |
 |---|---|
-| `init` | Create the data directory, config templates, event files, and state directory. |
-| `accounts list` | Show configured account IDs without printing secrets. |
-| `accounts check` | Validate IMAP connectivity for configured accounts. |
-| `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. Outputs a `messages` summary (uid/from/subject/suggested category) for agent decisions. Never touches mailbox state. |
-| `mailbox mark-read` | Mark messages `\Seen` after the agent decides they are fully handled. `--reason` is recorded in the audit event. |
-| `mailbox move` | Move messages to a configured logical folder (default `trash`) after the agent judges them by content. `--reason` is recorded in the audit event. |
-| `submit` | Submit agent-extracted fields for a pending message: validate, reject duplicate invoice numbers, cross-check provider metadata, rename, finalize. `--invoice-file` picks the invoice among multiple staged files; `--discard --reason` drops a pending item with an audit event. |
-| `status` | Report recent runs, output files, and state summary. |
+| `init` | Create the data directory and config templates. Defaults to dry-run preview; `--apply` writes. |
+| `accounts list` / `accounts check` | Show configured account IDs / validate IMAP connectivity. |
+| `list` | List unread inbox messages with summaries (uid, from, subject, snippet, attachments, dedupe status). Read-only. `--since` bounds the range; `--include-seen` widens. |
+| `show` | Show one message in full: body text and attachment list. Read-only. |
+| `stage` | Stage one agent-judged invoice message: collect PDFs (pdf/zip attachments with zip expansion, or allowlisted provider links), save them, write a pending manifest. |
+| `submit` | Finalize a pending extraction: validate fields, reject duplicate invoice numbers, cross-check provider metadata, rename, write the final event. `--discard --reason` drops a pending item. |
+| `mailbox mark-read` / `mailbox move` | Execute an agent decision: flag `\Seen` / move to a configured folder. `--reason` is recorded in the audit event. |
+| `status` | Report data-dir readiness, event counts, and pending extractions. |
 
 ## Storage
 
@@ -80,14 +75,12 @@ Default root: `~/.local/share/oh-my-superpowers/mail-pipeline/`
 
 Override with `MAIL_PIPELINE_DATA_DIR`.
 
-See `references/storage.md` for the directory contract and `references/config.md`
-for account and processor config.
-
 ## References
 
 | Need | File |
 |---|---|
-| Storage layout and event files | `references/storage.md` |
+| Scenario SOPs (routed from Scenario Routing) | `references/sops/` |
+| Interface flow and safety defaults | `references/pipeline.md` |
 | Account and processor config | `references/config.md` |
-| Processing stages and safety defaults | `references/pipeline.md` |
 | JSONL schemas | `references/schemas.md` |
+| Storage layout and event files | `references/storage.md` |

@@ -1,6 +1,6 @@
 # Schemas
 
-Every event written to JSONL should include:
+Every event written to JSONL MUST include:
 
 ```json
 {
@@ -24,13 +24,14 @@ Every event written to JSONL should include:
   "extracted": {},
   "attachments": [],
   "actions": [],
-  "status": "dry_run"
+  "status": "pending_extraction"
 }
 ```
 
-Use `message_id + attachment sha256` for attachment-level dedupe when possible.
+The dedupe key MUST combine `account_id`, `message_id`, and the attachment
+sha256 list; messages without attachments key on `message_id` alone.
 
-Status values: `dry_run`, `pending_extraction` (staged, waiting for agent
+Status values: `pending_extraction` (staged via `stage`, waiting for agent
 fields via `submit`), `processed`, `discarded` (pending item dropped via
 `submit --discard`, staged files removed, reason recorded).
 
@@ -43,9 +44,9 @@ a zip or fetched from an allowlisted provider link.
 
 ## extracted.invoice
 
-Processors with `extract: invoice` stage PDFs for the calling agent; the
-agent reads each staged PDF, extracts fields, and submits them via
-`omp mail-pipeline submit` (no regex parsing, no LLM call inside scripts):
+`stage` saves PDFs for the calling agent; the agent reads each staged PDF,
+extracts fields, and submits them via `omp mail-pipeline submit` (no regex
+parsing, no LLM call inside scripts):
 
 ```json
 {
@@ -61,8 +62,9 @@ agent reads each staged PDF, extracts fields, and submits them via
 
 - `amount` is the tax-inclusive total (价税合计).
 - `tax_rate` keeps face-value markers such as `*` verbatim.
-- All fields except `confidence` are required; staging failure (no pdf/zip
-  attachment and no allowlisted link) routes the message to `needs_review`.
+- All fields except `confidence` are required; `stage` fails fast when a
+  message has no pdf/zip attachment and no allowlisted link — the agent
+  reroutes it per the invoice SOP.
 - `submit` cross-checks `invoice_number` and `amount` against provider
   metadata when the PDF came from a link provider; mismatches reject the
   submit and keep the manifest pending. Provider dates are not compared
