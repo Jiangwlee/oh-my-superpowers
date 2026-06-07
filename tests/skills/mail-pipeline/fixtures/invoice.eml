@@ -1,0 +1,21 @@
+From: Billing Team <billing@example.com>
+To: Me <me@example.com>
+Subject: Invoice INV-001
+Date: Sat, 06 Jun 2026 18:20:00 +0800
+Message-ID: <invoice-001@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/plain; charset="utf-8"
+
+Please find attached invoice INV-001.
+
+--BOUNDARY
+Content-Type: application/pdf; name="invoice.pdf"
+Content-Disposition: attachment; filename="invoice.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJUZha2UgaW52b2ljZSBwZGYK
+
+--BOUNDARY--

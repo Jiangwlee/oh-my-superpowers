@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 import json
 from pathlib import Path
@@ -118,3 +119,166 @@ def default_processors_yaml() -> str:
       - write_jsonl
       - add_label
 """
+
+
+@dataclass(slots=True)
+class Account:
+    """Configured IMAP account without secret material."""
+
+    id: str
+    provider: str
+    host: str
+    port: int
+    username: str
+    password_env: str
+    inbox: str
+    processed: str | None
+    needs_review: str | None
+
+
+def accounts_config_path(root: Path) -> Path:
+    """Return the account config path."""
+
+    return config_dir(root) / "accounts.yaml"
+
+
+def processors_config_path(root: Path) -> Path:
+    """Return the processor config path."""
+
+    return config_dir(root) / "processors.yaml"
+
+
+def load_accounts(root: Path) -> list[Account]:
+    """Load account config without reading password values."""
+
+    path = accounts_config_path(root)
+    if not path.exists():
+        raise FileNotFoundError(f"accounts config not found: {path}. Run `omp mail-pipeline init --apply` first.")
+    raw = load_yaml(path)
+    accounts = raw.get("accounts") or []
+    if not isinstance(accounts, list):
+        raise ValueError("accounts.yaml must contain an `accounts` list")
+
+    loaded: list[Account] = []
+    seen: set[str] = set()
+    for item in accounts:
+        if not isinstance(item, dict):
+            raise ValueError("each account entry must be a mapping")
+        account_id = str(item.get("id", "")).strip()
+        if not account_id:
+            raise ValueError("account entry missing `id`")
+        if account_id in seen:
+            raise ValueError(f"duplicate account id: {account_id}")
+        seen.add(account_id)
+        folders = item.get("folders") or {}
+        loaded.append(
+            Account(
+                id=account_id,
+                provider=str(item.get("provider", "imap")),
+                host=str(item.get("host", "")).strip(),
+                port=int(item.get("port", 993)),
+                username=str(item.get("username", "")).strip(),
+                password_env=str(item.get("password_env", "")).strip(),
+                inbox=str(folders.get("inbox", "INBOX")),
+                processed=folders.get("processed"),
+                needs_review=folders.get("needs_review"),
+            )
+        )
+    return loaded
+
+
+def select_accounts(accounts: list[Account], selected: str) -> list[Account]:
+    """Select accounts by id or return all."""
+
+    if selected == "all":
+        return accounts
+    matched = [account for account in accounts if account.id == selected]
+    if not matched:
+        valid = ", ".join(account.id for account in accounts) or "<none>"
+        raise ValueError(f"unknown account {selected!r}; valid accounts: {valid}")
+    return matched
+
+
+def account_public_dict(account: Account) -> dict[str, Any]:
+    """Return account metadata safe for command output."""
+
+    return {
+        "id": account.id,
+        "provider": account.provider,
+        "host": account.host,
+        "port": account.port,
+        "username": account.username,
+        "password_env": account.password_env,
+        "folders": {
+            "inbox": account.inbox,
+            "processed": account.processed,
+            "needs_review": account.needs_review,
+        },
+    }
+
+
+def load_yaml(path: Path) -> dict[str, Any]:
+    """Load YAML with PyYAML when available, otherwise use a small config parser."""
+
+    text = path.read_text(encoding="utf-8")
+    try:
+        import yaml
+
+        return yaml.safe_load(text) or {}
+    except ModuleNotFoundError:
+        return _load_simple_accounts_yaml(text)
+
+
+def _load_simple_accounts_yaml(text: str) -> dict[str, Any]:
+    """Parse the limited accounts.yaml shape used by this skill."""
+
+    accounts: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    folders: dict[str, str] | None = None
+    in_accounts = False
+    in_folders = False
+    for raw_line in text.splitlines():
+        line_without_comment = raw_line.split("#", 1)[0].rstrip()
+        if not line_without_comment.strip():
+            continue
+        stripped = line_without_comment.strip()
+        indent = len(line_without_comment) - len(line_without_comment.lstrip(" "))
+        if stripped == "accounts:":
+            in_accounts = True
+            continue
+        if not in_accounts:
+            continue
+        if indent == 2 and stripped.startswith("- "):
+            current = {}
+            accounts.append(current)
+            folders = None
+            in_folders = False
+            key_value = stripped[2:]
+            if key_value:
+                key, value = _parse_key_value(key_value)
+                current[key] = value
+            continue
+        if current is None:
+            continue
+        if indent == 4 and stripped == "folders:":
+            folders = {}
+            current["folders"] = folders
+            in_folders = True
+            continue
+        if ":" not in stripped:
+            continue
+        key, value = _parse_key_value(stripped)
+        if in_folders and indent >= 6 and folders is not None:
+            folders[key] = str(value)
+        elif indent == 4:
+            current[key] = value
+            in_folders = False
+    return {"accounts": accounts}
+
+
+def _parse_key_value(value: str) -> tuple[str, Any]:
+    key, _, raw = value.partition(":")
+    parsed = raw.strip().strip("\"'")
+    if parsed.isdigit():
+        return key.strip(), int(parsed)
+    return key.strip(), parsed

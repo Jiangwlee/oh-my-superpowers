@@ -33,7 +33,7 @@ app.add_typer(accounts_app, name="accounts")
 
 def _run(script: str, args: list[str]) -> None:
     path = SCRIPTS / script
-    sys.exit(subprocess.call([sys.executable, str(path), *args]))
+    sys.exit(subprocess.call(["uv", "run", str(path), *args]))
 
 
 @app.command()
