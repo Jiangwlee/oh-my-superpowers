@@ -4,52 +4,34 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import imaplib
+import io
 import json
 import os
 import sqlite3
 import ssl
 import sys
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from common import data_dir, events_dir, load_accounts, load_processors, select_accounts, select_processors, state_dir
-from extract import extract_invoice
+from common import (
+    append_jsonl,
+    data_dir,
+    events_dir,
+    load_accounts,
+    load_processors,
+    pending_dir,
+    safe_name,
+    safe_relative_path,
+    select_accounts,
+    select_processors,
+    state_dir,
+    within_root,
+)
+from linkfetch import extract_urls, fetch_link_attachments, match_provider
 from parser import parse_bytes, parse_file
-
-
-def _render_rename_base(template: str, fields: dict) -> str:
-    """Render a rename template from extracted fields, sanitized per component."""
-    rendered = template.format(**{key: _safe_name(str(value)) for key, value in fields.items()})
-    return _safe_name(rendered)
-
-
-def _run_extraction(processor, processors_by_name: dict, message: dict, classification: dict, model: str | None):
-    """Run the processor's AI extraction stage.
-
-    Returns (processor, classification, extracted, rename_base); routes the
-    message to needs_review when extraction fails.
-    """
-    if processor.extract != "invoice":
-        return processor, classification, {}, None
-    pdf = next(
-        (item for item in message.get("attachments", []) if str(item.get("filename", "")).lower().endswith(".pdf")),
-        None,
-    )
-    try:
-        if pdf is None:
-            raise ValueError("invoice extraction requires a PDF attachment")
-        invoice = extract_invoice(pdf["content_b64"], model)
-        rename_base = _render_rename_base(processor.rename_template, invoice) if processor.rename_template else None
-        return processor, classification, {"invoice": invoice}, rename_base
-    except (ValueError, KeyError) as exc:
-        fallback = processors_by_name.get("needs_review", processor)
-        failed = {
-            "category": fallback.name,
-            "confidence": 0.3,
-            "reason": f"invoice extraction failed: {exc}",
-        }
-        return fallback, failed, {}, None
 
 
 def _classify(message: dict, processor_names: set[str]) -> dict:
@@ -140,58 +122,26 @@ def _mark_processed(conn: sqlite3.Connection, key: str, processed_at: str) -> No
     conn.commit()
 
 
-def _safe_name(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in value.strip())
-    return cleaned.strip("._") or "message"
-
-
-def _within_root(root: Path, path: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _safe_relative_path(root: Path, value: str) -> Path:
-    raw = Path(value)
-    if raw.is_absolute():
-        raise ValueError(f"path must be relative to data dir: {value}")
-    target = root / raw
-    if not _within_root(root, target):
-        raise ValueError(f"path escapes data dir: {value}")
-    return target
-
-
 def _attachment_dir(root: Path, processor, message: dict, category: str) -> Path:
     template = processor.file_dir or "files/{account_id}/{category}"
     rendered = template.format(
-        account_id=_safe_name(str(message["account_id"])),
-        category=_safe_name(category),
+        account_id=safe_name(str(message["account_id"])),
+        category=safe_name(category),
     )
-    return _safe_relative_path(root, rendered)
+    return safe_relative_path(root, rendered)
 
 
-def _save_attachments(root: Path, processor, message: dict, category: str, apply: bool, rename_base: str | None = None) -> list[dict]:
+def _save_attachments(root: Path, processor, message: dict, category: str, apply: bool, attachments: list[dict] | None = None) -> list[dict]:
     if "save_attachment" not in processor.allowed_actions:
         return []
     saved = []
-    used_names: set[str] = set()
     target_dir = _attachment_dir(root, processor, message, category)
-    for item in message.get("attachments", []):
+    for item in attachments if attachments is not None else message.get("attachments", []):
         sha8 = item["sha256"][:8]
-        filename = _safe_name(item["filename"])
-        if rename_base:
-            suffix = Path(filename).suffix
-            name = f"{rename_base}{suffix}"
-            if name in used_names:
-                name = f"{rename_base}_{sha8}{suffix}"
-        else:
-            subject = _safe_name(str(message["source"].get("subject") or "message"))[:80]
-            name = f"{subject}_{sha8}_{filename}"
-        used_names.add(name)
-        target = target_dir / name
-        if not _within_root(root, target):
+        filename = safe_name(item["filename"])
+        subject = safe_name(str(message["source"].get("subject") or "message"))[:80]
+        target = target_dir / f"{subject}_{sha8}_{filename}"
+        if not within_root(root, target):
             raise ValueError(f"attachment path escapes data dir: {target}")
         record = {
             "original_filename": item["filename"],
@@ -200,6 +150,9 @@ def _save_attachments(root: Path, processor, message: dict, category: str, apply
             "mime_type": item["mime_type"],
             "size_bytes": item["size_bytes"],
         }
+        for key in ("origin", "source_url", "source_zip"):
+            if item.get(key):
+                record[key] = item[key]
         if apply:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(base64.b64decode(item["content_b64"]))
@@ -207,10 +160,67 @@ def _save_attachments(root: Path, processor, message: dict, category: str, apply
     return saved
 
 
-def _write_jsonl(path: Path, event: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+def _zip_pdfs(item: dict) -> list[dict]:
+    """Expand PDF members from a zip attachment into attachment records."""
+    payload = base64.b64decode(item["content_b64"])
+    records: list[dict] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            for info in archive.infolist():
+                if info.is_dir() or not info.filename.lower().endswith(".pdf"):
+                    continue
+                data = archive.read(info)
+                records.append(
+                    {
+                        "filename": Path(info.filename).name,
+                        "mime_type": "application/pdf",
+                        "size_bytes": len(data),
+                        "sha256": hashlib.sha256(data).hexdigest(),
+                        "content_b64": base64.b64encode(data).decode("ascii"),
+                        "origin": "zip",
+                        "source_zip": item["filename"],
+                    }
+                )
+    except zipfile.BadZipFile:
+        return []
+    return records
+
+
+def _invoice_attachments(message: dict, processor, apply: bool) -> tuple[list[dict], dict, str | None, str | None]:
+    """Collect invoice PDFs from pdf/zip attachments, falling back to link fetch.
+
+    Returns (pdfs, provider_meta, planned_provider, error). Link fetch only
+    touches the network under --apply; dry-run reports the matched provider.
+    """
+    pdfs: list[dict] = []
+    for item in message.get("attachments", []):
+        name = str(item.get("filename", "")).lower()
+        if name.endswith(".pdf"):
+            pdfs.append(item)
+        elif name.endswith(".zip"):
+            pdfs.extend(_zip_pdfs(item))
+    if pdfs:
+        return pdfs, {}, None, None
+    if processor.link_providers:
+        matched = next(
+            (provider for url in extract_urls(message) if (provider := match_provider(url, processor.link_providers))),
+            None,
+        )
+        if matched and not apply:
+            return [], {}, matched, None
+        if matched:
+            try:
+                fetched, provider_meta = fetch_link_attachments(message, processor.link_providers)
+            except (ValueError, OSError) as exc:
+                return [], {}, None, f"link fetch failed: {exc}"
+            if fetched:
+                return fetched, provider_meta, None, None
+            return [], {}, None, f"link fetch from {matched} returned no PDF"
+    return [], {}, None, "no pdf/zip attachment and no allowlisted invoice link"
+
+
+def _pending_id(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
 
 
 def main() -> None:
@@ -220,9 +230,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=50, help="Maximum messages per account.")
     parser.add_argument("--fixture-dir", help="Read local .eml files instead of IMAP.")
     parser.add_argument("--apply", action="store_true", help="Write files/state and modify allowed mailbox state.")
-    parser.add_argument("--model", help="LLM model for extraction (default: OMP_DEFAULT_MODEL_PI, then pi default).")
     args = parser.parse_args()
-    model = args.model or os.environ.get("OMP_DEFAULT_MODEL_PI")
 
     root = data_dir()
     try:
@@ -249,6 +257,7 @@ def main() -> None:
     processors_by_name = {processor.name: processor for processor in processors}
     conn = _init_state(state_dir(root) / "processed.sqlite") if args.apply else None
     events = []
+    pending = []
     skipped = 0
     for message in messages:
         classification = _classify(message, processor_names)
@@ -258,35 +267,83 @@ def main() -> None:
         if conn is not None and _already_processed(conn, key):
             skipped += 1
             continue
-        processor, classification, extracted, rename_base = _run_extraction(
-            processor, processors_by_name, message, classification, model
-        )
+
+        stage_attachments: list[dict] | None = None
+        provider_meta: dict = {}
+        planned_provider: str | None = None
+        if processor.extract == "invoice":
+            pdfs, provider_meta, planned_provider, error = _invoice_attachments(message, processor, args.apply)
+            if error:
+                processor = processors_by_name.get("needs_review", processor)
+                classification = {"category": processor.name, "confidence": 0.3, "reason": f"invoice staging failed: {error}"}
+            else:
+                stage_attachments = pdfs
+
         try:
-            processor_jsonl = _safe_relative_path(root, processor.output_jsonl)
-            saved_attachments = _save_attachments(root, processor, message, classification["category"], args.apply, rename_base)
+            processor_jsonl = safe_relative_path(root, processor.output_jsonl)
+            saved_attachments = _save_attachments(root, processor, message, classification["category"], args.apply, stage_attachments)
         except ValueError as exc:
             if conn is not None:
                 conn.close()
             print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
             raise SystemExit(1)
+
+        actions = [
+            {"type": "write_jsonl", "target": "events/all.jsonl"},
+            {"type": "write_jsonl", "target": processor.output_jsonl},
+        ]
+        if saved_attachments:
+            actions.append({"type": "save_attachment", "count": len(saved_attachments)})
+        if planned_provider:
+            actions.append({"type": "fetch_links", "provider": planned_provider})
+
+        status = "dry_run"
+        pending_id = None
+        if processor.extract == "invoice" and stage_attachments is not None:
+            pending_id = _pending_id(key)
+            actions.append({"type": "stage_for_extraction", "pending_id": pending_id})
+            if args.apply:
+                status = "pending_extraction"
+                manifest = {
+                    "pending_id": pending_id,
+                    "created_at": processed_at,
+                    "account_id": message["account_id"],
+                    "source": message["source"],
+                    "category": classification["category"],
+                    "processor": processor.name,
+                    "output_jsonl": processor.output_jsonl,
+                    "rename_template": processor.rename_template,
+                    "provider_meta": provider_meta,
+                    "attachments": saved_attachments,
+                }
+                manifest_path = pending_dir(root) / f"{pending_id}.json"
+                manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            pending.append(
+                {
+                    "pending_id": pending_id,
+                    "subject": message["source"].get("subject"),
+                    "files": [record["saved_path"] for record in saved_attachments],
+                }
+            )
+        elif args.apply:
+            status = "processed"
+
         event = {
             "schema_version": "1.0",
             "processed_at": processed_at,
             "account_id": message["account_id"],
             "source": message["source"],
             "classification": classification,
-            "extracted": extracted,
+            "extracted": {},
             "attachments": saved_attachments,
-            "actions": [
-                {"type": "write_jsonl", "target": "events/all.jsonl"},
-                {"type": "write_jsonl", "target": processor.output_jsonl},
-            ] + ([{"type": "save_attachment", "count": len(saved_attachments)}] if saved_attachments else []),
-            "status": "processed" if args.apply else "dry_run",
+            "actions": actions,
+            "status": status,
         }
         events.append(event)
         if args.apply:
-            _write_jsonl(events_dir(root) / "all.jsonl", event)
-            _write_jsonl(processor_jsonl, event)
+            append_jsonl(events_dir(root) / "all.jsonl", event)
+            append_jsonl(processor_jsonl, event)
             if conn is not None:
                 _mark_processed(conn, key, processed_at)
     if conn is not None:
@@ -300,6 +357,7 @@ def main() -> None:
                 "data_dir": str(root),
                 "processed": len(events),
                 "skipped": skipped,
+                "pending": pending,
                 "events": events if not args.apply else [],
             },
             ensure_ascii=False,

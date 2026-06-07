@@ -1,0 +1,25 @@
+From: Billing Team <billing@example.com>
+To: Me <me@example.com>
+Subject: Invoice ZIP-001
+Date: Sat, 06 Jun 2026 19:20:00 +0800
+Message-ID: <invoice-zip-001@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/plain; charset="utf-8"
+
+Please find attached invoice ZIP-001.
+
+--BOUNDARY
+Content-Type: application/zip; name="invoice.zip"
+Content-Disposition: attachment; filename="invoice.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBAoAAAAAAGt3x1xmX86zIgAAACIAAAASABwAemlwcGVkLWludm9pY2Uu
+cGRmVVQJAAPJFiVqyRYlanV4CwABBOgDAAAE6AMAACVQREYtMS40CiVGYWtl
+IHppcHBlZCBpbnZvaWNlIHBkZgpQSwECHgMKAAAAAABrd8dcZl/OsyIAAAAi
+AAAAEgAYAAAAAAABAAAAtIEAAAAAemlwcGVkLWludm9pY2UucGRmVVQFAAPJ
+FiVqdXgLAAEE6AMAAAToAwAAUEsFBgAAAAABAAEAWAAAAG4AAAAAAA==
+
+--BOUNDARY--

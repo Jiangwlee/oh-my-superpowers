@@ -1,80 +1,25 @@
-"""AI multimodal field extraction for mail-pipeline."""
+"""Invoice field validation for mail-pipeline.
+
+Field recognition itself is cognitive work and belongs to the calling AI
+agent (it reads the staged PDF and submits fields via `submit`). This module
+only validates and cross-checks what the agent submitted.
+"""
 
 from __future__ import annotations
 
-import base64
-import json
-import os
-import shlex
-import subprocess
-import tempfile
 from datetime import date
-from pathlib import Path
 
 INVOICE_REQUIRED_FIELDS = ["invoice_date", "invoice_number", "amount", "tax_rate", "purchase_content", "seller"]
 
-INVOICE_PROMPT = (
-    "这是一张中国电子发票。请从发票图像中提取以下字段，只输出严格 JSON，不要任何其他文字："
-    '{"invoice_date": "YYYY-MM-DD", "invoice_number": "发票号码", "amount": 价税合计数字, '
-    '"tax_rate": "税率，如 13%；票面为 * 等标记时原样保留", "purchase_content": "购买内容摘要", '
-    '"seller": "销售方名称", "confidence": 0到1之间的置信度数字}'
-)
 
+def validate_invoice_fields(fields: dict) -> dict:
+    """Validate agent-submitted invoice fields.
 
-def _llm_command(pdf_path: Path, model: str | None) -> list[str]:
-    """Build the headless multimodal LLM command.
-
-    `MAIL_PIPELINE_LLM_CMD` overrides the command for tests; the override is
-    invoked with the PDF path appended and must print the field JSON.
+    `amount` is the tax-inclusive total (价税合计). Raises ValueError on
+    missing or malformed fields.
     """
-    override = os.environ.get("MAIL_PIPELINE_LLM_CMD")
-    if override:
-        return [*shlex.split(override), str(pdf_path)]
-    cmd = ["pi", "-p", "--no-session", "--no-tools", "--mode", "text"]
-    if model:
-        cmd += ["--model", model]
-    return [*cmd, f"@{pdf_path}", INVOICE_PROMPT]
-
-
-def _parse_json(stdout: str) -> dict:
-    """Extract the first JSON object from LLM output."""
-    text = stdout.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        raise ValueError("no JSON object in LLM output")
-    try:
-        parsed = json.loads(text[start : end + 1])
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid JSON in LLM output: {exc}") from exc
-    if not isinstance(parsed, dict):
-        raise ValueError("LLM output JSON is not an object")
-    return parsed
-
-
-def extract_invoice(content_b64: str, model: str | None) -> dict:
-    """Extract invoice fields from a PDF attachment via a multimodal LLM.
-
-    Raises ValueError when the command fails, output is not valid JSON, or
-    required fields are missing/malformed.
-    """
-    with tempfile.TemporaryDirectory() as tmp:
-        pdf_path = Path(tmp) / "invoice.pdf"
-        pdf_path.write_bytes(base64.b64decode(content_b64))
-        try:
-            result = subprocess.run(
-                _llm_command(pdf_path, model),
-                capture_output=True,
-                text=True,
-                timeout=180,
-                check=True,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ValueError("invoice extraction timed out") from exc
-        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-            raise ValueError(f"invoice extraction command failed: {exc}") from exc
-
-    fields = _parse_json(result.stdout)
+    if not isinstance(fields, dict):
+        raise ValueError("fields must be a JSON object")
     missing = [key for key in INVOICE_REQUIRED_FIELDS if not str(fields.get(key) or "").strip()]
     if missing:
         raise ValueError("missing invoice fields: " + ", ".join(missing))
@@ -85,3 +30,23 @@ def extract_invoice(content_b64: str, model: str | None) -> dict:
         raise ValueError(f"malformed invoice field: {exc}") from exc
     keys = INVOICE_REQUIRED_FIELDS + ["confidence"]
     return {key: fields[key] for key in keys if key in fields}
+
+
+def cross_check(fields: dict, provider_meta: dict) -> list[str]:
+    """Compare agent-submitted fields against provider metadata.
+
+    Returns a list of mismatch descriptions; empty when consistent or when
+    no provider metadata is available.
+    """
+    mismatches: list[str] = []
+    if not provider_meta:
+        return mismatches
+    meta_number = str(provider_meta.get("invoice_number") or "").strip()
+    if meta_number and meta_number != str(fields["invoice_number"]).strip():
+        mismatches.append(f"invoice_number: agent={fields['invoice_number']} provider={meta_number}")
+    meta_amount = provider_meta.get("amount")
+    if meta_amount is not None and abs(float(meta_amount) - float(fields["amount"])) > 0.01:
+        mismatches.append(f"amount: agent={fields['amount']} provider={meta_amount}")
+    # Provider dates reflect issuing-request time, not the invoice date on the
+    # PDF face (observed on nuonuo) — only strong identifiers are compared.
+    return mismatches

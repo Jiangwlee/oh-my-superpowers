@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from common import DIRECTORIES, EVENT_FILES, config_dir, data_dir, events_dir, logs_dir, state_dir
+from common import DIRECTORIES, EVENT_FILES, config_dir, data_dir, events_dir, logs_dir, pending_dir, state_dir
 
 
 def _status(root_exists: bool, directories: dict[str, bool], config: dict[str, object], event_counts: dict[str, int | None]) -> str:
@@ -31,6 +31,17 @@ def main() -> None:
         "processors": str(config_dir(root) / "processors.yaml"),
         "processors_exists": (config_dir(root) / "processors.yaml").exists(),
     }
+    pending = []
+    if pending_dir(root).exists():
+        for path in sorted(pending_dir(root).glob("*.json")):
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            pending.append(
+                {
+                    "pending_id": manifest.get("pending_id", path.stem),
+                    "subject": (manifest.get("source") or {}).get("subject"),
+                    "files": [record.get("saved_path") for record in manifest.get("attachments") or []],
+                }
+            )
     directories = {
         "config": config_dir(root).exists(),
         "events": events_dir(root).exists(),
@@ -46,6 +57,7 @@ def main() -> None:
                 "config": config,
                 "directories": directories,
                 "event_counts": event_counts,
+                "pending_extractions": pending,
                 "status": _status(root.exists(), directories, config, event_counts),
             },
             ensure_ascii=False,

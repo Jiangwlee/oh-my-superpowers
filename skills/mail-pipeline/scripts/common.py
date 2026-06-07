@@ -45,10 +45,53 @@ def state_dir(root: Path) -> Path:
     return root / "state"
 
 
+def pending_dir(root: Path) -> Path:
+    """Return the pending-extraction manifest directory under a data root."""
+
+    return root / "state" / "pending"
+
+
 def logs_dir(root: Path) -> Path:
     """Return the logs directory under a data root."""
 
     return root / "logs"
+
+
+def safe_name(value: str) -> str:
+    """Sanitize a string for use as a single path component."""
+
+    cleaned = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in value.strip())
+    return cleaned.strip("._") or "message"
+
+
+def within_root(root: Path, path: Path) -> bool:
+    """Return True when path resolves inside root."""
+
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def safe_relative_path(root: Path, value: str) -> Path:
+    """Resolve a config-supplied relative path, rejecting escapes from root."""
+
+    raw = Path(value)
+    if raw.is_absolute():
+        raise ValueError(f"path must be relative to data dir: {value}")
+    target = root / raw
+    if not within_root(root, target):
+        raise ValueError(f"path escapes data dir: {value}")
+    return target
+
+
+def append_jsonl(path: Path, event: Any) -> None:
+    """Append one event to a JSONL file."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def dump_json(path: Path, payload: Any) -> None:
@@ -93,6 +136,9 @@ def default_processors_yaml() -> str:
     file_dir: files/{account_id}/invoices
     extract: invoice
     rename_template: "{invoice_date}_{invoice_number}_{seller}"
+    link_providers:
+      - nuonuo
+      - xforceplus
     allowed_actions:
       - write_jsonl
       - save_attachment
@@ -149,6 +195,7 @@ class Processor:
     allowed_actions: list[str]
     extract: str | None
     rename_template: str | None
+    link_providers: list[str]
 
 
 def accounts_config_path(root: Path) -> Path:
@@ -233,6 +280,7 @@ def load_processors(root: Path) -> list[Processor]:
                 allowed_actions=[str(action) for action in actions],
                 extract=item.get("extract"),
                 rename_template=item.get("rename_template"),
+                link_providers=[str(provider) for provider in (item.get("link_providers") or [])],
             )
         )
     return loaded
