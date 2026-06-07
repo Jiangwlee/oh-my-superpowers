@@ -34,7 +34,7 @@ from common import (
     select_accounts,
     within_root,
 )
-from linkfetch import fetch_link_attachments
+from linkfetch import fetch_link_attachments, load_provider_registry, unmatched_link_hosts
 from mailfetch import fetch_message
 from parser import parse_file
 
@@ -70,7 +70,7 @@ def _zip_pdfs(item: dict) -> list[dict]:
     return records
 
 
-def _collect_pdfs(message: dict, processor) -> tuple[list[dict], dict]:
+def _collect_pdfs(message: dict, processor, registry: dict[str, dict]) -> tuple[list[dict], dict]:
     """Collect invoice PDFs from pdf/zip attachments, falling back to link fetch."""
     pdfs: list[dict] = []
     for item in message.get("attachments", []):
@@ -82,10 +82,12 @@ def _collect_pdfs(message: dict, processor) -> tuple[list[dict], dict]:
     if pdfs:
         return pdfs, {}
     if processor.link_providers:
-        fetched, provider_meta = fetch_link_attachments(message, processor.link_providers)
+        fetched, provider_meta = fetch_link_attachments(message, processor.link_providers, registry)
         if fetched:
             return fetched, provider_meta
-    raise ValueError("no pdf/zip attachment and no allowlisted invoice link")
+    hosts = unmatched_link_hosts(message, processor.link_providers, registry)
+    detail = f"; candidate link hosts (not allowlisted): {', '.join(hosts[:10])}" if hosts else ""
+    raise ValueError(f"no pdf/zip attachment and no allowlisted invoice link{detail}")
 
 
 def _attachment_dir(root: Path, processor, message: dict) -> Path:
@@ -160,7 +162,8 @@ def main() -> None:
 
     processed_at = datetime.now(timezone.utc).isoformat()
     try:
-        pdfs, provider_meta = _collect_pdfs(message, processor)
+        registry = load_provider_registry(root)
+        pdfs, provider_meta = _collect_pdfs(message, processor, registry)
         processor_jsonl = safe_relative_path(root, processor.output_jsonl)
         saved = _save_attachments(root, processor, message, pdfs)
     except (ValueError, OSError) as exc:

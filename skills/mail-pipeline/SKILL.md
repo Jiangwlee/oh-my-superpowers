@@ -49,12 +49,18 @@ judges every message by content.
    `~/Dockers/html-serve/data/mail-brief/<YYYY-MM-DD>-mail-brief.html` —
    one page per day, merged across same-day runs and all accounts (account
    markers per the template's multi-account rule). Give the user both URLs:
-   - `http://ubuntu-gem12.tail82a434.ts.net:8888/mail-brief/<date>-mail-brief.html`
+   - `http://100.90.192.71:8888/mail-brief/<date>-mail-brief.html`
    - `http://192.168.5.140:8888/mail-brief/<date>-mail-brief.html`
 
    Summarize the same content briefly in chat: action items first, then
    counts. Do not generate a Markdown archive — `events/*.jsonl` is the
    factual record.
+
+   If any invoice message failed staging because its link host is not in
+   the provider allowlist, the report and the chat summary MUST surface
+   each such host (with uid and sender) in the "needs your decision"
+   section, so the user can extend `config/providers.yaml`. Never let an
+   unallowlisted invoice provider pass silently.
 
 Done when: every listed message has a scenario, a completed SOP, and is
 marked read (or moved); `omp mail-pipeline status` shows zero pending
@@ -65,7 +71,7 @@ extractions; and the report is delivered. The report — not the unread flag
 
 | Scenario | Judge by | SOP |
 |---|---|---|
-| invoice | Formal invoice delivery: pdf/zip invoice attachment, or a link from an invoice provider (nuonuo, xforceplus, keruyun) | `references/sops/invoice.md` |
+| invoice | Formal invoice delivery: pdf/zip invoice attachment, or a link from an invoice provider (nuonuo, xforceplus, keruyun, jd) | `references/sops/invoice.md` |
 | ad | Marketing, promotion, newsletter, or subscription noise with no personal or business value | `references/sops/ad.md` |
 | notification | Service-generated notices (security alerts, billing reminders, account notices) that inform but deliver no formal invoice | `references/sops/notification.md` |
 | anything else / uncertain | Fits no scenario above, or judgment is uncertain | `references/sops/default.md` |

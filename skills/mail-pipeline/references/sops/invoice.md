@@ -1,7 +1,7 @@
 # Invoice SOP
 
 Judge: the message delivers a formal invoice — a pdf/zip invoice attachment,
-or a link from an invoice provider (nuonuo, xforceplus, keruyun).
+or a link from an invoice provider (nuonuo, xforceplus, keruyun, jd).
 
 ## Steps
 
@@ -12,9 +12,11 @@ or a link from an invoice provider (nuonuo, xforceplus, keruyun).
    ```
 
    If it fails with `no pdf/zip attachment and no allowlisted invoice link`,
-   the provider is not registered: handle the message as a notification
-   (load `references/sops/notification.md`) and report the provider domain
-   so the user can decide on allowlisting.
+   the provider is not registered — the error lists the candidate link
+   hosts. Mark the message read per the notification SOP, and add the
+   candidate hosts (with uid and sender) to the report's "needs your
+   decision" section so the user can extend `config/providers.yaml`.
+   Reporting an unallowlisted invoice provider is mandatory, never silent.
 
 2. Read each staged PDF and extract six fields: `invoice_date` (YYYY-MM-DD),
    `invoice_number`, `amount` (价税合计), `tax_rate` (keep face markers such

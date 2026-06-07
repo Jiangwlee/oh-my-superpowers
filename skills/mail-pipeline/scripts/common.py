@@ -181,12 +181,44 @@ def default_processors_yaml() -> str:
       - nuonuo
       - xforceplus
       - keruyun
+      - jd
     allowed_actions:
       - write_jsonl
       - save_attachment
       - add_label
       - move_email
 
+"""
+
+
+def default_providers_yaml() -> str:
+    """Return the starter link-provider registry config."""
+
+    return """# Invoice link providers. `hosts` is the URL allowlist; `strategy` is
+# `direct_pdf` (GET each matched link, keep PDF payloads) or a named
+# built-in flow (`nuonuo`). Entries here extend/override the built-ins.
+providers:
+  - name: nuonuo
+    strategy: nuonuo
+    hosts:
+      - nnfp.jss.com.cn
+
+  - name: xforceplus
+    strategy: direct_pdf
+    hosts:
+      - saas.xforceplus.com
+
+  - name: keruyun
+    strategy: direct_pdf
+    hosts:
+      - invoice.keruyun.com
+
+  - name: jd
+    strategy: direct_pdf
+    hosts:
+      - storage.jd.com
+      - oss.cn-north-1.jcloudcs.com
+      - eicore-invoice-26.s3.cn-north-1.jdcloud-oss.com
 """
 
 
@@ -362,6 +394,8 @@ def load_yaml(path: Path) -> dict[str, Any]:
     except ModuleNotFoundError:
         if "processors:" in text:
             return _load_simple_processors_yaml(text)
+        if "providers:" in text:
+            return _load_simple_processors_yaml(text, root_key="providers")
         return _load_simple_accounts_yaml(text)
 
 
@@ -420,8 +454,8 @@ def _parse_key_value(value: str) -> tuple[str, Any]:
     return key.strip(), parsed
 
 
-def _load_simple_processors_yaml(text: str) -> dict[str, Any]:
-    """Parse the limited processors.yaml shape used by this skill."""
+def _load_simple_processors_yaml(text: str, root_key: str = "processors") -> dict[str, Any]:
+    """Parse the limited processors/providers yaml shape used by this skill."""
 
     processors: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
@@ -433,7 +467,7 @@ def _load_simple_processors_yaml(text: str) -> dict[str, Any]:
             continue
         stripped = line_without_comment.strip()
         indent = len(line_without_comment) - len(line_without_comment.lstrip(" "))
-        if stripped == "processors:":
+        if stripped == root_key + ":":
             in_processors = True
             continue
         if not in_processors:
@@ -460,4 +494,4 @@ def _load_simple_processors_yaml(text: str) -> dict[str, Any]:
             key, value = _parse_key_value(stripped)
             current[key] = value
             current_list_key = None
-    return {"processors": processors}
+    return {root_key: processors}

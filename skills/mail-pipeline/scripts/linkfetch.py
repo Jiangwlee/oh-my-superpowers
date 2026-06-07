@@ -16,12 +16,43 @@ import urllib.request
 from html.parser import HTMLParser
 from typing import Any
 
-# Registered providers: name -> hosts that trigger it.
-PROVIDER_HOSTS = {
-    "xforceplus": ["saas.xforceplus.com"],
-    "nuonuo": ["nnfp.jss.com.cn"],
-    "keruyun": ["invoice.keruyun.com"],
-}
+# Built-in providers; config/providers.yaml extends or overrides by name.
+DEFAULT_PROVIDERS = [
+    {"name": "nuonuo", "strategy": "nuonuo", "hosts": ["nnfp.jss.com.cn"]},
+    {"name": "xforceplus", "strategy": "direct_pdf", "hosts": ["saas.xforceplus.com"]},
+    {"name": "keruyun", "strategy": "direct_pdf", "hosts": ["invoice.keruyun.com"]},
+    {"name": "jd", "strategy": "direct_pdf", "hosts": ["storage.jd.com", "oss.cn-north-1.jcloudcs.com", "eicore-invoice-26.s3.cn-north-1.jdcloud-oss.com"]},
+]
+_STRATEGIES = ("direct_pdf", "nuonuo")
+
+# Asset extensions never worth fetching for a direct_pdf provider.
+_SKIP_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".ico", ".css", ".js")
+
+
+def load_provider_registry(root) -> dict[str, dict]:
+    """Return {name: {hosts, strategy}} merging built-ins with config/providers.yaml."""
+    from common import config_dir, load_yaml
+
+    registry = {item["name"]: {"hosts": list(item["hosts"]), "strategy": item["strategy"]} for item in DEFAULT_PROVIDERS}
+    path = config_dir(root) / "providers.yaml"
+    if not path.exists():
+        return registry
+    for item in load_yaml(path).get("providers") or []:
+        name = str(item.get("name", "")).strip()
+        if not name:
+            raise ValueError("provider entry missing `name` in providers.yaml")
+        strategy = str(item.get("strategy") or "direct_pdf")
+        if strategy not in _STRATEGIES:
+            raise ValueError(f"unknown provider strategy {strategy!r} for {name!r}; valid: {', '.join(_STRATEGIES)}")
+        hosts = [str(host).strip() for host in (item.get("hosts") or []) if str(host).strip()]
+        if not hosts:
+            raise ValueError(f"provider {name!r} has no hosts in providers.yaml")
+        registry[name] = {"hosts": hosts, "strategy": strategy}
+    return registry
+
+
+def _default_registry() -> dict[str, dict]:
+    return {item["name"]: {"hosts": list(item["hosts"]), "strategy": item["strategy"]} for item in DEFAULT_PROVIDERS}
 
 _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 _TIMEOUT = 60
@@ -67,13 +98,27 @@ def extract_urls(message: dict) -> list[str]:
     return list(dict.fromkeys(urls))
 
 
-def match_provider(url: str, enabled: list[str]) -> str | None:
+def match_provider(url: str, enabled: list[str], registry: dict[str, dict] | None = None) -> str | None:
     """Return the enabled provider name whose host matches the URL, if any."""
+    registry = registry if registry is not None else _default_registry()
     host = urllib.parse.urlsplit(url).hostname or ""
     for provider in enabled:
-        if host in PROVIDER_HOSTS.get(provider, []):
+        if host in (registry.get(provider) or {}).get("hosts", []):
             return provider
     return None
+
+
+def unmatched_link_hosts(message: dict, enabled: list[str], registry: dict[str, dict] | None = None) -> list[str]:
+    """Return hosts of body links that match no enabled provider."""
+    registry = registry if registry is not None else _default_registry()
+    hosts: list[str] = []
+    for url in extract_urls(message):
+        if match_provider(url, enabled, registry):
+            continue
+        host = urllib.parse.urlsplit(url).hostname
+        if host and host not in hosts:
+            hosts.append(host)
+    return hosts
 
 
 def _get(url: str, timeout: int = _TIMEOUT) -> bytes:
@@ -111,15 +156,19 @@ def _attachment_record(filename: str, payload: bytes, source_url: str) -> dict[s
     }
 
 
-def _fetch_xforceplus(urls: list[str]) -> tuple[list[dict], dict]:
-    """Fetch xforceplus delivery links; only PDF payloads are kept."""
+def _fetch_direct_pdf(provider: str, urls: list[str]) -> tuple[list[dict], dict]:
+    """Generic strategy: GET each matched link, keep PDF payloads (by magic bytes)."""
     attachments: list[dict] = []
     for index, url in enumerate(urls):
-        if "/api/invoice-sharing/delivery/receive" not in url:
+        path = urllib.parse.urlsplit(url).path.lower()
+        if path.endswith(_SKIP_SUFFIXES):
             continue
         payload = _get(url)
-        if _is_pdf(payload):
-            attachments.append(_attachment_record(f"xforceplus_{index}.pdf", payload, url))
+        if not _is_pdf(payload):
+            continue
+        basename = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rsplit("/", 1)[-1])
+        filename = basename if basename.lower().endswith(".pdf") else f"{provider}_{index}.pdf"
+        attachments.append(_attachment_record(filename, payload, url))
     return attachments, {}
 
 
@@ -159,39 +208,26 @@ def _fetch_nuonuo(urls: list[str]) -> tuple[list[dict], dict]:
     return [_attachment_record(f"nuonuo_{vo.get('fphm') or 'invoice'}.pdf", pdf, pdf_url)], provider_meta
 
 
-def _fetch_keruyun(urls: list[str]) -> tuple[list[dict], dict]:
-    """Fetch keruyun short links; they redirect straight to the invoice PDF."""
-    attachments: list[dict] = []
-    for index, url in enumerate(urls):
-        payload = _get(url)
-        if _is_pdf(payload):
-            attachments.append(_attachment_record(f"keruyun_{index}.pdf", payload, url))
-    return attachments, {}
-
-
-_FETCHERS = {
-    "xforceplus": _fetch_xforceplus,
-    "nuonuo": _fetch_nuonuo,
-    "keruyun": _fetch_keruyun,
-}
-
-
-def fetch_link_attachments(message: dict, enabled: list[str]) -> tuple[list[dict], dict]:
+def fetch_link_attachments(message: dict, enabled: list[str], registry: dict[str, dict] | None = None) -> tuple[list[dict], dict]:
     """Fetch PDF attachments delivered via allowlisted provider links.
 
     Returns (attachment_records, provider_meta). Raises ValueError when a
     matched provider fails to deliver a PDF.
     """
+    registry = registry if registry is not None else _default_registry()
     urls = extract_urls(message)
     by_provider: dict[str, list[str]] = {}
     for url in urls:
-        provider = match_provider(url, enabled)
+        provider = match_provider(url, enabled, registry)
         if provider:
             by_provider.setdefault(provider, []).append(url)
     attachments: list[dict] = []
     provider_meta: dict = {}
     for provider, provider_urls in by_provider.items():
-        fetched, meta = _FETCHERS[provider](provider_urls)
+        if registry[provider]["strategy"] == "nuonuo":
+            fetched, meta = _fetch_nuonuo(provider_urls)
+        else:
+            fetched, meta = _fetch_direct_pdf(provider, provider_urls)
         attachments.extend(fetched)
         if meta:
             provider_meta = meta

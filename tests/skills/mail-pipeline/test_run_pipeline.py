@@ -157,6 +157,28 @@ class TestPipelineInterfaces(unittest.TestCase):
             self.assertEqual(1, result.returncode)
             self.assertIn("no pdf/zip attachment", result.stderr)
 
+    def test_stage_failure_lists_unallowlisted_hosts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            fixture_dir = Path(tmp) / "unknown-provider"
+            fixture_dir.mkdir()
+            (fixture_dir / "unknown.eml").write_text(
+                "From: bill@unknown-corp.example.com\n"
+                "To: me@example.com\n"
+                "Subject: 电子发票下载通知\n"
+                "Date: Sat, 06 Jun 2026 22:20:00 +0800\n"
+                "Message-ID: <unknown-001@example.com>\n"
+                "MIME-Version: 1.0\n"
+                'Content-Type: text/plain; charset="utf-8"\n'
+                "\n"
+                "请点击 https://invoice.unknown-corp.example.com/dl/1.pdf 下载发票。\n",
+                encoding="utf-8",
+            )
+            result = self.stage(root, fixture_dir, "unknown", check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("candidate link hosts (not allowlisted)", result.stderr)
+            self.assertIn("invoice.unknown-corp.example.com", result.stderr)
+
     def test_stage_sanitizes_account_path_component(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.init_root(tmp)
