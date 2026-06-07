@@ -12,10 +12,6 @@ DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "oh-my-superpowers" / "mai
 EVENT_FILES = [
     "all.jsonl",
     "invoices.jsonl",
-    "spam_ads.jsonl",
-    "important.jsonl",
-    "needs_review.jsonl",
-    "errors.jsonl",
 ]
 DIRECTORIES = ["config", "events", "files", "state", "logs"]
 
@@ -55,6 +51,50 @@ def logs_dir(root: Path) -> Path:
     """Return the logs directory under a data root."""
 
     return root / "logs"
+
+
+def dedupe_key(message: dict) -> str:
+    """Build the message-level dedupe key."""
+
+    message_id = message["source"].get("message_id") or ""
+    hashes = ",".join(item["sha256"] for item in message.get("attachments") or [])
+    return f"{message['account_id']}|{message_id}|{hashes}"
+
+
+def open_dedupe_db(root: Path, create: bool):
+    """Open the dedupe database; returns None when absent and not creating."""
+
+    import sqlite3
+
+    db_path = state_dir(root) / "processed.sqlite"
+    if not create and not db_path.exists():
+        return None
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        create table if not exists processed_messages (
+            dedupe_key text primary key,
+            processed_at text not null
+        )
+        """
+    )
+    return conn
+
+
+def already_processed(conn, key: str) -> bool:
+    """Return True when the dedupe key was processed before."""
+
+    if conn is None:
+        return False
+    return conn.execute("select 1 from processed_messages where dedupe_key = ?", (key,)).fetchone() is not None
+
+
+def mark_processed(conn, key: str, processed_at: str) -> None:
+    """Record a dedupe key as processed."""
+
+    conn.execute("insert or ignore into processed_messages (dedupe_key, processed_at) values (?, ?)", (key, processed_at))
+    conn.commit()
 
 
 def safe_name(value: str) -> str:
@@ -147,27 +187,6 @@ def default_processors_yaml() -> str:
       - add_label
       - move_email
 
-  - name: spam_ads
-    description: "Identify ads, promotions, newsletters, and low-value subscription emails."
-    output_jsonl: events/spam_ads.jsonl
-    allowed_actions:
-      - write_jsonl
-      - add_label
-      - move_email
-
-  - name: important
-    description: "Extract tasks, deadlines, customer requests, account security notices, and other important information."
-    output_jsonl: events/important.jsonl
-    allowed_actions:
-      - write_jsonl
-      - add_label
-
-  - name: needs_review
-    description: "Catch uncertain messages for manual review."
-    output_jsonl: events/needs_review.jsonl
-    allowed_actions:
-      - write_jsonl
-      - add_label
 """
 
 

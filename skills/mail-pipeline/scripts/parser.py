@@ -9,8 +9,43 @@ from email import policy
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+
+
+class _TextExtractor(HTMLParser):
+    """Collect visible text from an HTML body."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.chunks: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in ("script", "style"):
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style") and self._skip_depth:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip_depth and data.strip():
+            self.chunks.append(data.strip())
+
+
+def body_text(message: dict) -> str:
+    """Return the message body as plain text (HTML stripped when needed)."""
+    text = str(message.get("text") or "").strip()
+    if text:
+        return text
+    html = str(message.get("html") or "")
+    if not html:
+        return ""
+    extractor = _TextExtractor()
+    extractor.feed(html)
+    return " ".join(extractor.chunks)
 
 
 @dataclass(slots=True)

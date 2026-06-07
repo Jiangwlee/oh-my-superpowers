@@ -47,7 +47,7 @@ class TestConfigStorage(unittest.TestCase):
             self.assertTrue((root / "config" / "processors.yaml").exists())
             self.assertIn("password_env:", (root / "config" / "accounts.yaml").read_text())
             self.assertNotIn("password:", (root / "config" / "accounts.yaml").read_text())
-            for name in ["all.jsonl", "invoices.jsonl", "spam_ads.jsonl", "important.jsonl", "needs_review.jsonl", "errors.jsonl"]:
+            for name in ["all.jsonl", "invoices.jsonl"]:
                 self.assertTrue((root / "events" / name).exists(), name)
 
     def test_status_reports_initialized_state(self) -> None:

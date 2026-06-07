@@ -25,7 +25,7 @@ class TestMailPipelineStatic(unittest.TestCase):
             self.assertTrue((SKILL_ROOT / "references" / name).exists(), name)
 
     def test_required_scripts_exist_and_compile(self) -> None:
-        for name in ["common.py", "init.py", "accounts.py", "run.py", "status.py"]:
+        for name in ["common.py", "init.py", "accounts.py", "list_messages.py", "show.py", "stage.py", "submit.py", "mailbox.py", "status.py"]:
             script = SKILL_ROOT / "scripts" / name
             self.assertTrue(script.exists(), name)
             with tempfile.NamedTemporaryFile(suffix=".pyc", delete=True) as tmp:

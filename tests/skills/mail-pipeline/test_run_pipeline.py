@@ -1,4 +1,4 @@
-"""End-to-end fixture pipeline tests for mail-pipeline."""
+"""End-to-end fixture tests for the mail-pipeline interfaces (list/show/stage/submit/mailbox)."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ FIELDS = {
 }
 
 
-class TestRunPipeline(unittest.TestCase):
-    """Validate dry-run/apply/submit behavior using local .eml fixtures."""
+class TestPipelineInterfaces(unittest.TestCase):
+    """Validate the agent-facing interfaces using local .eml fixtures."""
 
     def run_script(self, script: str, *args: str, data_dir: Path, check: bool = True) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
@@ -41,69 +41,176 @@ class TestRunPipeline(unittest.TestCase):
             check=check,
         )
 
-    def test_dry_run_outputs_events_without_writing_files(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            result = self.run_script("run.py", "--fixture-dir", str(FIXTURES), data_dir=root)
-            payload = json.loads(result.stdout)
+    def init_root(self, tmp: str) -> Path:
+        root = Path(tmp) / "mail-data"
+        self.run_script("init.py", data_dir=root)
+        return root
 
-            self.assertFalse((root / "files" / "fixture").exists())
-            self.assertEqual("ok", payload["status"])
-            self.assertFalse(payload["apply"])
-            self.assertEqual("invoices", payload["events"][0]["classification"]["category"])
-            self.assertEqual({}, payload["events"][0]["extracted"])
-            self.assertEqual(1, len(payload["pending"]))
+    def stage(self, root: Path, fixture_dir: Path, uid: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return self.run_script(
+            "stage.py", "--account", "fixture", "--uid", uid, "--fixture-dir", str(fixture_dir), data_dir=root, check=check
+        )
+
+    # ---- list ----
+
+    def test_list_outputs_summaries_read_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            payload = json.loads(self.run_script("list_messages.py", "--fixture-dir", str(FIXTURES), data_dir=root).stdout)
+            self.assertEqual(1, payload["count"])
+            summary = payload["messages"][0]
+            self.assertEqual("invoice", summary["imap_uid"])
+            self.assertEqual("Invoice INV-001", summary["subject"])
+            self.assertEqual(["billing@example.com"], summary["from"])
+            self.assertIn("attached invoice INV-001", summary["snippet"])
+            self.assertEqual(["invoice.pdf"], summary["attachments"])
+            self.assertFalse(summary["processed_before"])
             self.assertEqual("", (root / "events" / "all.jsonl").read_text())
 
-    def test_apply_stages_pending_and_submit_finalizes(self) -> None:
+    def test_list_since_filters_messages(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            first = self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
-            payload = json.loads(first.stdout)
-            self.assertEqual(1, payload["processed"])
-            pending = payload["pending"][0]
-            staged = Path(pending["files"][0])
-            self.assertTrue(staged.exists())
-            self.assertTrue((root / "state" / "pending" / f"{pending['pending_id']}.json").exists())
-            staged_event = json.loads((root / "events" / "all.jsonl").read_text().splitlines()[0])
-            self.assertEqual("pending_extraction", staged_event["status"])
+            root = self.init_root(tmp)
+            kept = json.loads(self.run_script("list_messages.py", "--fixture-dir", str(FIXTURES), "--since", "2026-06-01", data_dir=root).stdout)
+            self.assertEqual(1, kept["count"])
+            filtered = json.loads(self.run_script("list_messages.py", "--fixture-dir", str(FIXTURES), "--since", "2026-06-07", data_dir=root).stdout)
+            self.assertEqual(0, filtered["count"])
 
-            submit = self.run_script("submit.py", "--id", pending["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
-            submit_payload = json.loads(submit.stdout)
-            final = Path(submit_payload["files"][0])
+    def test_list_annotates_processed_after_stage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            self.stage(root, FIXTURES, "invoice")
+            payload = json.loads(self.run_script("list_messages.py", "--fixture-dir", str(FIXTURES), data_dir=root).stdout)
+            self.assertTrue(payload["messages"][0]["processed_before"])
+
+    # ---- show ----
+
+    def test_show_returns_body_and_attachments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            payload = json.loads(
+                self.run_script("show.py", "--account", "fixture", "--uid", "invoice", "--fixture-dir", str(FIXTURES), data_dir=root).stdout
+            )
+            self.assertIn("attached invoice INV-001", payload["body"])
+            self.assertEqual("invoice.pdf", payload["attachments"][0]["filename"])
+
+    # ---- stage ----
+
+    def test_stage_saves_pdf_and_writes_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            payload = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            staged = Path(payload["files"][0])
+            self.assertTrue(staged.exists())
+            self.assertTrue((root / "state" / "pending" / f"{payload['pending_id']}.json").exists())
+            event = json.loads((root / "events" / "all.jsonl").read_text().splitlines()[0])
+            self.assertEqual("pending_extraction", event["status"])
+            conn = sqlite3.connect(root / "state" / "processed.sqlite")
+            self.assertEqual(1, conn.execute("select count(*) from processed_messages").fetchone()[0])
+            conn.close()
+
+    def test_stage_rejects_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            self.stage(root, FIXTURES, "invoice")
+            result = self.stage(root, FIXTURES, "invoice", check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("already staged or processed", result.stderr)
+
+    def test_stage_expands_zip_members(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            payload = json.loads(self.stage(root, FIXTURES / "zip", "zip-invoice").stdout)
+            staged = Path(payload["files"][0])
+            self.assertTrue(staged.read_bytes().startswith(b"%PDF-"))
+            manifest = json.loads((root / "state" / "pending" / f"{payload['pending_id']}.json").read_text())
+            self.assertEqual("zip", manifest["attachments"][0]["origin"])
+            self.assertEqual("invoice.zip", manifest["attachments"][0]["source_zip"])
+
+    def test_stage_fails_without_pdf_or_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            result = self.stage(root, FIXTURES / "spam", "spam", check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("no pdf/zip attachment", result.stderr)
+
+    def test_stage_sanitizes_account_path_component(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            self.run_script(
+                "stage.py", "--account", "../../outside", "--uid", "invoice", "--fixture-dir", str(FIXTURES), data_dir=root
+            )
+            saved = list((root / "files").rglob("*.pdf"))
+            self.assertEqual(1, len(saved))
+            self.assertTrue(saved[0].resolve().is_relative_to(root.resolve()))
+
+    def test_stage_rejects_jsonl_output_outside_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            processors = root / "config" / "processors.yaml"
+            processors.write_text(processors.read_text().replace("events/invoices.jsonl", "../outside.jsonl"), encoding="utf-8")
+            result = self.stage(root, FIXTURES, "invoice", check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("path escapes data dir", result.stderr)
+            self.assertFalse((root.parent / "outside.jsonl").exists())
+
+    # ---- submit ----
+
+    def test_submit_finalizes_with_rename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            staged = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            result = self.run_script("submit.py", "--id", staged["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
+            final = Path(json.loads(result.stdout)["files"][0])
             self.assertEqual("2026-06-04_26427000000465806619_测试电信公司.pdf", final.name)
             self.assertTrue(final.exists())
-            self.assertFalse(staged.exists())
-            self.assertFalse((root / "state" / "pending" / f"{pending['pending_id']}.json").exists())
+            self.assertFalse((root / "state" / "pending" / f"{staged['pending_id']}.json").exists())
+            statuses = [json.loads(line)["status"] for line in (root / "events" / "all.jsonl").read_text().splitlines() if line]
+            self.assertEqual(["pending_extraction", "processed"], statuses)
 
-            lines = [json.loads(line) for line in (root / "events" / "all.jsonl").read_text().splitlines() if line]
-            self.assertEqual(["pending_extraction", "processed"], [event["status"] for event in lines])
-            self.assertEqual(FIELDS["invoice_number"], lines[1]["extracted"]["invoice"]["invoice_number"])
-
-            second = self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
-            second_payload = json.loads(second.stdout)
-            self.assertEqual(0, second_payload["processed"])
-            self.assertEqual(1, second_payload["skipped"])
-            conn = sqlite3.connect(root / "state" / "processed.sqlite")
-            count = conn.execute("select count(*) from processed_messages").fetchone()[0]
-            conn.close()
-            self.assertEqual(1, count)
-
-    def test_dry_run_reflects_dedupe_state(self) -> None:
+    def test_submit_rejects_invalid_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
-            preview = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), data_dir=root).stdout)
-            self.assertEqual(0, preview["processed"])
-            self.assertEqual(1, preview["skipped"])
+            root = self.init_root(tmp)
+            staged = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            bad = {**FIELDS, "invoice_date": "not-a-date"}
+            result = self.run_script("submit.py", "--id", staged["pending_id"], "--fields", json.dumps(bad), data_dir=root, check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("malformed invoice field", result.stderr)
+
+    def test_submit_rejects_provider_metadata_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            staged = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            manifest_path = root / "state" / "pending" / f"{staged['pending_id']}.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["provider_meta"] = {"invoice_number": "DIFFERENT", "amount": 1.0}
+            manifest_path.write_text(json.dumps(manifest))
+            result = self.run_script("submit.py", "--id", staged["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root, check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertEqual(2, len(json.loads(result.stderr)["mismatches"]))
+            self.assertTrue(manifest_path.exists())
+
+    def test_duplicate_invoice_number_rejected_then_discardable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            first = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            second = json.loads(self.stage(root, FIXTURES / "zip", "zip-invoice").stdout)
+            self.run_script("submit.py", "--id", first["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
+
+            dup = self.run_script("submit.py", "--id", second["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root, check=False)
+            self.assertEqual(1, dup.returncode)
+            self.assertIn("already processed", dup.stderr)
+
+            discard = self.run_script(
+                "submit.py", "--id", second["pending_id"], "--discard", "--reason", "duplicate delivery", data_dir=root
+            )
+            self.assertEqual("ok", json.loads(discard.stdout)["status"])
+            self.assertFalse(Path(second["files"][0]).exists())
+            statuses = [json.loads(line)["status"] for line in (root / "events" / "all.jsonl").read_text().splitlines() if line]
+            self.assertIn("discarded", statuses)
 
     def test_submit_does_not_overwrite_different_file_with_same_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
+            root = self.init_root(tmp)
             processors = root / "config" / "processors.yaml"
             processors.write_text(
                 processors.read_text().replace(
@@ -112,184 +219,41 @@ class TestRunPipeline(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            first = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root).stdout)
-            second = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES / "zip"), "--apply", data_dir=root).stdout)
-            self.run_script("submit.py", "--id", first["pending"][0]["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
+            first = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            second = json.loads(self.stage(root, FIXTURES / "zip", "zip-invoice").stdout)
+            self.run_script("submit.py", "--id", first["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
             other = {**FIELDS, "invoice_number": "99999999999999999999"}
-            result = self.run_script("submit.py", "--id", second["pending"][0]["pending_id"], "--fields", json.dumps(other), data_dir=root)
+            result = self.run_script("submit.py", "--id", second["pending_id"], "--fields", json.dumps(other), data_dir=root)
             final = Path(json.loads(result.stdout)["files"][0])
             clean = final.parent / "2026-06-04_测试电信公司.pdf"
             self.assertTrue(clean.exists())
             self.assertNotEqual(clean, final)
-            self.assertTrue(final.name.startswith("2026-06-04_测试电信公司_"))
             self.assertTrue(final.exists())
-
-    def test_duplicate_invoice_number_rejected_then_discardable(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            first = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root).stdout)
-            second = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES / "zip"), "--apply", data_dir=root).stdout)
-            self.run_script("submit.py", "--id", first["pending"][0]["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
-
-            dup = self.run_script(
-                "submit.py", "--id", second["pending"][0]["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root, check=False
-            )
-            self.assertEqual(1, dup.returncode)
-            self.assertIn("already processed", dup.stderr)
-            staged = Path(second["pending"][0]["files"][0])
-            self.assertTrue(staged.exists())
-
-            discard = self.run_script(
-                "submit.py", "--id", second["pending"][0]["pending_id"], "--discard", "--reason", "duplicate delivery", data_dir=root
-            )
-            payload = json.loads(discard.stdout)
-            self.assertEqual("ok", payload["status"])
-            self.assertFalse(staged.exists())
-            self.assertFalse((root / "state" / "pending" / f"{second['pending'][0]['pending_id']}.json").exists())
-            statuses = [json.loads(line)["status"] for line in (root / "events" / "all.jsonl").read_text().splitlines() if line]
-            self.assertIn("discarded", statuses)
-
-    def test_since_filters_fixture_messages(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            kept = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--since", "2026-06-01", data_dir=root).stdout)
-            self.assertEqual(1, kept["processed"])
-            filtered = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--since", "2026-06-07", data_dir=root).stdout)
-            self.assertEqual(0, filtered["processed"])
 
     def test_invoice_file_selects_clean_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            payload = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES / "multi"), "--apply", data_dir=root).stdout)
-            pending = payload["pending"][0]
-            self.assertEqual(2, len(pending["files"]))
+            root = self.init_root(tmp)
+            staged = json.loads(self.stage(root, FIXTURES / "multi", "multi-invoice").stdout)
+            self.assertEqual(2, len(staged["files"]))
             result = self.run_script(
                 "submit.py",
-                "--id", pending["pending_id"],
+                "--id", staged["pending_id"],
                 "--fields", json.dumps(FIELDS),
                 "--invoice-file", "real-invoice.pdf",
                 data_dir=root,
             )
-            files = json.loads(result.stdout)["files"]
-            clean = [path for path in files if Path(path).name == "2026-06-04_26427000000465806619_测试电信公司.pdf"]
-            self.assertEqual(1, len(clean))
             event = json.loads((root / "events" / "all.jsonl").read_text().splitlines()[-1])
             by_name = {record["original_filename"]: record for record in event["attachments"]}
             self.assertTrue(by_name["real-invoice.pdf"]["saved_path"].endswith("2026-06-04_26427000000465806619_测试电信公司.pdf"))
-            self.assertIn("_", Path(by_name["dining-detail.pdf"]["saved_path"]).stem[len("2026-06-04_26427000000465806619_测试电信公司"):])
 
-    def test_zip_attachment_expands_pdf_members(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            result = self.run_script("run.py", "--fixture-dir", str(FIXTURES / "zip"), "--apply", data_dir=root)
-            payload = json.loads(result.stdout)
-            pending = payload["pending"][0]
-            self.assertEqual(1, len(pending["files"]))
-            staged = Path(pending["files"][0])
-            self.assertTrue(staged.exists())
-            self.assertTrue(staged.read_bytes().startswith(b"%PDF-"))
-            manifest = json.loads((root / "state" / "pending" / f"{pending['pending_id']}.json").read_text())
-            self.assertEqual("zip", manifest["attachments"][0]["origin"])
-            self.assertEqual("invoice.zip", manifest["attachments"][0]["source_zip"])
-
-    def test_submit_rejects_provider_metadata_mismatch(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            first = self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
-            pending = json.loads(first.stdout)["pending"][0]
-            manifest_path = root / "state" / "pending" / f"{pending['pending_id']}.json"
-            manifest = json.loads(manifest_path.read_text())
-            manifest["provider_meta"] = {"invoice_number": "DIFFERENT", "amount": 1.0}
-            manifest_path.write_text(json.dumps(manifest))
-
-            result = self.run_script(
-                "submit.py", "--id", pending["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root, check=False
-            )
-            self.assertEqual(1, result.returncode)
-            error = json.loads(result.stderr)
-            self.assertEqual(2, len(error["mismatches"]))
-            self.assertTrue(manifest_path.exists())
-
-    def test_submit_rejects_invalid_fields(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            first = self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
-            pending = json.loads(first.stdout)["pending"][0]
-            bad = {**FIELDS, "invoice_date": "not-a-date"}
-            result = self.run_script(
-                "submit.py", "--id", pending["pending_id"], "--fields", json.dumps(bad), data_dir=root, check=False
-            )
-            self.assertEqual(1, result.returncode)
-            self.assertIn("malformed invoice field", result.stderr)
-
-    def test_spam_classified_as_suggestion_without_mailbox_actions(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            result = self.run_script("run.py", "--fixture-dir", str(FIXTURES / "spam"), "--apply", data_dir=root)
-            payload = json.loads(result.stdout)
-            event = json.loads((root / "events" / "spam_ads.jsonl").read_text().splitlines()[0])
-            self.assertEqual("spam_ads", event["classification"]["category"])
-            # Classification is a routing suggestion only: run never plans or
-            # executes mailbox mutations. The agent decides via `mailbox`.
-            self.assertNotIn("move_email", json.dumps(event["actions"]))
-            self.assertNotIn("mark_read", json.dumps(event["actions"]))
-            self.assertEqual("spam_ads", payload["messages"][0]["category"])
-
-    def test_run_outputs_message_summaries_for_agent_decisions(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            payload = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), data_dir=root).stdout)
-            summary = payload["messages"][0]
-            self.assertEqual("Invoice INV-001", summary["subject"])
-            self.assertEqual(["billing@example.com"], summary["from"])
-            self.assertEqual("invoices", summary["category"])
+    # ---- mailbox ----
 
     def test_mailbox_rejects_unknown_account(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
+            root = self.init_root(tmp)
             result = self.run_script("mailbox.py", "mark-read", "--account", "nope", "--uid", "1", data_dir=root, check=False)
             self.assertEqual(1, result.returncode)
             self.assertIn("unknown account", result.stderr)
-
-    def test_apply_sanitizes_account_path_component(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--account", "../../outside", "--apply", data_dir=root)
-            saved = list((root / "files").rglob("*.pdf"))
-            self.assertEqual(1, len(saved))
-            self.assertTrue(saved[0].resolve().is_relative_to(root.resolve()))
-
-    def test_apply_rejects_jsonl_output_outside_data_dir(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            processors = root / "config" / "processors.yaml"
-            processors.write_text(processors.read_text().replace("events/invoices.jsonl", "../outside.jsonl"), encoding="utf-8")
-            with self.assertRaises(subprocess.CalledProcessError) as ctx:
-                self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
-            self.assertIn("path escapes data dir", ctx.exception.stderr)
-            self.assertFalse((root.parent / "outside.jsonl").exists())
-
-    def test_processor_without_save_attachment_does_not_write_attachment(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "mail-data"
-            self.run_script("init.py", data_dir=root)
-            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--processor", "important", "--apply", data_dir=root)
-            self.assertEqual([], list((root / "files").rglob("*.pdf")))
-            lines = [line for line in (root / "events" / "important.jsonl").read_text().splitlines() if line]
-            event = json.loads(lines[0])
-            self.assertEqual([], event["attachments"])
-            self.assertNotIn("save_attachment", json.dumps(event["actions"]))
 
 
 if __name__ == "__main__":

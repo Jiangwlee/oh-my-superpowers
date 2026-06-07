@@ -70,24 +70,49 @@ def accounts_check(
     _run("accounts.py", ["check", "--account", account])
 
 
-@app.command()
-def run(
+@app.command("list")
+def list_messages(
     account: str = typer.Option("all", "--account", help="Account id or 'all'."),
-    processor: str = typer.Option("all", "--processor", help="Processor name or 'all'."),
     limit: int = typer.Option(50, "--limit", help="Maximum messages per account."),
+    since: str | None = typer.Option(None, "--since", help="Only list messages dated on/after this day (YYYY-MM-DD)."),
+    include_seen: bool = typer.Option(False, "--include-seen", help="Also list already-read messages (default: unseen only)."),
     fixture_dir: str | None = typer.Option(None, "--fixture-dir", help="Read local .eml files instead of IMAP."),
-    apply: bool = typer.Option(False, "--apply", help="Write files/state and allowed mailbox changes."),
-    since: str | None = typer.Option(None, "--since", help="Only process messages dated on/after this day (YYYY-MM-DD)."),
 ) -> None:
-    """Process messages through configured processors. Defaults to dry-run."""
-    args = ["--account", account, "--processor", processor, "--limit", str(limit)]
-    if fixture_dir:
-        args += ["--fixture-dir", fixture_dir]
-    if apply:
-        args.append("--apply")
+    """List inbox messages with summaries for agent triage. Read-only."""
+    args = ["--account", account, "--limit", str(limit)]
     if since:
         args += ["--since", since]
-    _run("run.py", args)
+    if include_seen:
+        args.append("--include-seen")
+    if fixture_dir:
+        args += ["--fixture-dir", fixture_dir]
+    _run("list_messages.py", args)
+
+
+@app.command()
+def show(
+    account: str = typer.Option(..., "--account", help="Account id."),
+    uid: str = typer.Option(..., "--uid", help="IMAP uid."),
+    fixture_dir: str | None = typer.Option(None, "--fixture-dir", help="Read local .eml files instead of IMAP."),
+) -> None:
+    """Show one message in full (body text + attachment list). Read-only."""
+    args = ["--account", account, "--uid", uid]
+    if fixture_dir:
+        args += ["--fixture-dir", fixture_dir]
+    _run("show.py", args)
+
+
+@app.command()
+def stage(
+    account: str = typer.Option(..., "--account", help="Account id."),
+    uid: str = typer.Option(..., "--uid", help="IMAP uid of the invoice message."),
+    fixture_dir: str | None = typer.Option(None, "--fixture-dir", help="Read local .eml files instead of IMAP."),
+) -> None:
+    """Stage one agent-judged invoice message: save PDFs, write pending manifest."""
+    args = ["--account", account, "--uid", uid]
+    if fixture_dir:
+        args += ["--fixture-dir", fixture_dir]
+    _run("stage.py", args)
 
 
 @app.command()
