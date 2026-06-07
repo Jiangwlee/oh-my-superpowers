@@ -22,7 +22,7 @@ from parser import parse_file  # noqa: E402
 class TestAccountsAndParser(unittest.TestCase):
     """Validate account config loading and local MIME parsing."""
 
-    def test_load_accounts_and_select(self) -> None:
+    def test_load_accounts_and_select_multiple_accounts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "config").mkdir()
@@ -37,12 +37,22 @@ accounts:
     password_env: MAIL_PIPELINE_WORK_PASSWORD
     folders:
       inbox: INBOX
+  - id: personal
+    provider: imap
+    host: imap.personal.example.com
+    port: 993
+    username: me@personal.example.com
+    password_env: MAIL_PIPELINE_PERSONAL_PASSWORD
+    folders:
+      inbox: PersonalInbox
 """,
                 encoding="utf-8",
             )
             accounts = load_accounts(root)
-            self.assertEqual(["work"], [item.id for item in accounts])
+            self.assertEqual(["work", "personal"], [item.id for item in accounts])
+            self.assertEqual(["work", "personal"], [item.id for item in select_accounts(accounts, "all")])
             self.assertEqual("INBOX", select_accounts(accounts, "work")[0].inbox)
+            self.assertEqual("PersonalInbox", select_accounts(accounts, "personal")[0].inbox)
 
     def test_accounts_list_does_not_print_secret_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

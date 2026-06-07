@@ -38,7 +38,9 @@ def _check_account(account) -> dict:
         context = ssl.create_default_context()
         with imaplib.IMAP4_SSL(account.host, account.port, ssl_context=context, timeout=15) as client:
             client.login(account.username, password)
-            client.select(account.inbox, readonly=True)
+            status, _ = client.select(account.inbox, readonly=True)
+            if status != "OK":
+                return {"id": account.id, "ok": False, "reason": f"select failed for inbox {account.inbox!r}"}
             client.logout()
         return {"id": account.id, "ok": True, "reason": "connected"}
     except Exception as exc:  # pragma: no cover - real network path
