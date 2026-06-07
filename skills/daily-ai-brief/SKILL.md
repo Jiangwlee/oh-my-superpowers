@@ -69,7 +69,9 @@ Load `assets/brief-template.html`.
 1. Replace template markers with real content (see template comments)
 2. Write HTML to `~/Dockers/html-serve/data/ai-daily/<date>-daily-ai-brief.html`
 3. Generate Markdown archive in same directory (`.md` extension)
-4. Tell user the URL: `http://192.168.5.140:8888/ai-daily/<date>-daily-ai-brief.html`
+4. Tell user both URLs:
+   - Tailscale: `http://100.90.192.71/:8888/ai-daily/<date>-daily-ai-brief.html`
+   - LAN: `http://192.168.5.140:8888/ai-daily/<date>-daily-ai-brief.html`
 
 `<date>` = `YYYY-MM-DD`. Output directory is always `ai-daily/`, independent of current project.
 
