@@ -43,7 +43,8 @@ judges every message by content.
    sample markers with this run's data; follow the template's section and
    merge rules) and write it to
    `~/Dockers/html-serve/data/mail-brief/<YYYY-MM-DD>-mail-brief.html` —
-   one page per day, merged across same-day runs. Give the user both URLs:
+   one page per day, merged across same-day runs and all accounts (account
+   markers per the template's multi-account rule). Give the user both URLs:
    - `http://ubuntu-gem12.tail82a434.ts.net:8888/mail-brief/<date>-mail-brief.html`
    - `http://192.168.5.140:8888/mail-brief/<date>-mail-brief.html`
 

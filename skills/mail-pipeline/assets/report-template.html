@@ -105,8 +105,14 @@ a { color: inherit; text-decoration: none; }
 
      Tag classes: tag-invoice | tag-ad | tag-notice | tag-uncertain | tag-alert
 
-     Same-day rule: one page per day. If today's page exists, merge its
-     rows with this run before rendering (do not drop earlier rows).
+     Same-day rule: one page per day covering ALL accounts. If today's
+     page exists, merge its rows with this run before rendering (do not
+     drop earlier rows).
+
+     Multi-account rule: with a single account, omit account markers
+     (current samples). With 2+ accounts: list accounts in header-sub,
+     add an 账号 column as the first invoice-table column, and prefix
+     done/action titles with [<account>]. Stats stay aggregated.
      ══════════════════════════════════════════════════════════════ -->
 
 <header class="header">
