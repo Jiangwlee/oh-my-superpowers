@@ -37,13 +37,14 @@ from parser import parse_bytes, parse_file
 def _classify(message: dict, processor_names: set[str]) -> dict:
     subject = str(message["source"].get("subject") or "").lower()
     text = str(message.get("text") or "").lower()
+    html = str(message.get("html") or "").lower()
     attachment_names = " ".join(str(item.get("filename", "")).lower() for item in message.get("attachments", []))
-    haystack = " ".join([subject, text, attachment_names])
+    haystack = " ".join([subject, text, html, attachment_names])
     if "invoice" in haystack or "发票" in haystack or "账单" in haystack:
         category = "invoices"
         reason = "Invoice-like keyword found in subject, body, or attachment filename."
         confidence = 0.82
-    elif any(term in haystack for term in ["unsubscribe", "promotion", "newsletter", "sale"]):
+    elif any(term in haystack for term in ["unsubscribe", "promotion", "newsletter", "sale", "退订"]):
         category = "spam_ads"
         reason = "Marketing or subscription keyword found."
         confidence = 0.76
@@ -242,6 +243,59 @@ def _pending_id(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
 
 
+def _move_target(processor) -> str | None:
+    """Return the processor's move folder key when moving is allowed."""
+    if processor.move_to and "move_email" in processor.allowed_actions:
+        return processor.move_to
+    return None
+
+
+def _apply_mailbox_mutations(account, mark_read: list[str], moves: list[tuple[str, str]]) -> list[str]:
+    """Mark messages read and move them; returns error descriptions.
+
+    Runs after events and dedupe state are written so a mailbox failure
+    never loses pipeline data.
+    """
+    errors: list[str] = []
+    password = os.environ.get(account.password_env) if account.password_env else None
+    if not password:
+        return [f"missing password env for account {account.id!r}"]
+    folder_map = {"inbox": account.inbox, "processed": account.processed, "needs_review": account.needs_review, "trash": account.trash}
+    context = ssl.create_default_context()
+    with imaplib.IMAP4_SSL(account.host, account.port, ssl_context=context, timeout=30) as client:
+        client.login(account.username, password)
+        status, _ = client.select(account.inbox)
+        if status != "OK":
+            return [f"select failed for inbox {account.inbox!r} on account {account.id!r}"]
+        if mark_read:
+            status, _ = client.uid("STORE", ",".join(mark_read), "+FLAGS.SILENT", r"(\Seen)")
+            if status != "OK":
+                errors.append(f"mark_read failed for uids {','.join(mark_read)}")
+        has_move = any(cap.upper() == "MOVE" for cap in client.capabilities)
+        expunge_needed = False
+        for uid, folder_key in moves:
+            target = folder_map.get(folder_key)
+            if not target:
+                errors.append(f"move_email target {folder_key!r} not configured for account {account.id!r}")
+                continue
+            quoted = f'"{target}"'
+            if has_move:
+                status, _ = client.uid("MOVE", uid, quoted)
+                if status != "OK":
+                    errors.append(f"move failed for uid {uid} -> {target}")
+            else:
+                status, _ = client.uid("COPY", uid, quoted)
+                if status != "OK":
+                    errors.append(f"copy failed for uid {uid} -> {target}")
+                    continue
+                client.uid("STORE", uid, "+FLAGS.SILENT", r"(\Deleted)")
+                expunge_needed = True
+        if expunge_needed:
+            client.expunge()
+        client.logout()
+    return errors
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run mail-pipeline ingest.")
     parser.add_argument("--account", default="all", help="Account id or 'all'.")
@@ -264,6 +318,7 @@ def main() -> None:
         print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
         raise SystemExit(1)
 
+    accounts_by_id = {}
     if args.fixture_dir:
         fixture_dir = Path(args.fixture_dir).expanduser()
         paths = sorted(fixture_dir.glob("*.eml"))[: args.limit]
@@ -273,6 +328,7 @@ def main() -> None:
     else:
         try:
             accounts = select_accounts(load_accounts(root), args.account)
+            accounts_by_id = {account.id: account for account in accounts}
             messages = []
             for account in accounts:
                 messages.extend(_fetch_imap(account, args.limit, since))
@@ -292,6 +348,7 @@ def main() -> None:
     events = []
     pending = []
     skipped = 0
+    mutations: dict[str, dict[str, list]] = {}
     for message in messages:
         classification = _classify(message, processor_names)
         processor = processors_by_name[classification["category"]]
@@ -329,6 +386,17 @@ def main() -> None:
             actions.append({"type": "save_attachment", "count": len(saved_attachments)})
         if planned_provider:
             actions.append({"type": "fetch_links", "provider": planned_provider})
+        move_folder_key = _move_target(processor)
+        imap_uid = message["source"].get("imap_uid")
+        if imap_uid:
+            actions.append({"type": "mark_read"})
+            if move_folder_key:
+                actions.append({"type": "move_email", "target": move_folder_key})
+            if args.apply and message["account_id"] in accounts_by_id:
+                account_mutations = mutations.setdefault(message["account_id"], {"mark_read": [], "moves": []})
+                account_mutations["mark_read"].append(imap_uid)
+                if move_folder_key:
+                    account_mutations["moves"].append((imap_uid, move_folder_key))
 
         status = "dry_run"
         pending_id = None
@@ -381,6 +449,17 @@ def main() -> None:
     if conn is not None:
         conn.close()
 
+    mailbox_errors: list[str] = []
+    mailbox_applied = {"mark_read": 0, "moved": 0}
+    for account_id, account_mutations in mutations.items():
+        try:
+            errors = _apply_mailbox_mutations(accounts_by_id[account_id], account_mutations["mark_read"], account_mutations["moves"])
+        except Exception as exc:
+            errors = [f"mailbox mutation failed for account {account_id!r}: {exc}"]
+        mailbox_errors.extend(errors)
+        mailbox_applied["mark_read"] += len(account_mutations["mark_read"])
+        mailbox_applied["moved"] += len(account_mutations["moves"])
+
     print(
         json.dumps(
             {
@@ -390,6 +469,8 @@ def main() -> None:
                 "processed": len(events),
                 "skipped": skipped,
                 "pending": pending,
+                "mailbox": mailbox_applied,
+                "mailbox_errors": mailbox_errors,
                 "events": events if not args.apply else [],
             },
             ensure_ascii=False,

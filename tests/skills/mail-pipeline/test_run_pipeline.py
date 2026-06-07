@@ -228,6 +228,19 @@ class TestRunPipeline(unittest.TestCase):
             self.assertEqual(1, result.returncode)
             self.assertIn("malformed invoice field", result.stderr)
 
+    def test_spam_classified_and_move_planned_for_imap_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            result = self.run_script("run.py", "--fixture-dir", str(FIXTURES / "spam"), "--apply", data_dir=root)
+            payload = json.loads(result.stdout)
+            event = json.loads((root / "events" / "spam_ads.jsonl").read_text().splitlines()[0])
+            self.assertEqual("spam_ads", event["classification"]["category"])
+            # Fixture messages have no imap_uid: no mailbox mutation is planned or attempted.
+            self.assertNotIn("move_email", json.dumps(event["actions"]))
+            self.assertEqual({"mark_read": 0, "moved": 0}, payload["mailbox"])
+            self.assertEqual([], payload["mailbox_errors"])
+
     def test_apply_sanitizes_account_path_component(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "mail-data"

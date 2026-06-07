@@ -18,7 +18,7 @@ dedupe, and audit output.
 
 | Condition | Action |
 |---|---|
-| User wants to send, reply, forward, or delete mail | Stop. This skill is read/organize only. |
+| User wants to send, reply, forward, or delete mail | Stop. This skill is read/organize only. Organize means flags (`\Seen`) and folder moves (e.g. trash), never permanent deletion. |
 | Mailbox credentials are requested in config or chat | Stop. Use password environment variables. |
 | User asks for MCP integration | Explain that v1 is an IMAP pipeline; MCP is out of scope. |
 | Action would modify mailbox state without `--apply` | Stop. Default is dry-run/read-only. |
@@ -61,7 +61,7 @@ omp mail-pipeline <subcommand> [args]
 | `init` | Create the data directory, config templates, event files, and state directory. |
 | `accounts list` | Show configured account IDs without printing secrets. |
 | `accounts check` | Validate IMAP connectivity for configured accounts. |
-| `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. |
+| `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. Under `--apply`, marks processed messages read and moves matched categories (e.g. spam_ads) to their configured folder. |
 | `submit` | Submit agent-extracted fields for a pending message: validate, reject duplicate invoice numbers, cross-check provider metadata, rename, finalize. `--invoice-file` picks the invoice among multiple staged files; `--discard --reason` drops a pending item with an audit event. |
 | `status` | Report recent runs, output files, and state summary. |
 

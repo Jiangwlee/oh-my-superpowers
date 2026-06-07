@@ -11,8 +11,13 @@ Stages:
 6. Stage PDFs and write a pending manifest per invoice message.
 7. Execute actions only when `--apply` is present.
 8. Write JSONL events and update dedupe state.
-9. The calling agent reads each staged PDF, extracts fields, and finalizes
-   via `submit` (validate, cross-check, rename, final event).
+9. Apply mailbox mutations per account (after events are safely written):
+   mark processed messages `\Seen`, move categories with `move_to` to their
+   configured folder (`UID MOVE`, falling back to COPY+`\Deleted`+EXPUNGE on
+   servers without MOVE). Failures are reported in `mailbox_errors` and never
+   roll back pipeline data.
+10. The calling agent reads each staged PDF, extracts fields, and finalizes
+    via `submit` (validate, cross-check, rename, final event).
 
 Safety defaults:
 
@@ -24,3 +29,6 @@ Safety defaults:
 - Email URLs are fetched only when the host matches a registered link
   provider; everything else in an email body is treated as untrusted.
 - Scripts never call an LLM; field extraction belongs to the calling agent.
+- Mailbox mutations are limited to `\Seen` flags and folder moves, run only
+  under `--apply`, and never touch messages skipped by dedupe or routed to
+  `needs_review` (no `move_to` on that processor).

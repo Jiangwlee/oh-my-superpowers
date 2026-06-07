@@ -123,6 +123,7 @@ accounts:
       inbox: INBOX
       processed: AI/Processed
       needs_review: AI/NeedsReview
+      trash: Deleted Messages
 """
 
 
@@ -149,6 +150,7 @@ def default_processors_yaml() -> str:
   - name: spam_ads
     description: "Identify ads, promotions, newsletters, and low-value subscription emails."
     output_jsonl: events/spam_ads.jsonl
+    move_to: trash
     allowed_actions:
       - write_jsonl
       - add_label
@@ -183,6 +185,7 @@ class Account:
     inbox: str
     processed: str | None
     needs_review: str | None
+    trash: str | None
 
 
 @dataclass(slots=True)
@@ -197,6 +200,7 @@ class Processor:
     extract: str | None
     rename_template: str | None
     link_providers: list[str]
+    move_to: str | None
 
 
 def accounts_config_path(root: Path) -> Path:
@@ -245,6 +249,7 @@ def load_accounts(root: Path) -> list[Account]:
                 inbox=str(folders.get("inbox", "INBOX")),
                 processed=folders.get("processed"),
                 needs_review=folders.get("needs_review"),
+                trash=folders.get("trash"),
             )
         )
     return loaded
@@ -282,6 +287,7 @@ def load_processors(root: Path) -> list[Processor]:
                 extract=item.get("extract"),
                 rename_template=item.get("rename_template"),
                 link_providers=[str(provider) for provider in (item.get("link_providers") or [])],
+                move_to=item.get("move_to"),
             )
         )
     return loaded
