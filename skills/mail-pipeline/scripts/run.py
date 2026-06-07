@@ -14,7 +14,42 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from common import data_dir, events_dir, load_accounts, load_processors, select_accounts, select_processors, state_dir
+from extract import extract_invoice
 from parser import parse_bytes, parse_file
+
+
+def _render_rename_base(template: str, fields: dict) -> str:
+    """Render a rename template from extracted fields, sanitized per component."""
+    rendered = template.format(**{key: _safe_name(str(value)) for key, value in fields.items()})
+    return _safe_name(rendered)
+
+
+def _run_extraction(processor, processors_by_name: dict, message: dict, classification: dict, model: str | None):
+    """Run the processor's AI extraction stage.
+
+    Returns (processor, classification, extracted, rename_base); routes the
+    message to needs_review when extraction fails.
+    """
+    if processor.extract != "invoice":
+        return processor, classification, {}, None
+    pdf = next(
+        (item for item in message.get("attachments", []) if str(item.get("filename", "")).lower().endswith(".pdf")),
+        None,
+    )
+    try:
+        if pdf is None:
+            raise ValueError("invoice extraction requires a PDF attachment")
+        invoice = extract_invoice(pdf["content_b64"], model)
+        rename_base = _render_rename_base(processor.rename_template, invoice) if processor.rename_template else None
+        return processor, classification, {"invoice": invoice}, rename_base
+    except (ValueError, KeyError) as exc:
+        fallback = processors_by_name.get("needs_review", processor)
+        failed = {
+            "category": fallback.name,
+            "confidence": 0.3,
+            "reason": f"invoice extraction failed: {exc}",
+        }
+        return fallback, failed, {}, None
 
 
 def _classify(message: dict, processor_names: set[str]) -> dict:
@@ -137,16 +172,25 @@ def _attachment_dir(root: Path, processor, message: dict, category: str) -> Path
     return _safe_relative_path(root, rendered)
 
 
-def _save_attachments(root: Path, processor, message: dict, category: str, apply: bool) -> list[dict]:
+def _save_attachments(root: Path, processor, message: dict, category: str, apply: bool, rename_base: str | None = None) -> list[dict]:
     if "save_attachment" not in processor.allowed_actions:
         return []
     saved = []
+    used_names: set[str] = set()
     target_dir = _attachment_dir(root, processor, message, category)
     for item in message.get("attachments", []):
         sha8 = item["sha256"][:8]
         filename = _safe_name(item["filename"])
-        subject = _safe_name(str(message["source"].get("subject") or "message"))[:80]
-        target = target_dir / f"{subject}_{sha8}_{filename}"
+        if rename_base:
+            suffix = Path(filename).suffix
+            name = f"{rename_base}{suffix}"
+            if name in used_names:
+                name = f"{rename_base}_{sha8}{suffix}"
+        else:
+            subject = _safe_name(str(message["source"].get("subject") or "message"))[:80]
+            name = f"{subject}_{sha8}_{filename}"
+        used_names.add(name)
+        target = target_dir / name
         if not _within_root(root, target):
             raise ValueError(f"attachment path escapes data dir: {target}")
         record = {
@@ -176,7 +220,9 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=50, help="Maximum messages per account.")
     parser.add_argument("--fixture-dir", help="Read local .eml files instead of IMAP.")
     parser.add_argument("--apply", action="store_true", help="Write files/state and modify allowed mailbox state.")
+    parser.add_argument("--model", help="LLM model for extraction (default: OMP_DEFAULT_MODEL_PI, then pi default).")
     args = parser.parse_args()
+    model = args.model or os.environ.get("OMP_DEFAULT_MODEL_PI")
 
     root = data_dir()
     try:
@@ -212,9 +258,12 @@ def main() -> None:
         if conn is not None and _already_processed(conn, key):
             skipped += 1
             continue
+        processor, classification, extracted, rename_base = _run_extraction(
+            processor, processors_by_name, message, classification, model
+        )
         try:
             processor_jsonl = _safe_relative_path(root, processor.output_jsonl)
-            saved_attachments = _save_attachments(root, processor, message, classification["category"], args.apply)
+            saved_attachments = _save_attachments(root, processor, message, classification["category"], args.apply, rename_base)
         except ValueError as exc:
             if conn is not None:
                 conn.close()
@@ -226,7 +275,7 @@ def main() -> None:
             "account_id": message["account_id"],
             "source": message["source"],
             "classification": classification,
-            "extracted": {},
+            "extracted": extracted,
             "attachments": saved_attachments,
             "actions": [
                 {"type": "write_jsonl", "target": "events/all.jsonl"},

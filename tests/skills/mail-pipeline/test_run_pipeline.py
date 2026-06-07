@@ -19,9 +19,10 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 class TestRunPipeline(unittest.TestCase):
     """Validate dry-run/apply behavior using local .eml fixtures."""
 
-    def run_script(self, script: str, *args: str, data_dir: Path) -> subprocess.CompletedProcess[str]:
+    def run_script(self, script: str, *args: str, data_dir: Path, llm_cmd: str | None = None) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["MAIL_PIPELINE_DATA_DIR"] = str(data_dir)
+        env["MAIL_PIPELINE_LLM_CMD"] = llm_cmd or f"{sys.executable} {FIXTURES / 'fake_llm.py'}"
         return subprocess.run(
             [sys.executable, str(SCRIPTS / script), *args],
             cwd=str(SCRIPTS),
@@ -42,6 +43,7 @@ class TestRunPipeline(unittest.TestCase):
             self.assertEqual("ok", payload["status"])
             self.assertFalse(payload["apply"])
             self.assertEqual("invoices", payload["events"][0]["classification"]["category"])
+            self.assertEqual("26427000000465806619", payload["events"][0]["extracted"]["invoice"]["invoice_number"])
             self.assertEqual("", (root / "events" / "all.jsonl").read_text())
 
     def test_apply_writes_jsonl_attachment_and_dedupe_state(self) -> None:
@@ -73,7 +75,7 @@ class TestRunPipeline(unittest.TestCase):
             root = Path(tmp) / "mail-data"
             self.run_script("init.py", data_dir=root)
             self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--account", "../../outside", "--apply", data_dir=root)
-            saved = list((root / "files").rglob("*invoice.pdf"))
+            saved = list((root / "files").rglob("*.pdf"))
             self.assertEqual(1, len(saved))
             self.assertTrue(saved[0].resolve().is_relative_to(root.resolve()))
 
@@ -87,6 +89,31 @@ class TestRunPipeline(unittest.TestCase):
                 self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
             self.assertIn("path escapes data dir", ctx.exception.stderr)
             self.assertFalse((root.parent / "outside.jsonl").exists())
+
+    def test_apply_renames_attachment_from_extracted_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
+            saved = list((root / "files").rglob("*.pdf"))
+            self.assertEqual(1, len(saved))
+            self.assertEqual("2026-06-04_26427000000465806619_测试电信公司.pdf", saved[0].name)
+
+    def test_extraction_failure_routes_to_needs_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            result = self.run_script(
+                "run.py",
+                "--fixture-dir",
+                str(FIXTURES),
+                data_dir=root,
+                llm_cmd=f'{sys.executable} -c "print(123)"',
+            )
+            event = json.loads(result.stdout)["events"][0]
+            self.assertEqual("needs_review", event["classification"]["category"])
+            self.assertIn("invoice extraction failed", event["classification"]["reason"])
+            self.assertEqual({}, event["extracted"])
 
     def test_processor_without_save_attachment_does_not_write_attachment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

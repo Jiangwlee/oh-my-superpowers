@@ -91,6 +91,8 @@ def default_processors_yaml() -> str:
     description: "Identify invoice or billing emails, save PDF attachments, and extract invoice metadata."
     output_jsonl: events/invoices.jsonl
     file_dir: files/{account_id}/invoices
+    extract: invoice
+    rename_template: "{invoice_date}_{invoice_number}_{seller}"
     allowed_actions:
       - write_jsonl
       - save_attachment
@@ -145,6 +147,8 @@ class Processor:
     output_jsonl: str
     file_dir: str | None
     allowed_actions: list[str]
+    extract: str | None
+    rename_template: str | None
 
 
 def accounts_config_path(root: Path) -> Path:
@@ -227,6 +231,8 @@ def load_processors(root: Path) -> list[Processor]:
                 output_jsonl=str(item.get("output_jsonl", f"events/{name}.jsonl")),
                 file_dir=item.get("file_dir"),
                 allowed_actions=[str(action) for action in actions],
+                extract=item.get("extract"),
+                rename_template=item.get("rename_template"),
             )
         )
     return loaded

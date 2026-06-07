@@ -70,6 +70,7 @@ def run(
     limit: int = typer.Option(50, "--limit", help="Maximum messages per account."),
     fixture_dir: str | None = typer.Option(None, "--fixture-dir", help="Read local .eml files instead of IMAP."),
     apply: bool = typer.Option(False, "--apply", help="Write files/state and allowed mailbox changes."),
+    model: str | None = typer.Option(None, "--model", help="LLM model for extraction (default: OMP_DEFAULT_MODEL_PI, then pi default)."),
 ) -> None:
     """Process messages through configured processors. Defaults to dry-run."""
     args = ["--account", account, "--processor", processor, "--limit", str(limit)]
@@ -77,6 +78,8 @@ def run(
         args += ["--fixture-dir", fixture_dir]
     if apply:
         args.append("--apply")
+    if model:
+        args += ["--model", model]
     _run("run.py", args)
 
 
