@@ -29,3 +29,25 @@ Every event written to JSONL should include:
 ```
 
 Use `message_id + attachment sha256` for attachment-level dedupe when possible.
+
+## extracted.invoice
+
+Processors with `extract: invoice` fill `extracted.invoice` via multimodal LLM
+extraction from the PDF attachment (no regex parsing):
+
+```json
+{
+  "invoice_date": "2026-06-04",
+  "invoice_number": "26427000000465806619",
+  "amount": 314.4,
+  "tax_rate": "*",
+  "purchase_content": "通信服务费",
+  "seller": "中国电信股份有限公司武汉分公司",
+  "confidence": 0.96
+}
+```
+
+- `amount` is the tax-inclusive total (价税合计).
+- `tax_rate` keeps face-value markers such as `*` verbatim.
+- All fields except `confidence` are required; extraction failure routes the
+  message to `needs_review` and leaves `extracted` empty.

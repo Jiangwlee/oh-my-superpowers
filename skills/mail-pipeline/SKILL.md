@@ -43,7 +43,7 @@ omp mail-pipeline <subcommand> [args]
 | `init` | Create the data directory, config templates, event files, and state directory. |
 | `accounts list` | Show configured account IDs without printing secrets. |
 | `accounts check` | Validate IMAP connectivity for configured accounts. |
-| `run` | Process messages through configured processors. Defaults to dry-run. |
+| `run` | Process messages through configured processors. Defaults to dry-run. `--model` overrides the extraction LLM. |
 | `status` | Report recent runs, output files, and state summary. |
 
 ## Storage
