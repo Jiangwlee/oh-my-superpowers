@@ -35,6 +35,15 @@ Status values: `pending_extraction` (staged via `stage`, waiting for agent
 fields via `submit`), `processed`, `discarded` (pending item dropped via
 `submit --discard`, staged files removed, reason recorded).
 
+Reading the event log:
+
+- One message produces multiple rows over its lifecycle (e.g.
+  `pending_extraction` then `processed` in `invoices.jsonl`). Consumers MUST
+  filter by `status`; the last row per message is the current state.
+- Ingest events carry `source.imap_uid` (single value); `mailbox` audit
+  events carry `source.imap_uids` (array). Searching history for one uid
+  MUST check both shapes.
+
 `mailbox` commands append audit events with status `mailbox_action` (or
 `mailbox_action_failed`): `source.imap_uids` lists the touched messages and
 `actions[0]` carries the type (`mark_read`/`move_email`), target folder, and
