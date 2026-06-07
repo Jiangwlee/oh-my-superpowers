@@ -7,11 +7,14 @@ attachments, and SQLite processing state.
 
 `mail-pipeline` is a conservative local pipeline.
 
-- It supports IMAP account configuration and connectivity checks.
+- It supports IMAP account configuration, connectivity checks, and read-only
+  IMAP ingestion (`--fixture-dir` switches to local `.eml` files).
 - It writes structured JSONL output under a local data directory.
 - It saves attachments only when `--apply` is used and the selected processor allows `save_attachment`.
+- Invoice messages are staged for the calling AI agent: scripts collect PDFs
+  (attachments, zip members, or allowlisted provider links), the agent reads
+  them and finalizes via `submit`. Scripts never call an LLM.
 - It does not send, reply, forward, or delete email.
-- It does not currently fetch messages from IMAP in `run`; v1 processes local `.eml` files through `--fixture-dir`.
 
 ## Command Tree
 
@@ -21,7 +24,8 @@ omp mail-pipeline
 ├── accounts
 │   ├── list --account <id|all>
 │   └── check --account <id|all>
-├── run --account <id|all> --processor <name|all> --limit <n> --fixture-dir <dir> [--apply]
+├── run --account <id|all> --processor <name|all> --limit <n> --since <YYYY-MM-DD> --fixture-dir <dir> [--apply]
+├── submit --id <pending-id> (--fields <json> [--invoice-file <name>] | --discard --reason <text>)
 └── status
 ```
 
@@ -115,12 +119,21 @@ processors:
     description: "Identify invoice or billing emails, save PDF attachments, and extract invoice metadata."
     output_jsonl: events/invoices.jsonl
     file_dir: files/{account_id}/invoices
+    extract: invoice
+    rename_template: "{invoice_date}_{invoice_number}_{seller}"
+    link_providers:
+      - nuonuo
+      - xforceplus
+      - keruyun
     allowed_actions:
       - write_jsonl
       - save_attachment
       - add_label
       - move_email
 ```
+
+See `references/config.md` for `extract`, `rename_template`, and
+`link_providers` semantics.
 
 Important path rules:
 
@@ -195,6 +208,7 @@ Status reports:
 - required config file presence
 - required directory presence
 - JSONL event counts
+- pending extractions waiting for `submit`
 - readiness state: `not_initialized`, `partial`, or `ready`
 
 ## Output Layout
