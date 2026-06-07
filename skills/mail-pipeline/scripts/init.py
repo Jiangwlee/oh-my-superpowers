@@ -4,8 +4,24 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
-from common import data_dir
+from common import (
+    DIRECTORIES,
+    EVENT_FILES,
+    config_dir,
+    data_dir,
+    default_accounts_yaml,
+    default_processors_yaml,
+    events_dir,
+)
+
+
+def _write_if_missing(path: Path, content: str) -> bool:
+    if path.exists():
+        return False
+    path.write_text(content, encoding="utf-8")
+    return True
 
 
 def main() -> None:
@@ -14,17 +30,25 @@ def main() -> None:
     args = parser.parse_args()
 
     root = data_dir()
+    account_config = config_dir(root) / "accounts.yaml"
+    processor_config = config_dir(root) / "processors.yaml"
     plan = {
         "data_dir": str(root),
-        "directories": ["config", "events", "files", "state", "logs"],
+        "directories": DIRECTORIES,
+        "config_files": [str(account_config), str(processor_config)],
+        "event_files": [str(events_dir(root) / name) for name in EVENT_FILES],
         "dry_run": args.dry_run,
     }
     print(json.dumps(plan, ensure_ascii=False, indent=2))
 
     if args.dry_run:
         return
-    for name in plan["directories"]:
+    for name in DIRECTORIES:
         (root / name).mkdir(parents=True, exist_ok=True)
+    _write_if_missing(account_config, default_accounts_yaml())
+    _write_if_missing(processor_config, default_processors_yaml())
+    for name in EVENT_FILES:
+        (events_dir(root) / name).touch(exist_ok=True)
 
 
 if __name__ == "__main__":
