@@ -41,11 +41,10 @@ judges every message by content.
 4. Report results: one row per message (uid → scenario → actions →
    artifacts), with uncertain items in a "needs your decision" section.
 
-Done when: every listed message has a scenario and a completed SOP (or is
-reported as uncertain or action-required), `omp mail-pipeline status` shows
-zero pending extractions, and the report is delivered. Action-required
-notifications stay unread by design and re-enter the queue until the user
-handles them.
+Done when: every listed message has a scenario, a completed SOP, and is
+marked read (or moved); `omp mail-pipeline status` shows zero pending
+extractions; and the report is delivered. The report — not the unread flag
+— carries action-required items and open questions.
 
 ## Scenario Routing
 
