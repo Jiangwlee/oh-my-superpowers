@@ -61,6 +61,26 @@ class TestConfigStorage(unittest.TestCase):
             self.assertTrue(payload["config"]["accounts_exists"])
             self.assertEqual(0, payload["event_counts"]["all.jsonl"])
 
+    def test_status_reports_partial_for_empty_existing_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            root.mkdir()
+            result = self.run_script("status.py", data_dir=root)
+            payload = json.loads(result.stdout)
+
+            self.assertEqual("partial", payload["status"])
+            self.assertFalse(payload["config"]["accounts_exists"])
+            self.assertFalse(payload["directories"]["events"])
+
+    def test_status_reports_not_initialized_when_root_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            result = self.run_script("status.py", data_dir=root)
+            payload = json.loads(result.stdout)
+
+            self.assertEqual("not_initialized", payload["status"])
+            self.assertFalse(payload["exists"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
