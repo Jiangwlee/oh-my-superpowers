@@ -13,7 +13,7 @@ import sqlite3
 import ssl
 import sys
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from common import (
@@ -62,7 +62,25 @@ def _classify(message: dict, processor_names: set[str]) -> dict:
     return {"category": category, "confidence": confidence, "reason": reason}
 
 
-def _fetch_imap(account, limit: int) -> list[dict]:
+_IMAP_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _imap_since(value: date) -> str:
+    """Format a date as a locale-independent IMAP SEARCH date."""
+    return f"{value.day:02d}-{_IMAP_MONTHS[value.month - 1]}-{value.year}"
+
+
+def _message_on_or_after(message: dict, since: date) -> bool:
+    raw = message["source"].get("date")
+    if not raw:
+        return True
+    try:
+        return datetime.fromisoformat(raw).date() >= since
+    except ValueError:
+        return True
+
+
+def _fetch_imap(account, limit: int, since: date | None) -> list[dict]:
     """Fetch the most recent inbox messages for one account, read-only."""
     password = os.environ.get(account.password_env) if account.password_env else None
     if not password:
@@ -74,7 +92,8 @@ def _fetch_imap(account, limit: int) -> list[dict]:
         status, _ = client.select(account.inbox, readonly=True)
         if status != "OK":
             raise ValueError(f"select failed for inbox {account.inbox!r} on account {account.id!r}")
-        status, data = client.uid("search", None, "ALL")
+        criteria = ("SINCE", _imap_since(since)) if since else ("ALL",)
+        status, data = client.uid("search", None, *criteria)
         if status != "OK":
             raise ValueError(f"uid search failed on account {account.id!r}")
         uids = data[0].split()
@@ -230,7 +249,13 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=50, help="Maximum messages per account.")
     parser.add_argument("--fixture-dir", help="Read local .eml files instead of IMAP.")
     parser.add_argument("--apply", action="store_true", help="Write files/state and modify allowed mailbox state.")
+    parser.add_argument("--since", help="Only process messages dated on/after this day (YYYY-MM-DD).")
     args = parser.parse_args()
+    try:
+        since = date.fromisoformat(args.since) if args.since else None
+    except ValueError as exc:
+        print(json.dumps({"status": "error", "error": f"invalid --since: {exc}"}, ensure_ascii=False, indent=2), file=sys.stderr)
+        raise SystemExit(1)
 
     root = data_dir()
     try:
@@ -243,12 +268,14 @@ def main() -> None:
         fixture_dir = Path(args.fixture_dir).expanduser()
         paths = sorted(fixture_dir.glob("*.eml"))[: args.limit]
         messages = [parse_file(path, account_id=args.account if args.account != "all" else "fixture") for path in paths]
+        if since:
+            messages = [message for message in messages if _message_on_or_after(message, since)]
     else:
         try:
             accounts = select_accounts(load_accounts(root), args.account)
             messages = []
             for account in accounts:
-                messages.extend(_fetch_imap(account, args.limit))
+                messages.extend(_fetch_imap(account, args.limit, since))
         except Exception as exc:
             print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
             raise SystemExit(1)

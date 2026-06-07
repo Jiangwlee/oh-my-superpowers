@@ -1,0 +1,30 @@
+From: Billing Team <billing@example.com>
+To: Me <me@example.com>
+Subject: Invoice MULTI-001
+Date: Sat, 06 Jun 2026 20:20:00 +0800
+Message-ID: <invoice-multi-001@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/plain; charset="utf-8"
+
+Please find attached invoice MULTI-001 with dining detail.
+
+--BOUNDARY
+Content-Type: application/zip; name="invoice-bundle.zip"
+Content-Disposition: attachment; filename="invoice-bundle.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBAoAAAAAABZ7x1xOXsXeJAAAACQAAAAQABwAcmVhbC1pbnZvaWNlLnBk
+ZlVUCQADvBwlarwcJWp1eAsAAQToAwAABOgDAAAlUERGLTEuNAolRmFrZSBy
+ZWFsIGludm9pY2UgcGRmIEFBQQpQSwMECgAAAAAAFnvHXMwAbgYlAAAAJQAA
+ABEAHABkaW5pbmctZGV0YWlsLnBkZlVUCQADvBwlarwcJWp1eAsAAQToAwAA
+BOgDAAAlUERGLTEuNAolRmFrZSBkaW5pbmcgZGV0YWlsIHBkZiBCQkIKUEsB
+Ah4DCgAAAAAAFnvHXE5exd4kAAAAJAAAABAAGAAAAAAAAQAAALSBAAAAAHJl
+YWwtaW52b2ljZS5wZGZVVAUAA7wcJWp1eAsAAQToAwAABOgDAABQSwECHgMK
+AAAAAAAWe8dczABuBiUAAAAlAAAAEQAYAAAAAAABAAAAtIFuAAAAZGluaW5n
+LWRldGFpbC5wZGZVVAUAA7wcJWp1eAsAAQToAwAABOgDAABQSwUGAAAAAAIA
+AgCtAAAA3gAAAAAA
+
+--BOUNDARY--

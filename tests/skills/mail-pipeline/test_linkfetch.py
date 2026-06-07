@@ -34,6 +34,14 @@ class TestLinkfetch(unittest.TestCase):
     def test_match_provider_ignores_lookalike_hosts(self) -> None:
         self.assertIsNone(match_provider("https://nnfp.jss.com.cn.evil.com/abc", ["nuonuo"]))
 
+    def test_extract_bare_url_inside_html_body(self) -> None:
+        message = {"html": "你收到一张发票，点击「 https://invoice.keruyun.com/s/Bc0yM_ 」即可下载使用", "text": ""}
+        self.assertEqual(["https://invoice.keruyun.com/s/Bc0yM_"], extract_urls(message))
+
+    def test_match_provider_keruyun(self) -> None:
+        self.assertEqual("keruyun", match_provider("https://invoice.keruyun.com/s/Bc0yM_", ["keruyun"]))
+        self.assertIsNone(match_provider("https://invoice.keruyun.com/s/Bc0yM_", ["nuonuo", "xforceplus"]))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

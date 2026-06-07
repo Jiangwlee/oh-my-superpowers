@@ -31,7 +31,8 @@ Every event written to JSONL should include:
 Use `message_id + attachment sha256` for attachment-level dedupe when possible.
 
 Status values: `dry_run`, `pending_extraction` (staged, waiting for agent
-fields via `submit`), `processed`. Attachment records gain `origin`
+fields via `submit`), `processed`, `discarded` (pending item dropped via
+`submit --discard`, staged files removed, reason recorded). Attachment records gain `origin`
 (`zip`/`link`), `source_zip`, or `source_url` when the PDF was expanded from
 a zip or fetched from an allowlisted provider link.
 

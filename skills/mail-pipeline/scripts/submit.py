@@ -24,6 +24,38 @@ def _render_rename_base(template: str, fields: dict) -> str:
     return safe_name(rendered)
 
 
+def _find_duplicate(processor_jsonl: Path, invoice_number: str) -> dict | None:
+    """Return a prior processed event holding the same invoice number, if any."""
+    if not processor_jsonl.exists():
+        return None
+    for line in processor_jsonl.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        invoice = (event.get("extracted") or {}).get("invoice") or {}
+        if event.get("status") == "processed" and str(invoice.get("invoice_number")) == invoice_number:
+            return event
+    return None
+
+
+def _order_invoice_first(records: list[dict], invoice_file: str | None) -> list[dict]:
+    """Put the agent-designated invoice file first so it gets the clean name."""
+    if not invoice_file:
+        return records
+    matched = [
+        record
+        for record in records
+        if record.get("original_filename") == invoice_file or Path(record["saved_path"]).name == invoice_file
+    ]
+    if not matched:
+        names = ", ".join(Path(record["saved_path"]).name for record in records)
+        raise ValueError(f"--invoice-file {invoice_file!r} matches none of: {names}")
+    return matched + [record for record in records if record not in matched]
+
+
 def _rename_files(root: Path, records: list[dict], rename_base: str) -> list[dict]:
     """Rename staged files to the rendered base, keeping extensions."""
     renamed = []
@@ -55,11 +87,56 @@ def _rename_files(root: Path, records: list[dict], rename_base: str) -> list[dic
     return renamed
 
 
+def _discard(root: Path, manifest_path: Path, manifest: dict, reason: str) -> None:
+    """Drop a pending item: remove staged files, append an audit event."""
+    removed = []
+    for record in manifest.get("attachments") or []:
+        staged = Path(record["saved_path"])
+        if within_root(root, staged) and staged.exists():
+            staged.unlink()
+            removed.append(str(staged))
+    processed_at = datetime.now(timezone.utc).isoformat()
+    event = {
+        "schema_version": "1.0",
+        "processed_at": processed_at,
+        "account_id": manifest["account_id"],
+        "source": manifest["source"],
+        "classification": {
+            "category": manifest["category"],
+            "confidence": 1.0,
+            "reason": f"Pending extraction discarded: {reason}",
+        },
+        "extracted": {},
+        "attachments": manifest.get("attachments") or [],
+        "actions": [{"type": "discard_pending", "removed_files": len(removed)}],
+        "status": "discarded",
+        "pending_id": manifest["pending_id"],
+    }
+    append_jsonl(events_dir(root) / "all.jsonl", event)
+    append_jsonl(safe_relative_path(root, manifest["output_jsonl"]), event)
+    manifest_path.unlink()
+    print(
+        json.dumps(
+            {"status": "ok", "discarded": manifest["pending_id"], "reason": reason, "removed_files": removed},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Submit extracted invoice fields for a pending message.")
     parser.add_argument("--id", required=True, help="Pending extraction id from `run` output or `status`.")
-    parser.add_argument("--fields", required=True, help="Extracted fields as a JSON object string.")
+    parser.add_argument("--fields", help="Extracted fields as a JSON object string.")
+    parser.add_argument("--invoice-file", help="Filename of the invoice PDF when the message staged multiple files; it receives the clean rendered name.")
+    parser.add_argument("--discard", action="store_true", help="Drop this pending item instead of finalizing (e.g. duplicate delivery).")
+    parser.add_argument("--reason", help="Reason for --discard; recorded in the audit event.")
     args = parser.parse_args()
+
+    if args.discard == bool(args.fields):
+        _fail("provide exactly one of --fields or --discard")
+    if args.discard and not args.reason:
+        _fail("--discard requires --reason")
 
     root = data_dir()
     manifest_path = pending_dir(root) / f"{safe_name(args.id)}.json"
@@ -67,10 +144,29 @@ def main() -> None:
         _fail(f"no pending extraction with id {args.id!r}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
+    if args.discard:
+        try:
+            _discard(root, manifest_path, manifest, args.reason)
+        except (KeyError, ValueError) as exc:
+            _fail(str(exc))
+        return
+
     try:
         fields = validate_invoice_fields(json.loads(args.fields))
     except (json.JSONDecodeError, ValueError) as exc:
         _fail(f"invalid fields: {exc}")
+
+    try:
+        duplicate = _find_duplicate(safe_relative_path(root, manifest["output_jsonl"]), str(fields["invoice_number"]))
+    except (KeyError, ValueError) as exc:
+        _fail(str(exc))
+    if duplicate:
+        _fail(
+            f"invoice_number {fields['invoice_number']} already processed at "
+            f"{duplicate.get('processed_at')}; if this pending item is a duplicate delivery, "
+            "drop it with: submit --id <id> --discard --reason '...'",
+            pending_id=manifest["pending_id"],
+        )
 
     mismatches = cross_check(fields, manifest.get("provider_meta") or {})
     if mismatches:
@@ -82,6 +178,7 @@ def main() -> None:
 
     records = manifest.get("attachments") or []
     try:
+        records = _order_invoice_first(records, args.invoice_file)
         if manifest.get("rename_template"):
             rename_base = _render_rename_base(manifest["rename_template"], fields)
             records = _rename_files(root, records, rename_base)

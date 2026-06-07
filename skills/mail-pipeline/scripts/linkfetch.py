@@ -20,6 +20,7 @@ from typing import Any
 PROVIDER_HOSTS = {
     "xforceplus": ["saas.xforceplus.com"],
     "nuonuo": ["nnfp.jss.com.cn"],
+    "keruyun": ["invoice.keruyun.com"],
 }
 
 _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -39,18 +40,30 @@ class _HrefParser(HTMLParser):
                 self.urls.append(html.unescape(value))
 
 
+def _scan_bare_urls(text: str) -> list[str]:
+    """Collect bare http(s) tokens from plain text."""
+    urls: list[str] = []
+    for token in text.split():
+        if token.startswith("http"):
+            urls.append(token.strip(".,;)>」』、。"))
+    return urls
+
+
 def extract_urls(message: dict) -> list[str]:
-    """Extract candidate URLs from a message body (HTML preferred)."""
+    """Extract candidate URLs from a message body.
+
+    HTML bodies contribute both href/src attributes and bare URLs in text
+    (some senders ship text/html parts containing plain text with a raw
+    link). Plain-text bodies are token-scanned.
+    """
+    urls: list[str] = []
     body = message.get("html") or ""
     if body:
         parser = _HrefParser()
         parser.feed(body)
-        return list(dict.fromkeys(parser.urls))
-    urls: list[str] = []
-    text = str(message.get("text") or "")
-    for token in text.split():
-        if token.startswith("http"):
-            urls.append(token.strip(".,;)>"))
+        urls.extend(parser.urls)
+        urls.extend(_scan_bare_urls(html.unescape(body)))
+    urls.extend(_scan_bare_urls(str(message.get("text") or "")))
     return list(dict.fromkeys(urls))
 
 
@@ -146,9 +159,20 @@ def _fetch_nuonuo(urls: list[str]) -> tuple[list[dict], dict]:
     return [_attachment_record(f"nuonuo_{vo.get('fphm') or 'invoice'}.pdf", pdf, pdf_url)], provider_meta
 
 
+def _fetch_keruyun(urls: list[str]) -> tuple[list[dict], dict]:
+    """Fetch keruyun short links; they redirect straight to the invoice PDF."""
+    attachments: list[dict] = []
+    for index, url in enumerate(urls):
+        payload = _get(url)
+        if _is_pdf(payload):
+            attachments.append(_attachment_record(f"keruyun_{index}.pdf", payload, url))
+    return attachments, {}
+
+
 _FETCHERS = {
     "xforceplus": _fetch_xforceplus,
     "nuonuo": _fetch_nuonuo,
+    "keruyun": _fetch_keruyun,
 }
 
 

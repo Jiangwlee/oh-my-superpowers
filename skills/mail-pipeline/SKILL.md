@@ -28,7 +28,8 @@ dedupe, and audit output.
 1. Initialize storage and templates with `omp mail-pipeline init`.
 2. Configure accounts in `config/accounts.yaml`; secrets stay in environment variables.
 3. Validate account connectivity with `omp mail-pipeline accounts check`.
-4. Run a dry-run ingest with `omp mail-pipeline run --account <id> --limit <n>`.
+4. Run a dry-run ingest with `omp mail-pipeline run --account <id> --limit <n>`;
+   add `--since YYYY-MM-DD` to bound the date range.
 5. Review JSONL decisions and only then rerun with `--apply`.
 6. For each entry in the `pending` list of the `run --apply` output: Read the
    staged PDF yourself, extract the invoice fields, then call
@@ -36,10 +37,15 @@ dedupe, and audit output.
    `invoice_date` (YYYY-MM-DD), `invoice_number`, `amount` (价税合计),
    `tax_rate` (keep face markers like `*` verbatim), `purchase_content`,
    `seller`, and optional `confidence`.
-7. If a PDF is unreadable or fields are uncertain, skip the submit and tell
+7. When a message staged multiple PDFs, add `--invoice-file <filename>` so the
+   invoice itself gets the clean rendered name.
+8. If `submit` rejects a duplicate invoice number, verify it is the same
+   invoice, then drop the pending item with
+   `omp mail-pipeline submit --id <id> --discard --reason '<why>'`.
+9. If a PDF is unreadable or fields are uncertain, skip the submit and tell
    the user; the manifest stays pending and is listed by `status`.
-8. Use `omp mail-pipeline status` to inspect runs, counts, errors, and
-   pending extractions.
+10. Use `omp mail-pipeline status` to inspect runs, counts, errors, and
+    pending extractions.
 
 Extraction is the agent's job: scripts stage PDFs and validate submitted
 fields, but never call an LLM themselves.
@@ -56,7 +62,7 @@ omp mail-pipeline <subcommand> [args]
 | `accounts list` | Show configured account IDs without printing secrets. |
 | `accounts check` | Validate IMAP connectivity for configured accounts. |
 | `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. |
-| `submit` | Submit agent-extracted fields for a pending message: validate, cross-check provider metadata, rename, finalize. |
+| `submit` | Submit agent-extracted fields for a pending message: validate, reject duplicate invoice numbers, cross-check provider metadata, rename, finalize. `--invoice-file` picks the invoice among multiple staged files; `--discard --reason` drops a pending item with an audit event. |
 | `status` | Report recent runs, output files, and state summary. |
 
 ## Storage

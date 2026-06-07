@@ -139,6 +139,7 @@ def default_processors_yaml() -> str:
     link_providers:
       - nuonuo
       - xforceplus
+      - keruyun
     allowed_actions:
       - write_jsonl
       - save_attachment

@@ -30,6 +30,7 @@ processors:
     link_providers:
       - nuonuo
       - xforceplus
+      - keruyun
     allowed_actions:
       - write_jsonl
       - save_attachment
@@ -51,6 +52,8 @@ Optional processor fields:
   a message has no pdf/zip attachment. Registered providers: `nuonuo`
   (nnfp.jss.com.cn short link → detail API → PDF, with invoice_number/amount
   metadata for cross-check), `xforceplus` (saas.xforceplus.com delivery
-  links, PDF kept by magic bytes). URLs from emails are never fetched unless
+  links, PDF kept by magic bytes), `keruyun` (invoice.keruyun.com short
+  links from krystore@service.alibaba.com, redirect straight to the PDF).
+  URLs from emails are never fetched unless
   their host matches a registered provider; provider requests bypass
   environment proxies. Link fetch only runs under `--apply`.
