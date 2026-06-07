@@ -81,13 +81,45 @@ def _safe_name(value: str) -> str:
     return cleaned.strip("._") or "message"
 
 
-def _save_attachments(root: Path, message: dict, category: str, apply: bool) -> list[dict]:
+def _within_root(root: Path, path: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _safe_relative_path(root: Path, value: str) -> Path:
+    raw = Path(value)
+    if raw.is_absolute():
+        raise ValueError(f"path must be relative to data dir: {value}")
+    target = root / raw
+    if not _within_root(root, target):
+        raise ValueError(f"path escapes data dir: {value}")
+    return target
+
+
+def _attachment_dir(root: Path, processor, message: dict, category: str) -> Path:
+    template = processor.file_dir or "files/{account_id}/{category}"
+    rendered = template.format(
+        account_id=_safe_name(str(message["account_id"])),
+        category=_safe_name(category),
+    )
+    return _safe_relative_path(root, rendered)
+
+
+def _save_attachments(root: Path, processor, message: dict, category: str, apply: bool) -> list[dict]:
+    if "save_attachment" not in processor.allowed_actions:
+        return []
     saved = []
+    target_dir = _attachment_dir(root, processor, message, category)
     for item in message.get("attachments", []):
         sha8 = item["sha256"][:8]
         filename = _safe_name(item["filename"])
         subject = _safe_name(str(message["source"].get("subject") or "message"))[:80]
-        target = root / "files" / message["account_id"] / category / f"{subject}_{sha8}_{filename}"
+        target = target_dir / f"{subject}_{sha8}_{filename}"
+        if not _within_root(root, target):
+            raise ValueError(f"attachment path escapes data dir: {target}")
         record = {
             "original_filename": item["filename"],
             "saved_path": str(target),
@@ -144,7 +176,14 @@ def main() -> None:
         if conn is not None and _already_processed(conn, key):
             skipped += 1
             continue
-        saved_attachments = _save_attachments(root, message, classification["category"], args.apply)
+        try:
+            processor_jsonl = _safe_relative_path(root, processor.output_jsonl)
+            saved_attachments = _save_attachments(root, processor, message, classification["category"], args.apply)
+        except ValueError as exc:
+            if conn is not None:
+                conn.close()
+            print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+            raise SystemExit(1)
         event = {
             "schema_version": "1.0",
             "processed_at": processed_at,
@@ -162,7 +201,7 @@ def main() -> None:
         events.append(event)
         if args.apply:
             _write_jsonl(events_dir(root) / "all.jsonl", event)
-            _write_jsonl(root / processor.output_jsonl, event)
+            _write_jsonl(processor_jsonl, event)
             if conn is not None:
                 _mark_processed(conn, key, processed_at)
     if conn is not None:

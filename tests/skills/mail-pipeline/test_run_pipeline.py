@@ -68,6 +68,37 @@ class TestRunPipeline(unittest.TestCase):
             conn.close()
             self.assertEqual(1, count)
 
+    def test_apply_sanitizes_account_path_component(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--account", "../../outside", "--apply", data_dir=root)
+            saved = list((root / "files").rglob("*invoice.pdf"))
+            self.assertEqual(1, len(saved))
+            self.assertTrue(saved[0].resolve().is_relative_to(root.resolve()))
+
+    def test_apply_rejects_jsonl_output_outside_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            processors = root / "config" / "processors.yaml"
+            processors.write_text(processors.read_text().replace("events/invoices.jsonl", "../outside.jsonl"), encoding="utf-8")
+            with self.assertRaises(subprocess.CalledProcessError) as ctx:
+                self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
+            self.assertIn("path escapes data dir", ctx.exception.stderr)
+            self.assertFalse((root.parent / "outside.jsonl").exists())
+
+    def test_processor_without_save_attachment_does_not_write_attachment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--processor", "important", "--apply", data_dir=root)
+            self.assertEqual([], list((root / "files").rglob("*invoice.pdf")))
+            lines = [line for line in (root / "events" / "important.jsonl").read_text().splitlines() if line]
+            event = json.loads(lines[0])
+            self.assertEqual([], event["attachments"])
+            self.assertNotIn("save_attachment", json.dumps(event["actions"]))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
