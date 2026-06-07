@@ -68,10 +68,13 @@ def run(
     account: str = typer.Option("all", "--account", help="Account id or 'all'."),
     processor: str = typer.Option("all", "--processor", help="Processor name or 'all'."),
     limit: int = typer.Option(50, "--limit", help="Maximum messages per account."),
+    fixture_dir: str | None = typer.Option(None, "--fixture-dir", help="Read local .eml files instead of IMAP."),
     apply: bool = typer.Option(False, "--apply", help="Write files/state and allowed mailbox changes."),
 ) -> None:
     """Process messages through configured processors. Defaults to dry-run."""
     args = ["--account", account, "--processor", processor, "--limit", str(limit)]
+    if fixture_dir:
+        args += ["--fixture-dir", fixture_dir]
     if apply:
         args.append("--apply")
     _run("run.py", args)

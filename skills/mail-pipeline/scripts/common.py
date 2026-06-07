@@ -136,6 +136,17 @@ class Account:
     needs_review: str | None
 
 
+@dataclass(slots=True)
+class Processor:
+    """Configured business processor."""
+
+    name: str
+    description: str
+    output_jsonl: str
+    file_dir: str | None
+    allowed_actions: list[str]
+
+
 def accounts_config_path(root: Path) -> Path:
     """Return the account config path."""
 
@@ -187,6 +198,40 @@ def load_accounts(root: Path) -> list[Account]:
     return loaded
 
 
+def load_processors(root: Path) -> list[Processor]:
+    """Load processor config."""
+
+    path = processors_config_path(root)
+    if not path.exists():
+        raise FileNotFoundError(f"processors config not found: {path}. Run `omp mail-pipeline init --apply` first.")
+    raw = load_yaml(path)
+    processors = raw.get("processors") or []
+    if not isinstance(processors, list):
+        raise ValueError("processors.yaml must contain a `processors` list")
+    loaded: list[Processor] = []
+    seen: set[str] = set()
+    for item in processors:
+        if not isinstance(item, dict):
+            raise ValueError("each processor entry must be a mapping")
+        name = str(item.get("name", "")).strip()
+        if not name:
+            raise ValueError("processor entry missing `name`")
+        if name in seen:
+            raise ValueError(f"duplicate processor name: {name}")
+        seen.add(name)
+        actions = item.get("allowed_actions") or []
+        loaded.append(
+            Processor(
+                name=name,
+                description=str(item.get("description", "")).strip(),
+                output_jsonl=str(item.get("output_jsonl", f"events/{name}.jsonl")),
+                file_dir=item.get("file_dir"),
+                allowed_actions=[str(action) for action in actions],
+            )
+        )
+    return loaded
+
+
 def select_accounts(accounts: list[Account], selected: str) -> list[Account]:
     """Select accounts by id or return all."""
 
@@ -196,6 +241,18 @@ def select_accounts(accounts: list[Account], selected: str) -> list[Account]:
     if not matched:
         valid = ", ".join(account.id for account in accounts) or "<none>"
         raise ValueError(f"unknown account {selected!r}; valid accounts: {valid}")
+    return matched
+
+
+def select_processors(processors: list[Processor], selected: str) -> list[Processor]:
+    """Select processors by name or return all."""
+
+    if selected == "all":
+        return processors
+    matched = [processor for processor in processors if processor.name == selected]
+    if not matched:
+        valid = ", ".join(processor.name for processor in processors) or "<none>"
+        raise ValueError(f"unknown processor {selected!r}; valid processors: {valid}")
     return matched
 
 
@@ -226,6 +283,8 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
         return yaml.safe_load(text) or {}
     except ModuleNotFoundError:
+        if "processors:" in text:
+            return _load_simple_processors_yaml(text)
         return _load_simple_accounts_yaml(text)
 
 
@@ -282,3 +341,46 @@ def _parse_key_value(value: str) -> tuple[str, Any]:
     if parsed.isdigit():
         return key.strip(), int(parsed)
     return key.strip(), parsed
+
+
+def _load_simple_processors_yaml(text: str) -> dict[str, Any]:
+    """Parse the limited processors.yaml shape used by this skill."""
+
+    processors: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    current_list_key: str | None = None
+    in_processors = False
+    for raw_line in text.splitlines():
+        line_without_comment = raw_line.split("#", 1)[0].rstrip()
+        if not line_without_comment.strip():
+            continue
+        stripped = line_without_comment.strip()
+        indent = len(line_without_comment) - len(line_without_comment.lstrip(" "))
+        if stripped == "processors:":
+            in_processors = True
+            continue
+        if not in_processors:
+            continue
+        if indent == 2 and stripped.startswith("- "):
+            current = {}
+            processors.append(current)
+            current_list_key = None
+            key_value = stripped[2:]
+            if key_value:
+                key, value = _parse_key_value(key_value)
+                current[key] = value
+            continue
+        if current is None:
+            continue
+        if indent == 4 and stripped.endswith(":"):
+            current_list_key = stripped[:-1]
+            current[current_list_key] = []
+            continue
+        if indent >= 6 and stripped.startswith("- ") and current_list_key:
+            current[current_list_key].append(stripped[2:].strip().strip("\"'"))
+            continue
+        if indent == 4 and ":" in stripped:
+            key, value = _parse_key_value(stripped)
+            current[key] = value
+            current_list_key = None
+    return {"processors": processors}
