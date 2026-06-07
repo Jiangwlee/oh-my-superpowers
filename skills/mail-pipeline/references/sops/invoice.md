@@ -18,7 +18,8 @@ or a link from an invoice provider (nuonuo, xforceplus, keruyun).
 
 2. Read each staged PDF and extract six fields: `invoice_date` (YYYY-MM-DD),
    `invoice_number`, `amount` (价税合计), `tax_rate` (keep face markers such
-   as `*` verbatim), `purchase_content`, `seller`.
+   as `*` verbatim), `purchase_content`, `seller`. For foreign-currency
+   invoices add `"currency": "USD"` (omitted = CNY).
 
 3. Submit the fields (real example from a processed invoice):
 

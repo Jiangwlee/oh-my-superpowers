@@ -44,12 +44,15 @@ def main() -> None:
         raise SystemExit(1)
 
     root = data_dir()
+    total_matched = 0
     try:
         if args.fixture_dir:
             fixture_dir = Path(args.fixture_dir).expanduser()
             account_id = args.account if args.account != "all" else "fixture"
+            paths = sorted(fixture_dir.glob("*.eml"))
+            total_matched = len(paths)
             messages = []
-            for path in sorted(fixture_dir.glob("*.eml"))[: args.limit]:
+            for path in paths[: args.limit]:
                 message = parse_file(path, account_id=account_id)
                 message["source"]["imap_uid"] = path.stem
                 messages.append(message)
@@ -59,7 +62,9 @@ def main() -> None:
             accounts = select_accounts(load_accounts(root), args.account)
             messages = []
             for account in accounts:
-                messages.extend(fetch_messages(account, args.limit, since, unseen_only=not args.include_seen))
+                fetched, matched = fetch_messages(account, args.limit, since, unseen_only=not args.include_seen)
+                messages.extend(fetched)
+                total_matched += matched
     except Exception as exc:
         print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
         raise SystemExit(1)
@@ -69,7 +74,19 @@ def main() -> None:
     if conn is not None:
         conn.close()
 
-    print(json.dumps({"status": "ok", "count": len(summaries), "messages": summaries}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "count": len(summaries),
+                "total_matched": total_matched,
+                "truncated": total_matched > args.limit,
+                "messages": summaries,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

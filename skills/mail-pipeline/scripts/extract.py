@@ -28,7 +28,7 @@ def validate_invoice_fields(fields: dict) -> dict:
         float(fields["amount"])
     except (TypeError, ValueError) as exc:
         raise ValueError(f"malformed invoice field: {exc}") from exc
-    keys = INVOICE_REQUIRED_FIELDS + ["confidence"]
+    keys = INVOICE_REQUIRED_FIELDS + ["confidence", "currency"]
     return {key: fields[key] for key in keys if key in fields}
 
 

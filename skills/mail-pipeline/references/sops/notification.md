@@ -14,10 +14,11 @@ formal invoice.
    marked read in step 3.
 
 3. Mark the message read with the judgment you actually made (example
-   shape; never copy a reason without reading the message):
+   shape; never copy a reason without reading the message). Batch
+   same-judgment messages into ONE call with repeated `--uid`:
 
    ```bash
-   omp mail-pipeline mailbox mark-read --account qq --uid 2042 --reason '服务条款更新通知，已阅，无需行动'
+   omp mail-pipeline mailbox mark-read --account qq --uid 2042 --uid 2043 --reason '同一服务商的例行服务通知，已阅，无需行动'
    ```
 
 Done when: the message is marked read, and any required action appears at

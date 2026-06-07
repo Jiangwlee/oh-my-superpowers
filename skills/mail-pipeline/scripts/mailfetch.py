@@ -42,8 +42,12 @@ def _connect_readonly(account) -> imaplib.IMAP4_SSL:
     return client
 
 
-def fetch_messages(account, limit: int, since: date | None, unseen_only: bool) -> list[dict]:
-    """Fetch the most recent inbox messages for one account, read-only."""
+def fetch_messages(account, limit: int, since: date | None, unseen_only: bool) -> tuple[list[dict], int]:
+    """Fetch the most recent inbox messages for one account, read-only.
+
+    Returns (messages, total_matched); when total_matched exceeds limit the
+    OLDEST messages are the ones dropped.
+    """
     criteria: list[str] = []
     if unseen_only:
         criteria.append("UNSEEN")
@@ -57,14 +61,15 @@ def fetch_messages(account, limit: int, since: date | None, unseen_only: bool) -
         status, data = client.uid("search", None, *criteria)
         if status != "OK":
             raise ValueError(f"uid search failed on account {account.id!r}")
-        for uid in data[0].split()[-limit:]:
+        uids = data[0].split()
+        for uid in uids[-limit:]:
             status, msg_data = client.uid("fetch", uid, "(BODY.PEEK[])")
             if status != "OK" or not msg_data or msg_data[0] is None:
                 continue
             messages.append(parse_bytes(msg_data[0][1], account_id=account.id, mailbox=account.inbox, imap_uid=uid.decode()))
     finally:
         client.logout()
-    return messages
+    return messages, len(uids)
 
 
 def fetch_message(account, uid: str) -> dict | None:

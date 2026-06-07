@@ -38,7 +38,11 @@ judges every message by content.
    table. When subject and snippet are not enough, run
    `omp mail-pipeline show --account qq --uid 1581` for the full body. Load
    the matched SOP file and execute from its Step 1. After the SOP finishes,
-   continue with the next message.
+   continue with the next message. Batch mailbox actions for same-judgment
+   messages (repeated `--uid` in one call). For a message with
+   `processed_before: true`, check the event log for its earlier outcome and
+   complete only the missing SOP tail steps (usually mark-read) instead of
+   reprocessing.
 4. Render the report page from `assets/report-template.html` (replace the
    sample markers with this run's data; follow the template's section and
    merge rules) and write it to

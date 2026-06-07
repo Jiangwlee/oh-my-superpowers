@@ -75,6 +75,30 @@ class TestPipelineInterfaces(unittest.TestCase):
             filtered = json.loads(self.run_script("list_messages.py", "--fixture-dir", str(FIXTURES), "--since", "2026-06-07", data_dir=root).stdout)
             self.assertEqual(0, filtered["count"])
 
+    def test_list_reports_truncation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            fixture_dir = Path(tmp) / "many"
+            fixture_dir.mkdir()
+            source = (FIXTURES / "invoice.eml").read_text()
+            (fixture_dir / "a.eml").write_text(source)
+            (fixture_dir / "b.eml").write_text(source.replace("invoice-001@example.com", "invoice-002@example.com"))
+            payload = json.loads(
+                self.run_script("list_messages.py", "--fixture-dir", str(fixture_dir), "--limit", "1", data_dir=root).stdout
+            )
+            self.assertEqual(1, payload["count"])
+            self.assertEqual(2, payload["total_matched"])
+            self.assertTrue(payload["truncated"])
+
+    def test_submit_passes_currency_through(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.init_root(tmp)
+            staged = json.loads(self.stage(root, FIXTURES, "invoice").stdout)
+            fields = {**FIELDS, "currency": "USD"}
+            self.run_script("submit.py", "--id", staged["pending_id"], "--fields", json.dumps(fields), data_dir=root)
+            event = json.loads((root / "events" / "all.jsonl").read_text().splitlines()[-1])
+            self.assertEqual("USD", event["extracted"]["invoice"]["currency"])
+
     def test_list_annotates_processed_after_stage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.init_root(tmp)

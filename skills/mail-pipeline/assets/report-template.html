@@ -100,8 +100,14 @@ a { color: inherit; text-decoration: none; }
        2. invoices      — one row per UNIQUE invoice_number (dedupe!),
                           section-total shows the sum of `amount`.
                           Omit section if no invoices this day.
-       3. done          — everything else handled: one row per message,
-                          tag = scenario, note = agent's reason.
+       3. done          — everything else handled. One row per message for
+                          small runs; for large runs aggregate same-judgment
+                          groups into one row with a count ("RealVNC 促销
+                          ×20"), keeping distinct judgments separate.
+
+     Currency rule: invoice amounts are CNY unless the event carries a
+     `currency` field; show one section-total per currency (e.g.
+     "价税合计 ¥2218.70 + $15.93") and prefix non-CNY amounts in rows.
 
      Tag classes: tag-invoice | tag-ad | tag-notice | tag-uncertain | tag-alert
 

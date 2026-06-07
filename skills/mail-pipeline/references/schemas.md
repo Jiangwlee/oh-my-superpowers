@@ -70,6 +70,8 @@ parsing, no LLM call inside scripts):
 ```
 
 - `amount` is the tax-inclusive total (价税合计).
+- `currency` is optional and defaults to `CNY`; set it (e.g. `"USD"`) for
+  foreign-currency invoices, where `tax_rate` may be `*` or `n/a`.
 - `tax_rate` keeps face-value markers such as `*` verbatim.
 - All fields except `confidence` are required; `stage` fails fast when a
   message has no pdf/zip attachment and no allowlisted link — the agent
