@@ -228,7 +228,7 @@ class TestRunPipeline(unittest.TestCase):
             self.assertEqual(1, result.returncode)
             self.assertIn("malformed invoice field", result.stderr)
 
-    def test_spam_classified_and_move_planned_for_imap_only(self) -> None:
+    def test_spam_classified_as_suggestion_without_mailbox_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "mail-data"
             self.run_script("init.py", data_dir=root)
@@ -236,10 +236,29 @@ class TestRunPipeline(unittest.TestCase):
             payload = json.loads(result.stdout)
             event = json.loads((root / "events" / "spam_ads.jsonl").read_text().splitlines()[0])
             self.assertEqual("spam_ads", event["classification"]["category"])
-            # Fixture messages have no imap_uid: no mailbox mutation is planned or attempted.
+            # Classification is a routing suggestion only: run never plans or
+            # executes mailbox mutations. The agent decides via `mailbox`.
             self.assertNotIn("move_email", json.dumps(event["actions"]))
-            self.assertEqual({"mark_read": 0, "moved": 0}, payload["mailbox"])
-            self.assertEqual([], payload["mailbox_errors"])
+            self.assertNotIn("mark_read", json.dumps(event["actions"]))
+            self.assertEqual("spam_ads", payload["messages"][0]["category"])
+
+    def test_run_outputs_message_summaries_for_agent_decisions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            payload = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), data_dir=root).stdout)
+            summary = payload["messages"][0]
+            self.assertEqual("Invoice INV-001", summary["subject"])
+            self.assertEqual(["billing@example.com"], summary["from"])
+            self.assertEqual("invoices", summary["category"])
+
+    def test_mailbox_rejects_unknown_account(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            result = self.run_script("mailbox.py", "mark-read", "--account", "nope", "--uid", "1", data_dir=root, check=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("unknown account", result.stderr)
 
     def test_apply_sanitizes_account_path_component(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

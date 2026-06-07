@@ -32,7 +32,12 @@ Use `message_id + attachment sha256` for attachment-level dedupe when possible.
 
 Status values: `dry_run`, `pending_extraction` (staged, waiting for agent
 fields via `submit`), `processed`, `discarded` (pending item dropped via
-`submit --discard`, staged files removed, reason recorded). Attachment records gain `origin`
+`submit --discard`, staged files removed, reason recorded).
+
+`mailbox` commands append audit events with status `mailbox_action` (or
+`mailbox_action_failed`): `source.imap_uids` lists the touched messages and
+`actions[0]` carries the type (`mark_read`/`move_email`), target folder, and
+the agent's `reason`. Attachment records gain `origin`
 (`zip`/`link`), `source_zip`, or `source_url` when the PDF was expanded from
 a zip or fetched from an allowlisted provider link.
 

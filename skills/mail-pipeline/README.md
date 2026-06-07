@@ -26,6 +26,9 @@ omp mail-pipeline
 │   └── check --account <id|all>
 ├── run --account <id|all> --processor <name|all> --limit <n> --since <YYYY-MM-DD> --fixture-dir <dir> [--apply]
 ├── submit --id <pending-id> (--fields <json> [--invoice-file <name>] | --discard --reason <text>)
+├── mailbox
+│   ├── mark-read --account <id> --uid <uid>... [--reason <text>]
+│   └── move --account <id> --uid <uid>... [--to trash] [--reason <text>]
 └── status
 ```
 

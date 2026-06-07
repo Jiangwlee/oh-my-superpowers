@@ -29,6 +29,13 @@ accounts_app = typer.Typer(
     add_completion=False,
 )
 app.add_typer(accounts_app, name="accounts")
+mailbox_app = typer.Typer(
+    name="mailbox",
+    help="Explicit mailbox actions decided by the calling agent.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(mailbox_app, name="mailbox")
 
 
 def _run(script: str, args: list[str]) -> None:
@@ -102,6 +109,37 @@ def submit(
     if reason:
         args += ["--reason", reason]
     _run("submit.py", args)
+
+
+@mailbox_app.command("mark-read")
+def mailbox_mark_read(
+    account: str = typer.Option(..., "--account", help="Account id."),
+    uid: list[str] = typer.Option(..., "--uid", help="IMAP uid in the account inbox (repeatable)."),
+    reason: str | None = typer.Option(None, "--reason", help="Why the agent decided this; recorded in the audit event."),
+) -> None:
+    """Mark messages as read (\\Seen)."""
+    args = ["mark-read", "--account", account]
+    for value in uid:
+        args += ["--uid", value]
+    if reason:
+        args += ["--reason", reason]
+    _run("mailbox.py", args)
+
+
+@mailbox_app.command("move")
+def mailbox_move(
+    account: str = typer.Option(..., "--account", help="Account id."),
+    uid: list[str] = typer.Option(..., "--uid", help="IMAP uid in the account inbox (repeatable)."),
+    to: str = typer.Option("trash", "--to", help="Logical target folder from the account folders map."),
+    reason: str | None = typer.Option(None, "--reason", help="Why the agent decided this; recorded in the audit event."),
+) -> None:
+    """Move messages to a configured folder (e.g. trash)."""
+    args = ["move", "--account", account, "--to", to]
+    for value in uid:
+        args += ["--uid", value]
+    if reason:
+        args += ["--reason", reason]
+    _run("mailbox.py", args)
 
 
 @app.command()

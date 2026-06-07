@@ -18,9 +18,9 @@ accounts:
       trash: Deleted Messages
 ```
 
-`folders` maps logical names to server folder names; `move_to` on a
-processor references a logical name (QQ mail: trash is `Deleted Messages`,
-the spam folder is `Junk`).
+`folders` maps logical names to server folder names; `mailbox move --to`
+references a logical name (QQ mail: trash is `Deleted Messages`, the spam
+folder is `Junk`).
 
 `config/processors.yaml` defines business processors:
 
@@ -53,9 +53,6 @@ Optional processor fields:
   via `submit`. Scripts never call an LLM.
 - `rename_template` — base filename rendered from submitted fields at
   `submit` time; each value is path-sanitized. Files keep their extensions.
-- `move_to` — logical folder name (from the account's `folders` map) to move
-  matched messages to under `--apply`; requires `move_email` in
-  `allowed_actions`. Default config moves `spam_ads` to `trash`.
 - `link_providers` — allowlist of invoice link providers to fetch from when
   a message has no pdf/zip attachment. Registered providers: `nuonuo`
   (nnfp.jss.com.cn short link → detail API → PDF, with invoice_number/amount

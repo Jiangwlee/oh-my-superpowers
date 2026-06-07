@@ -150,7 +150,6 @@ def default_processors_yaml() -> str:
   - name: spam_ads
     description: "Identify ads, promotions, newsletters, and low-value subscription emails."
     output_jsonl: events/spam_ads.jsonl
-    move_to: trash
     allowed_actions:
       - write_jsonl
       - add_label
@@ -200,7 +199,6 @@ class Processor:
     extract: str | None
     rename_template: str | None
     link_providers: list[str]
-    move_to: str | None
 
 
 def accounts_config_path(root: Path) -> Path:
@@ -287,7 +285,6 @@ def load_processors(root: Path) -> list[Processor]:
                 extract=item.get("extract"),
                 rename_template=item.get("rename_template"),
                 link_providers=[str(provider) for provider in (item.get("link_providers") or [])],
-                move_to=item.get("move_to"),
             )
         )
     return loaded

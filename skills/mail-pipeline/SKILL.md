@@ -44,11 +44,18 @@ dedupe, and audit output.
    `omp mail-pipeline submit --id <id> --discard --reason '<why>'`.
 9. If a PDF is unreadable or fields are uncertain, skip the submit and tell
    the user; the manifest stays pending and is listed by `status`.
-10. Use `omp mail-pipeline status` to inspect runs, counts, errors, and
+10. Review the `messages` summary from `run` output (and message bodies when
+    needed): judge each message by content, then mark fully-handled messages
+    read with `omp mail-pipeline mailbox mark-read --account <id> --uid <uid>
+    --reason '<why>'` and move ads/spam with `omp mail-pipeline mailbox move
+    --account <id> --uid <uid> --to trash --reason '<why>'`. The keyword
+    `category` in the summary is a routing hint, never a decision.
+11. Use `omp mail-pipeline status` to inspect runs, counts, errors, and
     pending extractions.
 
-Extraction is the agent's job: scripts stage PDFs and validate submitted
-fields, but never call an LLM themselves.
+Cognition is the agent's job: scripts stage PDFs, validate submitted fields,
+and execute explicitly requested mailbox actions, but never call an LLM and
+never decide which messages to flag or move.
 
 ## CLI
 
@@ -61,7 +68,9 @@ omp mail-pipeline <subcommand> [args]
 | `init` | Create the data directory, config templates, event files, and state directory. |
 | `accounts list` | Show configured account IDs without printing secrets. |
 | `accounts check` | Validate IMAP connectivity for configured accounts. |
-| `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. Under `--apply`, marks processed messages read and moves matched categories (e.g. spam_ads) to their configured folder. |
+| `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. Outputs a `messages` summary (uid/from/subject/suggested category) for agent decisions. Never touches mailbox state. |
+| `mailbox mark-read` | Mark messages `\Seen` after the agent decides they are fully handled. `--reason` is recorded in the audit event. |
+| `mailbox move` | Move messages to a configured logical folder (default `trash`) after the agent judges them by content. `--reason` is recorded in the audit event. |
 | `submit` | Submit agent-extracted fields for a pending message: validate, reject duplicate invoice numbers, cross-check provider metadata, rename, finalize. `--invoice-file` picks the invoice among multiple staged files; `--discard --reason` drops a pending item with an audit event. |
 | `status` | Report recent runs, output files, and state summary. |
 
