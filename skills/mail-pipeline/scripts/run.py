@@ -255,7 +255,13 @@ def main() -> None:
 
     processor_names = {processor.name for processor in processors}
     processors_by_name = {processor.name: processor for processor in processors}
-    conn = _init_state(state_dir(root) / "processed.sqlite") if args.apply else None
+    # Dry-run reads existing dedupe state (without creating it) so the
+    # preview matches what --apply would actually process.
+    db_path = state_dir(root) / "processed.sqlite"
+    if args.apply:
+        conn = _init_state(db_path)
+    else:
+        conn = sqlite3.connect(db_path) if db_path.exists() else None
     events = []
     pending = []
     skipped = 0
@@ -344,8 +350,7 @@ def main() -> None:
         if args.apply:
             append_jsonl(events_dir(root) / "all.jsonl", event)
             append_jsonl(processor_jsonl, event)
-            if conn is not None:
-                _mark_processed(conn, key, processed_at)
+            _mark_processed(conn, key, processed_at)
     if conn is not None:
         conn.close()
 

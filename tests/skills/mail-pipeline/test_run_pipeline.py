@@ -91,6 +91,30 @@ class TestRunPipeline(unittest.TestCase):
             conn.close()
             self.assertEqual(1, count)
 
+    def test_dry_run_reflects_dedupe_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root)
+            preview = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), data_dir=root).stdout)
+            self.assertEqual(0, preview["processed"])
+            self.assertEqual(1, preview["skipped"])
+
+    def test_submit_does_not_overwrite_different_file_with_same_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "mail-data"
+            self.run_script("init.py", data_dir=root)
+            first = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES), "--apply", data_dir=root).stdout)
+            second = json.loads(self.run_script("run.py", "--fixture-dir", str(FIXTURES / "zip"), "--apply", data_dir=root).stdout)
+            self.run_script("submit.py", "--id", first["pending"][0]["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
+            result = self.run_script("submit.py", "--id", second["pending"][0]["pending_id"], "--fields", json.dumps(FIELDS), data_dir=root)
+            final = Path(json.loads(result.stdout)["files"][0])
+            clean = final.parent / "2026-06-04_26427000000465806619_测试电信公司.pdf"
+            self.assertTrue(clean.exists())
+            self.assertNotEqual(clean, final)
+            self.assertTrue(final.name.startswith("2026-06-04_26427000000465806619_测试电信公司_"))
+            self.assertTrue(final.exists())
+
     def test_zip_attachment_expands_pdf_members(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "mail-data"

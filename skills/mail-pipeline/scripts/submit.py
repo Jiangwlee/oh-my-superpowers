@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -37,8 +38,15 @@ def _rename_files(root: Path, records: list[dict], rename_base: str) -> list[dic
         name = f"{rename_base}{suffix}"
         if name in used_names:
             name = f"{rename_base}_{record['sha256'][:8]}{suffix}"
-        used_names.add(name)
         target = source.with_name(name)
+        # Never overwrite an existing file with different content (e.g. two
+        # invoices rendering the same base name from a prior submit).
+        if target.exists() and target != source:
+            existing_sha = hashlib.sha256(target.read_bytes()).hexdigest()
+            if existing_sha != record["sha256"]:
+                name = f"{rename_base}_{record['sha256'][:8]}{suffix}"
+                target = source.with_name(name)
+        used_names.add(name)
         if not within_root(root, target):
             raise ValueError(f"rename target escapes data dir: {target}")
         if source != target:
