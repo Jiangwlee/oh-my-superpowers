@@ -30,10 +30,16 @@ Every event written to JSONL should include:
 
 Use `message_id + attachment sha256` for attachment-level dedupe when possible.
 
+Status values: `dry_run`, `pending_extraction` (staged, waiting for agent
+fields via `submit`), `processed`. Attachment records gain `origin`
+(`zip`/`link`), `source_zip`, or `source_url` when the PDF was expanded from
+a zip or fetched from an allowlisted provider link.
+
 ## extracted.invoice
 
-Processors with `extract: invoice` fill `extracted.invoice` via multimodal LLM
-extraction from the PDF attachment (no regex parsing):
+Processors with `extract: invoice` stage PDFs for the calling agent; the
+agent reads each staged PDF, extracts fields, and submits them via
+`omp mail-pipeline submit` (no regex parsing, no LLM call inside scripts):
 
 ```json
 {
@@ -49,5 +55,9 @@ extraction from the PDF attachment (no regex parsing):
 
 - `amount` is the tax-inclusive total (价税合计).
 - `tax_rate` keeps face-value markers such as `*` verbatim.
-- All fields except `confidence` are required; extraction failure routes the
-  message to `needs_review` and leaves `extracted` empty.
+- All fields except `confidence` are required; staging failure (no pdf/zip
+  attachment and no allowlisted link) routes the message to `needs_review`.
+- `submit` cross-checks `invoice_number` and `amount` against provider
+  metadata when the PDF came from a link provider; mismatches reject the
+  submit and keep the manifest pending. Provider dates are not compared
+  (they reflect issuing-request time, not the invoice date on the PDF face).

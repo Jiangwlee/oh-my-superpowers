@@ -27,6 +27,9 @@ processors:
     file_dir: files/{account_id}/invoices
     extract: invoice
     rename_template: "{invoice_date}_{invoice_number}_{seller}"
+    link_providers:
+      - nuonuo
+      - xforceplus
     allowed_actions:
       - write_jsonl
       - save_attachment
@@ -38,9 +41,16 @@ Keep processor names stable; downstream JSONL consumers may depend on them.
 
 Optional processor fields:
 
-- `extract` — AI extraction stage to run; `invoice` extracts fields from the
-  PDF attachment via a headless multimodal LLM (`pi -p --no-session`). Model
-  resolution: `--model` flag, then `OMP_DEFAULT_MODEL_PI`, then pi default.
-- `rename_template` — base filename for saved attachments, rendered from
-  extracted fields; each value is path-sanitized. All attachments of one
-  message share the base name and keep their original extensions.
+- `extract` — extraction contract; `invoice` stages PDFs (from pdf/zip
+  attachments, zip members expanded; only pdf/zip attachment types are
+  processed) and writes a pending manifest for the calling agent to fill
+  via `submit`. Scripts never call an LLM.
+- `rename_template` — base filename rendered from submitted fields at
+  `submit` time; each value is path-sanitized. Files keep their extensions.
+- `link_providers` — allowlist of invoice link providers to fetch from when
+  a message has no pdf/zip attachment. Registered providers: `nuonuo`
+  (nnfp.jss.com.cn short link → detail API → PDF, with invoice_number/amount
+  metadata for cross-check), `xforceplus` (saas.xforceplus.com delivery
+  links, PDF kept by magic bytes). URLs from emails are never fetched unless
+  their host matches a registered provider; provider requests bypass
+  environment proxies. Link fetch only runs under `--apply`.

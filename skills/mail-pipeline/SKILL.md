@@ -30,7 +30,19 @@ dedupe, and audit output.
 3. Validate account connectivity with `omp mail-pipeline accounts check`.
 4. Run a dry-run ingest with `omp mail-pipeline run --account <id> --limit <n>`.
 5. Review JSONL decisions and only then rerun with `--apply`.
-6. Use `omp mail-pipeline status` to inspect runs, counts, and errors.
+6. For each entry in the `pending` list of the `run --apply` output: Read the
+   staged PDF yourself, extract the invoice fields, then call
+   `omp mail-pipeline submit --id <pending_id> --fields '<json>'` with
+   `invoice_date` (YYYY-MM-DD), `invoice_number`, `amount` (价税合计),
+   `tax_rate` (keep face markers like `*` verbatim), `purchase_content`,
+   `seller`, and optional `confidence`.
+7. If a PDF is unreadable or fields are uncertain, skip the submit and tell
+   the user; the manifest stays pending and is listed by `status`.
+8. Use `omp mail-pipeline status` to inspect runs, counts, errors, and
+   pending extractions.
+
+Extraction is the agent's job: scripts stage PDFs and validate submitted
+fields, but never call an LLM themselves.
 
 ## CLI
 
@@ -43,7 +55,8 @@ omp mail-pipeline <subcommand> [args]
 | `init` | Create the data directory, config templates, event files, and state directory. |
 | `accounts list` | Show configured account IDs without printing secrets. |
 | `accounts check` | Validate IMAP connectivity for configured accounts. |
-| `run` | Process messages through configured processors. Defaults to dry-run. `--model` overrides the extraction LLM. |
+| `run` | Process messages through configured processors. Defaults to dry-run. Stages invoice PDFs (pdf/zip attachments or allowlisted provider links) for agent extraction. |
+| `submit` | Submit agent-extracted fields for a pending message: validate, cross-check provider metadata, rename, finalize. |
 | `status` | Report recent runs, output files, and state summary. |
 
 ## Storage
