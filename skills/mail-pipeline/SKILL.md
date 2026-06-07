@@ -30,7 +30,9 @@ judges every message by content.
    `omp mail-pipeline accounts check`.
 2. Fetch the work queue: `omp mail-pipeline list --account qq --since 2026-05-01`.
    Unread messages are the queue; read means handled. Add `--include-seen`
-   only to revisit handled mail.
+   only to revisit handled mail. `processed_before: true` means the message
+   was staged or archived in an earlier run (dedupe state) — it never blocks
+   notification or ad handling.
 3. For each message: classify it by content against the Scenario Routing
    table. When subject and snippet are not enough, run
    `omp mail-pipeline show --account qq --uid 1581` for the full body. Load
@@ -40,8 +42,10 @@ judges every message by content.
    artifacts), with uncertain items in a "needs your decision" section.
 
 Done when: every listed message has a scenario and a completed SOP (or is
-reported as uncertain), `omp mail-pipeline status` shows zero pending
-extractions, and the report is delivered.
+reported as uncertain or action-required), `omp mail-pipeline status` shows
+zero pending extractions, and the report is delivered. Action-required
+notifications stay unread by design and re-enter the queue until the user
+handles them.
 
 ## Scenario Routing
 
