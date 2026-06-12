@@ -22,7 +22,8 @@ judges every message by content.
 | Mailbox credentials are requested in config or chat | Stop. Passwords come from environment variables only. |
 | User asks for MCP integration | Explain that v1 is an IMAP pipeline; MCP is out of scope. |
 | A script would judge message content (classify, pick what to flag or move) | Stop. Scripts never call an LLM; classification and every mailbox action are agent decisions. |
-| html-serve container not running when rendering the report | Tell user: `cd ~/Dockers/html-serve && docker compose up -d`; deliver the chat summary regardless. |
+| `HTML_SERVE_DATA_DIR` is unset when rendering the report | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; deliver the chat summary regardless. |
+| html-serve container not running when rendering the report | Tell user: `cd docker/html-serve && docker compose up -d`; deliver the chat summary regardless. |
 
 ## Main Loop
 
@@ -46,11 +47,13 @@ judges every message by content.
 4. Render the report page from `assets/report-template.html` (replace the
    sample markers with this run's data; follow the template's section and
    merge rules) and write it to
-   `~/Dockers/html-serve/data/mail-brief/<YYYY-MM-DD>-mail-brief.html` —
+   `$HTML_SERVE_DATA_DIR/mail-brief/<YYYY-MM-DD>-mail-brief.html` —
    one page per day, merged across same-day runs and all accounts (account
-   markers per the template's multi-account rule). Give the user both URLs:
-   - `http://100.90.192.71:8888/mail-brief/<date>-mail-brief.html`
-   - `http://192.168.5.140:8888/mail-brief/<date>-mail-brief.html`
+   markers per the template's multi-account rule). Give the user the published
+   URL derived from
+   `${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/mail-brief/<date>-mail-brief.html`.
+   Prefer `HTML_SERVE_BASE_URL` when set; on this host it should be the
+   Tailscale reachable base URL.
 
    Summarize the same content briefly in chat: action items first, then
    counts. Do not generate a Markdown archive — `events/*.jsonl` is the

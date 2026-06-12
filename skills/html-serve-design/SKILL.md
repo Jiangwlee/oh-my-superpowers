@@ -71,6 +71,8 @@ leave routine publishing to that target skill.
 The final handoff must name:
 
 - The target skill files created or changed.
-- The html-serve prototype URL used for review.
+- The html-serve prototype URL used for review. Prefer the configured
+  `HTML_SERVE_BASE_URL` URL; use localhost only as fallback or secondary
+  troubleshooting context.
 - The target skill asset that now owns the final template.
 - The target skill reference that documents generation and publishing.

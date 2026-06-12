@@ -67,11 +67,12 @@ Fail: fewer than 5 quality items → tell user, offer to expand source list.
 Load `assets/brief-template.html`.
 
 1. Replace template markers with real content (see template comments)
-2. Write HTML to `~/Dockers/html-serve/data/ai-daily/<date>-daily-ai-brief.html`
-3. Generate Markdown archive in same directory (`.md` extension)
-4. Tell user both URLs:
-   - Tailscale: `http://100.90.192.71/:8888/ai-daily/<date>-daily-ai-brief.html`
-   - LAN: `http://192.168.5.140:8888/ai-daily/<date>-daily-ai-brief.html`
+2. Write HTML to `$HTML_SERVE_DATA_DIR/ai-daily/<date>-daily-ai-brief.html`
+3. Generate Markdown archive in the same directory (`.md` extension)
+4. Tell user the published URL derived from
+   `${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/ai-daily/<date>-daily-ai-brief.html`.
+   Prefer `HTML_SERVE_BASE_URL` when set; on this host it should be the
+   Tailscale reachable base URL.
 
 `<date>` = `YYYY-MM-DD`. Output directory is always `ai-daily/`, independent of current project.
 
@@ -84,4 +85,5 @@ Done when: HTML written, URL given to user.
 | No sources reachable | Abort, tell user to check network/web-operator |
 | Fewer than 3 items pass editorial filter | Warn user, offer to lower threshold or expand sources |
 | Template file missing | Abort, tell user to reinstall skill |
-| html-serve container not running | Tell user: `cd ~/Dockers/html-serve && docker compose up -d` |
+| `HTML_SERVE_DATA_DIR` unset | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; do not write to a hardcoded path. |
+| html-serve container not running | Tell user: `cd docker/html-serve && docker compose up -d` |

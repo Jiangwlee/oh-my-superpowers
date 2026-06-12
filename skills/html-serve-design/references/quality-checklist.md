@@ -16,8 +16,10 @@ Run this checklist before packaging the final template into the target skill.
 - [ ] No committed file contains a fixed LAN or Tailscale IP.
 - [ ] html-serve paths are expressed with `HTML_SERVE_DATA_DIR` and relative
       output paths.
-- [ ] URLs are derived from `HTML_SERVE_BASE_URL` or documented as local
-      examples.
+- [ ] User-facing URLs prefer `HTML_SERVE_BASE_URL`; on this host that should
+      be configured as the Tailscale base URL.
+- [ ] Localhost URLs are used only as fallback, service checks, or secondary
+      troubleshooting links.
 - [ ] If html-serve is unavailable, target skill still preserves its core
       non-HTML artifacts.
 

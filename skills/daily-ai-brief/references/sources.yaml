@@ -7,6 +7,8 @@
 # Search strategy: "from:<handle>" sorted by recency.
 
 x_accounts:
+  - handle: AnthropicAI
+    weight: 3
   - handle: karpathy
     weight: 3
   - handle: demishassabis
@@ -57,10 +59,16 @@ x_accounts:
     weight: 1
 
 blogs:
-  - name: OpenAI Blog
-    url: https://openai.com/news/
+  - name: OpenAI News
+    url: https://openai.com/zh-Hans-CN/news/
     weight: 3
-  - name: Anthropic Blog
+  - name: Anthropic Engineering
+    url: https://www.anthropic.com/engineering
+    weight: 3
+  - name: Anthropic Tutorial
+    url: https://www.anthropic.com/tutorials
+    weight: 3
+  - name: Anthropic News
     url: https://www.anthropic.com/news
     weight: 3
   - name: Simon Willison
