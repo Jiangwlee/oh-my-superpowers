@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitHub Trending · {{DATE}}</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap");
+:root {
+  --bg:#fafafa; --surface:#fff; --fg:#111; --muted:#666; --border:#ddd;
+  --soft:#f5f5f3; --accent:#1a1a1a;
+  --font-display:"Source Serif 4",Georgia,"Noto Serif SC",serif;
+  --font-body:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);line-height:1.6}
+.shell{max-width:1080px;margin:0 auto;padding:36px 24px 72px}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end;padding-bottom:22px;border-bottom:1px solid var(--fg)}
+.eyebrow{color:var(--muted);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+h1{margin:0;font-family:var(--font-display);font-size:clamp(34px,5vw,56px);line-height:1.05;letter-spacing:-.02em}
+.meta{color:var(--muted);font-size:13px;text-align:right;font-family:var(--font-mono)}
+.takeaway{background:var(--soft);border:1px solid var(--border);padding:20px 24px;margin:22px 0 28px}
+.takeaway h2{margin:0 0 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.takeaway p{margin:0;font-size:15px}
+.lead{background:var(--surface);border:1px solid var(--border);padding:28px;margin-bottom:28px}
+.lead .tag{display:inline-block;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.lead h2{margin:0 0 6px;font-family:var(--font-display);font-size:34px;line-height:1.1;letter-spacing:-.015em}
+.lead h2 a{color:inherit;text-decoration:none}
+.lead h2 a:hover{text-decoration:underline}
+.lead .delta-big{font-family:var(--font-mono);font-size:14px;margin-bottom:14px;color:var(--fg)}
+.lead p{margin:0 0 12px;color:var(--muted)}
+.lead .comment{color:var(--fg)}
+h3.band{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin:34px 0 4px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.repo{padding:20px 0;border-bottom:1px solid var(--border)}
+.repo-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.rank{font-family:var(--font-mono);color:var(--muted);font-size:13px}
+.repo-name{font-weight:600;font-size:17px;color:var(--fg);text-decoration:none}
+.repo-name:hover{text-decoration:underline}
+.delta{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--fg)}
+.repo-desc{margin:8px 0 6px;color:var(--muted);font-size:14px}
+.repo-comment{margin:0 0 10px;font-size:14.5px}
+.repo-meta{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.topics{margin-top:8px}
+.topic{display:inline-block;background:var(--soft);border:1px solid var(--border);padding:1px 8px;font-size:11px;color:var(--muted);margin:0 6px 4px 0}
+.empty{padding:18px;border:1px dashed var(--border);color:var(--muted);background:var(--soft)}
+footer{margin-top:40px;color:var(--muted);font-size:12px;font-family:var(--font-mono)}
+@media(max-width:720px){.top{display:block}.meta{text-align:left;margin-top:12px}.delta{margin-left:0}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="top">
+    <div>
+      <div class="eyebrow">github-trending / {{SINCE}}</div>
+      <h1>GitHub 今日热门</h1>
+    </div>
+    <div class="meta">
+      <div>{{DATE}}</div>
+      <div>{{REPO_COUNT}} repos · since={{SINCE}}</div>
+    </div>
+  </header>
+
+  <!-- 今日看点：1 段编辑综述，点出榜单整体趋势与最大事件 -->
+  <section class="takeaway">
+    <h2>今日看点</h2>
+    <p>{{TAKEAWAY}}</p>
+  </section>
+
+  <!-- Lead：当日新增 star 最高的仓库 -->
+  <article class="lead">
+    <span class="tag">Top · +{{LEAD_STARS_TODAY}} stars today</span>
+    <h2><a href="https://github.com/{{LEAD_NAME}}" target="_blank">{{LEAD_NAME}}</a></h2>
+    <div class="delta-big">★ {{LEAD_STARS}} total · ⑂ {{LEAD_FORKS}} · {{LEAD_LANG}} · {{LEAD_LICENSE}}</div>
+    <p>{{LEAD_DESC}}</p>
+    <p class="comment">{{LEAD_COMMENT}}</p>
+  </article>
+
+  <!-- 焦点项目：第 2-4 名，使用 .repo 卡片结构 -->
+  <h3 class="band">焦点项目</h3>
+  {{FOCUS_REPOS}}
+
+  <!-- 完整榜单：其余仓库，同 .repo 结构。每个 .repo:
+  <article class="repo">
+    <div class="repo-head">
+      <span class="rank">NN</span>
+      <a class="repo-name" href="https://github.com/owner/repo" target="_blank">owner/repo</a>
+      <span class="delta">+N today</span>
+    </div>
+    <p class="repo-desc">英文原始描述</p>
+    <p class="repo-comment">中文点评（必填）</p>
+    <div class="repo-meta"><span>★ N</span><span>⑂ N</span><span>Lang</span><span>License</span><span>created YYYY-MM-DD</span></div>
+    <div class="topics"><span class="topic">topic</span></div>
+  </article>
+  -->
+  <h3 class="band">完整榜单</h3>
+  {{REST_REPOS}}
+
+  <!-- 当某个仓库 API 补全失败时，在其卡片 repo-meta 处标注 "details unavailable"；
+       全部抓取失败时用 <div class="empty">说明原因</div> 替代列表 -->
+
+  <footer>
+    数据来源：github.com/trending ({{SINCE}}) + GitHub REST API · 生成于 {{DATE}} · github-trending
+  </footer>
+</main>
+</body>
+</html>
