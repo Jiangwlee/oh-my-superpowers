@@ -1,0 +1,16 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: html-serve
+    restart: unless-stopped
+    ports:
+      - "${HTML_SERVE_PORT:-8888}:80"
+    volumes:
+      - type: bind
+        source: ${HTML_SERVE_DATA_DIR:?Set HTML_SERVE_DATA_DIR in docker/html-serve/.env or the shell environment}
+        target: /usr/share/nginx/html
+        read_only: true
+      - type: bind
+        source: ./nginx.conf
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
