@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{REPORT_TITLE}}</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --fg: #111111;
+  --muted: #666666;
+  --border: #dddddd;
+  --soft: #f5f5f3;
+  --accent: #1a1a1a;
+  --success: #166534;
+  --warn: #92400e;
+  --danger: #b91c1c;
+  --font-display: "Source Serif 4", Georgia, "Noto Serif SC", serif;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  letter-spacing: 0;
+  line-height: 1.6;
+}
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 44px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 48px 28px 72px;
+}
+.report { max-width: 66ch; }
+.eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+h1 {
+  margin: 0 0 18px;
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5vw, 48px);
+  line-height: 1.04;
+}
+.deck {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.5;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0 0 34px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.section h2,
+.sources h2 {
+  margin: 0 0 13px;
+  font-family: var(--font-display);
+  font-size: 27px;
+  line-height: 1.18;
+}
+.section ul {
+  margin: 0;
+  padding-left: 22px;
+}
+.section li + li { margin-top: 8px; }
+.section { margin: 42px 0; }
+.section p,
+.section li {
+  font-size: 16px;
+  line-height: 1.65;
+}
+.section p { margin: 0 0 16px; }
+.conclusion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.conclusion-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px 16px;
+}
+.conclusion-card strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.conclusion-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.source-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.source-table th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 10px 8px 0;
+  border-bottom: 1px solid var(--fg);
+}
+.source-table td {
+  vertical-align: top;
+  padding: 9px 10px 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.source-table td.platform { white-space: nowrap; color: var(--muted); }
+.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  color: var(--muted);
+  font-size: 13px;
+}
+.toc strong { display: block; color: var(--fg); margin-bottom: 10px; }
+.toc a { display: block; padding: 6px 0; text-decoration: none; }
+.toc a:hover { color: var(--fg); }
+.audit {
+  margin-top: 38px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+@media (max-width: 860px) {
+  .shell {
+    display: block;
+    padding: 28px 20px 56px;
+  }
+  .report { max-width: none; }
+  .toc {
+    position: static;
+    margin: 0 0 28px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .conclusion-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<main class="shell">
+  <article class="report">
+    <header>
+      <div class="eyebrow">deep-research / report</div>
+      <h1>{{REPORT_TITLE}}</h1>
+      <p class="deck">{{REPORT_DECK}}</p>
+      <div class="meta">
+        <span class="pill">{{GENERATED_AT}}</span>
+        <span class="pill">{{SOURCE_COUNT}} sources</span>
+        <span class="pill">status: {{STATUS}}</span>
+      </div>
+    </header>
+
+    <section class="section" id="goal">
+      <h2>研究目标</h2>
+      {{RESEARCH_GOAL}}
+    </section>
+
+    <section class="section" id="conclusions">
+      <h2>结论</h2>
+      <div class="conclusion-grid">
+        {{CONCLUSION_CARDS}}
+      </div>
+    </section>
+
+    <section class="section" id="risks">
+      <h2>关键分歧 / 风险</h2>
+      <ul>
+        {{RISK_ITEMS}}
+      </ul>
+    </section>
+
+    <section class="section" id="unresolved">
+      <h2>未解决问题</h2>
+      <ul>
+        {{UNRESOLVED_ITEMS}}
+      </ul>
+    </section>
+
+    <section class="section sources" id="sources">
+      <h2>信息来源</h2>
+      <table class="source-table">
+        <thead>
+          <tr><th>来源</th><th>平台</th><th>证据价值</th></tr>
+        </thead>
+        <tbody>
+          {{SOURCE_TABLE_ROWS}}
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="audit">
+      {{AUDIT_NOTE}}
+    </footer>
+  </article>
+
+  <nav class="toc" aria-label="Table of contents">
+    <strong>Contents</strong>
+    <a href="#goal">研究目标</a>
+    <a href="#conclusions">结论</a>
+    <a href="#risks">关键分歧 / 风险</a>
+    <a href="#unresolved">未解决问题</a>
+    <a href="#sources">信息来源</a>
+  </nav>
+</main>
+</body>
+</html>

@@ -9,7 +9,7 @@ description: >-
 
 # deep-research Skill
 
-把"搜一搜"升级为"有节奏的多轮研究"：拆目标 → broad 探索 → 定向深挖 → 补反方 → 输出可审计的 `brief` + `full report`。
+把"搜一搜"升级为"有节奏的多轮研究"：拆目标 → broad 探索 → 定向深挖 → 补反方 → 输出可审计的 `brief` + `full report` + HTML 最终报告页。
 
 **适用**：需要跨多角度、多来源、多轮验证才能下结论。
 **不适用**：一次性临时搜索、单页总结、单一事实查询。
@@ -23,9 +23,10 @@ description: >-
 | 2. Deep Dive | 关键全文 + Pre-search Reasoning 块 | 同上 |
 | 3. Diversity & Validation | 反方、限制、替代、风险 | 同上 |
 | 4. Synthesis Check | `[Round N Synthesis]` 状态块，更新 plan | `references/stop-criteria.md` |
-| Report | `brief.md` + `full-report.md` | `references/reporting.md` |
+| Report | `brief.md` + `full-report.md` + `report.html`，并发布 HTML 结果页 | `references/reporting.md` / `references/html-reporting.md` |
 
 未覆盖多角度、缺关键全文来源、缺反方 / 限制信息 → 不得提前停止。
+未生成 `reports/report.html` → 不得声明研究报告完成。
 
 ## CLI 入口
 
@@ -36,7 +37,7 @@ omp deep-research <subcommand> [args]
 | 命令 | 作用 |
 |---|---|
 | `init` | 创建 workspace（`--topic` / `--slug` / `--mode`） |
-| `build-report` | 写入 brief + full report，并把 sources 持久化到 `state.json` |
+| `build-report` | 写入 brief + full report，生成 `reports/report.html`，并把 sources 持久化到 `state.json` |
 
 不确定参数先跑 `omp deep-research <subcommand> --help`，或查 `references/cli.md`。
 
@@ -58,6 +59,7 @@ omp deep-research <subcommand> [args]
 | 决定搜什么、信什么来源 | `references/source-strategy.md` |
 | 判断是否停止本轮研究 | `references/stop-criteria.md` |
 | 写 brief / full report | `references/reporting.md` |
+| 生成并发布必需的 HTML 结果页 | `references/html-reporting.md` |
 | CLI 子命令与参数 | `references/cli.md` |
 | `state.json` 结构 | `references/state-schema.md` |
 | workspace 目录结构 | `references/workspace.md` |

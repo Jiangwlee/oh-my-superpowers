@@ -1,6 +1,8 @@
 # Reporting
 
 `deep-research` 产出两层报告。模板固定，不要自创结构。
+如需生成 HTML 发布页，先完成这两层 Markdown 报告，再按
+`html-reporting.md` 把 workspace 投影成 `reports/report.html`。
 
 ## `brief.md`
 

@@ -8,6 +8,7 @@
 | 决定搜什么、信什么来源 | [source-strategy.md](source-strategy.md) |
 | 判断何时停止本轮研究 | [stop-criteria.md](stop-criteria.md) |
 | 写 `brief` / `full report` | [reporting.md](reporting.md) |
+| 生成或发布 HTML 结果页 | [html-reporting.md](html-reporting.md) |
 | CLI 子命令与参数 | [cli.md](cli.md) |
 | `state.json` 结构 | [state-schema.md](state-schema.md) |
 | workspace 目录结构 | [workspace.md](workspace.md) |
