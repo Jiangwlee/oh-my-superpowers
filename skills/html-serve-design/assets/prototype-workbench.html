@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>html-serve template workbench</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap");
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --fg: #111111;
+  --muted: #666666;
+  --border: #dddddd;
+  --soft: #f5f5f3;
+  --accent: #1a1a1a;
+  --font-display: "Source Serif 4", Georgia, "Noto Serif SC", serif;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  line-height: 1.55;
+}
+.topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.topbar h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 19px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.topbar p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace {
+  height: calc(100vh - 56px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.preview {
+  overflow: auto;
+  padding: 28px;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px),
+    linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.page {
+  max-width: 1080px;
+  min-height: 720px;
+  margin: 0 auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 50px rgba(0,0,0,0.08);
+}
+.page-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: var(--gap, 44px);
+  padding: var(--pad, 48px);
+}
+.article { max-width: var(--measure, 66ch); }
+.eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.article h2 {
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-size: var(--title, 60px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+.deck {
+  margin: 0 0 26px;
+  color: var(--muted);
+  font-size: var(--deck, 19px);
+  line-height: 1.45;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 36px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: var(--boxpad, 20px);
+  margin-bottom: 36px;
+}
+.summary h3,
+.section h3 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+.summary ol {
+  margin: 0;
+  padding-left: 22px;
+}
+.summary li + li { margin-top: 9px; }
+.section {
+  margin: var(--section, 42px) 0;
+}
+.section p {
+  margin: 0 0 16px;
+  font-size: var(--body, 16px);
+  line-height: var(--leading, 1.65);
+}
+.source-row {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.source-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.toc {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+.toc strong {
+  display: block;
+  color: var(--fg);
+  margin-bottom: 10px;
+}
+.toc a {
+  display: block;
+  padding: 6px 0;
+  color: inherit;
+  text-decoration: none;
+}
+.toc-none .toc { display: none; }
+.toc-none .page-inner { grid-template-columns: minmax(0, 1fr); }
+.toc-inline .toc { position: static; order: -1; }
+.toc-sticky .toc { position: sticky; top: 24px; align-self: start; }
+.sources-hidden .sources { display: none; }
+.sources-expanded .source-row { background: var(--surface); border: 1px solid var(--border); padding: 12px; margin-bottom: 10px; }
+.emphasis-operational .article h2 { font-family: var(--font-body); font-size: calc(var(--title, 60px) * .72); letter-spacing: -0.02em; }
+.emphasis-neutral .article h2 { font-size: calc(var(--title, 60px) * .84); }
+.panel {
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+.panel-scroll {
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+.group { margin-bottom: 20px; }
+.group-title {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+button,
+select {
+  font: inherit;
+}
+.seg button,
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 4px;
+  padding: 7px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.seg button.active,
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+.control {
+  margin-bottom: 12px;
+}
+.control label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.control output {
+  color: var(--fg);
+  font-family: var(--font-mono);
+}
+input[type="range"] { width: 100%; }
+.export {
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+}
+pre {
+  max-height: 170px;
+  overflow: auto;
+  margin: 0 0 10px;
+  padding: 12px;
+  background: #1f1f1f;
+  color: #e8e8e8;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+.btn { flex: 1; }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.toast.show { opacity: 1; }
+@media (max-width: 900px) {
+  body { height: auto; overflow: auto; }
+  .workspace { display: block; height: auto; }
+  .preview { padding: 16px; }
+  .page-inner { display: block; padding: 28px; }
+  .panel { border-left: 0; border-top: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>html-serve template workbench</h1>
+    <p>Design a target skill result page, preview it, then export decisions.</p>
+  </div>
+</header>
+
+<div class="workspace">
+  <main class="preview">
+    <section class="page toc-sticky sources-compact emphasis-editorial" id="page">
+      <div class="page-inner">
+        <article class="article">
+          <div class="eyebrow"><span id="targetSkillText">target-skill</span> / <span id="patternText">report</span></div>
+          <h2>Final report page for a target skill</h2>
+          <p class="deck">The first viewport should show the real subject, the core conclusion, and enough context for the user to decide whether to keep reading.</p>
+          <div class="meta">
+            <span>Generated today</span>
+            <span>8 sources</span>
+            <span>Workspace retained for audit</span>
+          </div>
+          <section class="summary">
+            <h3>Core conclusions</h3>
+            <ol>
+              <li>The HTML page should present the final result, not the whole internal process.</li>
+              <li>Sources should be available without dominating the reading path.</li>
+              <li>The target skill owns the final template after this design loop.</li>
+            </ol>
+          </section>
+          <section class="section">
+            <h3>What changed</h3>
+            <p>This section previews the narrative body that a target skill would populate from its existing report or structured output files.</p>
+            <p>The design should keep the user's real reading task visible. Avoid generic placeholder panels and unnecessary page chrome.</p>
+          </section>
+          <section class="section sources">
+            <h3>Sources</h3>
+            <div class="source-row"><strong>Primary source title</strong><span>platform - one-line reason this source matters</span></div>
+            <div class="source-row"><strong>Supporting source title</strong><span>platform - corroborates the second conclusion</span></div>
+          </section>
+        </article>
+        <nav class="toc" aria-label="Template preview contents">
+          <strong>Contents</strong>
+          <a href="#">Core conclusions</a>
+          <a href="#">What changed</a>
+          <a href="#">Sources</a>
+        </nav>
+      </div>
+    </section>
+  </main>
+
+  <aside class="panel">
+    <div class="panel-scroll">
+      <div class="group">
+        <div class="group-title">Page Pattern</div>
+        <div class="seg" data-key="pattern">
+          <button class="active" data-value="report">Report</button>
+          <button data-value="brief">Brief</button>
+          <button data-value="review">Review</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Density</div>
+        <div class="seg" data-key="density">
+          <button data-value="compact">Compact</button>
+          <button class="active" data-value="standard">Standard</button>
+          <button data-value="spacious">Spacious</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Navigation</div>
+        <div class="seg" data-key="toc">
+          <button data-value="none">None</button>
+          <button data-value="inline">Inline</button>
+          <button class="active" data-value="sticky">Sticky</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Sources</div>
+        <div class="seg" data-key="sources">
+          <button data-value="hidden">Hidden</button>
+          <button class="active" data-value="compact">Compact</button>
+          <button data-value="expanded">Expanded</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Emphasis</div>
+        <div class="seg" data-key="emphasis">
+          <button data-value="neutral">Neutral</button>
+          <button class="active" data-value="editorial">Editorial</button>
+          <button data-value="operational">Operational</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Measures</div>
+        <div class="control">
+          <label>Reading width <output id="vMeasure">66ch</output></label>
+          <input id="measure" type="range" min="54" max="76" value="66">
+        </div>
+        <div class="control">
+          <label>Title scale <output id="vTitle">60px</output></label>
+          <input id="title" type="range" min="38" max="78" value="60">
+        </div>
+      </div>
+    </div>
+
+    <div class="export">
+      <pre id="exportCode"></pre>
+      <div class="btn-row">
+        <button class="btn" id="resetBtn">Reset</button>
+        <button class="btn btn-primary" id="copyBtn">Copy export</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const defaults = {
+  targetSkill: "target-skill",
+  pagePattern: "report",
+  density: "standard",
+  toc: "sticky",
+  sources: "compact",
+  emphasis: "editorial",
+  readingWidth: 66,
+  titleScale: 60,
+  notes: []
+};
+let state = {...defaults};
+const page = document.getElementById("page");
+
+function setSeg(key, value) {
+  state[key === "pattern" ? "pagePattern" : key] = value;
+  document.querySelectorAll(`[data-key="${key}"] button`).forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.value === value);
+  });
+  update();
+}
+
+document.querySelectorAll(".seg button").forEach(btn => {
+  btn.addEventListener("click", () => setSeg(btn.parentElement.dataset.key, btn.dataset.value));
+});
+
+document.getElementById("measure").addEventListener("input", e => {
+  state.readingWidth = Number(e.target.value);
+  update();
+});
+document.getElementById("title").addEventListener("input", e => {
+  state.titleScale = Number(e.target.value);
+  update();
+});
+
+function update() {
+  const density = {
+    compact: {pad: 34, gap: 28, boxpad: 16, section: 30, body: 15, leading: 1.55, deck: 17},
+    standard: {pad: 48, gap: 44, boxpad: 20, section: 42, body: 16, leading: 1.65, deck: 19},
+    spacious: {pad: 64, gap: 58, boxpad: 24, section: 58, body: 17, leading: 1.7, deck: 21}
+  }[state.density];
+  page.className = `page toc-${state.toc} sources-${state.sources} emphasis-${state.emphasis}`;
+  page.style.setProperty("--pad", density.pad + "px");
+  page.style.setProperty("--gap", density.gap + "px");
+  page.style.setProperty("--boxpad", density.boxpad + "px");
+  page.style.setProperty("--section", density.section + "px");
+  page.style.setProperty("--body", density.body + "px");
+  page.style.setProperty("--leading", density.leading);
+  page.style.setProperty("--deck", density.deck + "px");
+  page.style.setProperty("--measure", state.readingWidth + "ch");
+  page.style.setProperty("--title", state.titleScale + "px");
+  document.getElementById("patternText").textContent = state.pagePattern;
+  document.getElementById("vMeasure").textContent = state.readingWidth + "ch";
+  document.getElementById("vTitle").textContent = state.titleScale + "px";
+  document.getElementById("exportCode").textContent = JSON.stringify({
+    targetSkill: state.targetSkill,
+    pagePattern: state.pagePattern,
+    density: state.density,
+    readingWidth: state.readingWidth + "ch",
+    titleScale: state.titleScale + "px",
+    toc: state.toc,
+    sources: state.sources,
+    emphasis: state.emphasis,
+    notes: state.notes
+  }, null, 2);
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;left:-9999px;top:-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand("copy"); } catch (e) {}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+document.getElementById("copyBtn").addEventListener("click", () => {
+  copyToClipboard(document.getElementById("exportCode").textContent).then(() => {
+    const toast = document.getElementById("toast");
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1600);
+  });
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  state = {...defaults};
+  document.getElementById("measure").value = state.readingWidth;
+  document.getElementById("title").value = state.titleScale;
+  [["pattern", state.pagePattern], ["density", state.density], ["toc", state.toc], ["sources", state.sources], ["emphasis", state.emphasis]].forEach(([k, v]) => {
+    document.querySelectorAll(`[data-key="${k}"] button`).forEach(btn => btn.classList.toggle("active", btn.dataset.value === v));
+  });
+  update();
+});
+
+update();
+</script>
+</body>
+</html>

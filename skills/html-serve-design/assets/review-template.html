@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{REVIEW_TITLE}}</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --fg: #111111;
+  --muted: #666666;
+  --border: #dddddd;
+  --soft: #f5f5f3;
+  --accent: #1a1a1a;
+  --critical: #b91c1c;
+  --warning: #92400e;
+  --info: #1e40af;
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  line-height: 1.55;
+}
+.shell {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 30px 22px 64px;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+.eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.metric {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+.metric strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1;
+}
+.metric span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+}
+.filters {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+.filters h2,
+.lane h2 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.filter {
+  display: block;
+  padding: 8px 0;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+.lane {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.finding {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.finding:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.severity {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.severity.critical { color: var(--critical); }
+.severity.warning { color: var(--warning); }
+.severity.info { color: var(--info); }
+.finding h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+.path {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+.finding p {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+.suggestion {
+  background: var(--soft);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.empty {
+  color: var(--muted);
+  padding: 18px;
+  border: 1px dashed var(--border);
+  background: var(--soft);
+}
+@media (max-width: 860px) {
+  .top,
+  .layout,
+  .finding {
+    display: block;
+  }
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .filters {
+    position: static;
+    margin-bottom: 16px;
+  }
+  .severity {
+    margin-bottom: 8px;
+  }
+}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="top">
+    <div>
+      <div class="eyebrow">{{TARGET_SKILL}} / review</div>
+      <h1>{{REVIEW_TITLE}}</h1>
+    </div>
+    <div class="eyebrow">{{GENERATED_AT}}</div>
+  </header>
+
+  <section class="summary" aria-label="Review summary">
+    {{SUMMARY_METRICS}}
+  </section>
+
+  <section class="layout">
+    <nav class="filters" aria-label="Finding filters">
+      <h2>Filter</h2>
+      <a class="filter" href="#critical">Critical</a>
+      <a class="filter" href="#warning">Warning</a>
+      <a class="filter" href="#info">Info</a>
+      <a class="filter" href="#resolved">Resolved</a>
+    </nav>
+
+    <div>
+      <section class="lane" id="critical">
+        <h2>Critical</h2>
+        {{CRITICAL_FINDINGS}}
+      </section>
+      <section class="lane" id="warning">
+        <h2>Warning</h2>
+        {{WARNING_FINDINGS}}
+      </section>
+      <section class="lane" id="info">
+        <h2>Info</h2>
+        {{INFO_FINDINGS}}
+      </section>
+    </div>
+  </section>
+</main>
+</body>
+</html>
