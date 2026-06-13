@@ -1,8 +1,8 @@
 # Publishing Contract
 
-Use html-serve only as a local static preview and publishing surface. This
-skill designs templates for other skills; it does not become their runtime
-publisher.
+Use html-serve as a local static preview and publishing surface for prototype
+review. Keep the final HTML and `DESIGN.md` in the task workspace unless the
+user asks to package them elsewhere.
 
 ## Infrastructure
 
@@ -55,7 +55,7 @@ HTML_SERVE_BASE_URL=http://<tailscale-host-or-ip>:8888
 Publish design prototypes under a namespaced project directory:
 
 ```text
-$HTML_SERVE_DATA_DIR/<project>/html-serve-design/<timestamp>-<target-skill>-<topic>.html
+$HTML_SERVE_DATA_DIR/<project>/html-design/<timestamp>-<topic>-<direction>.html
 ```
 
 Recommended values:
@@ -64,32 +64,32 @@ Recommended values:
 |---|---|
 | `<project>` | Current repository directory name, e.g. `oh-my-superpowers` |
 | `<timestamp>` | `YYYY-MM-DDTHHMM` |
-| `<target-skill>` | Target skill name, e.g. `deep-research` |
-| `<topic>` | Short slug, e.g. `final-report` |
+| `<topic>` | Short task slug, e.g. `daily-brief` |
+| `<direction>` | Design direction slug, e.g. `editorial` |
 
 Derive the URL from the same relative path:
 
 ```text
-${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/<project>/html-serve-design/<filename>.html
+${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/<project>/html-design/<filename>.html
 ```
 
 When both public and local URLs are available, use the same relative path for
 both bases. Do not compute a different filename or directory per access path.
 
-## Runtime Ownership
+## Workspace Ownership
 
-After approval, copy the final template into the target skill:
+The task workspace owns exploration artifacts:
 
 ```text
-skills/<target-skill>/assets/<template-name>.html
+<workspace>/designs/<reference-slug>/DESIGN.md
+<workspace>/prototypes/<direction>.html
+<workspace>/exports/<direction>.json
+<workspace>/DESIGN.md
 ```
 
-Then document target-skill runtime behavior in that target skill's own
-references. The target skill should write its normal outputs and, when
-configured, publish a generated HTML page to html-serve.
-
-Do not make the target skill read files from `skills/html-serve-design/` during
-normal execution.
+If the user later wants the approved prototype packaged into another project or
+skill, copy the final HTML and `DESIGN.md` there in a separate implementation
+step.
 
 ## Service Check
 

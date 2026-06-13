@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>html-serve template workbench</title>
+<title>html-design prototype workbench</title>
 <style>
 @import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap");
 :root {
@@ -279,8 +279,8 @@ pre {
 <body>
 <header class="topbar">
   <div>
-    <h1>html-serve template workbench</h1>
-    <p>Design a target skill result page, preview it, then export decisions.</p>
+    <h1>html-design prototype workbench</h1>
+    <p>Design an HTML page prototype, preview it, then export decisions.</p>
   </div>
 </header>
 
@@ -289,8 +289,8 @@ pre {
     <section class="page toc-sticky sources-compact emphasis-editorial" id="page">
       <div class="page-inner">
         <article class="article">
-          <div class="eyebrow"><span id="targetSkillText">target-skill</span> / <span id="patternText">report</span></div>
-          <h2>Final report page for a target skill</h2>
+          <div class="eyebrow"><span id="scenarioText">page scenario</span> / <span id="patternText">report</span></div>
+          <h2>Editorial report page prototype</h2>
           <p class="deck">The first viewport should show the real subject, the core conclusion, and enough context for the user to decide whether to keep reading.</p>
           <div class="meta">
             <span>Generated today</span>
@@ -302,12 +302,12 @@ pre {
             <ol>
               <li>The HTML page should present the final result, not the whole internal process.</li>
               <li>Sources should be available without dominating the reading path.</li>
-              <li>The target skill owns the final template after this design loop.</li>
+              <li>The final workspace keeps the approved HTML prototype and DESIGN.md.</li>
             </ol>
           </section>
           <section class="section">
             <h3>What changed</h3>
-            <p>This section previews the narrative body that a target skill would populate from its existing report or structured output files.</p>
+            <p>This section previews the narrative body that the final static page would render from real content.</p>
             <p>The design should keep the user's real reading task visible. Avoid generic placeholder panels and unnecessary page chrome.</p>
           </section>
           <section class="section sources">
@@ -328,6 +328,15 @@ pre {
 
   <aside class="panel">
     <div class="panel-scroll">
+      <div class="group">
+        <div class="group-title">Information Model</div>
+        <div class="seg" data-key="informationModel">
+          <button class="active" data-value="priority-pyramid">Priority</button>
+          <button data-value="faceted-catalog">Faceted</button>
+          <button data-value="sequential-flow">Flow</button>
+        </div>
+      </div>
+
       <div class="group">
         <div class="group-title">Page Pattern</div>
         <div class="seg" data-key="pattern">
@@ -400,7 +409,8 @@ pre {
 
 <script>
 const defaults = {
-  targetSkill: "target-skill",
+  scenario: "page scenario",
+  informationModel: "priority-pyramid",
   pagePattern: "report",
   density: "standard",
   toc: "sticky",
@@ -454,7 +464,8 @@ function update() {
   document.getElementById("vMeasure").textContent = state.readingWidth + "ch";
   document.getElementById("vTitle").textContent = state.titleScale + "px";
   document.getElementById("exportCode").textContent = JSON.stringify({
-    targetSkill: state.targetSkill,
+    scenario: state.scenario,
+    informationModel: state.informationModel,
     pagePattern: state.pagePattern,
     density: state.density,
     readingWidth: state.readingWidth + "ch",

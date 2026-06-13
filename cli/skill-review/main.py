@@ -8,6 +8,7 @@ Subcommands:
   check            → run mechanical consistency checks (JSON output)
   emit-checklist   → produce a per-dimension scaffold for manual review
   validate         → reject filled reports that still have unfilled rows
+  render-html      → render a filled report as static HTML
 """
 
 import os
@@ -23,10 +24,11 @@ SCRIPTS = OMP_HOME / "skills" / "skill-review" / "scripts"
 CHECK_SCRIPT = SCRIPTS / "consistency_check.py"
 EMIT_SCRIPT = SCRIPTS / "emit_checklist.py"
 VALIDATE_SCRIPT = SCRIPTS / "validate_review.py"
+RENDER_HTML_SCRIPT = SCRIPTS / "render_html.py"
 
 app = typer.Typer(
     name="skill-review",
-    help="Skill review pipeline (check / emit-checklist / validate).",
+    help="Skill review pipeline (check / emit-checklist / validate / render-html).",
     invoke_without_command=True,
     add_completion=False,
 )
@@ -98,6 +100,35 @@ def validate(
         omp skill-review validate /tmp/review-my-skill.md
     """
     _run(VALIDATE_SCRIPT, [report])
+
+
+@app.command("render-html")
+def render_html(
+    report: str = typer.Argument(..., help="Path to the filled review report Markdown."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Path to write the HTML file."),
+    publish: bool = typer.Option(False, "--publish", help="Write under html-serve and print URL metadata."),
+    project: str | None = typer.Option(None, "--project", help="Project namespace for published output."),
+    data_dir: str | None = typer.Option(None, "--data-dir", help="html-serve data root. Defaults to HTML_SERVE_DATA_DIR."),
+    base_url: str | None = typer.Option(None, "--base-url", help="html-serve base URL. Defaults to HTML_SERVE_BASE_URL or localhost."),
+) -> None:
+    """Render a filled review report as a static HTML artifact.
+
+    Example:
+        omp skill-review render-html /tmp/review-my-skill.md --publish
+        omp skill-review render-html /tmp/review-my-skill.md --output /tmp/review.html
+    """
+    args = [report]
+    if output is not None:
+        args.extend(["--output", output])
+    if publish:
+        args.append("--publish")
+    if project is not None:
+        args.extend(["--project", project])
+    if data_dir is not None:
+        args.extend(["--data-dir", data_dir])
+    if base_url is not None:
+        args.extend(["--base-url", base_url])
+    _run(RENDER_HTML_SCRIPT, args)
 
 
 if __name__ == "__main__":

@@ -1,33 +1,37 @@
 # Prototype Loop
 
-Use html-serve as the browser review surface before packaging a target skill
-template.
+Use html-serve as the browser review surface before selecting the final page
+direction.
 
 ## Loop
 
 1. Copy `assets/prototype-workbench.html` to a temporary output file under the
    html-serve prototype path.
-2. Replace the sample preview with a representative target-skill page preview.
-3. Keep controls focused on decisions that matter for this target skill:
-   density, navigation, source visibility, section rhythm, and emphasis.
+2. Replace the sample preview with a representative page preview for the
+   current scenario.
+3. Keep controls focused on decisions that matter for this page: information
+   organization, density, navigation, section rhythm, emphasis, and reference
+   style.
 4. Publish the workbench to html-serve and give the user the preferred URL from
    `HTML_SERVE_BASE_URL` when configured; otherwise give the localhost URL.
 5. Ask the user to adjust the browser controls or describe what feels wrong.
-6. Apply feedback, republish, and repeat until the user accepts the design.
-7. Convert the accepted design into the target skill's final template asset.
+6. Apply feedback, republish, and repeat until the user accepts the direction.
+7. Save the accepted HTML prototype and matching `DESIGN.md` in the temporary
+   workspace.
 
 ## Required Workbench Controls
 
 Every prototype workbench should expose:
 
+- Information organization model.
 - Page pattern.
 - Density: compact, standard, spacious.
-- Reading width.
-- TOC mode: none, inline, sticky.
-- Source visibility: hidden, compact, expanded.
+- Reading width or layout width.
+- Navigation mode: none, inline, sticky, sidebar, tabs.
+- Source or metadata visibility: hidden, compact, expanded.
 - Emphasis mode: neutral, editorial, operational.
 
-Add target-specific controls only when they change a reusable template decision.
+Add task-specific controls only when they change a reusable design decision.
 Do not expose every CSS variable as a control.
 
 ## Export Contract
@@ -36,19 +40,21 @@ The browser export should produce a JSON-like block with:
 
 ```json
 {
-  "targetSkill": "<skill-name>",
+  "scenario": "<page scenario>",
+  "informationModel": "priority-pyramid",
   "pagePattern": "report",
   "density": "standard",
   "readingWidth": "66ch",
-  "toc": "sticky",
-  "sources": "compact",
+  "navigation": "sticky",
+  "metadata": "compact",
   "emphasis": "editorial",
+  "referenceDesign": "<DESIGN.md path>",
   "notes": []
 }
 ```
 
-Use the export as user feedback, not as executable config. The final template
-still belongs in the target skill's `assets/` directory.
+Use the export as user feedback, not as executable config. The final prototype
+still needs a readable `DESIGN.md` explaining the decisions.
 
 ## Browser Check
 

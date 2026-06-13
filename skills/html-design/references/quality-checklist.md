@@ -1,13 +1,14 @@
 # Quality Checklist
 
-Run this checklist before packaging the final template into the target skill.
+Run this checklist before calling the page design ready.
 
-## Template Ownership
+## Workspace Artifacts
 
-- [ ] Final template is copied into `skills/<target-skill>/assets/`.
-- [ ] Target skill has its own reference explaining HTML generation and
-      html-serve publishing.
-- [ ] Target skill does not depend on `skills/html-serve-design/` at runtime.
+- [ ] Temporary workspace was created with `omp html-design init`.
+- [ ] Five relevant `DESIGN.md` references were copied or their absence was
+      explained.
+- [ ] Final `DESIGN.md` names the selected information organization model.
+- [ ] Final HTML prototype and `DESIGN.md` are in the workspace.
 - [ ] No test files were placed inside the skill directory.
 
 ## Publishing Contract
@@ -20,14 +21,14 @@ Run this checklist before packaging the final template into the target skill.
       be configured as the Tailscale base URL.
 - [ ] Localhost URLs are used only as fallback, service checks, or secondary
       troubleshooting links.
-- [ ] If html-serve is unavailable, target skill still preserves its core
-      non-HTML artifacts.
 
 ## Page Quality
 
-- [ ] First viewport shows the actual result subject.
+- [ ] First viewport shows the actual subject.
+- [ ] The information organization model matches the reader task.
 - [ ] The page pattern matches the reader task.
-- [ ] Source visibility is intentional: hidden, compact, or expanded.
+- [ ] Source and metadata visibility are intentional: hidden, compact, or
+      expanded.
 - [ ] Mobile and desktop layouts do not overlap.
 - [ ] Body line length stays in the readable range.
 - [ ] Text fits inside buttons, labels, and cards.
@@ -40,10 +41,11 @@ Run this checklist before packaging the final template into the target skill.
 - [ ] No emoji icons in UI chrome.
 - [ ] Accent color is used sparingly.
 - [ ] Cards are not nested.
-- [ ] Placeholder and example content were removed.
+- [ ] Placeholder and example content were removed from final artifacts.
 
 ## Handoff
 
 - [ ] Final response names the prototype URL.
-- [ ] Final response names each target skill file changed.
+- [ ] Final response names the workspace path.
+- [ ] Final response names the chosen `DESIGN.md` reference.
 - [ ] Final response states what validation was run.

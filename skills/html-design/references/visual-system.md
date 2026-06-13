@@ -1,10 +1,10 @@
 # Visual System
 
-Use a restrained, readable style for generated result pages. Favor durable
+Use a restrained, readable style for HTML page prototypes. Favor durable
 reading surfaces over decorative app chrome.
 
-The system defines shared craft rules, not one fixed visual style. Each target
-skill chooses a page pattern and style family from `page-patterns.md`.
+The system defines shared craft rules, not one fixed visual style. Each page
+chooses a page pattern and style family from `page-patterns.md`.
 
 ## Base Tokens
 
@@ -33,7 +33,7 @@ Use semantic tokens:
 - Body text: `15px` to `18px`, line-height `1.5` to `1.7`.
 - Long-form reading width: `60ch` to `70ch`.
 - Display headings may use serif; body should use a readable sans-serif unless
-  the target skill has an editorial reason to use serif body.
+  the page has an editorial reason to use serif body.
 - Use at most three visible weights in one page.
 - Body letter spacing must be `0`.
 - ALL CAPS labels need positive tracking.
@@ -80,7 +80,7 @@ the information architecture before changing colors.
 
 Use consistent primitives:
 
-- Header: title, target skill, generated time, output type.
+- Header: title, scenario, generated time, output type.
 - Summary block: strongest conclusions or action items.
 - Section: heading, body, optional evidence/source links.
 - Source list: title, platform, URL, one-line reason it matters.
@@ -99,7 +99,7 @@ Use consistent primitives:
 
 ## State Design
 
-Design empty, error, and edge states when the target skill can produce them.
+Design empty, error, and edge states when the page can produce them.
 Static generated pages usually need:
 
 - Empty source list or empty findings list.
