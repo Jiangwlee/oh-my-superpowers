@@ -41,7 +41,7 @@ def _run(script: Path, args: list[str]) -> None:
     sys.exit(subprocess.call([sys.executable, str(script), *args]))
 
 
-def _run_check(skill_dir: str, output: str) -> None:
+def _run_check(skill_dir: str) -> None:
     _run(CHECK_SCRIPT, ["--skill-dir", skill_dir])
 
 
@@ -52,7 +52,6 @@ def root(
         None, "--skill-dir",
         help="Legacy shorthand for `check --skill-dir <path>`.",
     ),
-    output: str = typer.Option("text", "--output", help="Output format: text | json (legacy)."),
 ) -> None:
     """Skill review pipeline. Use a subcommand, or `--skill-dir` as a shortcut for `check`."""
     if ctx.invoked_subcommand is not None:
@@ -60,21 +59,19 @@ def root(
     if skill_dir is None:
         typer.echo(ctx.get_help())
         raise typer.Exit()
-    _run_check(skill_dir, output)
+    _run_check(skill_dir)
 
 
 @app.command()
 def check(
     skill_dir: str = typer.Option(..., "--skill-dir", help="Path to the skill directory."),
-    output: str = typer.Option("text", "--output", help="Output format: text | json."),
 ) -> None:
     """Run mechanical consistency checks on a skill directory.
 
     Example:
         omp skill-review check --skill-dir skills/my-skill
-        omp skill-review check --skill-dir skills/my-skill --output json
     """
-    _run_check(skill_dir, output)
+    _run_check(skill_dir)
 
 
 @app.command("emit-checklist")

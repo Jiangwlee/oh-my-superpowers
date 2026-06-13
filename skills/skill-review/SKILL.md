@@ -13,8 +13,24 @@ description: >-
 
 Purpose: 审查 skill 目录，发现 spec 违规、设计缺陷和证据质量问题。
 Input:   Skill 目录路径（用户提供）。
-Output:  填好的 scaffold Markdown 文件（路径由 emit-checklist 生成）。
+Output:  填好的 scaffold Markdown 文件 + 可选 html-serve HTML artifact。
 Scope:   `SKILL.md` + `references/**/*.md` + `scripts/*` + `assets/**`。references 在运行时被 agent 增量加载，等同 SKILL.md 的延伸指令，必须同步审查。
+
+## CLI
+
+```bash
+omp skill-review check --skill-dir <path>
+omp skill-review emit-checklist --skill-dir <path> --output /tmp/review-<skill>.md
+omp skill-review validate /tmp/review-<skill>.md
+omp skill-review render-html /tmp/review-<skill>.md
+```
+
+| Command | Purpose |
+|---|---|
+| `check` | 运行机械一致性检查，输出 JSON。 |
+| `emit-checklist` | 生成必须逐条填写的 Markdown scaffold。 |
+| `validate` | 拒绝未填写 checkbox、占位符或缺少 finding 子项的报告。 |
+| `render-html` | 将已填写 Markdown 报告渲染为 Minimal Review HTML artifact；`--publish` 写入 html-serve 并输出 URL。 |
 
 ## 前置检查
 
@@ -31,8 +47,9 @@ flowchart TD
     B --> C[Step 2: 加载 rubric.md 逐条填写 scaffold]
     C --> D[Step 3: validate 检查完整性]
     D -->|失败| C
-    D -->|通过| E[Step 4: 输出填好的报告]
-    E --> F([完成])
+    D -->|通过| E[Step 4: 生成并发布 HTML artifact]
+    E --> F[Step 5: 输出 Markdown 报告与 HTML URL]
+    F --> G([完成])
 ```
 
 ### Step 1：生成 scaffold
@@ -80,17 +97,33 @@ omp skill-review validate /tmp/review-<skill>.md
 
 Done when: `omp skill-review validate /tmp/review-<skill>.md` 退出 0。
 
-### Step 4：输出报告
+### Step 4：生成并发布 HTML artifact
 
-填好的 scaffold 文件即最终报告。把内容直接交付。
+运行：
 
-Done when: 已交付通过 `validate` 的最终报告，且报告中不再包含未填写 checkbox 或占位符。
+```
+omp skill-review render-html /tmp/review-<skill>.md --publish
+```
+
+该命令先校验报告完整性，再把已填写报告渲染成 Minimal Review HTML artifact，并发布到 html-serve。Markdown 仍是事实来源；HTML 是便于分享和扫描 findings 的增强视图。
+
+如果 `--publish` 因 `HTML_SERVE_DATA_DIR` 未配置失败，改用同一命令加 `--output /tmp/review-<skill>.html` 生成本地文件，并在最终交付中说明 HTML 未发布 URL。
+
+Done when: 命令输出 `html_path`；如果使用 `--publish`，还输出 `url`。
+
+### Step 5：输出报告
+
+交付通过 `validate` 的 Markdown 报告，并附上 HTML artifact 路径或 html-serve URL。
+
+Done when: 已交付 Markdown 报告、HTML artifact 信息，且报告中不再包含未填写 checkbox 或占位符。
 
 ## 失败处理
 
 - `omp skill-review emit-checklist` 失败 → 报告错误原文并停止
 - `references/rubric.md` 无法读取 → 停止并报告
 - `omp skill-review validate` 失败 → 回到 Step 2 补全，不得跳过
+- `omp skill-review render-html` 校验失败 → 回到 Step 2 补全报告，不得发布 HTML
+- HTML 发布失败 → 若缺少 `HTML_SERVE_DATA_DIR`，改用 `--output` 生成本地 HTML；其他错误报告原文并停止
 
 ## Guardrails
 
@@ -100,3 +133,4 @@ Done when: 已交付通过 `validate` 的最终报告，且报告中不再包含
 - 禁止无证据的 finding：每条 finding 必须引用文件原文、文件状态或机械检查 JSON
 - 禁止把项目偏好标记为 SPEC 违规，标签必须准确
 - 禁止把多个独立问题合并为一条 finding
+- 禁止把 HTML artifact 当作事实来源；Markdown 报告始终是 source of truth
