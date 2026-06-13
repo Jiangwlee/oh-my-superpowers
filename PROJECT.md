@@ -50,24 +50,32 @@ Hooks 是 Claude Code 的生命周期事件钩子。**Skill 通过 `hooks.json` 
 
 ```
 skills/                       # Skill 单元（每个独立）
-├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
-├── skill-review/             # Skill 目录质量审查
 ├── agent-review/             # Pi Agent markdown 文件审查
+├── brainstorming/            # 场景路由：S1 开放讨论 / S2 skill-agent / S3 feature
 ├── code-review/              # 本地未提交/未推送代码改动审查
-├── debug/                    # 可复现 bug 的系统化根因调试
-├── handoff/                  # /compact 前生成上下文交接文件
-├── insight/                  # 项目记忆系统（recall/capture/evaluate/list）
-├── evolution/                # 基于跨项目使用数据演进 skills 与 CLAUDE.md
+├── daily-ai-brief/           # 每日 AI 简报：扫描 X / 博客 / 社区，生成 HTML 卡片式日报
+├── debug-issues/             # 可复现 bug 的系统化根因调试
 ├── deep-research/            # 多轮、多源、带验证的深度研究
-├── omp-agents/               # 通过 omp run 委托给注册的 Pi Agent
-├── team/                     # 一次性 tmux 派发到 claude/codex/pi
-├── round-table/              # 多 runtime 角色化圆桌辩论
-├── web-operator/             # Chrome CDP 浏览器自动化 / 搜索 / 抽取
-├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
+├── docs-contract/            # 为 MVP 项目补建文档骨架与维护契约（scaffold + 三层 lint + inventory）
+├── evolution/                # 基于跨项目使用数据演进 skills 与 CLAUDE.md
+├── github-trending/          # GitHub 趋势仓库智能报告：分析 README/API 证据
+├── grill-me/                 # 面试式需求/设计追问，穷尽决策分支消除模糊
+├── handoff/                  # /compact 前生成上下文交接文件
+├── html-design/              # 设计静态 HTML 页面原型，搭配 DESIGN.md 组织信息模型
+├── insight/                  # 项目记忆系统（recall/capture/evaluate/list）
+├── invoice/                  # 统一本地发票登记：扫描目录、催办、按状态分类
+├── kickoff/                  # 需求澄清后生成状态文件（survive /compact）
 ├── llm-wiki/                 # Karpathy 风格 markdown wiki：omp wiki + SOP
 ├── mail-pipeline/            # 多邮箱 IMAP 到 JSONL / 附件 / 状态的结构化处理管道
+├── markdown/                 # Markdown 写作指导：结构、层级、措辞、图表选择
 ├── markdown-to-anything/     # Markdown 转 PDF/PNG 等格式
-├── docs-contract/            # 为 MVP 项目补建文档骨架与维护契约（scaffold + 三层 lint + inventory）
+├── media-editor/             # 为 media-editor agent 提供归档/查询/提升
+├── omp-agents/               # 通过 omp run 委托给注册的 Pi Agent
+├── round-table/              # 多 runtime 角色化圆桌辩论
+├── skill-refine/             # 重构 skill 目录内 Markdown 文件的结构与表达一致性
+├── skill-review/             # Skill 目录质量审查
+├── team/                     # 一次性 tmux 派发到 claude/codex/pi
+├── web-operator/             # Chrome CDP 浏览器自动化 / 搜索 / 抽取
 └── <skill-name>/
     ├── SKILL.md              # 元数据 + CLI 命令文档（不写相对路径）
     ├── hooks.json            # 可选：声明所需 Claude Code hooks（omp install 自动合并）
@@ -141,10 +149,10 @@ omp install agent <name> --global
 命令层次：
 
 ```text
-omp serve [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open]
-├── start   [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open]
+omp serve [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open] [--foreground]
+├── start   [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open] [--foreground]
 ├── stop    [--port PORT]
-├── restart [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open]
+├── restart [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open] [--foreground]
 └── dev     兼容别名，不推荐新用法
 ```
 
