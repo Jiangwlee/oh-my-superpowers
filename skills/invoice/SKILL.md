@@ -21,7 +21,7 @@ for audit and dedupe.
 |---|---|
 | User asks to fetch or process email | Use `mail-pipeline`; register only its resulting files with `omp invoice add` if needed. |
 | User asks for daily invoice intake from configured folders | Use `omp invoice scan`, not `add --source`. |
-| Field extraction is needed from a PDF | Use the Agent's multimodal PDF reading. Do not use regex, text scraping, OCR, or deterministic scripts to infer invoice fields. |
+| Field extraction is needed from an invoice file (PDF or image) | Use the Agent's multimodal vision to read the invoice directly. Do **not** convert PDF to text — that is an unreliable anti-pattern. Also avoid regex, text scraping, OCR, or deterministic scripts to infer invoice fields. |
 | A pending invoice lacks a readable invoice number | Do not submit. Leave it pending and report what field is missing. |
 | A pending item is a duplicate, non-invoice attachment, or wrong file | Use `omp invoice discard --id <id> --reason <text>`; never delete source files manually. |
 | Owner has no substitute rule | Classify new invoices as `claim` unless user gives a direct reason to mark `substitute`. |
@@ -51,8 +51,9 @@ Run this loop for scheduled invoice intake, such as every day at 23:00:
    omp invoice pending
    ```
 
-4. For each pending PDF, inspect the PDF with the Agent's multimodal reading
-   ability and extract the required fields in `references/registry.md`. Load
+4. For each pending file (PDF or image), inspect it with the Agent's
+   multimodal vision to read the invoice directly and extract the required
+   fields in `references/registry.md`. Load
    the owner's `substitute_rule` from `config/owners.yaml`; decide `purpose`
    as `claim` or `substitute`.
 

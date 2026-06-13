@@ -23,7 +23,7 @@ import yaml
 
 DEFAULT_ROOT = Path.home() / ".local" / "share" / "oh-my-superpowers" / "invoice"
 DATA_DIR = Path(os.environ.get("INVOICE_DATA_DIR", DEFAULT_ROOT)).expanduser()
-SUPPORTED_SUFFIXES = {".pdf"}
+SUPPORTED_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
 VALID_PURPOSES = {"claim", "substitute"}
 VALID_STATUSES = {"available", "used", "archived"}
 
