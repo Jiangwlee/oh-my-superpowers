@@ -4,6 +4,8 @@ Pi Agent + Skills 开发套件。聚焦两件事：
 1. **Skills** — 工具封装单元，构建 Agent 的基础
 2. **Agents** — 有身份的角色，由 Skills 驱动
 
+项目同时提供 `omp serve`：面向当前项目的 Skill 开发 Web 工作台。它把文件树、Markdown/HTML 预览、编辑器和 Pi Agent 对话放在一个本地页面中，用于在线创建、预览和修改 Skill。
+
 > 通用 LLM 行为准则见 [CLAUDE.md](CLAUDE.md)。本文件只记录本项目特定规则。
 
 ---
@@ -84,6 +86,7 @@ agents/                       # Pi Agent 定义（每个独立）+ agents.json �
 └── wps-assistant.md          # WPS 文档助理
 
 cli/                          # 工具 CLI 模块（typer apps，omp <tool> 路由）
+├── serve/main.py             # 当前项目 Skill 开发 Web 工作台
 └── <tool>/main.py            # 每个工具一个 CLI 模块（PEP 723 inline deps）
 
 tests/                        # 所有测试的统一根（skill 测试不放 skill 目录下）
@@ -123,6 +126,40 @@ omp install agent <name> --global
 
 ---
 
+## Skill 工作台（omp serve）
+
+`omp serve` 启动一个项目本地 Web 工作台，用于开发当前仓库内的 Skills。
+
+核心能力：
+
+- 左栏：懒加载文件树，逐层展开当前项目目录。
+- 中栏：文件预览与编辑，支持 Markdown/HTML 预览，Markdown 使用 GFM 渲染。
+- 右栏：Pi Agent 对话区，通过 `pi -p --mode json --approve --session <page-session>` 执行对话。
+- 会话：每个浏览器页面生成新的 page-local Pi session；同一页面内多轮对话复用该 session。
+- 主题：支持深色和浅色模式。
+
+命令层次：
+
+```text
+omp serve [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open]
+├── start   [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open]
+├── stop    [--port PORT]
+├── restart [--workspace PATH] [--host HOST] [--port PORT] [--model MODEL] [--open/--no-open]
+└── dev     兼容别名，不推荐新用法
+```
+
+常用命令：
+
+```bash
+omp serve start --workspace . --no-open
+omp serve restart --workspace . --no-open
+omp serve stop
+```
+
+默认监听 `0.0.0.0:8765`，允许本机、局域网和 Tailscale 访问。页面地址通常是 `http://localhost:8765/` 或当前机器的网络地址。
+
+---
+
 ## 环境变量
 
 | 变量 | 用途 | 默认值 |
@@ -154,6 +191,7 @@ omp install agent <name> --global
 - `cli/<tool>/main.py` 使用 typer + PEP 723 inline dependencies
 - 实现脚本通过 `$OMP_HOME` 引用，禁止相对路径
 - SKILL.md 中只写 `omp <tool> <subcommand> [args]`，不写路径
+- `omp serve` 是特殊高频工具，顶层路由通过当前 Python 直接执行 `cli/serve/main.py`，避免二次 `uv run` 启动开销。
 
 ### 强制前置动作（违反 = 返工）
 
@@ -239,6 +277,7 @@ BrainStorm → Plan → Code → Review → Test → Commit
 
 - **Skill 开发**：先读 `docs/specs/00_skills/README.md`，再用 `brainstorming` skill
 - **Agent 开发**：先读 `docs/specs/01_agents/README.md`，再用 `brainstorming` skill
+- **Skill 实作与预览**：用 `omp serve start --workspace . --no-open` 打开 Web 工作台，在线编辑、预览并与 Pi Agent 对话
 - **Review**：用 `skill-review` / `agent-review` / `code-review`（统一入口：`reviewer` agent 自动路由）
 - **测试分层**：T1 静态检查 → T2 E2E（`pi -p`）→ T3 LLM-as-judge
 

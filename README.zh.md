@@ -21,6 +21,8 @@ oh-my-superpowers 聚焦两件事：
 
 本项目提供元 Skills、开发规范和 CLI 工具，覆盖 Skill/Agent 的设计、构建、审查和安装全流程。
 
+项目还提供 **`omp serve`**：面向当前项目的 Skill 开发 Web 工作台。它可以浏览项目文件树、预览或编辑 Markdown/HTML 文件，并在同一个界面中与 Pi Agent 对话生成或修改 Skill。
+
 ## 项目结构
 
 ```
@@ -100,6 +102,19 @@ omp list --global  # 全局
 # "我们聊聊 / 探索一下 ..."  → 路由到 S1（开放讨论）
 ```
 
+### 打开 Skill 工作台
+
+```bash
+# 为当前项目启动本地 Web 工作台
+omp serve start --workspace . --no-open
+
+# 重启或停止
+omp serve restart --workspace . --no-open
+omp serve stop
+```
+
+打开 `http://localhost:8765/`，或使用当前机器的局域网 / Tailscale 地址访问。每个浏览器页面都会创建新的 Pi 会话；同一页面内的多轮提问会继续该页面级对话。
+
 ## 可用 Skills
 
 | Skill | 模式 | 用途 |
@@ -156,6 +171,7 @@ omp handoff               compaction lifecycle 上下文交接
 omp insight               从 AI 对话中提取 memory 并提炼洞察
 omp media-editor          归档 / 查询 / 提升 media items
 omp round-table           多 AI 圆桌讨论
+omp serve                 当前项目的 Skill 工作台：文件树、Markdown/HTML 预览、编辑器与 Pi 对话
 omp skill-review          skill 目录的机械一致性检查
 omp dispatch              tmux 派遣原语（claude/codex/pi 的 spawn/wait/tail）
 omp web-operator          浏览器自动化、搜索、内容抽取

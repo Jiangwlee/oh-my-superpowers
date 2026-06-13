@@ -49,6 +49,19 @@ APP_HTML = r"""<!doctype html>
       --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
       --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    body[data-theme="light"] {
+      --bg: #f4efe4;
+      --panel: #fbf7ed;
+      --ink: #25231d;
+      --muted: #5f5a4d;
+      --faint: #8c8474;
+      --line: rgba(42, 37, 27, .12);
+      --green: #517d46;
+      --amber: #9b6a1d;
+      --red: #aa4f3c;
+      --cyan: #3c7b82;
+      --shadow: 0 16px 34px rgba(61, 51, 31, .12);
+    }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; overflow: hidden; }
     body {
@@ -62,6 +75,15 @@ APP_HTML = r"""<!doctype html>
       color: var(--ink);
       font-family: var(--sans);
       letter-spacing: 0;
+    }
+    body[data-theme="light"] {
+      background:
+        radial-gradient(circle at 18% 12%, rgba(81,125,70,.12), transparent 30%),
+        radial-gradient(circle at 88% 78%, rgba(60,123,130,.10), transparent 28%),
+        linear-gradient(rgba(42,37,27,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(42,37,27,.025) 1px, transparent 1px),
+        var(--bg);
+      background-size: auto, auto, 20px 20px, 20px 20px;
     }
     button, textarea, input { font: inherit; }
     button { cursor: pointer; }
@@ -104,6 +126,19 @@ APP_HTML = r"""<!doctype html>
       font: 11px/1 var(--mono);
       white-space: nowrap;
     }
+    .theme-toggle {
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(164,216,111,.11);
+      color: var(--green);
+      padding: 0 10px;
+      font: 700 11px/1 var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      white-space: nowrap;
+    }
+    .theme-toggle:hover { background: rgba(164,216,111,.17); }
     .shell { min-height: 0; display: grid; grid-template-columns: 252px minmax(440px, 1fr) minmax(390px, .86fr); gap: 10px; }
     .files, .editor, .agent {
       min-width: 0;
@@ -130,7 +165,7 @@ APP_HTML = r"""<!doctype html>
     }
     .head span:last-child { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-list { overflow: auto; padding: 10px; background: transparent; }
-    .file-list::-webkit-scrollbar, .preview::-webkit-scrollbar, .diff-view::-webkit-scrollbar { width: 10px; }
+    .file-list::-webkit-scrollbar, .preview::-webkit-scrollbar, .diff-view::-webkit-scrollbar { width: 10px; height: 10px; }
     .file-list::-webkit-scrollbar-thumb, .preview::-webkit-scrollbar-thumb, .diff-view::-webkit-scrollbar-thumb {
       background: rgba(243,236,221,.16);
       border-radius: 999px;
@@ -261,7 +296,7 @@ APP_HTML = r"""<!doctype html>
     .assistant-md blockquote { margin-left: 0; padding-left: 12px; border-left: 2px solid rgba(164,216,111,.24); color: var(--faint); }
     .assistant-md table { border-collapse: collapse; width: 100%; }
     .assistant-md th, .assistant-md td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; }
-    .timeline { margin-top: 12px; display: grid; gap: 7px; }
+    .timeline { margin: 0 0 12px; display: grid; gap: 7px; }
     .step { display: flex; align-items: center; gap: 9px; min-height: 28px; border-radius: 999px; background: rgba(16,16,14,.52); padding: 0 10px; color: var(--muted); font: 12px/1.35 var(--mono); }
     .step::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
     .step.done::before { background: var(--green); box-shadow: 0 0 10px rgba(164,216,111,.44); }
@@ -301,6 +336,45 @@ APP_HTML = r"""<!doctype html>
     }
     .send { height: 30px; border: 0; border-radius: 999px; background: var(--green); color: #10100e; padding: 0 14px; font-size: 12px; font-weight: 750; }
     .send:disabled { opacity: .45; cursor: default; }
+    body[data-theme="light"] .top,
+    body[data-theme="light"] .bottom {
+      background: rgba(251,247,237,.76);
+      box-shadow: 0 10px 26px rgba(61,51,31,.10);
+    }
+    body[data-theme="light"] .cmd,
+    body[data-theme="light"] .editor-surface,
+    body[data-theme="light"] .input-box {
+      background: rgba(255,252,246,.74);
+    }
+    body[data-theme="light"] .files,
+    body[data-theme="light"] .editor,
+    body[data-theme="light"] .agent {
+      background: rgba(251,247,237,.72);
+      box-shadow: var(--shadow);
+    }
+    body[data-theme="light"] sl-tree-item::part(item):hover,
+    body[data-theme="light"] sl-tree-item::part(item--selected),
+    body[data-theme="light"] .turn,
+    body[data-theme="light"] .step {
+      background: rgba(255,252,246,.78);
+    }
+    body[data-theme="light"] .turn.user { background: rgba(60,123,130,.08); }
+    body[data-theme="light"] .preview pre,
+    body[data-theme="light"] .diff-view pre,
+    body[data-theme="light"] .assistant-md pre {
+      background: rgba(42,37,27,.06);
+    }
+    body[data-theme="light"] .file-list::-webkit-scrollbar-thumb,
+    body[data-theme="light"] .preview::-webkit-scrollbar-thumb,
+    body[data-theme="light"] .diff-view::-webkit-scrollbar-thumb,
+    body[data-theme="light"] .agent-stream::-webkit-scrollbar-thumb {
+      background: rgba(42,37,27,.20);
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+    body[data-theme="light"] .send {
+      color: #fbf7ed;
+    }
     @media (max-width: 1100px) {
       .shell { grid-template-columns: 220px 1fr; }
       .agent { position: fixed; right: 12px; top: 66px; bottom: 52px; width: 390px; box-shadow: -20px 0 48px rgba(0,0,0,.36); }
@@ -317,11 +391,12 @@ APP_HTML = r"""<!doctype html>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/components/tree/tree.js"></script>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/components/tree-item/tree-item.js"></script>
 </head>
-<body>
+<body data-theme="dark">
   <div class="app">
     <header class="top">
       <div class="brand"><span class="pulse"></span><span>omp-serve</span></div>
       <div class="cmd" id="workspace-label">Loading workspace...</div>
+      <button class="theme-toggle" id="theme-toggle">Light</button>
       <div class="state">approved</div>
     </header>
     <main class="shell">
@@ -335,8 +410,8 @@ APP_HTML = r"""<!doctype html>
           <div class="editor-toolbar">
             <div class="tabs"><button class="tab file active" id="active-file">Select a file</button></div>
             <div class="mode-tabs">
-              <button class="tab mode active" data-mode="edit">Edit</button>
-              <button class="tab mode" data-mode="preview">Preview</button>
+              <button class="tab mode active" data-mode="preview">Preview</button>
+              <button class="tab mode" data-mode="edit">Edit</button>
               <button class="tab mode" data-mode="diff">Diff</button>
               <button class="tab save" id="save-btn">Save</button>
             </div>
@@ -362,10 +437,11 @@ APP_HTML = r"""<!doctype html>
   <script>
     const state = {
       workspace: '',
+      sessionId: '',
       selectedPath: '',
       original: '',
       content: '',
-      mode: 'edit',
+      mode: 'preview',
       dirty: false,
       sending: false,
       assistantEl: null,
@@ -377,6 +453,22 @@ APP_HTML = r"""<!doctype html>
 
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+    function setTheme(theme) {
+      const next = theme === 'light' ? 'light' : 'dark';
+      document.body.dataset.theme = next;
+      localStorage.setItem('ompServeTheme', next);
+      $('theme-toggle').textContent = next === 'light' ? 'Dark' : 'Light';
+    }
+
+    function toggleTheme() {
+      setTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
+    }
+
+    function newSessionId() {
+      if (crypto?.randomUUID) return crypto.randomUUID();
+      return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    }
 
     function ext(path) {
       const idx = path.lastIndexOf('.');
@@ -449,7 +541,7 @@ APP_HTML = r"""<!doctype html>
       state.original = data.content ?? '';
       state.content = data.content ?? '';
       state.dirty = false;
-      state.mode = 'edit';
+      state.mode = 'preview';
       updateChrome();
       syncTreeSelection();
       renderEditor();
@@ -604,7 +696,7 @@ APP_HTML = r"""<!doctype html>
       state.assistantRaw = '';
       const timeline = document.createElement('div');
       timeline.className = 'timeline';
-      article.querySelector('.turn-body').appendChild(timeline);
+      article.querySelector('.turn-body').insertBefore(timeline, state.assistantTextEl);
       state.toolListEl = timeline;
     }
 
@@ -639,7 +731,7 @@ APP_HTML = r"""<!doctype html>
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({message})
+          body: JSON.stringify({message, sessionId: state.sessionId})
         });
         if (!res.ok) {
           throw new Error(await res.text() || `HTTP ${res.status}`);
@@ -698,6 +790,7 @@ APP_HTML = r"""<!doctype html>
     document.querySelectorAll('[data-mode]').forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
     $('save-btn').addEventListener('click', saveFile);
     $('send-btn').addEventListener('click', sendMessage);
+    $('theme-toggle').addEventListener('click', toggleTheme);
     $('chat-input').addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') sendMessage();
     });
@@ -711,6 +804,9 @@ APP_HTML = r"""<!doctype html>
 
     (async function boot() {
       try {
+        setTheme(localStorage.getItem('ompServeTheme') || 'dark');
+        state.sessionId = newSessionId();
+        $('session-label').textContent = `session: ${state.sessionId.slice(0, 8)}`;
         await loadMeta();
         await loadTree();
         renderEditor();
@@ -860,7 +956,7 @@ def _serve(
     url = f"http://{host}:{port}/"
     console.print(f"[omp serve] workspace: [cyan]{root}[/cyan]")
     console.print(f"[omp serve] url: [bold]{url}[/bold]")
-    console.print(f"[omp serve] pi: [cyan]pi -p --mode json --approve --session {state.session_path}[/cyan]")
+    console.print(f"[omp serve] pi: [cyan]pi -p --mode json --approve --session .omp/serve/sessions/<page>.jsonl[/cyan]")
     if open_browser:
         threading.Timer(0.3, lambda: webbrowser.open(url)).start()
     try:
@@ -938,7 +1034,7 @@ class ServeState:
         self.workspace = workspace.resolve()
         self.model = model
         self.session_dir = self.workspace / ".omp" / "serve"
-        self.session_path = self.session_dir / "pi-session.jsonl"
+        self.sessions_dir = self.session_dir / "sessions"
 
 
 def _is_safe(root: Path, target: Path) -> bool:
@@ -952,6 +1048,12 @@ def _resolve_rel(state: ServeState, rel_path: str) -> Path:
     if not _is_safe(state.workspace, target):
         raise ValueError("path escapes workspace")
     return target
+
+
+def _session_path(state: ServeState, session_id: str) -> Path:
+    if not re.fullmatch(r"[A-Za-z0-9._-]{8,80}", session_id):
+        raise ValueError("invalid session id")
+    return state.sessions_dir / f"{session_id}.jsonl"
 
 
 def _json_bytes(payload: Any) -> bytes:
@@ -1110,7 +1212,7 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                         {
                             "workspace": str(state.workspace),
                             "model": state.model,
-                            "session": str(state.session_path),
+                            "sessionMode": "page-local",
                         }
                     )
                 elif parsed.path == "/api/tree":
@@ -1156,14 +1258,18 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
             try:
                 payload = json.loads(_read_body(self).decode("utf-8"))
                 message = str(payload.get("message") or "").strip()
+                session_id = str(payload.get("sessionId") or "").strip()
                 if not message:
                     self._send_error_json(HTTPStatus.BAD_REQUEST, "message is required")
                     return
-                self._stream_pi(message)
+                if not session_id:
+                    self._send_error_json(HTTPStatus.BAD_REQUEST, "sessionId is required")
+                    return
+                self._stream_pi(message, session_id)
             except Exception as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
-        def _stream_pi(self, message: str) -> None:
+        def _stream_pi(self, message: str, session_id: str) -> None:
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
@@ -1175,7 +1281,8 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                 self.wfile.flush()
                 return
 
-            state.session_dir.mkdir(parents=True, exist_ok=True)
+            session_path = _session_path(state, session_id)
+            state.sessions_dir.mkdir(parents=True, exist_ok=True)
             cmd = [
                 "pi",
                 "-p",
@@ -1183,7 +1290,7 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                 "json",
                 "--approve",
                 "--session",
-                str(state.session_path),
+                str(session_path),
                 "--model",
                 state.model,
                 message,

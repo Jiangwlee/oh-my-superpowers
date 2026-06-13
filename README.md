@@ -21,6 +21,8 @@ oh-my-superpowers is a development framework focused on two things:
 
 It provides the meta-skills, specs, and CLI tooling needed to design, build, review, and install Skills and Agents for Pi and Claude Code.
 
+It also includes **`omp serve`**, a project-local web workbench for Skill development: browse the current repository, preview or edit Markdown/HTML files, and talk to a Pi Agent from the same UI.
+
 ## Repository Layout
 
 ```
@@ -100,6 +102,19 @@ omp list --global  # global
 # "Let's discuss / explore ..."    → routes to S1 (open discussion)
 ```
 
+### Open the Skill Workbench
+
+```bash
+# Start the local web workbench for the current project
+omp serve start --workspace . --no-open
+
+# Restart or stop it
+omp serve restart --workspace . --no-open
+omp serve stop
+```
+
+Open `http://localhost:8765/` or the machine's LAN/Tailscale address. Each browser page creates a fresh Pi session; multiple prompts in the same page continue that page-local conversation.
+
 ## Available Skills
 
 | Skill | Pattern | Purpose |
@@ -156,6 +171,7 @@ omp handoff               Context handoff helpers for compaction lifecycle
 omp insight               Extract memories from AI conversations and distill insights
 omp media-editor          Archive, query, and promote media items
 omp round-table           Multi-AI round table discussions
+omp serve                 Project-local Skill workbench with file tree, Markdown/HTML preview, editor, and Pi chat
 omp skill-review          Mechanical consistency checks on a skill directory
 omp dispatch              Tmux dispatch primitive (claude/codex/pi spawn/wait/tail)
 omp web-operator          Browser automation, search, and content extraction

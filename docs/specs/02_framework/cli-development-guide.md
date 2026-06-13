@@ -84,6 +84,8 @@ omp                              # 唯一入口（~/.local/bin/omp）
 
 使用 `uv run` 确保 `main.py` 的第三方依赖（typer、rich 等）通过 PEP 723 inline metadata 自动解析，无需预装。
 
+例外：`omp serve` 是高频本地工作台入口，顶层路由直接用当前 Python 执行 `cli/serve/main.py`，避免二次 `uv run` 启动开销。该例外只适用于已确认依赖由顶层运行环境满足的工具。
+
 ### 自动路由注册
 
 `omp --help` 应动态列出所有已安装的工具。实现方式：启动时扫描 `$OMP_HOME/cli/` 下含 `main.py` 的子目录，提取工具名和描述，注册为子命令组。

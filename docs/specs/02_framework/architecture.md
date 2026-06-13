@@ -7,8 +7,8 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │  Layer 4: CLI                                   │
-│  omp 命令（install/remove/list/run/test）        │
-│  职责：安装/卸载/调用，路径解析                    │
+│  omp 命令（install/remove/list/run/test/serve）  │
+│  职责：安装/卸载/调用，路径解析，开发工作台          │
 ├─────────────────────────────────────────────────┤
 │  Layer 3: Agents                                │
 │  agents/<name>.md（Pi frontmatter + prompt）    │
@@ -31,7 +31,7 @@
 | Tools/Scripts | 执行能力、结构化输出、错误提示 | 业务决策、推理 |
 | Skills | WHEN（触发场景）、WHAT（调用哪个 CLI 命令）| HOW（脚本内部实现）|
 | Agents | 角色身份、判断、推理循环、输出格式 | 底层执行细节 |
-| CLI | 路径解析、安装管理 | 业务逻辑 |
+| CLI | 路径解析、安装管理、Agent 调用入口、本地开发工作台 | 业务逻辑 |
 
 ### 关键约束
 
