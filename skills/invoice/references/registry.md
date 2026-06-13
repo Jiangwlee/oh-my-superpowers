@@ -6,7 +6,7 @@ Use `invoice_number` as the primary invoice identity.
 
 Rules:
 
-- The registry accepts PDF invoices only. Images are ignored during scan.
+- The registry accepts PDF and image invoices (.pdf, .jpg, .jpeg, .png, .webp).
 - Scripts must not extract invoice fields from PDF content with regex, text
   scraping, OCR, or PDF parsing libraries. The Agent reads the PDF and submits
   extracted fields explicitly through `omp invoice submit`.
