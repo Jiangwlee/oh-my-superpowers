@@ -834,6 +834,8 @@ def _try_tool_route() -> None:
     tool_main = OMP_HOME / "cli" / candidate / "main.py"
     if tool_main.is_file():
         os.environ["OMP_TOOL_PROG_NAME"] = f"omp {candidate}"
+        if candidate == "serve":
+            os.execv(sys.executable, [sys.executable, str(tool_main)] + sys.argv[2:])
         os.execvp("uv", ["uv", "run", "--script", str(tool_main)] + sys.argv[2:])
     # 未匹配任何 tool → 交给 typer 处理（会显示 help/error）
 
