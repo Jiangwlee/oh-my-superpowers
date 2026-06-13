@@ -5,47 +5,72 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GitHub Trending · {{DATE}}</title>
 <style>
-@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 :root {
-  --bg:#fafafa; --surface:#fff; --fg:#111; --muted:#666; --border:#ddd;
-  --soft:#f5f5f3; --accent:#1a1a1a;
+  --bg:#fafafa;
+  --surface:#ffffff;
+  --fg:#111111;
+  --muted:#666666;
+  --border:#dddddd;
+  --soft:#f5f5f3;
+  --accent:#0f2f2e;
+  --accent-soft:#e8f0ee;
   --font-display:"Source Serif 4",Georgia,"Noto Serif SC",serif;
   --font-body:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
   --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);line-height:1.6}
-.shell{max-width:1080px;margin:0 auto;padding:36px 24px 72px}
-.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end;padding-bottom:22px;border-bottom:1px solid var(--fg)}
-.eyebrow{color:var(--muted);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
-h1{margin:0;font-family:var(--font-display);font-size:clamp(34px,5vw,56px);line-height:1.05;letter-spacing:-.02em}
-.meta{color:var(--muted);font-size:13px;text-align:right;font-family:var(--font-mono)}
-.takeaway{background:var(--soft);border:1px solid var(--border);padding:20px 24px;margin:22px 0 28px}
-.takeaway h2{margin:0 0 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
-.takeaway p{margin:0;font-size:15px}
-.lead{background:var(--surface);border:1px solid var(--border);padding:28px;margin-bottom:28px}
-.lead .tag{display:inline-block;color:var(--muted);font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
-.lead h2{margin:0 0 6px;font-family:var(--font-display);font-size:34px;line-height:1.1;letter-spacing:-.015em}
-.lead h2 a{color:inherit;text-decoration:none}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);line-height:1.62}
+a{color:inherit}
+.shell{max-width:1180px;margin:0 auto;padding:38px 24px 76px}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end;padding-bottom:24px;border-bottom:2px solid var(--fg)}
+.eyebrow{color:var(--muted);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
+h1{margin:0;font-family:var(--font-display);font-size:clamp(36px,5vw,64px);line-height:1.02;letter-spacing:-.025em}
+.deck{max-width:66ch;margin:14px 0 0;color:var(--muted);font-size:16px}
+.meta{color:var(--muted);font-size:12px;text-align:right;font-family:var(--font-mono);white-space:nowrap}
+.takeaway{display:grid;grid-template-columns:160px minmax(0,1fr);gap:22px;background:var(--soft);border:1px solid var(--border);padding:22px 24px;margin:24px 0 30px}
+.takeaway h2{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.takeaway p{margin:0;font-size:16px;color:var(--fg)}
+.lead{background:var(--surface);border:1px solid var(--fg);padding:30px;margin-bottom:34px}
+.lead-kicker{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:12px;color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.lead h2{margin:0 0 8px;font-family:var(--font-display);font-size:clamp(30px,4vw,46px);line-height:1.08;letter-spacing:-.018em}
+.lead h2 a{text-decoration:none}
 .lead h2 a:hover{text-decoration:underline}
-.lead .delta-big{font-family:var(--font-mono);font-size:14px;margin-bottom:14px;color:var(--fg)}
-.lead p{margin:0 0 12px;color:var(--muted)}
-.lead .comment{color:var(--fg)}
-h3.band{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin:34px 0 4px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-.repo{padding:20px 0;border-bottom:1px solid var(--border)}
-.repo-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.lead-desc{max-width:76ch;margin:0 0 18px;color:var(--muted);font-size:15px}
+.lens-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin:18px 0}
+.lens{background:var(--surface);padding:16px}
+.lens-label{display:block;margin-bottom:7px;color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.lens p{margin:0;font-size:14.5px}
+.lead-judgment{display:grid;grid-template-columns:150px minmax(0,1fr);gap:18px;border-top:1px solid var(--border);padding-top:18px;margin-top:18px}
+.lead-judgment .label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-family:var(--font-mono)}
+.lead-judgment p{margin:0;font-size:15px}
+.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:34px 0 10px;padding-bottom:9px;border-bottom:1px solid var(--border)}
+.section-head h3{margin:0;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+.section-head p{margin:0;color:var(--muted);font-size:13px}
+.repo{padding:22px 0;border-bottom:1px solid var(--border)}
+.repo-top{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:14px;align-items:baseline}
 .rank{font-family:var(--font-mono);color:var(--muted);font-size:13px}
-.repo-name{font-weight:600;font-size:17px;color:var(--fg);text-decoration:none}
+.repo-name{font-weight:700;font-size:18px;color:var(--fg);text-decoration:none;overflow-wrap:anywhere}
 .repo-name:hover{text-decoration:underline}
-.delta{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--fg)}
-.repo-desc{margin:8px 0 6px;color:var(--muted);font-size:14px}
-.repo-comment{margin:0 0 10px;font-size:14.5px}
-.repo-meta{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
-.topics{margin-top:8px}
-.topic{display:inline-block;background:var(--soft);border:1px solid var(--border);padding:1px 8px;font-size:11px;color:var(--muted);margin:0 6px 4px 0}
+.delta{font-family:var(--font-mono);font-size:12px;color:var(--fg);white-space:nowrap}
+.repo-desc{margin:8px 0 12px;color:var(--muted);font-size:14px;padding-left:68px}
+.repo-lenses{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding-left:68px;margin:12px 0}
+.repo-lens{background:var(--surface);border:1px solid var(--border);padding:12px 13px}
+.repo-lens b{display:block;margin-bottom:5px;color:var(--accent);font-size:12px;letter-spacing:.05em}
+.repo-lens span{font-size:13.5px;color:var(--fg)}
+.repo-summary{margin:10px 0 10px;padding-left:68px;font-size:14.5px}
+.repo-trend{margin:0 0 10px;padding-left:68px;color:var(--muted);font-size:13.5px}
+.repo-meta{display:flex;gap:14px;flex-wrap:wrap;padding-left:68px;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.topics{padding-left:68px;margin-top:8px}
+.topic{display:inline-block;background:var(--accent-soft);border:1px solid #cfddda;padding:1px 8px;font-size:11px;color:var(--accent);margin:0 6px 4px 0}
 .empty{padding:18px;border:1px dashed var(--border);color:var(--muted);background:var(--soft)}
-footer{margin-top:40px;color:var(--muted);font-size:12px;font-family:var(--font-mono)}
-@media(max-width:720px){.top{display:block}.meta{text-align:left;margin-top:12px}.delta{margin-left:0}}
+footer{margin-top:42px;color:var(--muted);font-size:12px;font-family:var(--font-mono);border-top:1px solid var(--border);padding-top:16px}
+@media(max-width:820px){
+  .top{display:block}.meta{text-align:left;margin-top:14px}.takeaway,.lead-judgment{grid-template-columns:1fr}.lens-grid,.repo-lenses{grid-template-columns:1fr}.repo-top{grid-template-columns:42px minmax(0,1fr)}.delta{grid-column:2}.repo-desc,.repo-lenses,.repo-summary,.repo-trend,.repo-meta,.topics{padding-left:56px}
+}
+@media(max-width:560px){
+  .shell{padding:28px 16px 56px}.lead{padding:22px}.repo-top{grid-template-columns:1fr}.rank{order:-1}.delta{grid-column:1}.repo-desc,.repo-lenses,.repo-summary,.repo-trend,.repo-meta,.topics{padding-left:0}.takeaway{padding:18px}
+}
 </style>
 </head>
 <body>
@@ -53,7 +78,8 @@ footer{margin-top:40px;color:var(--muted);font-size:12px;font-family:var(--font-
   <header class="top">
     <div>
       <div class="eyebrow">github-trending / {{SINCE}}</div>
-      <h1>GitHub 今日热门</h1>
+      <h1>GitHub 每日热门项目</h1>
+      <p class="deck">每天不只看谁涨得快，而是看清：项目要解决什么问题、具体做了什么、给开发者或生态创造什么价值。</p>
     </div>
     <div class="meta">
       <div>{{DATE}}</div>
@@ -61,43 +87,78 @@ footer{margin-top:40px;color:var(--muted);font-size:12px;font-family:var(--font-
     </div>
   </header>
 
-  <!-- 今日看点：1 段编辑综述，点出榜单整体趋势与最大事件 -->
   <section class="takeaway">
     <h2>今日看点</h2>
     <p>{{TAKEAWAY}}</p>
   </section>
 
-  <!-- Lead：当日新增 star 最高的仓库 -->
   <article class="lead">
-    <span class="tag">Top · +{{LEAD_STARS_TODAY}} stars today</span>
-    <h2><a href="https://github.com/{{LEAD_NAME}}" target="_blank">{{LEAD_NAME}}</a></h2>
-    <div class="delta-big">★ {{LEAD_STARS}} total · ⑂ {{LEAD_FORKS}} · {{LEAD_LANG}} · {{LEAD_LICENSE}}</div>
-    <p>{{LEAD_DESC}}</p>
-    <p class="comment">{{LEAD_COMMENT}}</p>
+    <div class="lead-kicker">
+      <span>Top mover · +{{LEAD_STARS_TODAY}} stars today</span>
+      <span>★ {{LEAD_STARS}} · forks {{LEAD_FORKS}} · {{LEAD_LANG}} · {{LEAD_LICENSE}}</span>
+    </div>
+    <h2><a href="https://github.com/{{LEAD_NAME}}" target="_blank" rel="noreferrer">{{LEAD_NAME}}</a></h2>
+    <p class="lead-desc">{{LEAD_DESC}}</p>
+
+    <div class="lens-grid" aria-label="lead project analysis">
+      <div class="lens">
+        <span class="lens-label">项目目的</span>
+        <p>{{LEAD_PURPOSE}}</p>
+      </div>
+      <div class="lens">
+        <span class="lens-label">项目内容</span>
+        <p>{{LEAD_CONTENT}}</p>
+      </div>
+      <div class="lens">
+        <span class="lens-label">项目价值</span>
+        <p>{{LEAD_VALUE}}</p>
+      </div>
+    </div>
+
+    <div class="lead-judgment">
+      <span class="label">editorial judgment</span>
+      <p>{{LEAD_COMMENT}}</p>
+    </div>
+    <div class="lead-judgment">
+      <span class="label">trend reason</span>
+      <p>{{LEAD_TREND_REASON}}</p>
+    </div>
   </article>
 
-  <!-- 焦点项目：第 2-4 名，使用 .repo 卡片结构 -->
-  <h3 class="band">焦点项目</h3>
+  <section class="section-head">
+    <h3>焦点项目</h3>
+    <p>第 2-4 名：用三问快速判断是否值得继续研究。</p>
+  </section>
   {{FOCUS_REPOS}}
 
-  <!-- 完整榜单：其余仓库，同 .repo 结构。每个 .repo:
-  <article class="repo">
-    <div class="repo-head">
-      <span class="rank">NN</span>
-      <a class="repo-name" href="https://github.com/owner/repo" target="_blank">owner/repo</a>
-      <span class="delta">+N today</span>
-    </div>
-    <p class="repo-desc">英文原始描述</p>
-    <p class="repo-comment">中文点评（必填）</p>
-    <div class="repo-meta"><span>★ N</span><span>⑂ N</span><span>Lang</span><span>License</span><span>created YYYY-MM-DD</span></div>
-    <div class="topics"><span class="topic">topic</span></div>
-  </article>
-  -->
-  <h3 class="band">完整榜单</h3>
+  <section class="section-head">
+    <h3>完整榜单</h3>
+    <p>其余项目保留同一分析尺度，避免只看热度。</p>
+  </section>
   {{REST_REPOS}}
 
-  <!-- 当某个仓库 API 补全失败时，在其卡片 repo-meta 处标注 "details unavailable"；
-       全部抓取失败时用 <div class="empty">说明原因</div> 替代列表 -->
+  <!-- FOCUS_REPOS / REST_REPOS 片段结构：
+  <article class="repo">
+    <div class="repo-top">
+      <span class="rank">02</span>
+      <a class="repo-name" href="https://github.com/owner/repo" target="_blank" rel="noreferrer">owner/repo</a>
+      <span class="delta">+N today</span>
+    </div>
+    <p class="repo-desc">英文原始描述或 API 描述</p>
+    <div class="repo-lenses">
+      <div class="repo-lens"><b>项目目的</b><span>它要解决什么问题</span></div>
+      <div class="repo-lens"><b>项目内容</b><span>它具体做了什么</span></div>
+      <div class="repo-lens"><b>项目价值</b><span>它创造什么价值</span></div>
+    </div>
+    <p class="repo-summary">一句中文编辑判断。</p>
+    <p class="repo-trend">趋势原因：有证据才写；没有证据可省略。</p>
+    <div class="repo-meta"><span>★ N</span><span>forks N</span><span>Lang</span><span>License</span><span>created YYYY-MM-DD</span></div>
+    <div class="topics"><span class="topic">topic</span></div>
+  </article>
+
+  若某个仓库 API 补全失败，在 repo-meta 标注 "details unavailable"。
+  若列表为空，用 <div class="empty">说明原因</div> 替代对应片段。
+  -->
 
   <footer>
     数据来源：github.com/trending ({{SINCE}}) + GitHub REST API · 生成于 {{DATE}} · github-trending

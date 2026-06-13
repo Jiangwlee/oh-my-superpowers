@@ -1,17 +1,31 @@
 ---
 name: github-trending
 description: >-
-  Generate a GitHub trending report: fetch today's trending repos, enrich each
-  with GitHub API details and README excerpts, write Chinese editorial
-  commentary, and publish an HTML digest to html-serve. Use when the user asks
-  for GitHub trending, hot repos, "今日 GitHub 热门", "trending 项目报告", or a
-  daily open-source digest. Do NOT use for deep research on a single repo (use
-  deep-research) or general AI news briefs (use daily-ai-brief).
+  Generate a daily GitHub trending project-intelligence report: fetch trending
+  repos, study README/API evidence, answer each repo's purpose/content/value in
+  Chinese, and publish a lens-first HTML digest to html-serve. Use when the user
+  asks for GitHub trending, hot repos, 今日 GitHub 热门, trending 项目报告, or a
+  daily open-source project digest. Do NOT use for deep research on a single
+  repo (use deep-research) or general AI news briefs (use daily-ai-brief).
 ---
 
 # GitHub Trending
 
-Pipeline: Fetch → Study → Comment → Render → Publish
+Pipeline: Fetch → Study → Analyze → Render → Publish
+
+## Output Contract
+
+This skill exists to answer one daily question: **今天的热门项目到底在解决什么问题、做了什么、创造了什么价值？**
+
+For every repo, produce a Chinese three-lens analysis:
+
+| Lens | Required answer | Evidence to use |
+|---|---|---|
+| **项目目的** | It solves what problem, for whom, in what context. | README intro, tagline, topics, homepage, repo description. |
+| **项目内容** | It actually provides what product, library, workflow, model, app, or infrastructure. | README features, install/usage, directory/docs when cloned. |
+| **项目价值** | It creates what practical value: speed, cost, quality, access, automation, developer leverage, or ecosystem signal. | Use cases, adoption signals, stars-today, comparisons, integration surface. |
+
+Do not treat stars as value by themselves. Stars are attention; value must be stated as a user-facing or ecosystem-facing gain.
 
 ## Workflow
 
@@ -26,45 +40,63 @@ Output: JSON array, one object per repo with `name`, `desc`, `lang`,
 `stars_today`, `stars`, `forks`, `topics`, `license`, `created_at`, `readme`.
 Repos that failed enrichment carry an `error` field instead.
 
-Done when: JSON file exists with 10+ repos.
+Done when: JSON file exists with 10+ repos, or the hard gate explains why it cannot.
 
 ### Stage 2: Study
 
-Read the JSON. For each repo, the `readme` excerpt plus API metadata is
-usually enough. Only when a repo is still unclear and it ranks in the top 4:
+Read the JSON before writing. Use `readme`, `full_desc`, `topics`, `homepage`, language, age, and stars-today to infer the three lenses.
+
+Only clone when the three lenses are still unclear and the repo ranks in the top 4:
 
 ```bash
 git clone --depth 1 https://github.com/<owner>/<repo> /tmp/<repo>
 ```
 
-Inspect its docs/structure, then continue. Never clone more than 3 repos.
+Inspect README, docs, examples, package metadata, and top-level structure. Never clone more than 3 repos.
 
-Done when: every repo can be summarized in 1-3 sentences.
+Done when: every repo has evidence for purpose/content/value, or an explicit uncertainty note.
 
-### Stage 3: Comment
+### Stage 3: Analyze
 
-Write for each repo a Chinese commentary (1-3 sentences): what it is, why it
-trends today, and relevance to the user's work when obvious. Then write one
-`今日看点` paragraph naming the day's dominant theme and the top mover.
+For each repo, write these fields in Chinese:
 
-Done when: every repo has commentary; takeaway written.
+| Field | Length | Rule |
+|---|---:|---|
+| `purpose` | 1 sentence | Name the pain point or job-to-be-done. |
+| `content` | 1 sentence | Say what the repo contains or enables, not only what category it belongs to. |
+| `value` | 1 sentence | State the practical gain or strategic signal. |
+| `trend_reason` | 0-1 sentence | Explain why it may be trending today when evidence supports it. |
+| `summary` | 1 sentence | A compact editorial judgment tying the three lenses together. |
+
+Then write `今日看点`: one paragraph that names the day's dominant problem cluster, the strongest value signal, and the top mover.
+
+Done when: every repo answers all three lenses; uncertain claims are marked as uncertain instead of invented.
 
 ### Stage 4: Render
 
 Load `assets/report-template.html`. Sort repos by stars-today descending:
-rank 1 fills the Lead block, ranks 2-4 fill 焦点项目, the rest fill 完整榜单.
-Replace all `{{MARKER}}` placeholders (structure comments are in the template).
-HTML-escape repo descriptions and commentary.
+
+| Rank | Template area | Required emphasis |
+|---:|---|---|
+| 1 | Lead block | purpose/content/value + editorial judgment. |
+| 2-4 | 焦点项目 | compact three-lens cards. |
+| 5+ | 完整榜单 | scannable three-lens rows. |
+
+Replace all `{{MARKER}}` placeholders. Generate `{{FOCUS_REPOS}}` and `{{REST_REPOS}}` as escaped HTML fragments using the structure documented in the template comments. HTML-escape repo descriptions, README-derived text, topics, and analysis.
 
 Write to: `$HTML_SERVE_DATA_DIR/github-trending/<YYYY-MM-DD>.html`
 (weekly/monthly runs: `<YYYY-MM-DD>-<since>.html`).
 
-Done when: HTML file written, no `{{` markers remain.
+Done when: HTML file exists, no `{{` markers remain, and every visible repo contains 项目目的 / 项目内容 / 项目价值.
 
 ### Stage 5: Publish
 
 Tell the user the URL:
-`${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/github-trending/<filename>.html`.
+
+```text
+${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/github-trending/<filename>.html
+```
+
 Prefer `HTML_SERVE_BASE_URL` when set. Verify with a HEAD request returning 200.
 
 Done when: URL verified and given to user.
@@ -73,9 +105,18 @@ Done when: URL verified and given to user.
 
 | Condition | Action |
 |---|---|
-| `fetch` returns no repos | Abort; tell user to check network or report page-structure breakage |
-| `gh` not authenticated | Continue (script auto-falls back to anonymous API, 60 req/h); suggest `gh auth login` for higher limits |
-| More than half of repos carry `error` | Warn user about API rate limit; suggest `gh auth login` or retry later |
-| `HTML_SERVE_DATA_DIR` unset | Ask user to configure `docker/html-serve/.env` or export it; do not write to a hardcoded path |
-| html-serve container not running | Tell user: `cd docker/html-serve && docker compose up -d` |
-| Template file missing | Abort, tell user to reinstall skill |
+| `fetch` returns no repos | Abort; tell user to check network or report page-structure breakage. |
+| `gh` not authenticated | Continue; the script falls back to anonymous API with 60 req/h. Suggest `gh auth login` for higher limits. |
+| More than half of repos carry `error` | Warn user about API rate limit; suggest `gh auth login` or retry later. |
+| A repo's purpose/content/value cannot be inferred | Mark the specific lens as `证据不足`; do not hallucinate. Clone only if it is top 4 and clone budget remains. |
+| `HTML_SERVE_DATA_DIR` unset | Ask user to configure `docker/html-serve/.env` or export it; do not write to a hardcoded path. |
+| html-serve container not running | Tell user: `cd docker/html-serve && docker compose up -d`. |
+| Template file missing | Abort; tell user to reinstall the skill. |
+
+## Command Hierarchy
+
+```text
+omp
+└── github-trending
+    └── fetch --since daily|weekly|monthly --lang <language> --readme-chars N --out <path>
+```
