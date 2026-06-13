@@ -106,7 +106,9 @@ def render_html(
     publish: bool = typer.Option(False, "--publish", help="Write under html-serve and print URL metadata."),
     project: str | None = typer.Option(None, "--project", help="Project namespace for published output."),
     data_dir: str | None = typer.Option(None, "--data-dir", help="html-serve data root. Defaults to HTML_SERVE_DATA_DIR."),
-    base_url: str | None = typer.Option(None, "--base-url", help="html-serve base URL. Defaults to HTML_SERVE_BASE_URL or localhost."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Legacy html-serve public base URL."),
+    localhost_base_url: str | None = typer.Option(None, "--localhost-base-url", help="Localhost html-serve base URL."),
+    tailscale_base_url: str | None = typer.Option(None, "--tailscale-base-url", help="Tailscale html-serve base URL."),
 ) -> None:
     """Render a filled review report as a static HTML artifact.
 
@@ -125,6 +127,10 @@ def render_html(
         args.extend(["--data-dir", data_dir])
     if base_url is not None:
         args.extend(["--base-url", base_url])
+    if localhost_base_url is not None:
+        args.extend(["--localhost-base-url", localhost_base_url])
+    if tailscale_base_url is not None:
+        args.extend(["--tailscale-base-url", tailscale_base_url])
     _run(RENDER_HTML_SCRIPT, args)
 
 

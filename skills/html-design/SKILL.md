@@ -46,7 +46,8 @@ omp html-design init [--slug SLUG] [--root PATH]
    `assets/prototype-workbench.html`; expose controls for the page decisions
    that matter.
 7. **Publish for review** - Use `references/publishing-contract.md` to publish
-   prototypes to html-serve and give the user the preferred review URL.
+   prototypes through `omp html-serve publish` and give the user both returned
+   URLs (`localhost_url` and `tailscale_url`).
 8. **Iterate and finalize** - Apply user feedback, keep the chosen prototype
    and final `DESIGN.md`, and remove rejected temporary directions from the
    handoff unless the user asks to keep them.
@@ -92,6 +93,6 @@ The final handoff must name:
 - The temporary workspace path.
 - The five reference `DESIGN.md` files considered.
 - The chosen information organization model.
-- The html-serve prototype URL used for review.
+- The html-serve prototype URLs used for review (`localhost_url` and `tailscale_url`).
 - The final HTML prototype file and final `DESIGN.md`.
 - The validation command or checklist used.

@@ -138,6 +138,8 @@ omp install agent <name> --global
 
 `omp serve` 启动一个项目本地 Web 工作台，用于开发当前仓库内的 Skills。
 
+> 静态 HTML artifact 发布使用 `omp html-serve publish <file.html> --to <relative/path.html>`；它写入 `HTML_SERVE_DATA_DIR` 并返回 `localhost_url` 与 `tailscale_url`。
+
 核心能力：
 
 - 左栏：懒加载文件树，逐层展开当前项目目录。
@@ -174,6 +176,9 @@ omp serve stop
 |------|------|--------|
 | `OMP_HOME` | omp 安装路径 | `~/.oh-my-superpowers` |
 | `OMP_DEFAULT_MODEL_PI` | Pi runtime 默认模型 | `openai-codex/gpt-5.4-mini` |
+| `HTML_SERVE_DATA_DIR` | `omp html-serve publish` 的静态文件根目录 | 无，通常写在 `docker/html-serve/.env` |
+| `HTML_SERVE_PORT` | html-serve 本地端口 | `8888` |
+| `HTML_SERVE_TAILSCALE_BASE_URL` | 发布结果中的 Tailscale URL base | 自动从 Tailscale 探测，或手动配置 |
 
 **默认模型原则**：所有需要调用 LLM 的组件（CLI、skill 脚本）统一通过 `OMP_DEFAULT_MODEL_PI` 环境变量获取默认模型，不在代码中硬编码模型名。优先级：`--model 命令行 > agents.json 显式声明 > OMP_DEFAULT_MODEL_PI > 硬编码 fallback`。
 

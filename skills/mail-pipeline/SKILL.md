@@ -22,8 +22,8 @@ judges every message by content.
 | Mailbox credentials are requested in config or chat | Stop. Passwords come from environment variables only. |
 | User asks for MCP integration | Explain that v1 is an IMAP pipeline; MCP is out of scope. |
 | A script would judge message content (classify, pick what to flag or move) | Stop. Scripts never call an LLM; classification and every mailbox action are agent decisions. |
-| `HTML_SERVE_DATA_DIR` is unset when rendering the report | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; deliver the chat summary regardless. |
-| html-serve container not running when rendering the report | Tell user: `cd docker/html-serve && docker compose up -d`; deliver the chat summary regardless. |
+| `omp html-serve publish` reports missing `HTML_SERVE_DATA_DIR` when publishing the report | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; deliver the chat summary regardless. |
+| html-serve container not running when publishing the report | Tell user: `omp html-serve start`; deliver the chat summary regardless. |
 
 ## Main Loop
 
@@ -46,14 +46,11 @@ judges every message by content.
    reprocessing.
 4. Render the report page from `assets/report-template.html` (replace the
    sample markers with this run's data; follow the template's section and
-   merge rules) and write it to
-   `$HTML_SERVE_DATA_DIR/mail-brief/<YYYY-MM-DD>-mail-brief.html` —
-   one page per day, merged across same-day runs and all accounts (account
-   markers per the template's multi-account rule). Give the user the published
-   URL derived from
-   `${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/mail-brief/<date>-mail-brief.html`.
-   Prefer `HTML_SERVE_BASE_URL` when set; on this host it should be the
-   Tailscale reachable base URL.
+   merge rules) to a temporary local HTML file, then publish it with:
+   `omp html-serve publish <tmp.html> --to mail-brief/<YYYY-MM-DD>-mail-brief.html`.
+   Keep one page per day, merged across same-day runs and all accounts (account
+   markers per the template's multi-account rule). Give the user both returned
+   URLs: `localhost_url` and `tailscale_url`.
 
    Summarize the same content briefly in chat: action items first, then
    counts. Do not generate a Markdown archive — `events/*.jsonl` is the

@@ -107,10 +107,12 @@ class HtmlDesignStaticTest(unittest.TestCase):
         ]:
             self.assertIn(family, text)
 
-    def test_publishing_contract_prefers_public_base_url(self):
+    def test_publishing_contract_returns_localhost_and_tailscale_urls(self):
         text = (SKILL / "references" / "publishing-contract.md").read_text()
 
-        self.assertIn("HTML_SERVE_BASE_URL", text)
+        self.assertIn("omp html-serve publish", text)
+        self.assertIn("HTML_SERVE_TAILSCALE_BASE_URL", text)
         self.assertIn("Tailscale", text)
-        self.assertIn("Final responses should lead with the public URL", text)
-        self.assertIn("localhost", text)
+        self.assertIn("Final responses should include both URLs", text)
+        self.assertIn("localhost_url", text)
+        self.assertIn("tailscale_url", text)

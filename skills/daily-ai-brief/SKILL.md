@@ -67,16 +67,15 @@ Fail: fewer than 5 quality items → tell user, offer to expand source list.
 Load `assets/brief-template.html`.
 
 1. Replace template markers with real content (see template comments)
-2. Write HTML to `$HTML_SERVE_DATA_DIR/ai-daily/<date>-daily-ai-brief.html`
-3. Generate Markdown archive in the same directory (`.md` extension)
-4. Tell user the published URL derived from
-   `${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/ai-daily/<date>-daily-ai-brief.html`.
-   Prefer `HTML_SERVE_BASE_URL` when set; on this host it should be the
-   Tailscale reachable base URL.
+2. Write rendered HTML to a temporary local file
+3. Publish it with:
+   `omp html-serve publish <tmp.html> --to ai-daily/<date>-daily-ai-brief.html`
+4. Generate Markdown archive under `$HTML_SERVE_DATA_DIR/ai-daily/` (`.md` extension)
+5. Tell user both returned URLs: `localhost_url` and `tailscale_url`
 
 `<date>` = `YYYY-MM-DD`. Output directory is always `ai-daily/`, independent of current project.
 
-Done when: HTML written, URL given to user.
+Done when: HTML published through `omp html-serve publish`, and both URLs are given to user.
 
 ## Hard Gate
 
@@ -85,5 +84,5 @@ Done when: HTML written, URL given to user.
 | No sources reachable | Abort, tell user to check network/web-operator |
 | Fewer than 3 items pass editorial filter | Warn user, offer to lower threshold or expand sources |
 | Template file missing | Abort, tell user to reinstall skill |
-| `HTML_SERVE_DATA_DIR` unset | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; do not write to a hardcoded path. |
-| html-serve container not running | Tell user: `cd docker/html-serve && docker compose up -d` |
+| `omp html-serve publish` reports missing `HTML_SERVE_DATA_DIR` | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; do not write to a hardcoded path. |
+| html-serve container not running | Tell user: `omp html-serve start` |

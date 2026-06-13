@@ -12,8 +12,8 @@ direction.
 3. Keep controls focused on decisions that matter for this page: information
    organization, density, navigation, section rhythm, emphasis, and reference
    style.
-4. Publish the workbench to html-serve and give the user the preferred URL from
-   `HTML_SERVE_BASE_URL` when configured; otherwise give the localhost URL.
+4. Publish the workbench with `omp html-serve publish` and give the user both
+   returned URLs: `localhost_url` and `tailscale_url`.
 5. Ask the user to adjust the browser controls or describe what feels wrong.
 6. Apply feedback, republish, and repeat until the user accepts the direction.
 7. Save the accepted HTML prototype and matching `DESIGN.md` in the temporary
@@ -65,5 +65,5 @@ screenshot-capable tool when available. Check:
 - Desktop and mobile layouts do not overlap.
 - Controls update the preview and export.
 - Copy works over plain HTTP using an `execCommand('copy')` fallback.
-- The shared URL uses the configured public base, preferably Tailscale on this
-  host, without hardcoding the address in committed files.
+- The shared URLs come from `omp html-serve publish` and include both localhost
+  and Tailscale addresses without hardcoding either in committed files.

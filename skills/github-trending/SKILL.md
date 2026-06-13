@@ -84,22 +84,22 @@ Load `assets/report-template.html`. Sort repos by stars-today descending:
 
 Replace all `{{MARKER}}` placeholders. Generate `{{FOCUS_REPOS}}` and `{{REST_REPOS}}` as escaped HTML fragments using the structure documented in the template comments. HTML-escape repo descriptions, README-derived text, topics, and analysis.
 
-Write to: `$HTML_SERVE_DATA_DIR/github-trending/<YYYY-MM-DD>.html`
-(weekly/monthly runs: `<YYYY-MM-DD>-<since>.html`).
+Write the rendered HTML to a temporary local file. Filename convention:
+`<YYYY-MM-DD>.html` (weekly/monthly runs: `<YYYY-MM-DD>-<since>.html`).
 
-Done when: HTML file exists, no `{{` markers remain, and every visible repo contains 项目目的 / 项目内容 / 项目价值.
+Done when: local HTML file exists, no `{{` markers remain, and every visible repo contains 项目目的 / 项目内容 / 项目价值.
 
 ### Stage 5: Publish
 
-Tell the user the URL:
+Publish through html-serve CLI:
 
-```text
-${HTML_SERVE_BASE_URL:-http://localhost:${HTML_SERVE_PORT:-8888}}/github-trending/<filename>.html
+```bash
+omp html-serve publish <tmp.html> --to github-trending/<filename>.html
 ```
 
-Prefer `HTML_SERVE_BASE_URL` when set. Verify with a HEAD request returning 200.
+Tell the user both returned URLs: `localhost_url` and `tailscale_url`.
 
-Done when: URL verified and given to user.
+Done when: `omp html-serve publish` succeeds and both URLs are given to user.
 
 ## Hard Gate
 
@@ -109,8 +109,8 @@ Done when: URL verified and given to user.
 | `gh` not authenticated | Continue; the script falls back to anonymous API with 60 req/h. Suggest `gh auth login` for higher limits. |
 | More than half of repos carry `error` | Warn user about API rate limit; suggest `gh auth login` or retry later. |
 | A repo's purpose/content/value cannot be inferred | Mark the specific lens as `证据不足`; do not hallucinate. Clone only if it is top 4 and clone budget remains. |
-| `HTML_SERVE_DATA_DIR` unset | Ask user to configure `docker/html-serve/.env` or export it; do not write to a hardcoded path. |
-| html-serve container not running | Tell user: `cd docker/html-serve && docker compose up -d`. |
+| `omp html-serve publish` reports missing `HTML_SERVE_DATA_DIR` | Ask user to configure `docker/html-serve/.env` or export it; do not write to a hardcoded path. |
+| html-serve container not running | Tell user: `omp html-serve start`. |
 | Template file missing | Abort; tell user to reinstall the skill. |
 
 ## Command Hierarchy

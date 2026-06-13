@@ -48,27 +48,22 @@ If a section is empty, render a short neutral placeholder such as
 
 ## html-serve Publishing
 
-Publish the generated file only when `HTML_SERVE_DATA_DIR` is configured.
-Use this relative path convention:
+Publish the generated file only when html-serve is configured. Use this relative
+path convention:
 
 ```text
 oh-my-superpowers/deep-research/<workspace-name>/report.html
 ```
 
-Copy `reports/report.html` to:
+Publish through the shared CLI:
 
-```text
-$HTML_SERVE_DATA_DIR/oh-my-superpowers/deep-research/<workspace-name>/report.html
+```bash
+omp html-serve publish reports/report.html --to oh-my-superpowers/deep-research/<workspace-name>/report.html
 ```
 
-Derive the review URL from:
-
-```text
-${HTML_SERVE_BASE_URL:-http://localhost:8888}/oh-my-superpowers/deep-research/<workspace-name>/report.html
-```
-
-Do not hardcode personal filesystem paths, LAN IPs, or Tailscale IPs in skill
-files.
+The command returns both `localhost_url` and `tailscale_url`; give both to the
+user. Do not hardcode personal filesystem paths, LAN IPs, or Tailscale IPs in
+skill files.
 
 ## Fallback
 
@@ -97,4 +92,4 @@ source. Use the workspace files for verification:
   of its summary.
 - The source table includes URLs and evidence value.
 - `reports/report.html` exists even when html-serve is unavailable.
-- Published URLs are derived from `HTML_SERVE_BASE_URL`.
+- Published URLs come from `omp html-serve publish` and include both `localhost_url` and `tailscale_url`.

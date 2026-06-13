@@ -86,6 +86,8 @@ def test_publish_writes_under_html_serve_data_dir(tmp_path: Path) -> None:
     assert html_path.is_file()
     assert html_path.parent == data_dir / "my-project" / "skill-review"
     assert metadata["url"].startswith("http://example.test:8888/my-project/skill-review/")
+    assert metadata["tailscale_url"].startswith("http://example.test:8888/my-project/skill-review/")
+    assert metadata["localhost_url"].startswith("http://localhost:8888/my-project/skill-review/")
 
 
 def test_rejects_unvalidated_report(tmp_path: Path) -> None:

@@ -15,12 +15,12 @@ Run this checklist before calling the page design ready.
 
 - [ ] No committed file contains a personal absolute path.
 - [ ] No committed file contains a fixed LAN or Tailscale IP.
-- [ ] html-serve paths are expressed with `HTML_SERVE_DATA_DIR` and relative
-      output paths.
-- [ ] User-facing URLs prefer `HTML_SERVE_BASE_URL`; on this host that should
-      be configured as the Tailscale base URL.
-- [ ] Localhost URLs are used only as fallback, service checks, or secondary
-      troubleshooting links.
+- [ ] html-serve publishing uses `omp html-serve publish` with a relative
+      output path.
+- [ ] Final response includes both returned URLs: `localhost_url` and
+      `tailscale_url`.
+- [ ] No workflow hand-computes html-serve URLs when the CLI result is
+      available.
 
 ## Page Quality
 
@@ -45,7 +45,7 @@ Run this checklist before calling the page design ready.
 
 ## Handoff
 
-- [ ] Final response names the prototype URL.
+- [ ] Final response names both prototype URLs.
 - [ ] Final response names the workspace path.
 - [ ] Final response names the chosen `DESIGN.md` reference.
 - [ ] Final response states what validation was run.

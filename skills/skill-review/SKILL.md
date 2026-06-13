@@ -30,7 +30,7 @@ omp skill-review render-html /tmp/review-<skill>.md
 | `check` | 运行机械一致性检查，输出 JSON。 |
 | `emit-checklist` | 生成必须逐条填写的 Markdown scaffold。 |
 | `validate` | 拒绝未填写 checkbox、占位符或缺少 finding 子项的报告。 |
-| `render-html` | 将已填写 Markdown 报告渲染为 Minimal Review HTML artifact；`--publish` 写入 html-serve 并输出 URL。 |
+| `render-html` | 将已填写 Markdown 报告渲染为 Minimal Review HTML artifact；发布时再调用 `omp html-serve publish`。 |
 
 ## 前置检查
 
@@ -102,18 +102,19 @@ Done when: `omp skill-review validate /tmp/review-<skill>.md` 退出 0。
 运行：
 
 ```
-omp skill-review render-html /tmp/review-<skill>.md --publish
+omp skill-review render-html /tmp/review-<skill>.md --output /tmp/review-<skill>.html
+omp html-serve publish /tmp/review-<skill>.html --to oh-my-superpowers/skill-review/review-<skill>.html
 ```
 
-该命令先校验报告完整性，再把已填写报告渲染成 Minimal Review HTML artifact，并发布到 html-serve。Markdown 仍是事实来源；HTML 是便于分享和扫描 findings 的增强视图。
+第一条命令先校验报告完整性，再把已填写报告渲染成 Minimal Review HTML artifact；第二条命令发布到 html-serve 并返回 `localhost_url` 与 `tailscale_url`。Markdown 仍是事实来源；HTML 是便于分享和扫描 findings 的增强视图。
 
-如果 `--publish` 因 `HTML_SERVE_DATA_DIR` 未配置失败，改用同一命令加 `--output /tmp/review-<skill>.html` 生成本地文件，并在最终交付中说明 HTML 未发布 URL。
+如果 `omp html-serve publish` 因 `HTML_SERVE_DATA_DIR` 未配置失败，只交付本地 HTML 文件，并在最终交付中说明 HTML 未发布 URL。
 
-Done when: 命令输出 `html_path`；如果使用 `--publish`，还输出 `url`。
+Done when: `render-html` 输出 `html_path`；如发布成功，`omp html-serve publish` 输出 `localhost_url` 与 `tailscale_url`。
 
 ### Step 5：输出报告
 
-交付通过 `validate` 的 Markdown 报告，并附上 HTML artifact 路径或 html-serve URL。
+交付通过 `validate` 的 Markdown 报告，并附上 HTML artifact 路径；如发布成功，同时附上 `localhost_url` 与 `tailscale_url`。
 
 Done when: 已交付 Markdown 报告、HTML artifact 信息，且报告中不再包含未填写 checkbox 或占位符。
 
@@ -123,7 +124,7 @@ Done when: 已交付 Markdown 报告、HTML artifact 信息，且报告中不再
 - `references/rubric.md` 无法读取 → 停止并报告
 - `omp skill-review validate` 失败 → 回到 Step 2 补全，不得跳过
 - `omp skill-review render-html` 校验失败 → 回到 Step 2 补全报告，不得发布 HTML
-- HTML 发布失败 → 若缺少 `HTML_SERVE_DATA_DIR`，改用 `--output` 生成本地 HTML；其他错误报告原文并停止
+- `omp html-serve publish` 失败 → 若缺少 `HTML_SERVE_DATA_DIR`，交付本地 HTML；其他错误报告原文并停止
 
 ## Guardrails
 

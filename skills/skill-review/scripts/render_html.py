@@ -15,8 +15,11 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote
 
+OMP_HOME = Path(os.environ.get("OMP_HOME", str(Path(__file__).resolve().parents[3])))
+sys.path.insert(0, str(OMP_HOME / "lib"))
+
+from html_serve.core import build_url, resolve_config  # noqa: E402
 from validate_review import collect_issues
 
 CHECKBOX_PATTERN = re.compile(r"^- \[([✓✗—])\] (.+?)(?: → (.*))?$")
@@ -399,10 +402,28 @@ def _is_relative_to(path: Path, parent: Path) -> bool:
         return False
 
 
-def _publish_url(output_path: Path, data_dir: Path, base_url: str) -> str:
-    """Build an html-serve URL for an output path under the data dir."""
+def _publish_urls(
+    output_path: Path,
+    data_dir: Path,
+    localhost_base_url: str | None,
+    tailscale_base_url: str | None,
+    legacy_base_url: str | None,
+) -> dict[str, str]:
+    """Build localhost and Tailscale html-serve URLs for a published file."""
     rel = output_path.resolve().relative_to(data_dir.resolve()).as_posix()
-    return base_url.rstrip("/") + "/" + quote(rel)
+    config = resolve_config(
+        omp_home=OMP_HOME,
+        data_dir=str(data_dir),
+        localhost_base_url=localhost_base_url,
+        tailscale_base_url=tailscale_base_url or legacy_base_url,
+    )
+    localhost_url = build_url(config.localhost_base_url, rel)
+    tailscale_url = build_url(config.tailscale_base_url, rel) if config.tailscale_base_url else ""
+    return {
+        "localhost_url": localhost_url,
+        "tailscale_url": tailscale_url,
+        "url": tailscale_url or localhost_url,
+    }
 
 
 def resolve_output_path(
@@ -459,8 +480,18 @@ def main() -> None:
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("HTML_SERVE_BASE_URL") or f"http://localhost:{os.environ.get('HTML_SERVE_PORT', '8888')}",
-        help="Public html-serve base URL. Defaults to HTML_SERVE_BASE_URL or localhost.",
+        default=os.environ.get("HTML_SERVE_BASE_URL"),
+        help="Legacy public html-serve base URL. Prefer --tailscale-base-url.",
+    )
+    parser.add_argument(
+        "--localhost-base-url",
+        default=None,
+        help="Localhost html-serve base URL. Defaults to http://localhost:HTML_SERVE_PORT.",
+    )
+    parser.add_argument(
+        "--tailscale-base-url",
+        default=os.environ.get("HTML_SERVE_TAILSCALE_BASE_URL"),
+        help="Tailscale html-serve base URL. Defaults to env or automatic Tailscale detection.",
     )
     args = parser.parse_args()
 
@@ -490,7 +521,15 @@ def main() -> None:
 
     result: dict[str, str] = {"html_path": str(output_path)}
     if args.publish and data_root is not None:
-        result["url"] = _publish_url(output_path, data_root, args.base_url)
+        result.update(
+            _publish_urls(
+                output_path,
+                data_root,
+                args.localhost_base_url,
+                args.tailscale_base_url,
+                args.base_url,
+            )
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
