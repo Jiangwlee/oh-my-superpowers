@@ -18,7 +18,7 @@ or a link from an invoice provider (nuonuo, xforceplus, keruyun, jd).
    decision" section so the user can extend `config/providers.yaml`.
    Reporting an unallowlisted invoice provider is mandatory, never silent.
 
-2. Read each staged PDF and extract six fields: `invoice_date` (YYYY-MM-DD),
+2. Convert each staged PDF to image and extract six fields using your image reading capability: `invoice_date` (YYYY-MM-DD),
    `invoice_number`, `amount` (价税合计), `tax_rate` (keep face markers such
    as `*` verbatim), `purchase_content`, `seller`. For foreign-currency
    invoices add `"currency": "USD"` (omitted = CNY).

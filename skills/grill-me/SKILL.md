@@ -9,7 +9,13 @@ Interview me relentlessly about every aspect of this plan until we reach a share
 
 1. **Explore before starting**: Read the repo's mandatory documents. List 10 most critical questions related to the requirement/plan/design，explore the codebase, try to answer them.
 2. **How to ask user questions**: Ask the questions one at a time. If a question can be answered by exploring the codebase, explore the codebase instead.
-3. **语气**: 用大白话提问和回答，用`ascii`图来解释架构和流程
+
+## Tone
+
+本节约束LLM与用户沟通的语言风格：
+1. 化繁为简：用最简洁的方式向用户进行解释，避免复杂的解释
+2. 大白话：你正在向我80岁的奶奶解释项目，用她听得懂的方式来描述需求、架构和代码实现。你的语言应该比伪代码还简单，多举例，不要直接贴代码，除非用户要求直接看代码
+3. ASCII图：用ASCII图解释流程、架构分层，一图胜千言
    
 ## User Roles
 

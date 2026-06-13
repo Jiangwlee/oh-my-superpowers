@@ -41,6 +41,13 @@ class TestMailPipelineStatic(unittest.TestCase):
         self.assertIn("omp mail-pipeline", content)
         self.assertIsNone(re.search(r"\b(bash|python|python3|node)\s+scripts/", content))
 
+    def test_html_serve_uses_environment_contract(self) -> None:
+        content = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("HTML_SERVE_DATA_DIR", content)
+        self.assertIn("HTML_SERVE_BASE_URL", content)
+        self.assertNotIn("~/Dockers/html-serve", content)
+        self.assertIsNone(re.search(r"\b(?:100|192)\.\d+\.\d+\.\d+\b", content))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
