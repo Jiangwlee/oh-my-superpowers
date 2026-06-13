@@ -514,25 +514,43 @@ APP_HTML = r"""<!doctype html>
       item.dataset.path = node.path;
       item.dataset.type = node.type;
       item.classList.add(node.type === 'directory' ? 'folder' : 'file');
-      if (node.type === 'directory' && node.hasChildren) item.setAttribute('lazy', '');
+      if (node.type === 'directory' && node.hasChildren) {
+        item.setAttribute('lazy', '');
+        item.addEventListener('sl-lazy-load', async (event) => {
+          event.stopPropagation();
+          await populateDirectory(item);
+        });
+      }
       if (node.path === state.selectedPath) item.selected = true;
       return item;
     }
 
     async function populateDirectory(item) {
       const path = item.dataset.path || '';
-      const data = await loadDirectory(path);
-      item.innerHTML = '';
-      item.textContent = item.title.split('/').pop() || item.title;
-      for (const node of data.nodes) item.appendChild(createTreeItem(node));
-      if (!data.nodes.length) {
+      try {
+        const data = await loadDirectory(path);
+        item.innerHTML = '';
+        item.textContent = item.title.split('/').pop() || item.title;
+        for (const node of data.nodes) item.appendChild(createTreeItem(node));
+        if (!data.nodes.length) {
+          const empty = document.createElement('sl-tree-item');
+          empty.textContent = '(empty)';
+          empty.disabled = true;
+          empty.classList.add('empty');
+          item.appendChild(empty);
+        }
+      } catch (err) {
+        item.innerHTML = '';
+        item.textContent = item.title.split('/').pop() || item.title;
         const empty = document.createElement('sl-tree-item');
-        empty.textContent = '(empty)';
+        empty.textContent = err.message || 'failed to load';
         empty.disabled = true;
         empty.classList.add('empty');
         item.appendChild(empty);
+      } finally {
+        item.lazy = false;
+        item.removeAttribute('lazy');
       }
-      item.removeAttribute('lazy');
     }
 
     async function selectFile(path) {
@@ -799,10 +817,6 @@ APP_HTML = r"""<!doctype html>
       const selected = event.detail.selection?.[0];
       if (selected?.dataset?.type === 'file') selectFile(selected.dataset.path);
     });
-    $('file-tree').addEventListener('sl-lazy-load', async (event) => {
-      await populateDirectory(event.target);
-    });
-
     (async function boot() {
       try {
         setTheme(localStorage.getItem('ompServeTheme') || 'dark');
