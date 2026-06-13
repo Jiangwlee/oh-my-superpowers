@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.parse
 import webbrowser
+from contextlib import suppress
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -820,6 +821,7 @@ APP_HTML = r"""<!doctype html>
 """
 
 console = Console(stderr=True)
+CLIENT_DISCONNECT_ERRORS = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
 app = typer.Typer(
     name="serve",
     help="Local project workbench for skill development.",
@@ -901,6 +903,29 @@ def _pid_exists(pid: int) -> bool:
     return True
 
 
+def _serve_dir(workspace: Path) -> Path:
+    return workspace.resolve() / ".omp" / "serve"
+
+
+def _pid_file(workspace: Path, port: int) -> Path:
+    return _serve_dir(workspace) / f"serve-{port}.pid"
+
+
+def _log_file(workspace: Path, port: int) -> Path:
+    return _serve_dir(workspace) / f"serve-{port}.log"
+
+
+def _write_pid(workspace: Path, port: int) -> None:
+    pid_file = _pid_file(workspace, port)
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text(f"{os.getpid()}\n", encoding="utf-8")
+
+
+def _remove_pid(workspace: Path, port: int) -> None:
+    with suppress(OSError):
+        _pid_file(workspace, port).unlink()
+
+
 def _stop_port(port: int, quiet: bool = False) -> bool:
     pids = _pids_on_port(port)
     if not pids:
@@ -935,7 +960,7 @@ def _stop_port(port: int, quiet: bool = False) -> bool:
     return True
 
 
-def _serve(
+def _serve_foreground(
     workspace: Path,
     host: str,
     port: int,
@@ -956,7 +981,17 @@ def _serve(
     url = f"http://{host}:{port}/"
     console.print(f"[omp serve] workspace: [cyan]{root}[/cyan]")
     console.print(f"[omp serve] url: [bold]{url}[/bold]")
+    console.print(f"[omp serve] log: [cyan]{_log_file(root, port)}[/cyan]")
     console.print(f"[omp serve] pi: [cyan]pi -p --mode json --approve --session .omp/serve/sessions/<page>.jsonl[/cyan]")
+    _write_pid(root, port)
+    stop_requested = threading.Event()
+
+    def request_stop(signum: int, _frame: Any) -> None:
+        stop_requested.set()
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, request_stop)
     if open_browser:
         threading.Timer(0.3, lambda: webbrowser.open(url)).start()
     try:
@@ -964,7 +999,71 @@ def _serve(
     except KeyboardInterrupt:
         console.print("\n[omp serve] stopped")
     finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
+        if stop_requested.is_set():
+            console.print("\n[omp serve] stopped")
         server.server_close()
+        _remove_pid(root, port)
+
+
+def _serve_background(
+    workspace: Path,
+    host: str,
+    port: int,
+    model: str,
+    open_browser: bool,
+) -> None:
+    root = workspace.resolve()
+    if not root.is_dir():
+        console.print(f"[red]workspace not found:[/red] {root}")
+        raise typer.Exit(1)
+    if _pids_on_port(port):
+        console.print(f"[yellow][omp serve] port {port} already has a listener; use restart or stop first.[/yellow]")
+        raise typer.Exit(1)
+
+    serve_dir = _serve_dir(root)
+    serve_dir.mkdir(parents=True, exist_ok=True)
+    log_path = _log_file(root, port)
+    stdout = log_path.open("ab")
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--workspace",
+        str(root),
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--model",
+        model,
+        "--foreground",
+    ]
+    cmd.append("--open" if open_browser else "--no-open")
+    proc = subprocess.Popen(
+        cmd,
+        cwd=root,
+        stdin=subprocess.DEVNULL,
+        stdout=stdout,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    stdout.close()
+    deadline = time.time() + 3
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            console.print(f"[red][omp serve] failed to start; see log:[/red] {log_path}")
+            raise typer.Exit(proc.returncode or 1)
+        if _pids_on_port(port):
+            break
+        time.sleep(0.1)
+    else:
+        console.print(f"[yellow][omp serve] process started but port {port} was not observed yet.[/yellow]")
+
+    _pid_file(root, port).write_text(f"{proc.pid}\n", encoding="utf-8")
+    console.print(f"[omp serve] started in background: [cyan]pid {proc.pid}[/cyan]")
+    console.print(f"[omp serve] workspace: [cyan]{root}[/cyan]")
+    console.print(f"[omp serve] url: [bold]http://{host}:{port}/[/bold]")
+    console.print(f"[omp serve] log: [cyan]{log_path}[/cyan]")
 
 
 @app.callback()
@@ -980,10 +1079,14 @@ def _main(
         help="Pi model.",
     ),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser after start."),
+    foreground: bool = typer.Option(False, "--foreground", help="Run in the foreground instead of background."),
 ) -> None:
     """Start the local skill development workbench."""
     if ctx.invoked_subcommand is None:
-        _serve(workspace, host, port, model, open_browser)
+        if foreground:
+            _serve_foreground(workspace, host, port, model, open_browser)
+        else:
+            _serve_background(workspace, host, port, model, open_browser)
 
 
 @app.command()
@@ -998,9 +1101,13 @@ def start(
         help="Pi model.",
     ),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser after start."),
+    foreground: bool = typer.Option(False, "--foreground", help="Run in the foreground instead of background."),
 ) -> None:
     """Start the local skill development workbench."""
-    _serve(workspace, host, port, model, open_browser)
+    if foreground:
+        _serve_foreground(workspace, host, port, model, open_browser)
+    else:
+        _serve_background(workspace, host, port, model, open_browser)
 
 
 @app.command()
@@ -1023,10 +1130,14 @@ def restart(
         help="Pi model.",
     ),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser after start."),
+    foreground: bool = typer.Option(False, "--foreground", help="Run in the foreground instead of background."),
 ) -> None:
     """Restart the local skill development workbench."""
     _stop_port(port, quiet=True)
-    _serve(workspace, host, port, model, open_browser)
+    if foreground:
+        _serve_foreground(workspace, host, port, model, open_browser)
+    else:
+        _serve_background(workspace, host, port, model, open_browser)
 
 
 class ServeState:
@@ -1188,7 +1299,8 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
             self._send(status, _json_bytes(payload), "application/json; charset=utf-8")
 
         def _send_error_json(self, status: HTTPStatus, message: str) -> None:
-            self._send_json({"error": message}, status)
+            with suppress(*CLIENT_DISCONNECT_ERRORS):
+                self._send_json({"error": message}, status)
 
         def do_HEAD(self) -> None:  # noqa: N802
             parsed = urllib.parse.urlparse(self.path)
@@ -1229,6 +1341,8 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                     self._send_json({"path": rel, "content": content})
                 else:
                     self._send_error_json(HTTPStatus.NOT_FOUND, "not found")
+            except CLIENT_DISCONNECT_ERRORS:
+                return
             except Exception as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -1247,6 +1361,8 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                     return
                 path.write_text(content, encoding="utf-8")
                 self._send_json({"ok": True, "path": rel})
+            except CLIENT_DISCONNECT_ERRORS:
+                return
             except Exception as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -1266,6 +1382,8 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                     self._send_error_json(HTTPStatus.BAD_REQUEST, "sessionId is required")
                     return
                 self._stream_pi(message, session_id)
+            except CLIENT_DISCONNECT_ERRORS:
+                return
             except Exception as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
 
@@ -1276,9 +1394,12 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
             self.send_header("Connection", "keep-alive")
             self.end_headers()
 
-            if not shutil.which("pi"):
-                self.wfile.write(_sse({"type": "error", "message": "pi binary not found in PATH"}))
+            def send_event(payload: dict[str, Any]) -> None:
+                self.wfile.write(_sse(payload))
                 self.wfile.flush()
+
+            if not shutil.which("pi"):
+                send_event({"type": "error", "message": "pi binary not found in PATH"})
                 return
 
             session_path = _session_path(state, session_id)
@@ -1316,24 +1437,23 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
             if not proc.stdout:
                 return
             sent_done = False
-            for raw in proc.stdout:
-                raw = raw.strip()
-                if not raw:
-                    continue
-                try:
-                    event = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                event_type = event.get("type")
-                if event_type == "message_update":
-                    delta = _extract_text_delta(event)
-                    if delta:
-                        self.wfile.write(_sse({"type": "assistant_delta", "delta": delta}))
-                        self.wfile.flush()
-                elif event_type == "tool_execution_start":
-                    name = str(event.get("toolName") or "tool")
-                    self.wfile.write(
-                        _sse(
+            try:
+                for raw in proc.stdout:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    event_type = event.get("type")
+                    if event_type == "message_update":
+                        delta = _extract_text_delta(event)
+                        if delta:
+                            send_event({"type": "assistant_delta", "delta": delta})
+                    elif event_type == "tool_execution_start":
+                        name = str(event.get("toolName") or "tool")
+                        send_event(
                             {
                                 "type": "tool_start",
                                 "id": str(event.get("toolCallId") or name),
@@ -1341,12 +1461,9 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                                 "detail": _tool_detail(name, event.get("args")),
                             }
                         )
-                    )
-                    self.wfile.flush()
-                elif event_type == "tool_execution_end":
-                    name = str(event.get("toolName") or "tool")
-                    self.wfile.write(
-                        _sse(
+                    elif event_type == "tool_execution_end":
+                        name = str(event.get("toolName") or "tool")
+                        send_event(
                             {
                                 "type": "tool_end",
                                 "id": str(event.get("toolCallId") or name),
@@ -1354,31 +1471,35 @@ def _make_handler(state: ServeState) -> type[BaseHTTPRequestHandler]:
                                 "detail": _tool_detail(name, event.get("args")),
                             }
                         )
-                    )
-                    self.wfile.flush()
-                elif event_type == "error":
-                    self.wfile.write(_sse({"type": "error", "message": str(event.get("message", "pi error"))}))
-                    self.wfile.flush()
-                elif event_type == "agent_end":
-                    self.wfile.write(_sse({"type": "done", "returncode": 0}))
-                    self.wfile.flush()
-                    sent_done = True
-                    break
-            if sent_done and proc.poll() is None:
-                try:
-                    proc.terminate()
-                    rc = proc.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+                    elif event_type == "error":
+                        send_event({"type": "error", "message": str(event.get("message", "pi error"))})
+                    elif event_type == "agent_end":
+                        send_event({"type": "done", "returncode": 0})
+                        sent_done = True
+                        break
+                if sent_done and proc.poll() is None:
+                    with suppress(subprocess.TimeoutExpired):
+                        proc.terminate()
+                        rc = proc.wait(timeout=2)
+                    if proc.poll() is None:
+                        proc.kill()
+                        rc = proc.wait()
+                else:
                     rc = proc.wait()
-            else:
-                rc = proc.wait()
-            if rc != 0 and not sent_done:
-                detail = "\n".join(stderr_lines[-8:]) or f"pi exited with {rc}"
-                self.wfile.write(_sse({"type": "error", "message": detail}))
-            if not sent_done:
-                self.wfile.write(_sse({"type": "done", "returncode": rc}))
-            self.wfile.flush()
+                if rc != 0 and not sent_done:
+                    detail = "\n".join(stderr_lines[-8:]) or f"pi exited with {rc}"
+                    send_event({"type": "error", "message": detail})
+                if not sent_done:
+                    send_event({"type": "done", "returncode": rc})
+            except CLIENT_DISCONNECT_ERRORS:
+                if proc.poll() is None:
+                    proc.terminate()
+                    with suppress(subprocess.TimeoutExpired):
+                        proc.wait(timeout=2)
+                    if proc.poll() is None:
+                        proc.kill()
+                        proc.wait()
+                return
 
     return Handler
 
@@ -1398,7 +1519,7 @@ def dev(
 ) -> None:
     """Compatibility alias for `omp serve`."""
     console.print("[yellow][omp serve] dev is deprecated; use `omp serve`.[/yellow]")
-    _serve(workspace, host, port, model, open_browser)
+    _serve_foreground(workspace, host, port, model, open_browser)
 
 
 if __name__ == "__main__":
