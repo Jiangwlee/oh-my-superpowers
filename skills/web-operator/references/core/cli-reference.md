@@ -95,6 +95,29 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
   omp web-operator read-url "https://blog.samaltman.com/..." --json
   ```
 
+### Single-Platform Search
+
+- `omp web-operator search <site> "<query>" [limit] [--target TARGET]`
+  Search one supported site and return a JSON array of results.
+  Supported sites: `baidu`, `duckduckgo`, `github`, `google`, `reddit`, `taoguba`, `weixin-sogou`, `x`, `xueqiu`.
+
+  The `search` command uses positional arguments. Do not use `--platform`, `--query`, or `--limit` with `search`.
+
+  Examples:
+  ```bash
+  omp web-operator search google "AI agents" 10
+  omp web-operator search baidu "AI 智能体" 5
+  omp web-operator search reddit "Claude Code memory" 5
+  omp web-operator search x "Claude Code" 5 --target 0
+  ```
+
+  Anti-examples:
+  ```bash
+  # BAD: these options do not exist for search
+  omp web-operator search --platform google --query "AI agents"
+  omp web-operator search google --query "AI agents" --limit 10
+  ```
+
 ### Multi-Platform Parallel Search
 
 - `omp web-operator search-multi --<platform> "<query>" [...] [--limit N]`

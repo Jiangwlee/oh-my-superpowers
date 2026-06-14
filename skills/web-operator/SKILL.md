@@ -30,6 +30,37 @@ This repository uses a `core + sites + tests` layout.
 - Prefer stable URL navigation when a workflow can avoid brittle click paths.
 - Load the relevant core or site reference before running a non-trivial workflow.
 
+## Search Command Contract
+
+Use this exact shape for single-platform search:
+
+```bash
+omp web-operator search <site> "<query>" [limit]
+```
+
+- `<site>` is a positional argument: `google`, `baidu`, `duckduckgo`, `github`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, or `taoguba`.
+- `<query>` is a positional argument. Quote it when it contains spaces.
+- `[limit]` is a positional argument. Use `5`, not `--limit 5`.
+- `search` does not accept `--platform` or `--query`. The only search option is `--target`.
+
+| Use case | Command |
+|---|---|
+| Google search | `omp web-operator search google "Claude Code memory" 5` |
+| Baidu search | `omp web-operator search baidu "Claude Code 记忆机制" 5` |
+| Reddit search | `omp web-operator search reddit "Claude Code memory" 5` |
+| X search | `omp web-operator search x "Claude Code memory" 5` |
+| Multi-platform search | `omp web-operator search-multi --google "Claude Code memory" --baidu "Claude Code 记忆机制" --limit 5` |
+
+Do not invent option-style parameters for `search`:
+
+```bash
+# BAD
+omp web-operator search --platform google --query "Claude Code memory"
+
+# GOOD
+omp web-operator search google "Claude Code memory" 5
+```
+
 ## When To Load References
 
 Load core references for shared browser behavior:
