@@ -134,7 +134,14 @@ async function removeProjectFlow(id: string): Promise<void> {
   });
   if (!ok) return;
   const wasCurrent = state.currentProjectId === id;
-  await api(`/api/projects?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  try {
+    await api(`/api/projects?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch {
+    // Another tab may have removed projects concurrently (e.g. server refuses
+    // to empty the registry). Re-sync from the server and stop.
+    await loadProjects();
+    return;
+  }
   await loadProjects();
   if (wasCurrent) {
     newSession();

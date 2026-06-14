@@ -34,9 +34,13 @@ export function handleProjectRemove(res: ServerResponse, id: string): void {
     sendErrorJson(res, 400, "id is required");
     return;
   }
-  const ok = removeProject(id);
-  if (!ok) {
+  const result = removeProject(id);
+  if (result === "not_found") {
     sendErrorJson(res, 404, "unknown project");
+    return;
+  }
+  if (result === "last") {
+    sendErrorJson(res, 409, "cannot remove the last project");
     return;
   }
   sendJson(res, { ok: true, id });

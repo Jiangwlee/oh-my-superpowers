@@ -4,7 +4,7 @@
 // a localStorage mirror for fast restore but reconciles against this on boot —
 // this file wins.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, renameSync, statSync, realpathSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, statSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import type { Config, ProjectContext } from "../config.js";
@@ -56,7 +56,16 @@ function writeRegistry(reg: RegistryFile): void {
   mkdirSync(REGISTRY_DIR, { recursive: true });
   const tmp = `${REGISTRY_PATH}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(reg, null, 2), "utf-8");
-  renameSync(tmp, REGISTRY_PATH);
+  try {
+    renameSync(tmp, REGISTRY_PATH);
+  } catch (exc) {
+    try {
+      unlinkSync(tmp); // don't leave a stale temp file behind
+    } catch {
+      /* best effort */
+    }
+    throw exc;
+  }
 }
 
 // Canonical real path: a stored project root must contain no symlink component,
@@ -95,14 +104,18 @@ export function addProject(absPath: string, addedAt: string): Project {
   return project;
 }
 
+export type RemoveResult = "ok" | "not_found" | "last";
+
 // Unregister a project. This only removes the registry entry — project files
 // are never touched (the directory belongs to the user, not to omp serve).
-export function removeProject(id: string): boolean {
+// Refuses to remove the last project so the registry never empties (authoritative
+// even if a second tab bypasses the frontend's own guard).
+export function removeProject(id: string): RemoveResult {
   const reg = readRegistry();
-  const next = reg.projects.filter((p) => p.id !== id);
-  if (next.length === reg.projects.length) return false;
-  writeRegistry({ projects: next });
-  return true;
+  if (!reg.projects.some((p) => p.id === id)) return "not_found";
+  if (reg.projects.length <= 1) return "last";
+  writeRegistry({ projects: reg.projects.filter((p) => p.id !== id) });
+  return "ok";
 }
 
 // Ensure the CLI --workspace is registered so the page always has at least one
