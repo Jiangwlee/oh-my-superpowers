@@ -13,6 +13,7 @@ import { handleTree } from "./routes/tree.js";
 import { handleFileGet, handleFilePut } from "./routes/file.js";
 import { handleChatRoute } from "./routes/chat.js";
 import { handleDiff } from "./routes/diff.js";
+import { handleSessionHistory } from "./routes/session.js";
 import { handleProjectsList, handleProjectAdd, handleProjectRemove } from "./routes/projects.js";
 import { handleBrowse } from "./routes/browse.js";
 import { handleTerminalUpgrade } from "./pi/terminal.js";
@@ -100,6 +101,10 @@ const server = createServer((req, res) => {
       }
       if (path === "/api/file") {
         handleFileGet(res, ctxFor(url), url.searchParams.get("path") || "");
+        return;
+      }
+      if (path === "/api/session") {
+        handleSessionHistory(res, ctxFor(url), url.searchParams.get("sessionId") || "");
         return;
       }
       if (path === "/api/diff") {

@@ -62,6 +62,21 @@ export function clearChat(): void {
   state.toolSteps.clear();
 }
 
+// Repaint a resumed session's past turns into the chat panel. pi keeps the
+// real context via --session; this only restores what the user can see. Each
+// turn is static (assistant turns show "done", not the animated working state).
+export function renderHistoryTurns(turns: { role: string; text: string }[]): void {
+  clearChat();
+  for (const turn of turns) {
+    const role = turn.role === "user" ? "User" : "Assistant";
+    const article = addTurn(role, turn.text);
+    if (role === "Assistant") {
+      const status = article.querySelector(".turn-status");
+      if (status) status.textContent = "done";
+    }
+  }
+}
+
 export async function sendMessage(): Promise<void> {
   const input = $("chat-input") as HTMLTextAreaElement;
   const message = input.value.trim();
