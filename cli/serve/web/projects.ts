@@ -3,11 +3,11 @@
 //
 // Source of truth is the backend registry (GET /api/projects). localStorage is
 // only a fast-restore mirror reconciled on boot — the server always wins.
-import { state, $, esc, type ProjectInfo } from "./state.js";
+import { state, $, esc, newSessionId, type ProjectInfo } from "./state.js";
 import { api } from "./api.js";
 import { loadTree } from "./tree.js";
 import { renderEditor, updateChrome } from "./editor.js";
-import { newSession } from "./session.js";
+import { newSession, bindSession } from "./session.js";
 import { openDialog, confirmDialog } from "./dialog.js";
 
 const MIRROR_KEY = "ompServeProjects";
@@ -72,11 +72,16 @@ async function reloadProjectSurfaces(): Promise<void> {
 export async function switchProject(id: string): Promise<void> {
   if (id === state.currentProjectId) return;
   const prev = state.currentProjectId;
+  // Remember the session we are leaving so a later switch back resumes it.
+  if (prev) state.projectSessions[prev] = state.sessionId;
   // The new id must be live before reloadProjectSurfaces so its project-scoped
   // requests resolve correctly; renderTabs gives immediate feedback.
   state.currentProjectId = id;
   renderTabs();
-  newSession(); // rotate the workspace-bound pi session, clear chat/terminal
+  // Resume this project's last session, or start a fresh one the first time.
+  const sessionId = state.projectSessions[id] || newSessionId();
+  state.projectSessions[id] = sessionId;
+  bindSession(sessionId); // reset chat/terminal UI, bind pi --session to it
   try {
     await reloadProjectSurfaces();
     persist(); // only pin a project that actually loaded
@@ -84,6 +89,7 @@ export async function switchProject(id: string): Promise<void> {
     // Roll back so a vanished/removed project never leaves a broken active tab.
     state.currentProjectId = prev;
     renderTabs();
+    if (prev) bindSession(state.projectSessions[prev] || state.sessionId);
     $("file-list").innerHTML = `<div class="empty">${esc(err?.message || "failed to open project")}</div>`;
   }
 }

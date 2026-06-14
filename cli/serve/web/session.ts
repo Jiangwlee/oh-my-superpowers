@@ -6,17 +6,28 @@ import { clearChat } from "./chat.js";
 import { resetGenUiSeal } from "./genui.js";
 import { resetTerminal } from "./terminal.js";
 
-// Start a fresh pi session without reloading the page: rotate the sessionId,
-// clear the chat transcript and reset the terminal (both are session-bound).
-// File tree, editor, open file and theme are page state and are kept intact.
-export function newSession(): void {
+// Bind the page to a given pi session id and reset the session-bound surfaces
+// (chat transcript, Gen UI seal, terminal). The on-screen transcript is always
+// cleared — resuming a session restores Agent context via pi --session, not the
+// rendered history. File tree, editor, open file and theme are page state and
+// are kept intact.
+export function bindSession(sessionId: string): void {
   state.chatAbort?.abort(); // stop any in-flight chat stream bound to the old session
-  state.sessionId = newSessionId();
-  $("session-label").textContent = `session: ${state.sessionId.slice(0, 8)}`;
+  state.sessionId = sessionId;
+  $("session-label").textContent = `session: ${sessionId.slice(0, 8)}`;
   state.sending = false;
   ($("send-btn") as HTMLButtonElement).disabled = false;
   clearChat();
   resetGenUiSeal();
   resetTerminal();
   if (state.sideTab !== "terminal") $("chat-status").textContent = "idle";
+}
+
+// Start a fresh pi session for the current project (the "New" button). The fresh
+// id replaces the project's remembered session so switching away and back
+// resumes this new one, not the discarded one.
+export function newSession(): void {
+  const sessionId = newSessionId();
+  if (state.currentProjectId) state.projectSessions[state.currentProjectId] = sessionId;
+  bindSession(sessionId);
 }

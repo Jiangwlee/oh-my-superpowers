@@ -11,6 +11,11 @@ export interface AppState {
   projects: ProjectInfo[];
   currentProjectId: string;
   sessionId: string;
+  // projectId -> last sessionId, so switching back to a project resumes its pi
+  // session (Agent context continuity). In-memory only (NOT persisted): keeps
+  // the page-local session invariant — a reload or another tab starts fresh and
+  // never runs two pi processes against the same session jsonl.
+  projectSessions: Record<string, string>;
   selectedPath: string;
   original: string;
   content: string;
@@ -44,6 +49,7 @@ export const state: AppState = {
   projects: [],
   currentProjectId: "",
   sessionId: "",
+  projectSessions: {},
   selectedPath: "",
   original: "",
   content: "",

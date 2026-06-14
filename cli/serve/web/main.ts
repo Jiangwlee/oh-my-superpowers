@@ -56,9 +56,13 @@ window.addEventListener("resize", fitTerminal);
 (async function boot() {
   try {
     setTheme(localStorage.getItem("ompServeTheme") || "dark");
-    state.sessionId = newSessionId();
-    $("session-label").textContent = `session: ${state.sessionId.slice(0, 8)}`;
     await initProjects(); // sets currentProjectId before any project-scoped request
+    // Fresh session for this page's initial project, remembered so switching
+    // away and back resumes it (page-local: a reload starts fresh again).
+    const sessionId = newSessionId();
+    if (state.currentProjectId) state.projectSessions[state.currentProjectId] = sessionId;
+    state.sessionId = sessionId;
+    $("session-label").textContent = `session: ${sessionId.slice(0, 8)}`;
     await loadMeta();
     await loadTree();
     renderEditor();
