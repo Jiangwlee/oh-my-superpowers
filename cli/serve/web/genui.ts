@@ -14,6 +14,14 @@ export function cleanPartialHtml(html: string): string {
 // This mirrors how CopilotKit drives @jetbrains/websandbox.
 export const GENUI_SHELL = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#fff}</style></head><body></body><script>
 (function(){
+  var OMP_SHELL_STYLE_ID='omp-genui-shell-style';
+  var OMP_SHELL_CSS='html,body{margin:0;min-height:100%;background:#fff}*{scrollbar-width:thin;scrollbar-color:rgba(42,37,27,.20) transparent}*::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-thumb{background:rgba(42,37,27,.20);border-radius:999px;border:3px solid transparent;background-clip:content-box}';
+  function installShellStyle(){
+    var style=document.getElementById(OMP_SHELL_STYLE_ID);
+    if(!style){style=document.createElement('style');style.id=OMP_SHELL_STYLE_ID;document.head.appendChild(style);}
+    style.textContent=OMP_SHELL_CSS;
+  }
+  installShellStyle();
   function runScripts(srcDoc){
     var olds=srcDoc.querySelectorAll('script');
     // Execute scripts strictly in document order. External scripts must finish
@@ -45,6 +53,7 @@ export const GENUI_SHELL = `<!doctype html><html><head><meta charset="utf-8"><st
     var d=e.data; if(!d||d.__genui!==1) return;
     var doc=new DOMParser().parseFromString(d.html||'','text/html');
     document.head.innerHTML=doc.head.innerHTML;
+    installShellStyle();
     document.body.innerHTML=doc.body.innerHTML;
     if(d.run===1) runScripts(doc);  // only run inline <script> on final paint
   });

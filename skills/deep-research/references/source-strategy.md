@@ -63,13 +63,7 @@ omp web-operator search-multi \
   --limit 5
 ```
 
-Use single-platform `search` only for precise follow-up or platform-specific options. Its arguments are positional:
-
-```bash
-omp web-operator search google "Claude Code memory" 5
-```
-
-Do not use non-existent option forms such as `--platform google`, `--query`, or `--limit` with `search`.
+Use single-platform `search` only for precise follow-up or platform-specific options.
 
 ## Evidence Check
 
