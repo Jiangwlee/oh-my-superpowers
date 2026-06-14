@@ -1,7 +1,8 @@
 // Editor: Preview/Edit/Diff + Gen UI mode tab. Ported 1:1 from APP_HTML.
 import { state, $, esc, isMarkdown, isHtml } from "./state.js";
 import { api } from "./api.js";
-import { renderMarkdown, renderDiff } from "./markdown.js";
+import { renderMarkdown } from "./markdown.js";
+import { renderGitDiff } from "./diff.js";
 import { GENUI_SHELL, postGenUi } from "./genui.js";
 import { syncTreeSelection } from "./tree.js";
 
@@ -38,6 +39,11 @@ export function renderEditor(): void {
     root.querySelector("#genui-frame")!.addEventListener("load", () => postGenUi(state.genUiFinal === true));
     return;
   }
+  if (state.mode === "diff") {
+    // Workspace-wide git diff; independent of the selected file.
+    renderGitDiff(root);
+    return;
+  }
   if (!state.selectedPath) {
     root.innerHTML = '<div class="empty">Select a file from the project tree.</div>';
     return;
@@ -63,7 +69,6 @@ export function renderEditor(): void {
     }
     return;
   }
-  root.innerHTML = `<pre class="diff-view">${renderDiff(state.original, state.content)}</pre>`;
 }
 
 export async function selectFile(path: string): Promise<void> {

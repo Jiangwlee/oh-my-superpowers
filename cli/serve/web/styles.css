@@ -129,6 +129,22 @@
       min-width: 0;
     }
     .head span:last-child { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .head-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .tree-refresh {
+      height: 20px;
+      width: 20px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--faint);
+      font: 400 13px/1 var(--mono);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .tree-refresh:hover { background: rgba(243,236,221,.08); color: var(--muted); }
+    .tree-refresh.spinning { animation: tree-spin .6s linear infinite; }
+    @keyframes tree-spin { to { transform: rotate(360deg); } }
     .file-list { overflow: auto; padding: 10px; background: transparent; }
     .file-list::-webkit-scrollbar, .preview::-webkit-scrollbar, .diff-view::-webkit-scrollbar,
     textarea.editor-text::-webkit-scrollbar,
@@ -232,6 +248,38 @@
       line-height: 1.7;
       color: var(--muted);
     }
+    /* Git diff panel: collapsible file cards -> inline unified diff */
+    .diff-panel { height: 100%; overflow: auto; padding: 12px; }
+    .diff-summary { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 12px; color: var(--faint); font: 600 11px/1 var(--mono); }
+    .diff-summary .totals b { color: var(--green); } .diff-summary .totals s { color: var(--red); text-decoration: none; }
+    .diff-refresh { height: 22px; border: 0; border-radius: 999px; background: rgba(243,236,221,.08); color: var(--faint); font: 700 11px/1 var(--mono); padding: 0 9px; cursor: pointer; }
+    .diff-refresh:hover { background: rgba(243,236,221,.14); color: var(--muted); }
+    .file-card { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 10px; background: rgba(20,16,9,.5); overflow: hidden; }
+    .file-card-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; user-select: none; }
+    .file-card-head:hover { background: rgba(243,236,221,.03); }
+    .file-card .chev { color: var(--faint); font: 400 11px/1 var(--mono); transition: transform .15s ease; width: 10px; }
+    .file-card.open .chev { transform: rotate(90deg); }
+    .diff-badge { font: 700 9px/1 var(--mono); padding: 3px 6px; border-radius: 5px; letter-spacing: .04em; }
+    .diff-badge.M { color: var(--amber); background: rgba(224,175,104,.14); }
+    .diff-badge.A { color: var(--green); background: rgba(158,206,106,.14); }
+    .diff-badge.D { color: var(--red); background: rgba(247,118,142,.14); }
+    .diff-badge.R { color: var(--cyan); background: rgba(125,207,255,.14); }
+    .file-card .fname { flex: 1; min-width: 0; font: 600 12px/1.4 var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-card .fname .dir { color: var(--faint); }
+    .diff-meta { display: flex; align-items: center; gap: 12px; color: var(--faint); font: 600 10px/1 var(--mono); white-space: nowrap; }
+    .diff-meta .stat b { color: var(--green); } .diff-meta .stat s { color: var(--red); text-decoration: none; }
+    .diff-bar { display: inline-flex; gap: 1px; vertical-align: middle; }
+    .diff-bar span { width: 5px; height: 5px; border-radius: 1px; }
+    .diff-bar .a { background: var(--green); } .diff-bar .d { background: var(--red); } .diff-bar .n { background: var(--line); }
+    .file-card-body { display: none; border-top: 1px solid var(--line); }
+    .file-card.open .file-card-body { display: block; }
+    pre.diff-lines { margin: 0; padding: 10px 0; background: var(--bg); overflow: auto; font: 12px/1.55 var(--mono); }
+    pre.diff-lines .ln { display: block; padding: 0 12px; white-space: pre; }
+    pre.diff-lines .hunk { color: var(--cyan); background: rgba(125,207,255,.06); }
+    pre.diff-lines .add { color: var(--green); background: rgba(158,206,106,.10); }
+    pre.diff-lines .del { color: var(--red); background: rgba(247,118,142,.10); }
+    pre.diff-lines .ctx { color: var(--muted); }
+    pre.diff-lines .meta { color: var(--faint); }
     .preview h1, .preview h2, .preview h3 { color: var(--ink); line-height: 1.22; }
     .preview h1 { font-size: 28px; }
     .preview h2 { font-size: 20px; margin-top: 28px; }
@@ -250,6 +298,11 @@
     .turn-head { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 12px; color: var(--faint); font: 700 10px/1 var(--mono); text-transform: uppercase; }
     .turn.user .turn-head { color: var(--cyan); }
     .turn.assistant .turn-head { color: var(--green); }
+    .working { display: inline-flex; gap: 4px; align-items: center; }
+    .working i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: working-fade 1.2s infinite ease-in-out; }
+    .working i:nth-child(2) { animation-delay: .2s; }
+    .working i:nth-child(3) { animation-delay: .4s; }
+    @keyframes working-fade { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
     .turn-body { padding: 0 12px 13px; }
     .turn-body p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
     .assistant-md { color: var(--muted); font-size: 13px; line-height: 1.65; }
@@ -318,6 +371,21 @@
       letter-spacing: .08em;
     }
     .side-tab.active { color: var(--green); background: rgba(164,216,111,.10); }
+    #chat-status { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .new-session {
+      height: 22px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(125,207,255,.11);
+      color: var(--cyan);
+      padding: 0 10px;
+      font: 700 10px/1 var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .new-session:hover { background: rgba(125,207,255,.18); }
     .side-pane { min-height: 0; display: none; }
     .side-pane.active { display: block; }
     .agent-stream.side-pane.active { display: flex; }
@@ -387,6 +455,21 @@
       background: rgba(255,252,246,.78);
     }
     body[data-theme="light"] .turn.user { background: rgba(60,123,130,.08); }
+    /* Diff panel — light theme recalibration (dark rgba tints invert badly) */
+    body[data-theme="light"] .file-card { background: rgba(255,252,246,.7); }
+    body[data-theme="light"] .file-card-head:hover { background: rgba(42,37,27,.04); }
+    body[data-theme="light"] .diff-refresh { background: rgba(42,37,27,.06); }
+    body[data-theme="light"] .diff-refresh:hover { background: rgba(42,37,27,.11); }
+    body[data-theme="light"] .diff-badge.M { background: rgba(155,106,29,.15); }
+    body[data-theme="light"] .diff-badge.A { background: rgba(81,125,70,.16); }
+    body[data-theme="light"] .diff-badge.D { background: rgba(170,79,60,.15); }
+    body[data-theme="light"] .diff-badge.R { background: rgba(60,123,130,.15); }
+    body[data-theme="light"] pre.diff-lines { background: rgba(42,37,27,.04); }
+    body[data-theme="light"] pre.diff-lines .hunk { color: var(--cyan); background: rgba(60,123,130,.10); }
+    body[data-theme="light"] pre.diff-lines .add { color: var(--green); background: rgba(81,125,70,.13); }
+    body[data-theme="light"] pre.diff-lines .del { color: var(--red); background: rgba(170,79,60,.12); }
+    body[data-theme="light"] .diff-bar .a { background: var(--green); }
+    body[data-theme="light"] .diff-bar .d { background: var(--red); }
     body[data-theme="light"] .preview pre,
     body[data-theme="light"] .diff-view pre,
     body[data-theme="light"] .assistant-md pre {

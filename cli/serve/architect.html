@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omp serve — 架构文档</title>
+<style>
+  :root{
+    --bg:#15120c; --panel:#1d1a12; --inner:#141009; --ink:#f3ecdd; --muted:#ccc3ad;
+    --faint:#8c8367; --line:#3a3424; --green:#9ece6a; --amber:#e0af68; --cyan:#7dcfff; --red:#f7768e;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 28px 96px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.2px}
+  h2{font-size:19px;margin:44px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line);color:var(--amber);letter-spacing:.3px}
+  h3{font-size:15px;margin:26px 0 8px;color:var(--cyan)}
+  p{color:var(--muted);margin:10px 0}
+  code{font-family:var(--mono);font-size:.86em;background:var(--inner);border:1px solid var(--line);padding:1px 5px;border-radius:5px;color:var(--ink)}
+  .lead{color:var(--faint);font-size:14px;margin:0 0 8px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 22px;margin:16px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.5px;font-size:11px}
+  td code{white-space:nowrap}
+  pre{background:var(--inner);border:1px solid var(--line);border-radius:12px;padding:16px;overflow:auto;font-family:var(--mono);font-size:12.5px;color:var(--muted);line-height:1.5}
+  pre .a{color:var(--amber)} pre .g{color:var(--green)} pre .c{color:var(--cyan)} pre .r{color:var(--red)} pre .f{color:var(--faint)}
+  ul{color:var(--muted);padding-left:22px} li{margin:5px 0}
+  .tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);margin-right:6px}
+  .t-green{color:var(--green);border-color:var(--green)} .t-amber{color:var(--amber);border-color:var(--amber)}
+  .t-cyan{color:var(--cyan);border-color:var(--cyan)} .t-red{color:var(--red);border-color:var(--red)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  hr{border:none;border-top:1px solid var(--line);margin:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>omp serve — 架构文档</h1>
+<p class="lead">Project-local Skill 工作台 · Python launcher + TypeScript 全栈应用 · 单进程 HTTP+WS server</p>
+<p class="meta">scope: cli/serve/ · 生成日期 2026-06-14 · 事实来源：server/ + web/ + extensions/ + pty_helper.py</p>
+
+<div class="panel">
+<strong>一句话</strong>
+<p style="margin:8px 0 0">浏览器三栏工作台（文件树 / 编辑器·预览 / Pi 交互）经由一个 Node 单进程 server，把 Pi coding agent 的 JSONL 流转换成前端可消费的事件：聊天走 <code>SSE</code>，终端走 <code>WebSocket</code>（PTY 在 Python），生成式 UI 走 <code>render_ui</code> 扩展 + 沙箱 iframe。Python (<code>main.py</code>) 只做生命周期编排与按需构建，不参与任何请求。</p>
+</div>
+
+<h2>1 · 分层架构</h2>
+
+<p>四个进程层，职责严格隔离。每个 <code>/api/chat</code> 或终端连接都会拉起一个独立的 Pi 子进程。</p>
+
+<pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│  <span class="c">BROWSER  (web/, 打包到 web/dist/bundle.js)</span>                          │
+│  三栏工作台：tree.ts · editor/markdown.ts · chat.ts/genui.ts/terminal.ts │
+│  state.ts 单一可变状态 · api.ts fetch 封装                              │
+└───────────┬───────────────────┬───────────────────┬───────────────────┘
+   HTTP/JSON │           SSE     │      WebSocket     │
+   /api/*    │       /api/chat   │     /ws/terminal   │
+┌───────────▼───────────────────▼───────────────────▼───────────────────┐
+│  <span class="a">NODE SERVER  (server/, 打包到 server/dist/index.js)</span>                 │
+│  index.ts 单一 HTTP+WS 入口 · config.ts 配置/路径 · sse.ts 响应助手     │
+│  routes/{meta,tree,file,chat}  ·  fs/workspace.ts (路径越界防护)        │
+│  pi/runChat.ts (spawn pi)  ·  pi/events.ts (JSONL→SSE 映射)  ·  pi/terminal.ts (WS↔PTY) │
+└───────────┬───────────────────┬───────────────────┬───────────────────┘
+            │ spawn pi -p        │ spawn pi          │ spawn python3
+            │ --mode json        │ (--extension)     │ pty_helper.py
+┌───────────▼────────────────────────────────┐ ┌────▼───────────────────┐
+│  <span class="g">PI CODING AGENT (子进程, 每次请求一个)</span>       │ │ <span class="r">pty_helper.py (Python)</span> │
+│  stdout 输出 JSONL 事件流                    │ │ 持有真实 PTY，运行交互   │
+│  --extension render_ui.ts 注册 render_ui 工具 │ │ 式 pi，NDJSON 桥接       │
+└─────────────────────────────────────────────┘ └────────────────────────┘
+</pre>
+
+<h3>各层职责</h3>
+<table>
+<tr><th>层</th><th>文件</th><th>职责</th></tr>
+<tr><td><span class="tag t-cyan">Python launcher</span></td><td><code>main.py</code></td><td>typer CLI（start/stop/restart）、PID/端口/后台 spawn、stale 时跑 <code>node build.mjs</code>、拉起 <code>node server/dist/index.js</code> 并透传 host/port/model/workspace。<b>不处理任何请求。</b></td></tr>
+<tr><td><span class="tag t-amber">Node 入口</span></td><td><code>server/index.ts</code></td><td>单 <code>createServer</code>：静态文件（web/dist，防路径穿越）+ JSON/SSE 路由分发 + <code>upgrade</code> 事件转给终端 WS。</td></tr>
+<tr><td><span class="tag t-amber">配置</span></td><td><code>server/config.ts</code></td><td>从 argv 读 host/port/model/workspace；派生 <code>RENDER_UI_EXTENSION_PATH</code>、<code>PTY_HELPER_PATH</code>、<code>WEB_DIST_DIR</code>、session 目录（<code>&lt;workspace&gt;/.omp/serve/sessions/</code>）。model 默认 <code>OMP_DEFAULT_MODEL_PI</code> 兜底。</td></tr>
+<tr><td><span class="tag t-amber">事件映射</span></td><td><code>server/pi/events.ts</code></td><td>核心翻译层：把一行 Pi JSONL 解析成 0..N 个 SSE 事件。per-stream <code>createPiLineMapper()</code> 隔离 render_ui 缓冲状态。</td></tr>
+<tr><td><span class="tag t-amber">聊天流</span></td><td><code>server/pi/runChat.ts</code></td><td>spawn <code>pi -p --mode json --approve --extension render_ui</code>，按行喂给 mapper，转 SSE；客户端断开/agent_end 时 SIGTERM→SIGKILL 收尾。</td></tr>
+<tr><td><span class="tag t-amber">终端桥</span></td><td><code>server/pi/terminal.ts</code></td><td>零依赖手写 WebSocket（握手/帧编解码），spawn <code>pty_helper.py</code>，双向桥接 NDJSON。</td></tr>
+<tr><td><span class="tag t-red">PTY 宿主</span></td><td><code>pty_helper.py</code></td><td>openpty 运行交互式 <code>pi --approve</code>，select 循环，TIOCSWINSZ resize，进程组 teardown。PTY 逻辑留在 Python。</td></tr>
+<tr><td><span class="tag t-green">Pi 扩展</span></td><td><code>extensions/render_ui.ts</code></td><td>注册 <code>render_ui</code> 工具（CopilotKit 式 envelope）：LLM 把完整 HTML 文档放进工具参数，handler 是 no-op，真正渲染由 server 拦截参数流 + 前端沙箱 iframe 完成。</td></tr>
+<tr><td><span class="tag t-cyan">前端</span></td><td><code>web/*.ts</code></td><td>vanilla TS：tree / editor / markdown / chat / genui / terminal / state / api。打包成 <code>web/dist/bundle.js</code>。</td></tr>
+</table>
+
+<h2>2 · 消息流向</h2>
+
+<h3>2.1 文件 / 树（同步 JSON）</h3>
+<pre><span class="c">GET  /api/meta</span>   → {workspace, model, sessionMode:"page-local"}
+<span class="c">GET  /api/tree?path=</span> → routes/tree → fs/workspace.listDirectory → {path, nodes, count}
+<span class="c">GET  /api/file?path=</span> → 读文本（resolveRel 路径越界防护）→ {path, content}
+<span class="c">PUT  /api/file</span>   → 写文本：O_NOFOLLOW 防 symlink 越界，fd 级 write+truncate</pre>
+<p>所有路径经 <code>fs/workspace.resolveRel</code> 限定在 workspace 内；写入用 <code>O_NOFOLLOW</code> 防 check→open 之间被换成符号链接（路径逃逸红线）。</p>
+
+<h3>2.2 聊天（异步 SSE，生成式 UI 的主通道）</h3>
+<pre><span class="f">// 浏览器 → server → pi → server → 浏览器，单向流</span>
+chat.ts sendMessage()
+  → <span class="c">POST /api/chat</span> {message, sessionId}
+    → routes/chat 校验 → runChat.handleChat
+      → spawn <span class="g">pi -p --mode json --approve --extension render_ui --session &lt;id&gt;.jsonl --model M</span>
+        → pi stdout: <span class="a">一行行 JSONL 事件</span>
+          → events.mapPiLine(line) <span class="f">// 翻译为 SSE</span>
+            → sse.sendSse: <span class="c">data: {type:...}\n\n</span>
+              → chat.ts 读 ReadableStream，按 \n\n 切分，dispatch
+                → assistant_delta → appendAssistant（markdown 渲染）
+                → tool_start/tool_end → timeline step
+                → gen_ui_delta / gen_ui → genui.ts postMessage → 沙箱 iframe
+                → done → 解锁输入框
+  <span class="f">客户端断开 res.on("close") 或 agent_end → kill pi（SIGTERM→2s→SIGKILL）</span></pre>
+
+<h3>2.3 终端（双向 WebSocket，PTY 在 Python）</h3>
+<pre>terminal.ts → <span class="c">WS /ws/terminal?sessionId=</span>
+  → index.ts upgrade → terminal.handleTerminalUpgrade（手写握手）
+    → spawn <span class="r">python3 pty_helper.py --session --model --cwd</span>
+       <span class="f">浏览器 → server:</span> WS text frame {type:"input"|"resize"} → helper stdin (NDJSON)
+       <span class="f">helper → server → 浏览器:</span> stdout {type:"output"} → WS text frame
+                                            {type:"exit"} → WS close
+    <span class="f">close/error → helper.kill(SIGTERM)</span></pre>
+
+<h2>3 · 事件类型</h2>
+
+<h3>3.1 Pi JSONL 事件（输入侧，<code>events.ts</code> 消费）</h3>
+<table>
+<tr><th>type</th><th>关键字段</th><th>映射结果</th></tr>
+<tr><td><code>message_update</code></td><td><code>assistantMessageEvent.type</code> = <code>text_delta</code> / <code>toolcall_delta</code></td><td>text_delta → <code>assistant_delta</code>；toolcall_delta（render_ui 参数流）→ <code>gen_ui_delta</code></td></tr>
+<tr><td><code>tool_execution_start</code></td><td><code>toolName, toolCallId, args</code></td><td><code>tool_start</code>；若 render_ui，缓存 <code>args.html/title</code> 作为 fallback</td></tr>
+<tr><td><code>tool_execution_end</code></td><td><code>toolName, args</code></td><td><code>tool_end</code>；若 render_ui，发出权威 <code>gen_ui</code>（run=true，跑脚本）</td></tr>
+<tr><td><code>error</code></td><td><code>message</code></td><td><code>error</code></td></tr>
+<tr><td><code>agent_end</code></td><td>—</td><td><code>done</code>（returncode:0），清空缓冲，<code>done:true</code> 终止流</td></tr>
+</table>
+
+<h3>3.2 SSE 事件（输出侧，<code>chat.ts</code> 消费）</h3>
+<table>
+<tr><th>type</th><th>载荷</th><th>前端动作</th></tr>
+<tr><td><code>assistant_delta</code></td><td><code>delta</code></td><td>累加到当前 turn，重渲染 markdown</td></tr>
+<tr><td><code>gen_ui_delta</code></td><td><code>html</code></td><td>流式部分 HTML，paint（<b>run=false</b>，不跑脚本），节流 100ms</td></tr>
+<tr><td><code>gen_ui</code></td><td><code>html, title</code></td><td>权威完整 HTML，最终 paint（<b>run=true</b>，跑脚本 + 派发 DOMContentLoaded）</td></tr>
+<tr><td><code>tool_start</code> / <code>tool_end</code></td><td><code>id, name, detail</code></td><td>timeline 增加 / 标记完成（detail 由 <code>toolDetail</code> 抽路径/命令）</td></tr>
+<tr><td><code>error</code></td><td><code>message</code></td><td>追加到 assistant 文本</td></tr>
+<tr><td><code>done</code></td><td><code>returncode</code></td><td>解锁输入框，状态置 idle</td></tr>
+</table>
+
+<h3>3.3 终端 NDJSON（server ↔ pty_helper.py）</h3>
+<div class="grid">
+<div class="panel"><strong>parent → helper</strong><pre>{"type":"input","data":"&lt;utf8&gt;"}
+{"type":"resize","rows":N,"cols":N}</pre></div>
+<div class="panel"><strong>helper → parent</strong><pre>{"type":"output","data":"&lt;utf8&gt;"}
+{"type":"exit","returncode":N}</pre></div>
+</div>
+
+<h2>4 · render_ui 生成式 UI（最精巧的一环）</h2>
+
+<p>难点：Pi 把整份 HTML 作为工具参数<b>流式</b>吐出（可能是增量片段，也可能是累积快照），且最终的「跑脚本」时机必须恰好一次——多跑会重复执行脚本，漏跑则交互失效。</p>
+
+<div class="panel">
+<h3 style="margin-top:0">服务端 (events.ts) 的恢复策略</h3>
+<ul>
+<li><b>流式阶段</b>：<code>toolcall_delta</code> 里 <code>extractHtmlFromPartialJson</code> 从不完整 JSON 中尽力抠出 <code>html</code> 值（容忍截断尾巴），发 <code>gen_ui_delta</code>。区分增量片段 vs 累积快照（以 <code>{</code>/<code>[</code> 开头则重置缓冲）。</li>
+<li><b>START 兜底</b>：Pi 在 start 而非 end 携带完整 html，故在 <code>tool_execution_start</code> 缓存 <code>renderState.lastHtml</code>，覆盖无 toolcall_delta 的快流。</li>
+<li><b>权威 END</b>：仅在 <code>tool_execution_end</code> 发出一次 <code>gen_ui</code>（run=true）。优先 materialized args → 缓冲 JSON → <code>renderState.lastHtml</code> 三级 fallback。</li>
+<li>per-stream <code>renderArgBuffers</code> + <code>renderState</code>，并发 chat 不串味。</li>
+</ul>
+</div>
+
+<div class="panel">
+<h3 style="margin-top:0">前端 (genui.ts) 的无闪烁 + 防误擦</h3>
+<ul>
+<li><b>持久 shell iframe</b>（<code>GENUI_SHELL</code>，沙箱）只建一次；内部 bootstrap 收 <code>postMessage</code>，原地改 head/body，永不重新导航 → 无白闪。</li>
+<li><b>run 标志</b>：delta 帧 run=0 只渲染不跑脚本；最终帧 run=1 严格按顺序执行脚本（外部脚本 onload 串行），全跑完才派发 DOMContentLoaded / load。</li>
+<li><b>seal 机制</b>：run=true paint 后已挂事件监听器，任何迟到的 partial（run=false）会 <code>innerHTML=</code> 抹掉监听器——故 sealed 后忽略 partial，直到下一轮 <code>resetGenUiSeal()</code>（每条用户消息触发）。</li>
+<li><b>版本号</b>：单调 <code>genUiRenderVersion</code>，节流中的旧 delta 若被新 render 抢先则丢弃，防覆盖最终脚本化渲染。</li>
+</ul>
+</div>
+
+<h2>5 · 关键约束与不变量</h2>
+<ul>
+<li><span class="tag t-amber">单进程</span> Node 一个 <code>createServer</code> 同时服务静态资源、JSON API、SSE、WS upgrade。</li>
+<li><span class="tag t-green">无原生依赖</span> WebSocket 手写帧编解码，不引 <code>ws</code>；PTY 用 Python <code>pty</code>，不引 node-pty。</li>
+<li><span class="tag t-cyan">路径越界防护</span> 所有文件操作经 <code>resolveRel</code>；写入 <code>O_NOFOLLOW</code>；静态服务拒绝 <code>..</code>。</li>
+<li><span class="tag t-red">每请求独立 Pi</span> 一个 chat / 一个终端连接 = 一个 pi 子进程；断连必杀（SIGTERM→2s→SIGKILL）。</li>
+<li><span class="tag t-amber">session 隔离</span> sessionId 正则 <code>[A-Za-z0-9._-]{8,80}</code>，落 <code>&lt;workspace&gt;/.omp/serve/sessions/&lt;id&gt;.jsonl</code>；<code>sessionMode: "page-local"</code>。</li>
+<li><span class="tag t-cyan">沙箱渲染</span> render_ui HTML 在无 same-origin 的 iframe 里运行，库须走 CDN，不能用 localStorage/cookie/同源 fetch。</li>
+<li><span class="tag t-green">Python 不碰请求</span> main.py 只做 lifecycle + build-if-stale；运行期请求全在 Node。</li>
+</ul>
+
+<hr style="margin:40px 0 16px">
+<p class="meta">注：UI 视觉/布局契约见同目录 <code>DESIGN.md</code>（三栏工作台、C5 配色、滚动条规范等）。本文聚焦运行时架构与数据流。</p>
+
+</div>
+</body>
+</html>

@@ -23,7 +23,7 @@
     </header>
     <main class="shell">
       <aside class="files">
-        <div class="head"><span>Files</span><span id="tree-count">0</span></div>
+        <div class="head"><span>Files</span><div class="head-actions"><span id="tree-count">0</span><button class="tree-refresh" id="tree-refresh" title="Refresh file tree">&#x21bb;</button></div></div>
         <div class="file-list"><sl-tree id="file-tree" selection="single"></sl-tree></div>
       </aside>
       <section class="editor">
@@ -48,7 +48,7 @@
             <button class="side-tab active" data-side-tab="chat">Chat</button>
             <button class="side-tab" data-side-tab="terminal">Terminal</button>
           </div>
-          <span id="chat-status">idle</span>
+          <div class="head-actions"><span id="chat-status">idle</span><button class="new-session" id="new-session" title="Start a new pi session">New</button></div>
         </div>
         <div class="agent-stream side-pane active" id="chat-log"></div>
         <div class="terminal-pane side-pane" id="terminal-pane">

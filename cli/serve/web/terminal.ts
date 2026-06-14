@@ -40,6 +40,31 @@ export function fitTerminal(): void {
   } catch (_) {}
 }
 
+// Tear down the terminal so the next connection uses the current sessionId.
+// The old PTY-bound socket is closed; if the terminal tab is active we
+// immediately reconnect under the new session.
+export function resetTerminal(): void {
+  try {
+    state.terminalSocket?.close();
+  } catch (_) {}
+  state.terminalSocket = null;
+  try {
+    state.terminalResizeObserver?.disconnect();
+  } catch (_) {}
+  state.terminalResizeObserver = null;
+  try {
+    state.terminal?.dispose();
+  } catch (_) {}
+  state.terminal = null;
+  state.terminalFit = null;
+  state.terminalStarted = false;
+  $("terminal").innerHTML = "";
+  if (state.sideTab === "terminal") {
+    startTerminal();
+    setTimeout(fitTerminal, 40);
+  }
+}
+
 export function startTerminal(): void {
   if (state.terminalStarted) return;
   state.terminalStarted = true;

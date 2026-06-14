@@ -11,6 +11,7 @@ import { handleMeta } from "./routes/meta.js";
 import { handleTree } from "./routes/tree.js";
 import { handleFileGet, handleFilePut } from "./routes/file.js";
 import { handleChatRoute } from "./routes/chat.js";
+import { handleDiff } from "./routes/diff.js";
 import { handleTerminalUpgrade } from "./pi/terminal.js";
 
 const cfg = loadConfig();
@@ -79,6 +80,10 @@ const server = createServer((req, res) => {
       }
       if (path === "/api/file") {
         handleFileGet(res, cfg, url.searchParams.get("path") || "");
+        return;
+      }
+      if (path === "/api/diff") {
+        handleDiff(res, cfg);
         return;
       }
       if (serveStatic(res, path)) return;

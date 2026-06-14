@@ -3,6 +3,7 @@ import { state, $, esc } from "./state.js";
 import { renderMarkdown } from "./markdown.js";
 import { setMode } from "./editor.js";
 import { postGenUi, scheduleGenUiFrame, resetGenUiSeal } from "./genui.js";
+import { refreshTree } from "./tree.js";
 
 export function addTurn(role: string, text: string): HTMLElement {
   const article = document.createElement("article");
@@ -11,7 +12,11 @@ export function addTurn(role: string, text: string): HTMLElement {
     role === "Assistant"
       ? `<div class="assistant-md">${renderMarkdown(text || "")}</div>`
       : `<p>${esc(text)}</p>`;
-  article.innerHTML = `<div class="turn-head"><span>${role}</span><span>${role === "User" ? "prompt" : "working"}</span></div><div class="turn-body">${body}</div>`;
+  const status =
+    role === "User"
+      ? "prompt"
+      : `<span class="working"><i></i><i></i><i></i></span>`;
+  article.innerHTML = `<div class="turn-head"><span>${role}</span><span class="turn-status">${status}</span></div><div class="turn-body">${body}</div>`;
   $("chat-log").appendChild(article);
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
   return article;
@@ -43,6 +48,17 @@ export function addStep(text: string, done = false): HTMLElement {
   state.toolListEl!.appendChild(step);
   $("chat-log").scrollTop = $("chat-log").scrollHeight;
   return step;
+}
+
+// Clear the chat transcript and per-turn assistant/tool state. Used when
+// starting a new session so the old conversation's turns do not linger.
+export function clearChat(): void {
+  $("chat-log").innerHTML = "";
+  state.assistantEl = null;
+  state.assistantTextEl = null;
+  state.assistantRaw = "";
+  state.toolListEl = null;
+  state.toolSteps.clear();
 }
 
 export async function sendMessage(): Promise<void> {
@@ -117,7 +133,13 @@ export async function sendMessage(): Promise<void> {
           state.sending = false;
           ($("send-btn") as HTMLButtonElement).disabled = false;
           $("chat-status").textContent = "idle";
+          // Turn finished: replace the animated working dots with a static label.
+          const status = state.assistantEl?.querySelector(".turn-status");
+          if (status) status.textContent = "done";
           input.focus();
+          // The turn may have created/edited/deleted files: refresh the tree,
+          // restoring expanded dirs so the view does not collapse each turn.
+          refreshTree().catch(() => {});
         }
       }
     }

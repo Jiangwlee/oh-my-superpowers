@@ -56,6 +56,39 @@ export async function populateDirectory(item: HTMLElement): Promise<void> {
   }
 }
 
+function findTreeItem(path: string): HTMLElement | null {
+  for (const el of Array.from(document.querySelectorAll("sl-tree-item"))) {
+    if ((el as HTMLElement).dataset.path === path) return el as HTMLElement;
+  }
+  return null;
+}
+
+// Rebuild the tree from root but restore the previously-expanded directories,
+// so a refresh (manual or post-turn auto) does not collapse the user's view.
+// Dirs that no longer exist are silently dropped; selection is restored by
+// createTreeItem via state.selectedPath.
+export async function refreshTree(): Promise<void> {
+  // Capture expanded directory paths, shallow→deep so each parent is rebuilt
+  // and populated before we look up its children.
+  const expanded = Array.from(document.querySelectorAll("sl-tree-item"))
+    .filter(
+      (el) =>
+        (el as any).expanded && (el as HTMLElement).dataset.type === "directory",
+    )
+    .map((el) => (el as HTMLElement).dataset.path || "")
+    .filter(Boolean)
+    .sort((a, b) => a.split("/").length - b.split("/").length);
+
+  await loadTree();
+
+  for (const path of expanded) {
+    const item = findTreeItem(path);
+    if (!item) continue; // directory removed since last expand
+    await populateDirectory(item); // load children, clears lazy
+    (item as any).expanded = true;
+  }
+}
+
 export function syncTreeSelection(): void {
   document.querySelectorAll("sl-tree-item").forEach((item) => {
     (item as any).selected = (item as HTMLElement).dataset.path === state.selectedPath;

@@ -64,20 +64,3 @@ function inlineMd(text: string): string {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
 }
-
-export function renderDiff(a: string, b: string): string {
-  if (a === b) return "No changes.";
-  const before = a.split(/\r?\n/);
-  const after = b.split(/\r?\n/);
-  const out: string[] = [];
-  const max = Math.max(before.length, after.length);
-  for (let i = 0; i < max; i++) {
-    if (before[i] === after[i]) {
-      if (before[i] !== undefined) out.push(`  ${esc(before[i])}`);
-    } else {
-      if (before[i] !== undefined) out.push(`<span style="color:var(--red)">- ${esc(before[i])}</span>`);
-      if (after[i] !== undefined) out.push(`<span style="color:var(--green)">+ ${esc(after[i])}</span>`);
-    }
-  }
-  return out.join("\n");
-}
