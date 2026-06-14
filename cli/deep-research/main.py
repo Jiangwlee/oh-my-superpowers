@@ -63,7 +63,7 @@ def build_report(
     full_report: str | None = typer.Option(None, "--full-report", help="Inline full report markdown."),
     sources_file: str | None = typer.Option(None, "--sources-file", help="JSON file containing sources array."),
 ) -> None:
-    """Write reports and persist sources to workspace.
+    """Write reports, render report.html, and persist sources to workspace.
 
     Example:
         omp deep-research build-report --workspace /path/to/ws --brief-file brief.md --full-report-file report.md

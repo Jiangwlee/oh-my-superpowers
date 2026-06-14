@@ -1,90 +1,77 @@
 # Source Strategy
 
-## Source Priority
+Use complementary sources. Do not let one platform or one language define the answer.
 
-默认优先级（越靠后越适合补视角，不适合作唯一证据）：
+## Priority
 
-1. 官方文档 / 官方博客 / 原始仓库 / 原始论文
-2. 权威研究机构 / 行业报告 / 可靠媒体
-3. 技术博客 / 案例研究 / 深度文章
-4. 社区讨论（Reddit / HN / 论坛）
-5. 社交媒体（X 等）
+Prefer primary and verifiable sources:
 
-## Query 类型混搭
+1. Official docs, official blogs, original repos, original papers
+2. Research institutions, industry reports, reliable media
+3. Technical blogs, case studies, long-form analysis
+4. Community discussion: Reddit, HN, forums
+5. Social media: X and similar platforms
 
-每轮搜索优先混合以下类型，不要只用一种：
+Lower-priority sources can add viewpoints, but should not be the only evidence for a key conclusion.
 
-| 类型 | 示例关键词 |
+## Query Mix
+
+Each round should mix query intent:
+
+| Intent | Use for |
 |---|---|
-| 概览型 | `what is`, `overview`, `state of` |
-| 事实型 | `statistics`, `data`, `market size`, `benchmarks` |
-| 对比型 | `vs`, `comparison`, `alternatives` |
-| 案例型 | `case study`, `implementation`, `adoption` |
-| 批判型 | `limitations`, `criticism`, `risks` |
-| 时效型 | `2026`, `latest`, `recent` |
+| Overview | map the topic and vocabulary |
+| Fact/data | find numbers, benchmarks, market size, timelines |
+| Comparison | find alternatives and tradeoffs |
+| Case | find adoption, implementation, failures |
+| Critical | find limitations, criticism, risks |
+| Recent | find latest changes and current status |
 
-## 何时读全文
+## Full-text Reading
 
-满足任一条件时优先读全文，不只看 snippet：
-
-- 来源权威
-- snippet 回答不了关键问题
-- 含数据、案例、技术细节
-- 多来源反复提到的关键节点
-
-统一命令：
+Read full text when a source is authoritative, repeatedly cited, data-heavy, or needed to answer a key subquestion.
 
 ```bash
 omp web-operator read-url <url> --limit 15000
 ```
 
-自动处理动态渲染；reddit / x / xueqiu / taoguba 走专用提取路径。不要手搓 CDP 或 curl。
+`read-url` handles dynamic sites through site-specific paths. Do not replace it with curl or custom CDP.
 
-## 多语言覆盖
+## Language Coverage
 
-**同一主题中文和英文各搜至少一次**，不同语言社区信息差异往往很大。
+Search Chinese and English at least once unless the topic is explicitly single-language.
 
-- 英文：Google + GitHub + Reddit + X
-- 中文：Baidu + 微信搜狗
-- 日文 / 韩文等：涉及时也要覆盖
-- 搜到足够结果也不能只停在一种语言
-
-## 平台选择矩阵
-
-按主题类型组合互补平台：
-
-| 主题类型 | 推荐组合 |
+| Topic | Platform mix |
 |---|---|
-| 技术 / 开源 | Google + GitHub + Reddit + X |
-| 中文财经 | Baidu + 雪球 + 淘股吧 |
-| 中文时事 / 政策 | Baidu + 微信搜狗 |
-| 社交舆论 | X + Reddit |
-| 通用研究 | Google + Baidu + DuckDuckGo |
+| Tech / OSS | Google + GitHub + Reddit + X |
+| Chinese finance | Baidu + 雪球 + 淘股吧 |
+| Chinese policy / current events | Baidu + 微信搜狗 |
+| Social sentiment | X + Reddit |
+| General research | Google + Baidu + DuckDuckGo |
 
-不确定时至少一个英文平台 + 一个中文平台。
+When unsure, use at least one English platform and one Chinese platform.
 
-## 优先 search-multi
+## Search Command
 
-每轮用 `omp web-operator search-multi` 一次覆盖 2-3 个互补平台，不要逐平台串行搜。
+Prefer one `search-multi` call per round:
 
 ```bash
 omp web-operator search-multi \
   --google "Claude Code memory" \
   --github "Claude Code memory" \
   --reddit "Claude Code memory" \
-  --x "Claude Code memory" \
   --limit 5
 ```
 
-只有单平台精确搜索（翻页、特殊参数）才退到单平台 `search`。
+Use single-platform `search` only for precise follow-up or platform-specific options.
 
-## 跨来源校验
+## Evidence Check
 
-结论写入报告前检查：
+Before reporting a conclusion, ask:
 
-- 是否至少两个独立来源支持
-- 是否只是单一社区 / 单一作者的说法
-- 是否存在明显矛盾
-- 是否已过时
+- Do at least two independent sources support it?
+- Is it only one community or one author’s view?
+- Is there a contradiction?
+- Is the source outdated?
 
-只有单一来源支持时，报告里必须标记"未充分验证"。
+Mark single-source conclusions as `未充分验证`.

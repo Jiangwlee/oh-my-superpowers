@@ -1,38 +1,31 @@
 # Stop Criteria
 
-停止不是因为"搜累了"，而是研究目标已基本覆盖。
+Stop when the research goal is covered, not when searching feels complete.
 
-## 可以停止
+## Stop When
 
-- 主要子问题大多已回答
-- 新一轮的信息增量明显下降
-- 关键结论有多来源支持
-- 已覆盖正反两面或主要分歧
-- 报告所需的事实、案例、观点、限制材料齐备
+- Most `plan.md` subquestions are answered or explicitly marked open.
+- New rounds add little new information.
+- Key conclusions have multiple independent sources.
+- Main disagreements, risks, and limits are represented.
+- The report can cite evidence immediately when challenged.
 
-## 不应停止
+## Continue When
 
-- 只读了 snippet，未读关键全文
-- 只覆盖单一角度
-- 关键结论只有一个来源支持
-- 用户问题仍有明显未答部分
-- 报告只能写泛泛总结，无法给依据
+- You only read snippets for key sources.
+- The research covers one angle, platform, or language only.
+- A key conclusion has one source.
+- The user’s main question is still partly unanswered.
+- The report would be generic and weakly sourced.
 
-## 量化护栏
+## Round Limits
 
-| 模式 | 最多搜索轮次 |
-|---|---|
+| Mode | Max search rounds |
+|---|---:|
 | quick | 3 |
 | default | 8 |
 | deep | 12 |
 
-**连续 2 轮无新增量**（没有新 URL、没有新数据点）→ 强制进入报告阶段。
+If two consecutive rounds add no new URL or data point, enter the report phase.
 
-护栏只在 autonomous run 下兜底防死循环，定性判断仍优先。
-
-## 停下前的最小自检
-
-- 我已经回答了哪些子问题？（对照 `plan.md`）
-- 哪些子问题证据仍不足？
-- 每条核心结论分别基于哪些来源？
-- 用户追问"依据呢"，我能立即指出来源吗？
+These limits prevent autonomous loops. Evidence coverage still decides whether the report is credible.

@@ -1,95 +1,45 @@
 # HTML Reporting
 
-Use the HTML page as a local publishing surface for a completed
-`deep-research` workspace. Keep `brief.md`, `full-report.md`, and `state.json`
-as the canonical audit artifacts.
+`build-report` renders `reports/report.html` from `assets/report-page-template.html`. The HTML page is a sharing surface; `plan.md`, `brief.md`, `full-report.md`, and `state.json` remain the audit source.
 
 ## Inputs
 
-Populate `assets/report-page-template.html` from these workspace files:
-
-| Input | Fields Used |
+| Source | Used for |
 |---|---|
 | `reports/brief.md` | title, core conclusions, risks |
-| `reports/full-report.md` | research goal, unresolved questions, per-source evidence value |
-| `state.json` | topic, status, completed time, source count, source titles, platforms, URLs |
+| `reports/full-report.md` | research goal, unresolved questions, source evidence summaries |
+| `state.json` | topic, status, completed time, source count, source URLs |
 
-Page order is fixed: research goal, conclusions, risks, unresolved
-questions, sources. Subquestion breakdown, research log, and the
-facts/opinions/inferences layer stay in `full-report.md` only.
+The page order is fixed: goal → conclusions → risks → unresolved questions → sources. Keep subquestion details, research log, and fact/opinion/inference separation in `full-report.md` only.
 
-Do not paste webpage full text into the HTML page. Link sources and summarize
-why each source matters.
+Do not paste webpage full text into HTML. Link sources and summarize why each matters.
 
-## Generation
+## Generation Contract
 
-Create one generated page per reported workspace:
+`omp deep-research build-report` must:
 
-```text
-reports/report.html
-```
+1. Read `assets/report-page-template.html`.
+2. Write `reports/report.html`.
+3. Record `state.json.report_files.html`.
+4. Fail if any `{{MARKER}}` placeholder remains.
 
-Replace template markers with escaped HTML. Convert Markdown lists and report
-sections into semantic HTML:
+If input sections are missing, render neutral placeholders. Do not invent missing conclusions or sources.
 
-| Marker | Expected HTML |
-|---|---|
-| `{{RESEARCH_GOAL}}` | paragraph or list from `full-report.md` |
-| `{{CONCLUSION_CARDS}}` | `.conclusion-card` blocks from `brief.md` core conclusions: `<strong>` compact title (one clause, no trailing punctuation) + `<p>` one-to-three sentence summary with source link |
-| `{{RISK_ITEMS}}` | `<li>` items from `brief.md` risks |
-| `{{UNRESOLVED_ITEMS}}` | `<li>` items from `full-report.md` |
-| `{{SOURCE_TABLE_ROWS}}` | `<tr>` rows: linked title, platform, one-line evidence value |
+## Publish
 
-Write the conclusion-card title yourself: distill each core conclusion into
-a short noun-or-verdict phrase. Do not repeat the summary text as the title.
-
-If a section is empty, render a short neutral placeholder such as
-`<p>Not reported.</p>`. Do not invent missing conclusions or sources.
-
-## html-serve Publishing
-
-Publish the generated file only when html-serve is configured. Use this relative
-path convention:
-
-```text
-oh-my-superpowers/deep-research/<workspace-name>/report.html
-```
-
-Publish through the shared CLI:
+Publish only when html-serve is configured:
 
 ```bash
-omp html-serve publish reports/report.html --to oh-my-superpowers/deep-research/<workspace-name>/report.html
+omp html-serve publish reports/report.html --to deep-research/<workspace-name>.html
 ```
 
-The command returns both `localhost_url` and `tailscale_url`; give both to the
-user. Do not hardcode personal filesystem paths, LAN IPs, or Tailscale IPs in
-skill files.
+Use the workspace directory name unless the user asks for a specific report name. Return both `localhost_url` and `tailscale_url`.
 
-## Fallback
-
-If html-serve is not configured or not running, still generate
-`reports/report.html` inside the workspace and report that local path. The core
-research output remains valid as long as `brief.md`, `full-report.md`, and
-`state.json` exist.
-
-## Audit Boundary
-
-The HTML page is a readable projection of the workspace. It is not the audit
-source. Use the workspace files for verification:
-
-| Artifact | Audit Role |
-|---|---|
-| `plan.md` | subquestion scope and synthesis checkpoints |
-| `reports/brief.md` | concise conclusion layer |
-| `reports/full-report.md` | process log and full reasoning |
-| `state.json` | status, report paths, and source metadata |
+If publishing fails because html-serve is unavailable, still return the local `reports/report.html` path and explain that it was not published.
 
 ## Checklist
 
-- The first viewport shows the topic, research goal, and the first
-  conclusion cards.
-- Each conclusion card has a distinct compact title, not a truncated copy
-  of its summary.
-- The source table includes URLs and evidence value.
-- `reports/report.html` exists even when html-serve is unavailable.
-- Published URLs come from `omp html-serve publish` and include both `localhost_url` and `tailscale_url`.
+- `reports/report.html` exists.
+- No `{{MARKER}}` placeholders remain.
+- The source table includes source URLs and evidence value.
+- Published path is `deep-research/<report-name>.html`, not an `oh-my-superpowers/` subdirectory.

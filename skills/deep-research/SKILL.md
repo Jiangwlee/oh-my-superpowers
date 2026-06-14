@@ -9,57 +9,57 @@ description: >-
 
 # deep-research Skill
 
-把"搜一搜"升级为"有节奏的多轮研究"：拆目标 → broad 探索 → 定向深挖 → 补反方 → 输出可审计的 `brief` + `full report` + HTML 最终报告页。
+Turn open-ended research into an auditable loop: plan → broad search → deep read → validation → report.
 
-**适用**：需要跨多角度、多来源、多轮验证才能下结论。
-**不适用**：一次性临时搜索、单页总结、单一事实查询。
+Use for questions that need multiple angles, multiple sources, and explicit verification. Do not use for quick fact lookup, one-page summary, or casual search.
 
-## 工作流骨架
+## Output Contract
 
-| Phase | 产出 | 详见 |
+A completed run must produce:
+
+- `plan.md` with 3-6 tracked subquestions
+- `reports/brief.md`
+- `reports/full-report.md`
+- `reports/report.html`
+- `state.json` with sources and report paths
+
+Do not declare the report complete if `reports/report.html` is missing or still contains `{{MARKER}}` placeholders.
+
+## Workflow
+
+| Phase | Required action | Load |
 |---|---|---|
-| 0. Clarify Goal | `plan.md`（3-6 条子问题，带 checkbox） | `references/methodology.md` |
-| 1. Broad Exploration | 维度地图、关键词、关键实体 | 同上 |
-| 2. Deep Dive | 关键全文 + Pre-search Reasoning 块 | 同上 |
-| 3. Diversity & Validation | 反方、限制、替代、风险 | 同上 |
-| 4. Synthesis Check | `[Round N Synthesis]` 状态块，更新 plan | `references/stop-criteria.md` |
-| Report | `brief.md` + `full-report.md` + `report.html`，并发布 HTML 结果页 | `references/reporting.md` / `references/html-reporting.md` |
+| 0. Clarify | Create `plan.md`; define subquestions and scope. | `references/methodology.md` |
+| 1. Explore | Map dimensions, terms, entities, and viewpoints. | `references/source-strategy.md` |
+| 2. Deepen | Read high-value sources; write Pre-search Reasoning before each search. | `references/methodology.md` |
+| 3. Validate | Add counterpoints, limits, alternatives, risks, and contradictions. | `references/source-strategy.md` |
+| 4. Synthesize | Emit `[Round N Synthesis]`; update `plan.md`; decide continue/stop. | `references/stop-criteria.md` |
+| 5. Report | Write Markdown reports, generate HTML, publish when possible. | `references/reporting.md`, `references/html-reporting.md` |
 
-未覆盖多角度、缺关键全文来源、缺反方 / 限制信息 → 不得提前停止。
-未生成 `reports/report.html` → 不得声明研究报告完成。
+Do not stop early when key full-text sources, opposing views, or limitation evidence are missing.
 
-## CLI 入口
+## CLI
 
 ```bash
 omp deep-research <subcommand> [args]
 ```
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `init` | 创建 workspace（`--topic` / `--slug` / `--mode`） |
-| `build-report` | 写入 brief + full report，生成 `reports/report.html`，并把 sources 持久化到 `state.json` |
+| `init` | Create a workspace: `--topic`, `--slug`, `--mode`. |
+| `build-report` | Write reports, render `reports/report.html`, and update `state.json`. |
 
-不确定参数先跑 `omp deep-research <subcommand> --help`，或查 `references/cli.md`。
+Read `references/cli.md` before the first CLI call or when parameters are unclear.
 
-## 搜索工具
+## Search Tool
 
-**优先** `omp web-operator`：`search-multi` 一次覆盖多个互补平台，`read-url` 读全文（已适配 reddit / x / xueqiu / taoguba 等动态站点）。失败再降级到 WebSearch / WebFetch。不要手搓 CDP 或用 curl 抓页面。
+Prefer `omp web-operator`:
 
-来源优先级、中英文覆盖、平台矩阵 → `references/source-strategy.md`。
+- `search-multi` for 2-3 complementary platforms per round
+- `read-url` for full text
 
-## 数据目录
+Fallback to WebSearch / WebFetch only when `web-operator` fails. Do not hand-roll CDP or curl page scraping.
 
-默认：`~/.local/share/oh-my-superpowers/deep-research/`，可用 `DEEP_RESEARCH_DATA_DIR` 覆盖。workspace 结构 → `references/workspace.md`；`state.json` schema → `references/state-schema.md`。
+## Data
 
-## 按需加载
-
-| 何时读 | 文档 |
-|---|---|
-| 理解完整流程和每个 Phase 的产物 | `references/methodology.md` |
-| 决定搜什么、信什么来源 | `references/source-strategy.md` |
-| 判断是否停止本轮研究 | `references/stop-criteria.md` |
-| 写 brief / full report | `references/reporting.md` |
-| 生成并发布必需的 HTML 结果页 | `references/html-reporting.md` |
-| CLI 子命令与参数 | `references/cli.md` |
-| `state.json` 结构 | `references/state-schema.md` |
-| workspace 目录结构 | `references/workspace.md` |
+Default workspace root: `~/.local/share/oh-my-superpowers/deep-research/`. Override with `DEEP_RESEARCH_DATA_DIR`. Directory layout and `state.json` schema live in `references/workspace.md`.
