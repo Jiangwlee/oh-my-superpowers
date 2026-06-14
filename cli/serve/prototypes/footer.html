@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omp-serve · footer prototype</title>
+<style>
+  :root {
+    --bg: #10100e; --panel: #191814; --ink: #f3ecdd; --muted: #b3aa9b;
+    --faint: #7c7467; --line: rgba(243,236,221,.10);
+    --green: #a4d86f; --amber: #e9b85f; --red: #ed806c; --cyan: #7bcbd1;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  body[data-theme="light"] {
+    --bg: #f4efe4; --panel: #fbf7ed; --ink: #25231d; --muted: #5f5a4d;
+    --faint: #8c8474; --line: rgba(42,37,27,.12);
+    --green: #517d46; --amber: #9b6a1d; --red: #aa4f3c; --cyan: #3c7b82;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: radial-gradient(120% 90% at 50% 0%, rgba(233,184,95,.05), transparent 60%), var(--bg);
+    color: var(--ink); font: 13px/1.4 var(--sans);
+  }
+  .app { height: 100vh; display: grid; grid-template-rows: 44px 1fr 30px; gap: 10px; padding: 10px; }
+
+  /* faux chrome so the footer is seen in context */
+  .top, .bottom {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(25,24,20,.78); border: 1px solid var(--line);
+    border-radius: 16px; padding: 0 12px; backdrop-filter: blur(16px);
+  }
+  body[data-theme="light"] .top, body[data-theme="light"] .bottom { background: rgba(251,247,237,.7); }
+  .top { box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+  .brand { display: flex; align-items: center; gap: 9px; min-width: 150px; font-weight: 750; }
+  .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 18px rgba(164,216,111,.7); }
+  .cmd { flex: 1; color: var(--faint); font: 11px/1 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .theme-toggle { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; height: 24px; padding: 0 12px; font: 11px/1 var(--mono); cursor: pointer; }
+  .faux-main { border: 1px dashed var(--line); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: var(--faint); font: 11px/1 var(--mono); }
+
+  /* ---- the footer ---- */
+  .bottom { color: var(--faint); font: 11px/1 var(--mono); padding: 0 10px; gap: 10px; min-width: 0; }
+
+  /* LEFT: project tabs + add */
+  .bottom-left { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; }
+  .proj-label { color: var(--faint); letter-spacing: .08em; text-transform: uppercase; font-size: 9px; flex-shrink: 0; padding-right: 2px; }
+  .proj-tabs {
+    display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .proj-tabs::-webkit-scrollbar { height: 0; }
+  .proj {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    height: 20px; padding: 0 9px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent;
+    color: var(--muted); font: 11px/1 var(--mono); cursor: pointer; white-space: nowrap;
+    max-width: 160px;
+  }
+  .proj .name { overflow: hidden; text-overflow: ellipsis; }
+  .proj:hover { color: var(--ink); background: rgba(243,236,221,.06); }
+  body[data-theme="light"] .proj:hover { background: rgba(42,37,27,.05); }
+  .proj.active { color: var(--green); background: rgba(164,216,111,.11); border-color: rgba(164,216,111,.28); }
+  .proj .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex-shrink: 0; }
+  .proj.active .dot { background: var(--green); box-shadow: 0 0 8px rgba(164,216,111,.6); }
+  .proj .close { color: var(--faint); font-size: 13px; line-height: 1; opacity: 0; transition: opacity .12s; }
+  .proj:hover .close { opacity: .7; }
+  .proj .close:hover { color: var(--red); opacity: 1; }
+  .proj-add {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent; color: var(--faint);
+    font: 14px/1 var(--mono); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .proj-add:hover { color: var(--green); border-color: rgba(164,216,111,.4); background: rgba(164,216,111,.08); }
+
+  .divider { width: 1px; height: 16px; background: var(--line); flex-shrink: 0; }
+
+  /* RIGHT: info strip */
+  .bottom-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .bottom-right span { white-space: nowrap; }
+  .bottom-right .k { color: var(--faint); }
+  .bottom-right .v { color: var(--muted); }
+  .bottom-right .v.clean { color: var(--green); }
+
+  /* ---- dialog placeholder ---- */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; }
+  .scrim.open { display: flex; }
+  .dialog {
+    width: 460px; max-height: 70vh; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  }
+  .dialog h3 { margin: 0; font: 600 13px/1 var(--sans); color: var(--ink); }
+  .dialog .crumb { font: 11px/1 var(--mono); color: var(--faint); }
+  .dialog .crumb b { color: var(--cyan); }
+  .browser { border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,.18); overflow-y: auto; max-height: 320px; }
+  body[data-theme="light"] .browser { background: rgba(0,0,0,.03); }
+  .browser .row { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font: 12px/1 var(--mono); color: var(--muted); cursor: pointer; border-bottom: 1px solid var(--line); }
+  .browser .row:last-child { border-bottom: 0; }
+  .browser .row:hover { background: rgba(243,236,221,.05); color: var(--ink); }
+  .browser .row .ic { color: var(--amber); }
+  .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .dialog button.act { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; height: 28px; padding: 0 14px; font: 11px/1 var(--mono); cursor: pointer; }
+  .dialog button.act.primary { color: var(--green); border-color: rgba(164,216,111,.4); background: rgba(164,216,111,.1); }
+  /* unified scrollbar contract */
+  .browser::-webkit-scrollbar { width: 10px; height: 10px; }
+  .browser::-webkit-scrollbar-thumb { background: rgba(243,236,221,.16); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+  body[data-theme="light"] .browser::-webkit-scrollbar-thumb { background: rgba(42,37,27,.2); border: 3px solid transparent; background-clip: content-box; }
+</style>
+</head>
+<body data-theme="dark">
+  <div class="app">
+    <header class="top">
+      <div class="brand"><span class="pulse"></span><span>omp-serve</span></div>
+      <div class="cmd">pi -p --mode json --approve · /home/bruce/Projects/oh-my-superpowers · gpt-5.4-mini</div>
+      <button class="theme-toggle" id="theme-toggle">Light</button>
+      <div style="color:var(--green);font:11px/1 var(--mono)">approved</div>
+    </header>
+
+    <div class="faux-main">— files / editor / assistant 区（原型仅展示 footer）—</div>
+
+    <footer class="bottom">
+      <!-- LEFT: project tabs -->
+      <div class="bottom-left">
+        <span class="proj-label">Project</span>
+        <div class="proj-tabs" id="proj-tabs">
+          <button class="proj active"><span class="dot"></span><span class="name">oh-my-superpowers</span><span class="close" title="移除">×</span></button>
+          <button class="proj"><span class="dot"></span><span class="name">ashare-data</span><span class="close" title="移除">×</span></button>
+          <button class="proj"><span class="dot"></span><span class="name">pi-mono</span><span class="close" title="移除">×</span></button>
+          <button class="proj"><span class="dot"></span><span class="name">a-very-long-project-name-here</span><span class="close" title="移除">×</span></button>
+        </div>
+        <button class="proj-add" id="proj-add" title="添加项目">+</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- RIGHT: info strip -->
+      <div class="bottom-right">
+        <span><span class="k">Pi</span> <span class="v">JSON mode</span></span>
+        <span><span class="k">session</span> <span class="v">3f9a1c0e</span></span>
+        <span><span class="k">mode</span> <span class="v">edit</span></span>
+        <span class="v clean">clean</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- "+" dialog placeholder -->
+  <div class="scrim" id="scrim">
+    <div class="dialog">
+      <h3>选择一个目录作为项目</h3>
+      <div class="crumb">浏览根（沙箱）：<b>~/</b>Projects</div>
+      <div class="browser">
+        <div class="row"><span class="ic">↰</span><span>..</span></div>
+        <div class="row"><span class="ic">▸</span><span>oh-my-superpowers</span></div>
+        <div class="row"><span class="ic">▸</span><span>ashare-data</span></div>
+        <div class="row"><span class="ic">▸</span><span>web-operator</span></div>
+        <div class="row"><span class="ic">▸</span><span>experiments</span></div>
+        <div class="row"><span class="ic">▸</span><span>scratch</span></div>
+      </div>
+      <div class="actions">
+        <button class="act" id="dlg-cancel">取消</button>
+        <button class="act primary">选择此目录</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const body = document.body;
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const next = body.dataset.theme === "light" ? "dark" : "light";
+      body.dataset.theme = next;
+      document.getElementById("theme-toggle").textContent = next === "light" ? "Dark" : "Light";
+    });
+    document.getElementById("proj-tabs").addEventListener("click", (e) => {
+      const tab = e.target.closest(".proj");
+      if (!tab || e.target.classList.contains("close")) return;
+      document.querySelectorAll(".proj").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+    });
+    const scrim = document.getElementById("scrim");
+    document.getElementById("proj-add").addEventListener("click", () => scrim.classList.add("open"));
+    document.getElementById("dlg-cancel").addEventListener("click", () => scrim.classList.remove("open"));
+    scrim.addEventListener("click", (e) => { if (e.target === scrim) scrim.classList.remove("open"); });
+  </script>
+</body>
+</html>

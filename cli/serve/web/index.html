@@ -63,7 +63,15 @@
       </aside>
     </main>
     <footer class="bottom">
-      <span>Pi JSON mode</span><span id="session-label">session: project-local</span><span id="mode-label">mode: edit</span><span id="dirty-label">clean</span>
+      <div class="bottom-left">
+        <span class="proj-label">Project</span>
+        <div class="proj-tabs" id="proj-tabs"></div>
+        <button class="proj-add" id="proj-add" title="Add project">+</button>
+      </div>
+      <div class="bottom-divider"></div>
+      <div class="bottom-right">
+        <span>Pi JSON mode</span><span id="session-label">session: project-local</span><span id="mode-label">mode: edit</span><span id="dirty-label">clean</span>
+      </div>
     </footer>
   </div>
   <script type="module" src="/bundle.js"></script>

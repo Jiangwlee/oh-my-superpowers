@@ -4,6 +4,7 @@ import { renderMarkdown } from "./markdown.js";
 import { setMode } from "./editor.js";
 import { postGenUi, scheduleGenUiFrame, resetGenUiSeal } from "./genui.js";
 import { refreshTree } from "./tree.js";
+import { withProject } from "./api.js";
 
 export function addTurn(role: string, text: string): HTMLElement {
   const article = document.createElement("article");
@@ -78,7 +79,7 @@ export async function sendMessage(): Promise<void> {
   const abort = new AbortController();
   state.chatAbort = abort;
   try {
-    const res = await fetch("/api/chat", {
+    const res = await fetch(withProject("/api/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, sessionId: turnSession }),

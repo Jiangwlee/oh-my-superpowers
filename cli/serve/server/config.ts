@@ -13,13 +13,25 @@ export const PTY_HELPER_PATH = join(TOOL_DIR, "pty_helper.py");
 // Static web bundle output.
 export const WEB_DIST_DIR = join(TOOL_DIR, "web", "dist");
 
+// Server-level config: fixed for the lifetime of the process. The workspace a
+// request operates on is no longer global — it is resolved per request from the
+// `project` query param (see resolveContext in projects/registry.ts). The CLI
+// `--workspace` becomes the bootstrap project that is auto-registered on start.
 export interface Config {
   host: string;
   port: number;
   model: string;
+  bootstrapWorkspace: string;
+}
+
+// Per-request, project-scoped view. Every file/tree/diff/chat/terminal handler
+// takes one of these instead of the global Config so a single server can serve
+// many projects concurrently (multi-tab safe).
+export interface ProjectContext {
   workspace: string;
   sessionDir: string;
   sessionsDir: string;
+  model: string;
 }
 
 function argValue(name: string, fallback: string): string {
@@ -30,14 +42,18 @@ function argValue(name: string, fallback: string): string {
 }
 
 export function loadConfig(): Config {
-  const workspace = resolve(argValue("workspace", process.cwd()));
+  const bootstrapWorkspace = resolve(argValue("workspace", process.cwd()));
   const host = argValue("host", "0.0.0.0");
   const port = Number(argValue("port", "8765"));
   const model = argValue(
     "model",
     process.env.OMP_DEFAULT_MODEL_PI || "openai-codex/gpt-5.4-mini",
   );
+  return { host, port, model, bootstrapWorkspace };
+}
+
+// Derive the project-scoped session dirs for a given workspace.
+export function contextFor(workspace: string, model: string): ProjectContext {
   const sessionDir = join(workspace, ".omp", "serve");
-  const sessionsDir = join(sessionDir, "sessions");
-  return { host, port, model, workspace, sessionDir, sessionsDir };
+  return { workspace, sessionDir, sessionsDir: join(sessionDir, "sessions"), model };
 }

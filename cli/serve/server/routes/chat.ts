@@ -1,10 +1,10 @@
 import type { ServerResponse } from "node:http";
-import type { Config } from "../config.js";
+import type { ProjectContext } from "../config.js";
 import { sendErrorJson } from "../sse.js";
 import { handleChat } from "../pi/runChat.js";
 
 // POST /api/chat body parsing + validation (mirrors main.py do_POST).
-export function handleChatRoute(res: ServerResponse, cfg: Config, body: string): void {
+export function handleChatRoute(res: ServerResponse, ctx: ProjectContext, body: string): void {
   let payload: { message?: unknown; sessionId?: unknown };
   try {
     payload = JSON.parse(body) as { message?: unknown; sessionId?: unknown };
@@ -22,5 +22,5 @@ export function handleChatRoute(res: ServerResponse, cfg: Config, body: string):
     sendErrorJson(res, 400, "sessionId is required");
     return;
   }
-  handleChat(res, cfg, message, sessionId);
+  handleChat(res, ctx, message, sessionId);
 }

@@ -1,11 +1,11 @@
 import type { ServerResponse } from "node:http";
-import type { Config } from "../config.js";
+import type { ProjectContext } from "../config.js";
 import { sendJson } from "../sse.js";
 
-export function handleMeta(res: ServerResponse, cfg: Config): void {
+export function handleMeta(res: ServerResponse, ctx: ProjectContext): void {
   sendJson(res, {
-    workspace: cfg.workspace,
-    model: cfg.model,
+    workspace: ctx.workspace,
+    model: ctx.model,
     sessionMode: "page-local",
   });
 }

@@ -145,6 +145,36 @@ export function listDirectory(workspace: string, relPath: string): TreeNode[] {
   return nodes;
 }
 
+// List immediate subdirectories of absDir, constrained to `root` (the browse
+// sandbox, e.g. $HOME). Hidden and conventionally-ignored dirs are filtered.
+// lstat (no follow) skips symlinked directories so a symlink cannot redirect
+// the picker outside the sandbox. Used by the "+ add project" directory picker.
+export function listSubdirectories(root: string, absDir: string): { name: string; path: string }[] {
+  if (!isSafe(root, absDir)) throw new Error("path escapes sandbox");
+  let names: string[];
+  try {
+    names = readdirSync(absDir);
+  } catch {
+    return [];
+  }
+  const dirs: { name: string; path: string }[] = [];
+  for (const name of names) {
+    if (name.startsWith(".") || DEFAULT_IGNORES.has(name)) continue;
+    const full = join(absDir, name);
+    try {
+      if (!lstatSync(full).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    if (!isSafe(root, full)) continue;
+    dirs.push({ name, path: full });
+  }
+  dirs.sort((a, b) =>
+    a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0,
+  );
+  return dirs;
+}
+
 function looksBinary(data: Buffer): boolean {
   const slice = data.subarray(0, 8192);
   return slice.includes(0);

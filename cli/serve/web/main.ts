@@ -1,11 +1,11 @@
 // omp-serve web app entry: boot + event wiring. Ported 1:1 from APP_HTML.
 import { state, $, esc, newSessionId } from "./state.js";
-import { api } from "./api.js";
 import { loadTree, refreshTree } from "./tree.js";
 import { renderEditor, setMode, saveFile, selectFile } from "./editor.js";
-import { sendMessage, clearChat } from "./chat.js";
-import { setSideTab, fitTerminal, resetTerminal } from "./terminal.js";
-import { resetGenUiSeal } from "./genui.js";
+import { sendMessage } from "./chat.js";
+import { setSideTab, fitTerminal } from "./terminal.js";
+import { newSession } from "./session.js";
+import { initProjects, loadMeta, wireProjectFooter } from "./projects.js";
 
 function setTheme(theme: string): void {
   const next = theme === "light" ? "light" : "dark";
@@ -16,12 +16,6 @@ function setTheme(theme: string): void {
 
 function toggleTheme(): void {
   setTheme(document.body.dataset.theme === "light" ? "dark" : "light");
-}
-
-async function loadMeta(): Promise<void> {
-  const data = await (await api("/api/meta")).json();
-  state.workspace = data.workspace;
-  $("workspace-label").textContent = `pi -p --mode json --approve · ${data.workspace} · ${data.model}`;
 }
 
 document
@@ -41,21 +35,8 @@ $("file-tree").addEventListener("sl-selection-change", (event: Event) => {
   const selected = (event as CustomEvent).detail.selection?.[0];
   if (selected?.dataset?.type === "file") selectFile(selected.dataset.path);
 });
-// Start a fresh pi session without reloading the page: rotate the sessionId,
-// clear the chat transcript and reset the terminal (both are session-bound).
-// File tree, editor, open file and theme are page state and are kept intact.
-function newSession(): void {
-  state.chatAbort?.abort(); // stop any in-flight chat stream bound to the old session
-  state.sessionId = newSessionId();
-  $("session-label").textContent = `session: ${state.sessionId.slice(0, 8)}`;
-  state.sending = false;
-  ($("send-btn") as HTMLButtonElement).disabled = false;
-  clearChat();
-  resetGenUiSeal();
-  resetTerminal();
-  if (state.sideTab !== "terminal") $("chat-status").textContent = "idle";
-}
 $("new-session").addEventListener("click", newSession);
+wireProjectFooter();
 $("tree-refresh").addEventListener("click", async () => {
   const btn = $("tree-refresh") as HTMLButtonElement;
   if (btn.disabled) return;
@@ -77,6 +58,7 @@ window.addEventListener("resize", fitTerminal);
     setTheme(localStorage.getItem("ompServeTheme") || "dark");
     state.sessionId = newSessionId();
     $("session-label").textContent = `session: ${state.sessionId.slice(0, 8)}`;
+    await initProjects(); // sets currentProjectId before any project-scoped request
     await loadMeta();
     await loadTree();
     renderEditor();

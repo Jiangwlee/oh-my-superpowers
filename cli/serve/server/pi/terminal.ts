@@ -5,7 +5,7 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import type { Config } from "../config.js";
+import type { ProjectContext } from "../config.js";
 import { PTY_HELPER_PATH } from "../config.js";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -84,7 +84,7 @@ function parseFrames(buf: Buffer): { frames: ParsedFrame[]; rest: Buffer } {
 export function handleTerminalUpgrade(
   req: IncomingMessage,
   socket: Duplex,
-  cfg: Config,
+  ctx: ProjectContext,
 ): void {
   const key = req.headers["sec-websocket-key"];
   const upgrade = String(req.headers["upgrade"] || "").toLowerCase();
@@ -125,10 +125,10 @@ export function handleTerminalUpgrade(
     return;
   }
 
-  const sessionPath = `${cfg.sessionsDir}/${sessionId}.jsonl`;
+  const sessionPath = `${ctx.sessionsDir}/${sessionId}.jsonl`;
   const helper = spawn(
     "python3",
-    [PTY_HELPER_PATH, "--session", sessionPath, "--model", cfg.model, "--cwd", cfg.workspace],
+    [PTY_HELPER_PATH, "--session", sessionPath, "--model", ctx.model, "--cwd", ctx.workspace],
     { stdio: ["pipe", "pipe", "inherit"] },
   );
 

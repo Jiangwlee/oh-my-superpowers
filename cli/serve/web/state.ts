@@ -1,7 +1,15 @@
 // App state — ported 1:1 from main.py APP_HTML `state` object.
 
+export interface ProjectInfo {
+  id: string;
+  name: string;
+  path: string;
+}
+
 export interface AppState {
   workspace: string;
+  projects: ProjectInfo[];
+  currentProjectId: string;
   sessionId: string;
   selectedPath: string;
   original: string;
@@ -33,6 +41,8 @@ export interface AppState {
 
 export const state: AppState = {
   workspace: "",
+  projects: [],
+  currentProjectId: "",
   sessionId: "",
   selectedPath: "",
   original: "",

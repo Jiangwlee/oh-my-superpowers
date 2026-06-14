@@ -4,14 +4,14 @@ import type { ServerResponse } from "node:http";
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Config } from "../config.js";
+import type { ProjectContext } from "../config.js";
 import { RENDER_UI_EXTENSION_PATH } from "../config.js";
 import { startSse, sendSse } from "../sse.js";
 import { createPiLineMapper, truncate } from "./events.js";
 
-function sessionPath(cfg: Config, sessionId: string): string {
+function sessionPath(ctx: ProjectContext, sessionId: string): string {
   if (!/^[A-Za-z0-9._-]{8,80}$/.test(sessionId)) throw new Error("invalid session id");
-  return join(cfg.sessionsDir, `${sessionId}.jsonl`);
+  return join(ctx.sessionsDir, `${sessionId}.jsonl`);
 }
 
 // shlex.quote/join equivalent for the exec log line.
@@ -23,7 +23,7 @@ function shquote(s: string): string {
 
 export function handleChat(
   res: ServerResponse,
-  cfg: Config,
+  ctx: ProjectContext,
   message: string,
   sessionId: string,
 ): void {
@@ -37,8 +37,8 @@ export function handleChat(
     sendSse(res, payload);
   };
 
-  const session = sessionPath(cfg, sessionId);
-  mkdirSync(cfg.sessionsDir, { recursive: true });
+  const session = sessionPath(ctx, sessionId);
+  mkdirSync(ctx.sessionsDir, { recursive: true });
 
   const cmd = [
     "pi",
@@ -51,7 +51,7 @@ export function handleChat(
     "--session",
     session,
     "--model",
-    cfg.model,
+    ctx.model,
     message,
   ];
 
@@ -60,7 +60,7 @@ export function handleChat(
   console.error(`[omp serve] exec: ${logCmd} ${shquote(truncate(message, 80))}`);
 
   const proc = spawn(cmd[0], cmd.slice(1), {
-    cwd: cfg.workspace,
+    cwd: ctx.workspace,
     stdio: ["ignore", "pipe", "pipe"],
   });
 

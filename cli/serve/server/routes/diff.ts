@@ -16,7 +16,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { statSync, lstatSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
-import type { Config } from "../config.js";
+import type { ProjectContext } from "../config.js";
 import { sendJson } from "../sse.js";
 import { resolveRel, isSafe, TEXT_EXTENSIONS } from "../fs/workspace.js";
 
@@ -48,7 +48,7 @@ interface DiffFile {
 // Run git async. Returns ok=false with whatever stdout was produced: some git
 // subcommands (`diff --no-index`, `rev-parse --verify`) exit non-zero by design
 // yet still emit the output we need.
-async function git(cfg: Config, args: string[]): Promise<{ ok: boolean; stdout: string }> {
+async function git(cfg: ProjectContext, args: string[]): Promise<{ ok: boolean; stdout: string }> {
   try {
     const { stdout } = await execFileP("git", args, {
       cwd: cfg.workspace,
@@ -63,7 +63,7 @@ async function git(cfg: Config, args: string[]): Promise<{ ok: boolean; stdout: 
   }
 }
 
-function mtimeOf(cfg: Config, path: string): number | null {
+function mtimeOf(cfg: ProjectContext, path: string): number | null {
   try {
     return statSync(resolveRel(cfg.workspace, path)).mtimeMs;
   } catch {
@@ -74,7 +74,7 @@ function mtimeOf(cfg: Config, path: string): number | null {
 // Parse a unified `git diff` patch into per-file hunks. We only keep the
 // displayable lines (hunk headers + +/-/context); git's index/mode lines are
 // dropped, matching the inline view.
-function parsePatch(cfg: Config, patch: string): DiffFile[] {
+function parsePatch(cfg: ProjectContext, patch: string): DiffFile[] {
   const files: DiffFile[] = [];
   let cur: DiffFile | null = null;
   let oldPath = "";
@@ -133,7 +133,7 @@ function parsePatch(cfg: Config, patch: string): DiffFile[] {
 // Synthesize an "all added" card for one untracked file by reading it directly
 // — no per-file git subprocess. Symlinks, binaries and oversized files are
 // summarized rather than read, so a single /api/diff stays cheap and bounded.
-function untrackedCard(cfg: Config, path: string): DiffFile {
+function untrackedCard(cfg: ProjectContext, path: string): DiffFile {
   let lines: [Kind, string][] = [];
   let added = 0;
   let mtimeMs: number | null = null;
@@ -180,7 +180,7 @@ function untrackedCard(cfg: Config, path: string): DiffFile {
 }
 
 // List untracked files (bounded) and synthesize their add cards.
-async function untrackedFiles(cfg: Config): Promise<DiffFile[]> {
+async function untrackedFiles(cfg: ProjectContext): Promise<DiffFile[]> {
   // `-- .` scopes the listing to the workspace subtree (cwd), not the whole repo.
   const listed = await git(cfg, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."]);
   if (!listed.ok) return [];
@@ -199,7 +199,7 @@ async function untrackedFiles(cfg: Config): Promise<DiffFile[]> {
   return out;
 }
 
-export async function handleDiff(res: ServerResponse, cfg: Config): Promise<void> {
+export async function handleDiff(res: ServerResponse, cfg: ProjectContext): Promise<void> {
   if (!(await git(cfg, ["rev-parse", "--is-inside-work-tree"])).ok) {
     sendJson(res, { git: false, files: [] });
     return;

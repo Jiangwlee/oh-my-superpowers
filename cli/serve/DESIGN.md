@@ -166,6 +166,28 @@ Rules:
 - Resize the PTY when the terminal container changes size.
 - Terminal scrollbars must match the workbench scrollbar contract.
 
+## Footer (Bottom Bar)
+
+The 30px bottom bar is fixed chrome and splits into two halves:
+
+- Left: the `Project` label, the project tab strip, and the `+` add button. Tabs
+  are mono pills; the active project uses color plus background (never a size
+  change). The strip scrolls horizontally when crowded and must not leak a
+  default scrollbar or push the right strip off screen.
+- Right: the session/mode/state info strip.
+
+The bar must keep its 30px height and never let the page body scroll. Adding a
+project opens the shared dialog (see below) with a `$HOME`-sandboxed directory
+picker; removing a project always goes through a confirm dialog.
+
+## Dialogs
+
+All popups use one reusable dialog component (`web/dialog.ts`, styled under
+`.omp-dialog`): a blurred scrim, a titled panel on `--panel` with `--line`
+borders and ~16px radius, primary/danger/default pill actions, and scroll
+regions bound to the workbench scrollbar contract. Do not hand-roll one-off
+modals — extend the component so every dialog shares the same language.
+
 ## Responsive Behavior
 
 At medium widths, keep the editor and assistant usable by reducing the file tree

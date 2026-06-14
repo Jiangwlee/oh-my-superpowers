@@ -140,12 +140,15 @@ omp install agent <name> --global
 
 > 静态 HTML artifact 发布使用 `omp html-serve publish <file.html> --to <relative/path.html>`；它写入 `HTML_SERVE_DATA_DIR` 并返回 `localhost_url` 与 `tailscale_url`。
 
+定位：从单一 Skill 工作台演进为通用 vibe coding 工作台，可同时挂载并切换多个项目。
+
 核心能力：
 
 - 左栏：懒加载文件树，逐层展开当前项目目录。
 - 中栏：文件预览与编辑，支持 Markdown/HTML 预览，Markdown 使用 GFM 渲染。
 - 右栏：Pi Agent 对话区，通过 `pi -p --mode json --approve --session <page-session>` 执行对话。
 - 会话：每个浏览器页面生成新的 page-local Pi session；同一页面内多轮对话复用该 session。
+- 多项目：footer 左侧为项目标签栏（`+` 通过目录选择器添加，限定在 `$HOME` 沙箱内）；点击标签切换项目，文件树/中栏/右栏与 Pi session 实时重置到新项目。注册表存于 `~/.omp/serve/projects.json`（后端 SoT），浏览器 localStorage 仅作快速恢复镜像。删除项目仅注销标签，不删除磁盘文件，且需弹窗确认。每个 API 请求带 `?project=<id>`，server 按请求解析 workspace（多标签页互不干扰）。
 - 主题：支持深色和浅色模式。
 
 命令层次：

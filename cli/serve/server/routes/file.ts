@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 import { statSync, openSync, writeSync, ftruncateSync, closeSync, constants as fsConstants } from "node:fs";
-import type { Config } from "../config.js";
+import type { ProjectContext } from "../config.js";
 import { sendJson, sendErrorJson } from "../sse.js";
 import { resolveRel, readTextFile } from "../fs/workspace.js";
 
@@ -12,8 +12,8 @@ function isFile(p: string): boolean {
   }
 }
 
-export function handleFileGet(res: ServerResponse, cfg: Config, rel: string): void {
-  const path = resolveRel(cfg.workspace, rel);
+export function handleFileGet(res: ServerResponse, ctx: ProjectContext, rel: string): void {
+  const path = resolveRel(ctx.workspace, rel);
   if (!isFile(path)) {
     sendErrorJson(res, 404, "file not found");
     return;
@@ -22,11 +22,11 @@ export function handleFileGet(res: ServerResponse, cfg: Config, rel: string): vo
   sendJson(res, { path: rel, content });
 }
 
-export function handleFilePut(res: ServerResponse, cfg: Config, body: string): void {
+export function handleFilePut(res: ServerResponse, ctx: ProjectContext, body: string): void {
   const payload = JSON.parse(body) as { path?: unknown; content?: unknown };
   const rel = String(payload.path ?? "");
   const content = String(payload.content ?? "");
-  const path = resolveRel(cfg.workspace, rel);
+  const path = resolveRel(ctx.workspace, rel);
   if (!isFile(path)) {
     sendErrorJson(res, 404, "file not found");
     return;
