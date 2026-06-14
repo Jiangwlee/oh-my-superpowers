@@ -21,9 +21,10 @@ A completed run must produce:
 - `reports/brief.md`
 - `reports/full-report.md`
 - `reports/report.html`
+- Published HTML under `deep-research/` via `omp html-serve publish`
 - `state.json` with sources and report paths
 
-Do not declare the report complete if `reports/report.html` is missing or still contains `{{MARKER}}` placeholders.
+Do not declare the report complete if `reports/report.html` is missing, still contains `{{MARKER}}` placeholders, or has not been published/attempted with `omp html-serve publish`.
 
 ## Workflow
 
@@ -34,7 +35,7 @@ Do not declare the report complete if `reports/report.html` is missing or still 
 | 2. Deepen | Read high-value sources; write Pre-search Reasoning before each search. | `references/methodology.md` |
 | 3. Validate | Add counterpoints, limits, alternatives, risks, and contradictions. | `references/source-strategy.md` |
 | 4. Synthesize | Emit `[Round N Synthesis]`; update `plan.md`; decide continue/stop. | `references/stop-criteria.md` |
-| 5. Report | Write Markdown reports, generate HTML, publish when possible. | `references/reporting.md`, `references/html-reporting.md` |
+| 5. Report | Write Markdown reports, generate HTML, then publish to html-serve under `deep-research/`. | `references/reporting.md`, `references/html-reporting.md` |
 
 Do not stop early when key full-text sources, opposing views, or limitation evidence are missing.
 
@@ -50,6 +51,22 @@ omp deep-research <subcommand> [args]
 | `build-report` | Write reports, render `reports/report.html`, and update `state.json`. |
 
 Read `references/cli.md` before the first CLI call or when parameters are unclear.
+
+## Publish Command
+
+After `omp deep-research build-report` creates `reports/report.html`, publish the HTML report to the `deep-research/` directory:
+
+```bash
+omp html-serve publish /tmp/report.html --to deep-research/2026-06-13.html
+```
+
+In real runs, replace `/tmp/report.html` with the generated `reports/report.html` path and use the workspace/report name for the target file, for example:
+
+```bash
+omp html-serve publish "<workspace>/reports/report.html" --to "deep-research/<workspace-name>.html"
+```
+
+Return the `localhost_url` and `tailscale_url`. If publishing fails, report the error and still return the local `reports/report.html` path.
 
 ## Search Tool
 
