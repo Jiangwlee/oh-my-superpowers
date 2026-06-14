@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>omp-serve</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/themes/dark.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/components/tree/tree.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/components/tree-item/tree-item.js"></script>
+</head>
+<body data-theme="dark">
+  <div class="app">
+    <header class="top">
+      <div class="brand"><span class="pulse"></span><span>omp-serve</span></div>
+      <div class="cmd" id="workspace-label">Loading workspace...</div>
+      <button class="theme-toggle" id="theme-toggle">Light</button>
+      <div class="state">approved</div>
+    </header>
+    <main class="shell">
+      <aside class="files">
+        <div class="head"><span>Files</span><span id="tree-count">0</span></div>
+        <div class="file-list"><sl-tree id="file-tree" selection="single"></sl-tree></div>
+      </aside>
+      <section class="editor">
+        <div class="head"><span>Editor</span><span id="file-status">no file</span></div>
+        <div class="editor-body">
+          <div class="editor-toolbar">
+            <div class="tabs"><button class="tab file active" id="active-file">Select a file</button></div>
+            <div class="mode-tabs">
+              <button class="tab mode active" data-mode="preview">Preview</button>
+              <button class="tab mode" data-mode="edit">Edit</button>
+              <button class="tab mode" data-mode="diff">Diff</button>
+              <button class="tab mode" data-mode="genui">Gen UI</button>
+              <button class="tab save" id="save-btn">Save</button>
+            </div>
+          </div>
+          <div class="editor-surface" id="editor-surface"></div>
+        </div>
+      </section>
+      <aside class="agent">
+        <div class="head">
+          <div class="side-tabs">
+            <button class="side-tab active" data-side-tab="chat">Chat</button>
+            <button class="side-tab" data-side-tab="terminal">Terminal</button>
+          </div>
+          <span id="chat-status">idle</span>
+        </div>
+        <div class="agent-stream side-pane active" id="chat-log"></div>
+        <div class="terminal-pane side-pane" id="terminal-pane">
+          <div class="terminal-surface" id="terminal"></div>
+        </div>
+        <div class="composer">
+          <div class="input-box">
+            <textarea class="chat" id="chat-input" placeholder="Ask the assistant to inspect or edit this skill..."></textarea>
+            <div class="compose-footer"><span>Message</span><button class="send" id="send-btn">Send</button></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+    <footer class="bottom">
+      <span>Pi JSON mode</span><span id="session-label">session: project-local</span><span id="mode-label">mode: edit</span><span id="dirty-label">clean</span>
+    </footer>
+  </div>
+  <script type="module" src="/bundle.js"></script>
+</body>
+</html>

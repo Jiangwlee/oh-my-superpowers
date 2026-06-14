@@ -1,0 +1,4 @@
+# TS app build artifacts & deps — rebuilt on first `omp serve` (npm install + node build.mjs)
+node_modules/
+server/dist/
+web/dist/
