@@ -12,7 +12,9 @@ import { resetTerminal } from "./terminal.js";
 // rendered history. File tree, editor, open file and theme are page state and
 // are kept intact.
 export function bindSession(sessionId: string): void {
-  state.chatAbort?.abort(); // stop any in-flight chat stream bound to the old session
+  // NOTE: does NOT abort an in-flight chat. Switching projects must let a
+  // running agent finish in the background and persist to its session jsonl;
+  // killing it here would lose the response (only the user turn survives).
   state.sessionId = sessionId;
   $("session-label").textContent = `session: ${sessionId.slice(0, 8)}`;
   state.sending = false;
@@ -27,6 +29,9 @@ export function bindSession(sessionId: string): void {
 // id replaces the project's remembered session so switching away and back
 // resumes this new one, not the discarded one.
 export function newSession(): void {
+  // Explicit stop: abort the run only if it belongs to the current project, so a
+  // background run from another project is not killed.
+  if (state.chatAbort && state.chatRunSession === state.sessionId) state.chatAbort.abort();
   const sessionId = newSessionId();
   if (state.currentProjectId) state.projectSessions[state.currentProjectId] = sessionId;
   bindSession(sessionId);

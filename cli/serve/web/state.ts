@@ -24,6 +24,10 @@ export interface AppState {
   genUiTitle: string;
   dirty: boolean;
   sending: boolean;
+  // sessionId of the in-flight chat run (or "" when idle), so "New session" only
+  // aborts a run that belongs to the project being reset — a background run from
+  // another project keeps going.
+  chatRunSession: string;
   assistantEl: HTMLElement | null;
   assistantTextEl: HTMLElement | null;
   assistantRaw: string;
@@ -58,6 +62,7 @@ export const state: AppState = {
   genUiTitle: "",
   dirty: false,
   sending: false,
+  chatRunSession: "",
   assistantEl: null,
   assistantTextEl: null,
   assistantRaw: "",

@@ -4,7 +4,7 @@ import { renderMarkdown } from "./markdown.js";
 import { setMode } from "./editor.js";
 import { postGenUi, scheduleGenUiFrame, resetGenUiSeal } from "./genui.js";
 import { refreshTree } from "./tree.js";
-import { withProject } from "./api.js";
+import { api, withProject } from "./api.js";
 
 export function addTurn(role: string, text: string): HTMLElement {
   const article = document.createElement("article");
@@ -77,6 +77,18 @@ export function renderHistoryTurns(turns: { role: string; text: string }[]): voi
   }
 }
 
+// Fetch a session's past turns and repaint them. Best-effort: a missing or
+// unreadable session leaves a clean panel. Shared by project-switch resume and
+// by background-run completion.
+export async function loadSessionHistory(sessionId: string): Promise<void> {
+  try {
+    const data = await (await api(`/api/session?sessionId=${encodeURIComponent(sessionId)}`)).json();
+    if (Array.isArray(data.turns)) renderHistoryTurns(data.turns);
+  } catch {
+    /* leave the cleared panel as-is */
+  }
+}
+
 export async function sendMessage(): Promise<void> {
   const input = $("chat-input") as HTMLTextAreaElement;
   const message = input.value.trim();
@@ -93,6 +105,7 @@ export async function sendMessage(): Promise<void> {
   const turnSession = state.sessionId;
   const abort = new AbortController();
   state.chatAbort = abort;
+  state.chatRunSession = turnSession;
   try {
     const res = await fetch(withProject("/api/chat"), {
       method: "POST",
@@ -109,13 +122,19 @@ export async function sendMessage(): Promise<void> {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    // Once the user switches away from this turn's session, stop rendering but
+    // keep draining the stream so pi runs to completion and persists to its
+    // jsonl — the background run is never killed. We do not re-attach a
+    // mid-stream turn; the transcript is reloaded from disk on return instead.
+    let detached = false;
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      if (state.sessionId !== turnSession) break; // session rotated: drop stale stream
       buffer += decoder.decode(value, { stream: true });
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
+      if (!detached && state.sessionId !== turnSession) detached = true;
+      if (detached) continue; // drain silently, render nothing
       for (const chunk of chunks) {
         const line = chunk.split("\n").find((l) => l.startsWith("data: "));
         if (!line) continue;
@@ -166,6 +185,12 @@ export async function sendMessage(): Promise<void> {
         }
       }
     }
+    // The run finished. If it completed while detached and the user is back on
+    // this session, repaint the now-complete transcript from disk.
+    if (detached && state.sessionId === turnSession) {
+      await loadSessionHistory(turnSession);
+      refreshTree().catch(() => {});
+    }
   } catch (err: any) {
     // An abort (New session) or a session rotation is not an error to surface.
     if (err?.name !== "AbortError" && state.sessionId === turnSession) {
@@ -173,6 +198,7 @@ export async function sendMessage(): Promise<void> {
     }
   } finally {
     if (state.chatAbort === abort) state.chatAbort = null;
+    if (state.chatRunSession === turnSession) state.chatRunSession = "";
     // Only reset shared UI if this turn still owns the session; otherwise a newer
     // turn (after New session) is in control and must not be disturbed.
     if (state.sessionId === turnSession) {

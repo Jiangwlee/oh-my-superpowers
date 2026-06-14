@@ -8,7 +8,7 @@ import { api } from "./api.js";
 import { loadTree } from "./tree.js";
 import { renderEditor, updateChrome } from "./editor.js";
 import { newSession, bindSession } from "./session.js";
-import { renderHistoryTurns } from "./chat.js";
+import { loadSessionHistory } from "./chat.js";
 import { openDialog, confirmDialog } from "./dialog.js";
 
 const MIRROR_KEY = "ompServeProjects";
@@ -98,17 +98,6 @@ export async function switchProject(id: string): Promise<void> {
       await loadSessionHistory(prevSession).catch(() => {});
     }
     $("file-list").innerHTML = `<div class="empty">${esc(err?.message || "failed to open project")}</div>`;
-  }
-}
-
-// Fetch a resumed session's past turns and repaint them. Best-effort: a missing
-// or unreadable session just leaves a clean panel.
-async function loadSessionHistory(sessionId: string): Promise<void> {
-  try {
-    const data = await (await api(`/api/session?sessionId=${encodeURIComponent(sessionId)}`)).json();
-    if (Array.isArray(data.turns) && data.turns.length) renderHistoryTurns(data.turns);
-  } catch {
-    /* leave the cleared panel as-is */
   }
 }
 
