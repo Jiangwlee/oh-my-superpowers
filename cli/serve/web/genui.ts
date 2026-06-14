@@ -57,8 +57,27 @@ export const GENUI_SHELL = `<!doctype html><html><head><meta charset="utf-8"><st
 // the final scripted render and wipe runScripts() state.
 let genUiRenderVersion = 0;
 
+// Once the definitive (run=true) paint runs the document's scripts, it has
+// attached event listeners to the live DOM. Any later partial (run=false) paint
+// would `body.innerHTML = ...` those nodes away — silently killing every click
+// handler while the UI looks identical. So once sealed, partial paints are
+// ignored until the next turn unseals (resetGenUiSeal, called per user message).
+let genUiSealed = false;
+
+// Reset for a new render (called at the start of each user turn). Bumps the
+// version so any in-flight scheduled delta from a prior turn is dropped too.
+export function resetGenUiSeal(): void {
+  genUiSealed = false;
+  genUiRenderVersion++;
+  state.genUiPending = false;
+}
+
 // Push the current (partial or final) HTML into the live shell, no reload.
 export function postGenUi(run: boolean): void {
+  // After the final scripted paint, ignore trailing partial repaints — they
+  // would wipe the listeners that run=true just attached.
+  if (!run && genUiSealed) return;
+  if (run) genUiSealed = true;
   // Any direct post (notably the final run=true paint) supersedes pending deltas.
   genUiRenderVersion++;
   state.genUiPending = false;

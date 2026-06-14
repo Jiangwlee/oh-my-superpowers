@@ -162,12 +162,19 @@ export function createPiLineMapper(): PiLineMapper {
   // materializes, so we buffer the raw text and best-effort extract the `html`
   // field as it grows.
   const renderArgBuffers = new Map<string, string>();
-  return { mapPiLine: (raw) => mapPiLine(raw, renderArgBuffers) };
+  // Latest complete render_ui html seen during streaming. The materialized-
+  // arguments delta shape never touches renderArgBuffers, and message_update /
+  // tool_execution_end can carry different toolCallId keys, so a single
+  // stream-scoped holder (one render_ui per turn is the norm) reliably lets
+  // tool_execution_end recover the final html and emit the run=true gen_ui.
+  const renderState = { lastHtml: "" };
+  return { mapPiLine: (raw) => mapPiLine(raw, renderArgBuffers, renderState) };
 }
 
 function mapPiLine(
   raw: string,
   renderArgBuffers: Map<string, string>,
+  renderState: { lastHtml: string },
 ): { events: SseEvent[]; done: boolean } {
   const line = raw.trim();
   if (!line) return { events: [], done: false };
@@ -182,16 +189,24 @@ function mapPiLine(
 
   if (t === "message_update") {
     const partialHtml = renderUiPartialHtml(event, renderArgBuffers);
-    if (partialHtml) out.push({ type: "gen_ui_delta", html: partialHtml });
+    if (partialHtml) {
+      renderState.lastHtml = partialHtml;
+      out.push({ type: "gen_ui_delta", html: partialHtml });
+    }
     const delta = extractTextDelta(event);
     if (delta) out.push({ type: "assistant_delta", delta });
   } else if (t === "tool_execution_start") {
     const name = String(event.toolName ?? "tool");
-    // The definitive (run=true) gen_ui is emitted exactly once per toolCallId on
-    // tool_execution_end. Emitting it here too — when start already carries
-    // materialized args — would replay the same final HTML twice, re-running
-    // embedded scripts and duplicating GenUI side effects. So start does not
-    // emit a final gen_ui.
+    // The definitive (run=true) gen_ui is emitted exactly once on
+    // tool_execution_end (emitting here too would re-run scripts twice). But pi
+    // carries the full html on START, not END, so capture it here as the
+    // fallback the end uses — this also covers fast streams with no toolcall_delta.
+    if (name === "render_ui") {
+      const a = event.args;
+      if (a && typeof a === "object" && !Array.isArray(a) && typeof (a as Record<string, unknown>).html === "string") {
+        renderState.lastHtml = (a as Record<string, unknown>).html as string;
+      }
+    }
     out.push({
       type: "tool_start",
       id: String(event.toolCallId ?? name),
@@ -228,8 +243,13 @@ function mapPiLine(
           }
         }
       }
+      // Materialized-arguments streams never fill the buffer; fall back to the
+      // last complete html seen during the gen_ui_delta phase so the definitive
+      // run=true paint (which runs scripts/attaches listeners) is always emitted.
+      if (!html) html = renderState.lastHtml;
       if (html) out.push({ type: "gen_ui", html, title });
       renderArgBuffers.delete(key);
+      renderState.lastHtml = "";
     }
     out.push({
       type: "tool_end",
@@ -241,6 +261,7 @@ function mapPiLine(
     out.push({ type: "error", message: String(event.message ?? "pi error") });
   } else if (t === "agent_end") {
     renderArgBuffers.clear(); // drop per-turn render_ui arg accumulators
+    renderState.lastHtml = "";
     out.push({ type: "done", returncode: 0 });
     return { events: out, done: true };
   }

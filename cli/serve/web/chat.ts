@@ -2,7 +2,7 @@
 import { state, $, esc } from "./state.js";
 import { renderMarkdown } from "./markdown.js";
 import { setMode } from "./editor.js";
-import { postGenUi, scheduleGenUiFrame } from "./genui.js";
+import { postGenUi, scheduleGenUiFrame, resetGenUiSeal } from "./genui.js";
 
 export function addTurn(role: string, text: string): HTMLElement {
   const article = document.createElement("article");
@@ -50,6 +50,7 @@ export async function sendMessage(): Promise<void> {
   const message = input.value.trim();
   if (!message || state.sending) return;
   state.sending = true;
+  resetGenUiSeal(); // new turn: allow a fresh Gen UI render to paint partials again
   ($("send-btn") as HTMLButtonElement).disabled = true;
   $("chat-status").textContent = "running";
   addTurn("User", message);
