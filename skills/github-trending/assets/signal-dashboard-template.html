@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GitHub Trending Signal Board · {{DATE}}</title>
+  <style>
+    :root{
+      --bg:#090b12;--panel:#10141f;--ink:#151515;--muted:#9aa4b2;--line:rgba(255,255,255,.12);
+      --gold:#f4c76b;--green:#49d6a3;--blue:#83b8ff;--paper:#fffaf0;--paper2:#efe7d5;
+      --font:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+      --serif:Georgia,"Noto Serif SC",serif;--mono:"SFMono-Regular",Consolas,ui-monospace,monospace;
+    }
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -10%,rgba(131,184,255,.28),transparent 34%),radial-gradient(circle at 88% 8%,rgba(244,199,107,.20),transparent 28%),var(--bg);color:#eef3ff;font-family:var(--font);line-height:1.55}a{color:inherit}.wrap{max-width:1280px;margin:auto;padding:30px 22px 72px}.topbar{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:22px}.brand{display:flex;gap:12px;align-items:center}.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--gold),#fff3bf);color:#111;display:grid;place-items:center;font-weight:900;box-shadow:0 14px 35px rgba(244,199,107,.22)}.brand small{display:block;color:var(--muted);font-family:var(--mono);font-size:12px}.brand b{font-size:15px;letter-spacing:.04em}.actions{display:flex;gap:10px;flex-wrap:wrap}.pill,.btn{border:1px solid var(--line);background:rgba(255,255,255,.06);color:#dce6f5;border-radius:999px;padding:9px 13px;font-size:13px}.btn{cursor:pointer}.hero{display:grid;grid-template-columns:1.12fr .88fr;gap:18px;margin-bottom:18px}.cover{min-height:420px;padding:34px;border-radius:32px;background:linear-gradient(145deg,rgba(255,250,240,.98),rgba(239,231,213,.96));color:var(--ink);position:relative;overflow:hidden;box-shadow:0 28px 90px rgba(0,0,0,.28)}.cover:after{content:"";position:absolute;width:430px;height:430px;border:1px solid rgba(21,21,21,.10);border-radius:50%;right:-170px;top:-120px}.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:#746d61}.cover h1{font-family:var(--serif);font-size:clamp(42px,6vw,78px);line-height:.95;letter-spacing:-.055em;margin:20px 0 18px;max-width:760px}.deck{font-size:18px;color:#4a463f;max-width:780px}.metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:34px}.metric{border-top:1px solid rgba(21,21,21,.16);padding-top:13px}.metric strong{display:block;font-size:28px;letter-spacing:-.04em}.metric span{font-size:12px;color:#716a5e}.insight{position:absolute;left:34px;right:34px;bottom:30px;border:1px solid rgba(21,21,21,.14);background:rgba(255,255,255,.48);backdrop-filter:blur(12px);border-radius:22px;padding:17px 18px;display:grid;grid-template-columns:130px 1fr;gap:16px}.insight b{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase}.insight p{margin:0;color:#37342e}.side{display:grid;gap:18px}.panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.035));border-radius:28px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.20)}.panel h2,.section h2{margin:0 0 14px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#c8d4e6}.lead-card{display:grid;gap:13px}.repo-title{font-size:28px;font-weight:850;letter-spacing:-.04em}.repo-desc{color:#c9d3e2}.score{display:flex;align-items:center;gap:12px}.ring{--p:82;width:78px;height:78px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) calc(var(--p)*1%),rgba(255,255,255,.11) 0);position:relative;font-weight:900}.ring:before{content:"";position:absolute;inset:8px;background:#111827;border-radius:50%}.ring span{position:relative}.tags{display:flex;gap:7px;flex-wrap:wrap}.tag{font-size:12px;padding:5px 8px;border-radius:999px;background:rgba(131,184,255,.13);border:1px solid rgba(131,184,255,.24);color:#cfe2ff}.lens-list{display:grid;gap:10px}.lens{padding:13px;border-radius:18px;background:rgba(255,255,255,.055);border:1px solid var(--line)}.lens b{display:block;color:var(--gold);font-size:12px;margin-bottom:5px}.lens p{margin:0;color:#dce5f1;font-size:14px}.toolbar{position:sticky;top:10px;z-index:2;display:flex;justify-content:center;margin:18px 0}.floating{display:flex;gap:6px;padding:7px;border:1px solid var(--line);background:rgba(9,11,18,.72);backdrop-filter:blur(14px);border-radius:999px}.view{border:0;border-radius:999px;background:transparent;color:#aeb9c8;padding:8px 11px;cursor:pointer}.view.active{background:#eef3ff;color:#111}.grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}.section{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:30px;padding:20px}.map{display:grid;gap:12px}.map-item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:12px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid transparent}.map-item.hot{border-color:rgba(244,199,107,.42);background:rgba(244,199,107,.09)}.rank{font-family:var(--mono);color:var(--muted);font-size:12px}.bar{height:7px;border-radius:99px;background:rgba(255,255,255,.10);overflow:hidden;margin-top:5px}.bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--green),var(--gold))}.delta{font-family:var(--mono);color:#e9f0fb;font-size:12px}.repo-list{display:grid;gap:13px}.repo{display:grid;grid-template-columns:64px 1fr 160px;gap:16px;padding:18px;border-radius:24px;background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.035));border:1px solid var(--line)}.repo .no{font-family:var(--mono);font-size:13px;color:var(--muted);padding-top:4px}.repo h3{margin:0;font-size:20px;letter-spacing:-.035em}.meta{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:3px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:13px}.mini{border:1px solid rgba(255,255,255,.09);background:rgba(0,0,0,.13);border-radius:16px;padding:10px}.mini b{display:block;font-size:11px;color:#8fbfff;margin-bottom:4px}.mini span{font-size:13px;color:#d6dfec}.verdict{margin-top:12px;color:#f1f5ff;font-size:14px}.side-stat{text-align:right}.stars{font-size:22px;font-weight:850}.today{font-family:var(--mono);font-size:12px;color:var(--green)}.risk{margin-top:12px;font-size:12px;color:var(--muted)}.footer{margin-top:24px;color:var(--muted);font-family:var(--mono);font-size:12px;text-align:center}.compact .three{display:none}.compact .repo{grid-template-columns:48px 1fr 120px}.compact .verdict{margin-top:6px}@media(max-width:980px){.hero,.grid{grid-template-columns:1fr}.metric-row,.three{grid-template-columns:repeat(2,1fr)}.repo{grid-template-columns:48px 1fr}.side-stat{text-align:left;grid-column:2}.insight{position:relative;left:auto;right:auto;bottom:auto;margin-top:24px}.cover{min-height:auto}}@media(max-width:620px){.wrap{padding:18px 14px 54px}.topbar{align-items:flex-start;flex-direction:column}.cover{padding:24px;border-radius:24px}.metric-row,.three{grid-template-columns:1fr}.repo{grid-template-columns:1fr}.side-stat{grid-column:auto}.insight{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="wrap" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">GH</div>
+        <div><b>github-trending intelligence</b><small>signal board · {{DATE}} · {{SINCE}}</small></div>
+      </div>
+      <div class="actions"><span class="pill">{{REPO_COUNT}} repos</span><span class="pill">README + API evidence</span></div>
+    </header>
+
+    <section class="hero">
+      <article class="cover">
+        <div class="eyebrow">Daily Open Source Signal</div>
+        <h1>{{HEADLINE}}</h1>
+        <p class="deck">{{DECK}}</p>
+        <div class="metric-row">
+          <div class="metric"><strong>{{TOTAL_STARS_TODAY}}</strong><span>合计今日新增 stars</span></div>
+          <div class="metric"><strong>{{DOMINANT_CLUSTER_RATIO}}</strong><span>{{DOMINANT_CLUSTER}} 相关</span></div>
+          <div class="metric"><strong>{{LEAD_SIGNAL_SCORE}}</strong><span>头部项目综合信号</span></div>
+          <div class="metric"><strong>{{READ_TIME}}</strong><span>预计阅读时间</span></div>
+        </div>
+        <div class="insight"><b>今日看点</b><p>{{TAKEAWAY}}</p></div>
+      </article>
+
+      <aside class="side">
+        <section class="panel">
+          <h2>头部项目</h2>
+          <div class="lead-card">
+            <div class="repo-title"><a href="https://github.com/{{LEAD_NAME}}" target="_blank" rel="noreferrer">{{LEAD_NAME}}</a></div>
+            <p class="repo-desc">{{LEAD_DESC}}</p>
+            <div class="score"><div class="ring" style="--p:{{LEAD_SIGNAL_SCORE}}"><span>{{LEAD_SIGNAL_SCORE}}</span></div><div><b>{{LEAD_SIGNAL_LABEL}}</b><br><span class="meta">+{{LEAD_STARS_TODAY}} today · ★ {{LEAD_STARS}} · {{LEAD_LANG}} · {{LEAD_LICENSE}}</span></div></div>
+            <div class="tags">{{LEAD_TOPICS}}</div>
+          </div>
+        </section>
+        <section class="panel">
+          <h2>三问快读</h2>
+          <div class="lens-list">
+            <div class="lens"><b>项目目的</b><p>{{LEAD_PURPOSE}}</p></div>
+            <div class="lens"><b>项目内容</b><p>{{LEAD_CONTENT}}</p></div>
+            <div class="lens"><b>项目价值</b><p>{{LEAD_VALUE}}</p></div>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <div class="toolbar"><div class="floating"><button class="view active" onclick="setView('full',this)">完整视图</button><button class="view" onclick="setView('compact',this)">速览视图</button><button class="view" onclick="window.print()">打印</button></div></div>
+
+    <section class="grid">
+      <aside class="section">
+        <h2>趋势地图</h2>
+        <div class="map">{{TREND_MAP}}</div>
+      </aside>
+
+      <section class="repo-list" aria-label="repo list">
+        {{REPO_SIGNAL_CARDS}}
+      </section>
+    </section>
+
+    <!-- TREND_MAP 片段结构：
+    <div class="map-item hot"><span class="rank">01</span><div><b>AI Agent 工程化</b><div class="bar"><i style="width:92%"></i></div></div><span class="delta">+1421</span></div>
+    -->
+
+    <!-- REPO_SIGNAL_CARDS 片段结构：
+    <article class="repo">
+      <div class="no">01</div>
+      <div>
+        <h3><a href="https://github.com/owner/repo" target="_blank" rel="noreferrer">owner/repo</a></h3>
+        <div class="meta">Lang · License · created YYYY-MM-DD</div>
+        <div class="three">
+          <div class="mini"><b>目的</b><span>它要解决什么问题</span></div>
+          <div class="mini"><b>内容</b><span>它具体做了什么</span></div>
+          <div class="mini"><b>价值</b><span>它创造什么价值</span></div>
+        </div>
+        <div class="verdict">一句中文编辑判断。</div>
+      </div>
+      <div class="side-stat"><div class="stars">★ N</div><div class="today">+N today</div><div class="risk">证据或不确定性说明</div></div>
+    </article>
+    -->
+
+    <footer class="footer">数据来源：github.com/trending ({{SINCE}}) + GitHub REST API · 生成于 {{DATE}} · github-trending · template=Signal Board</footer>
+  </main>
+  <script>
+    function setView(mode,btn){
+      document.getElementById('app').classList.toggle('compact',mode==='compact');
+      document.querySelectorAll('.view').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  </script>
+</body>
+</html>

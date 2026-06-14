@@ -74,15 +74,22 @@ Done when: every repo answers all three lenses; uncertain claims are marked as u
 
 ### Stage 4: Render
 
-Load `assets/report-template.html`. Sort repos by stars-today descending:
+Choose one template from `assets/` based on the report's reading goal. If the user names a template, use it. Otherwise choose freely.
 
-| Rank | Template area | Required emphasis |
-|---:|---|---|
-| 1 | Lead block | purpose/content/value + editorial judgment. |
-| 2-4 | 焦点项目 | compact three-lens cards. |
-| 5+ | 完整榜单 | scannable three-lens rows. |
+| Template | Use when | Required fragments |
+|---|---|---|
+| `report-template.html` | The report should read like an editorial digest with a strong lead story. | `{{FOCUS_REPOS}}`, `{{REST_REPOS}}` |
+| `signal-dashboard-template.html` | The report should emphasize trend clusters, signal strength, and fast scanning. | `{{TREND_MAP}}`, `{{REPO_SIGNAL_CARDS}}` |
 
-Replace all `{{MARKER}}` placeholders. Generate `{{FOCUS_REPOS}}` and `{{REST_REPOS}}` as escaped HTML fragments using the structure documented in the template comments. HTML-escape repo descriptions, README-derived text, topics, and analysis.
+Sort repos by stars-today descending. Keep the same analysis obligation regardless of template:
+
+| Rank | Required emphasis |
+|---:|---|
+| 1 | purpose/content/value + editorial judgment. |
+| 2-4 | compact three-lens analysis. |
+| 5+ | scannable three-lens rows or cards. |
+
+Replace all `{{MARKER}}` placeholders. Generate escaped HTML fragments using the structure documented in the chosen template comments. HTML-escape repo descriptions, README-derived text, topics, and analysis.
 
 Write the rendered HTML to a temporary local file. Filename convention:
 `<YYYY-MM-DD>.html` (weekly/monthly runs: `<YYYY-MM-DD>-<since>.html`).
