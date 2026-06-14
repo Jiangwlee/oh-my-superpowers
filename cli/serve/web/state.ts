@@ -17,6 +17,7 @@ export interface AppState {
   toolListEl: HTMLElement | null;
   toolSteps: Map<string, HTMLElement>;
   sideTab: string;
+  chatAbort: AbortController | null;
   terminal: any;
   terminalFit: any;
   terminalSocket: WebSocket | null;
@@ -47,6 +48,7 @@ export const state: AppState = {
   toolListEl: null,
   toolSteps: new Map<string, HTMLElement>(),
   sideTab: "chat",
+  chatAbort: null,
   terminal: null,
   terminalFit: null,
   terminalSocket: null,

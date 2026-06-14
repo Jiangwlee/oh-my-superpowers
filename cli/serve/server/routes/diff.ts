@@ -3,20 +3,33 @@
 // changes (vs HEAD, staged + unstaged combined) plus untracked files as adds.
 //
 // Redline compliance:
-//  - spawnSync with a fixed arg array, NO shell, cwd = workspace (no user path
+//  - execFile with a fixed arg array, NO shell, cwd = workspace (no user path
 //    is ever interpolated into a git argument).
+//  - the diff is scoped to the workspace subtree (`--relative` + `-- .`) so a
+//    workspace nested inside a larger repo never leaks outside changes.
 //  - file mtime is read through resolveRel so a reported path cannot escape the
 //    workspace.
+//  - git runs asynchronously so a large diff never blocks chat/terminal I/O on
+//    the single server process; untracked work is bounded.
 import type { ServerResponse } from "node:http";
-import { spawnSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { statSync, lstatSync, readFileSync } from "node:fs";
+import { extname, join, resolve } from "node:path";
 import type { Config } from "../config.js";
 import { sendJson } from "../sse.js";
-import { resolveRel, TEXT_EXTENSIONS } from "../fs/workspace.js";
-import { extname } from "node:path";
+import { resolveRel, isSafe, TEXT_EXTENSIONS } from "../fs/workspace.js";
+
+const execFileP = promisify(execFile);
 
 const MAX_BUFFER = 1 << 26; // 64 MiB; protects against pathological diffs
+const GIT_TIMEOUT = 15000; // ms per git invocation
+const MAX_UNTRACKED_FILES = 200; // bound per-file work for new files
 const MAX_UNTRACKED_LINES = 800; // cap synthesized adds for huge new files
+const MAX_UNTRACKED_BYTES = 512 * 1024; // skip reading very large new files
+// Git's canonical empty-tree object: lets us diff an unborn repo (no HEAD) so
+// staged-but-uncommitted files still show up.
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 type Kind = "hunk" | "add" | "del" | "ctx" | "meta";
 interface Hunk {
@@ -32,13 +45,22 @@ interface DiffFile {
   hunks: Hunk[];
 }
 
-function git(cfg: Config, args: string[]): { ok: boolean; stdout: string } {
-  const r = spawnSync("git", args, {
-    cwd: cfg.workspace,
-    encoding: "utf-8",
-    maxBuffer: MAX_BUFFER,
-  });
-  return { ok: r.status === 0, stdout: r.stdout || "" };
+// Run git async. Returns ok=false with whatever stdout was produced: some git
+// subcommands (`diff --no-index`, `rev-parse --verify`) exit non-zero by design
+// yet still emit the output we need.
+async function git(cfg: Config, args: string[]): Promise<{ ok: boolean; stdout: string }> {
+  try {
+    const { stdout } = await execFileP("git", args, {
+      cwd: cfg.workspace,
+      encoding: "utf-8",
+      maxBuffer: MAX_BUFFER,
+      timeout: GIT_TIMEOUT,
+    });
+    return { ok: true, stdout };
+  } catch (err) {
+    const stdout = (err as { stdout?: string })?.stdout;
+    return { ok: false, stdout: typeof stdout === "string" ? stdout : "" };
+  }
 }
 
 function mtimeOf(cfg: Config, path: string): number | null {
@@ -51,7 +73,7 @@ function mtimeOf(cfg: Config, path: string): number | null {
 
 // Parse a unified `git diff` patch into per-file hunks. We only keep the
 // displayable lines (hunk headers + +/-/context); git's index/mode lines are
-// dropped, matching the prototype's inline view.
+// dropped, matching the inline view.
 function parsePatch(cfg: Config, patch: string): DiffFile[] {
   const files: DiffFile[] = [];
   let cur: DiffFile | null = null;
@@ -108,60 +130,93 @@ function parsePatch(cfg: Config, patch: string): DiffFile[] {
   return files;
 }
 
-// Synthesize an "all added" diff card for each untracked file.
-function untrackedFiles(cfg: Config): DiffFile[] {
-  const out: DiffFile[] = [];
-  const listed = git(cfg, ["ls-files", "--others", "--exclude-standard", "-z"]);
-  if (!listed.ok) return out;
-  for (const path of listed.stdout.split("\0").filter(Boolean)) {
-    const isText = TEXT_EXTENSIONS.has(extname(path).toLowerCase());
-    let lines: [Kind, string][] = [];
-    let added = 0;
-    if (isText) {
-      const shown = git(cfg, ["diff", "--no-index", "--", "/dev/null", path]);
-      // --no-index exits 1 when files differ; stdout still holds the patch.
-      const body = shown.stdout.split("\n");
-      let inHunk = false;
-      for (const l of body) {
-        if (l.startsWith("@@")) {
-          inHunk = true;
-          continue;
-        }
-        if (!inHunk) continue;
-        if (l.startsWith("+")) {
-          added++;
-          if (lines.length < MAX_UNTRACKED_LINES) lines.push(["add", l]);
-        }
-      }
-      if (added > MAX_UNTRACKED_LINES) {
-        lines.push(["meta", `\\ ${added - MAX_UNTRACKED_LINES} more added lines`]);
-      }
+// Synthesize an "all added" card for one untracked file by reading it directly
+// — no per-file git subprocess. Symlinks, binaries and oversized files are
+// summarized rather than read, so a single /api/diff stays cheap and bounded.
+function untrackedCard(cfg: Config, path: string): DiffFile {
+  let lines: [Kind, string][] = [];
+  let added = 0;
+  let mtimeMs: number | null = null;
+  try {
+    // lstat the LEXICAL path (not resolveRel's canonical path, which follows the
+    // final symlink) so an untracked symlink — even one resolving inside the
+    // workspace — is summarized, never read through.
+    const lexical = resolve(join(cfg.workspace, path));
+    if (!isSafe(cfg.workspace, lexical)) {
+      lines = [["meta", "\\ outside workspace"]];
     } else {
-      lines = [["meta", "\\ binary or non-text file"]];
+      const st = lstatSync(lexical);
+      if (st.isSymbolicLink()) {
+        lines = [["meta", "\\ symlink"]];
+      } else {
+        mtimeMs = st.mtimeMs;
+        if (!TEXT_EXTENSIONS.has(extname(path).toLowerCase())) {
+          lines = [["meta", "\\ binary or non-text file"]];
+        } else if (st.size > MAX_UNTRACKED_BYTES) {
+          lines = [["meta", `\\ file too large to preview (${st.size} bytes)`]];
+        } else {
+          const raw = readFileSync(lexical, "utf-8");
+          const arr = raw.length ? raw.split("\n") : [];
+          if (arr.length && arr[arr.length - 1] === "") arr.pop(); // drop trailing-newline empty
+          added = arr.length;
+          for (const l of arr.slice(0, MAX_UNTRACKED_LINES)) lines.push(["add", `+${l}`]);
+          if (added > MAX_UNTRACKED_LINES) {
+            lines.push(["meta", `\\ ${added - MAX_UNTRACKED_LINES} more added lines`]);
+          }
+        }
+      }
     }
+  } catch {
+    lines = [["meta", "\\ unreadable"]];
+  }
+  return {
+    path,
+    status: "A",
+    added,
+    deleted: 0,
+    mtimeMs,
+    hunks: lines.length ? [{ header: `@@ -0,0 +1,${added} @@`, lines }] : [],
+  };
+}
+
+// List untracked files (bounded) and synthesize their add cards.
+async function untrackedFiles(cfg: Config): Promise<DiffFile[]> {
+  // `-- .` scopes the listing to the workspace subtree (cwd), not the whole repo.
+  const listed = await git(cfg, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."]);
+  if (!listed.ok) return [];
+  const paths = listed.stdout.split("\0").filter(Boolean);
+  const out = paths.slice(0, MAX_UNTRACKED_FILES).map((p) => untrackedCard(cfg, p));
+  if (paths.length > MAX_UNTRACKED_FILES) {
     out.push({
-      path,
+      path: `… ${paths.length - MAX_UNTRACKED_FILES} more untracked files (truncated)`,
       status: "A",
-      added,
+      added: 0,
       deleted: 0,
-      mtimeMs: mtimeOf(cfg, path),
-      hunks: lines.length ? [{ header: `@@ -0,0 +1,${added} @@`, lines }] : [],
+      mtimeMs: null,
+      hunks: [],
     });
   }
   return out;
 }
 
-export function handleDiff(res: ServerResponse, cfg: Config): void {
-  if (!git(cfg, ["rev-parse", "--is-inside-work-tree"]).ok) {
+export async function handleDiff(res: ServerResponse, cfg: Config): Promise<void> {
+  if (!(await git(cfg, ["rev-parse", "--is-inside-work-tree"])).ok) {
     sendJson(res, { git: false, files: [] });
     return;
   }
-  const hasHead = git(cfg, ["rev-parse", "--verify", "HEAD"]).ok;
-  const diffArgs = ["-c", "core.quotepath=false", "diff"];
-  if (hasHead) diffArgs.push("HEAD");
-  const patch = git(cfg, diffArgs);
+  const hasHead = (await git(cfg, ["rev-parse", "--verify", "HEAD"])).ok;
+  // `--relative` emits workspace-relative paths and `-- .` restricts the diff to
+  // the workspace subtree, so a workspace nested in a larger repo stays scoped.
+  // Base is HEAD, or the empty tree for an unborn repo (keeps staged files).
+  const base = hasHead ? "HEAD" : EMPTY_TREE;
+  // --no-ext-diff/--no-textconv stop git from running repo-configured external
+  // diff or textconv programs when serving this network-facing endpoint.
+  const patch = await git(cfg, [
+    "-c", "core.quotepath=false",
+    "diff", "--no-ext-diff", "--no-textconv", "--relative", base, "--", ".",
+  ]);
   const tracked = patch.ok ? parsePatch(cfg, patch.stdout) : [];
-  const files = [...tracked, ...untrackedFiles(cfg)];
+  const files = [...tracked, ...(await untrackedFiles(cfg))];
   files.sort((a, b) => (b.mtimeMs ?? 0) - (a.mtimeMs ?? 0));
   sendJson(res, { git: true, files });
 }

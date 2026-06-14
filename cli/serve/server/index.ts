@@ -83,7 +83,9 @@ const server = createServer((req, res) => {
         return;
       }
       if (path === "/api/diff") {
-        handleDiff(res, cfg);
+        handleDiff(res, cfg).catch((exc) =>
+          sendErrorJson(res, 500, String((exc as Error)?.message || exc)),
+        );
         return;
       }
       if (serveStatic(res, path)) return;

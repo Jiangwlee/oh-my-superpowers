@@ -45,8 +45,11 @@ $("file-tree").addEventListener("sl-selection-change", (event: Event) => {
 // clear the chat transcript and reset the terminal (both are session-bound).
 // File tree, editor, open file and theme are page state and are kept intact.
 function newSession(): void {
+  state.chatAbort?.abort(); // stop any in-flight chat stream bound to the old session
   state.sessionId = newSessionId();
   $("session-label").textContent = `session: ${state.sessionId.slice(0, 8)}`;
+  state.sending = false;
+  ($("send-btn") as HTMLButtonElement).disabled = false;
   clearChat();
   resetGenUiSeal();
   resetTerminal();

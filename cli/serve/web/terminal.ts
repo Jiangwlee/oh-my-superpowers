@@ -100,20 +100,29 @@ export function startTerminal(): void {
   state.terminalSocket = socket;
   $("chat-status").textContent = "connecting";
 
+  // Fence handlers to this socket: after resetTerminal() (New session) replaces
+  // state.terminalSocket, late events from the old PTY must not write into the
+  // new terminal or clobber its status.
+  const isCurrent = (): boolean => state.terminalSocket === socket;
+
   state.terminal.onData((data: string) => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "input", data }));
   });
   socket.addEventListener("open", () => {
+    if (!isCurrent()) return;
     $("chat-status").textContent = "terminal";
     fitTerminal();
   });
   socket.addEventListener("message", (event: MessageEvent) => {
+    if (!isCurrent()) return;
     state.terminal.write(event.data);
   });
   socket.addEventListener("close", () => {
+    if (!isCurrent()) return;
     $("chat-status").textContent = state.sideTab === "terminal" ? "closed" : "idle";
   });
   socket.addEventListener("error", () => {
+    if (!isCurrent()) return;
     $("chat-status").textContent = "error";
   });
 }

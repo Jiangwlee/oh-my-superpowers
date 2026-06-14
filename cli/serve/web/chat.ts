@@ -72,11 +72,17 @@ export async function sendMessage(): Promise<void> {
   addTurn("User", message);
   startAssistantTurn();
   input.value = "";
+  // Fence this turn to the session it started in: if New session rotates the id
+  // (or aborts), stale events from this stream are ignored and the fetch stops.
+  const turnSession = state.sessionId;
+  const abort = new AbortController();
+  state.chatAbort = abort;
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, sessionId: state.sessionId }),
+      body: JSON.stringify({ message, sessionId: turnSession }),
+      signal: abort.signal,
     });
     if (!res.ok) {
       throw new Error((await res.text()) || `HTTP ${res.status}`);
@@ -90,6 +96,7 @@ export async function sendMessage(): Promise<void> {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      if (state.sessionId !== turnSession) break; // session rotated: drop stale stream
       buffer += decoder.decode(value, { stream: true });
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
@@ -144,11 +151,19 @@ export async function sendMessage(): Promise<void> {
       }
     }
   } catch (err: any) {
-    appendAssistant(`\n\n${err.message || err}`);
+    // An abort (New session) or a session rotation is not an error to surface.
+    if (err?.name !== "AbortError" && state.sessionId === turnSession) {
+      appendAssistant(`\n\n${err.message || err}`);
+    }
   } finally {
-    state.sending = false;
-    ($("send-btn") as HTMLButtonElement).disabled = false;
-    $("chat-status").textContent = "idle";
-    input.focus();
+    if (state.chatAbort === abort) state.chatAbort = null;
+    // Only reset shared UI if this turn still owns the session; otherwise a newer
+    // turn (after New session) is in control and must not be disturbed.
+    if (state.sessionId === turnSession) {
+      state.sending = false;
+      ($("send-btn") as HTMLButtonElement).disabled = false;
+      $("chat-status").textContent = "idle";
+      input.focus();
+    }
   }
 }
