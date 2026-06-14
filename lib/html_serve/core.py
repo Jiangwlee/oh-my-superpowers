@@ -203,11 +203,19 @@ def publish_file(
         raise HtmlServeError(f"target already exists: {target}", 1)
 
     target.parent.mkdir(parents=True, exist_ok=True)
+    for directory in target.parent.relative_to(config.data_dir).parents:
+        if str(directory) == ".":
+            continue
+        path = config.data_dir / directory
+        path.chmod(path.stat().st_mode | 0o755)
+    target.parent.chmod(target.parent.stat().st_mode | 0o755)
+
     fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
     os.close(fd)
     tmp_path = Path(tmp_name)
     try:
         shutil.copyfile(source, tmp_path)
+        tmp_path.chmod(0o644)
         os.replace(tmp_path, target)
     finally:
         if tmp_path.exists():

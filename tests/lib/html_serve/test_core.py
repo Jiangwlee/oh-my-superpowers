@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -45,6 +46,28 @@ def test_publish_file_returns_localhost_and_tailscale_urls(tmp_path: Path) -> No
         "localhost": "http://localhost:8888/reports/report.html",
         "tailscale": "http://100.64.0.1:8888/reports/report.html",
     }
+
+
+def test_publish_file_is_readable_by_nginx_with_restrictive_umask(tmp_path: Path) -> None:
+    source = tmp_path / "source.html"
+    source.write_text("<!doctype html><title>ok</title>", encoding="utf-8")
+
+    original_umask = os.umask(0o077)
+    try:
+        publish_file(
+            input_path=source,
+            config=make_config(tmp_path),
+            relative_path="reports/private/report.html",
+            verify=False,
+        )
+    finally:
+        os.umask(original_umask)
+
+    report_dir = tmp_path / "reports" / "private"
+    report = report_dir / "report.html"
+    assert report.stat().st_mode & 0o777 == 0o644
+    assert (tmp_path / "reports").stat().st_mode & 0o755 == 0o755
+    assert report_dir.stat().st_mode & 0o755 == 0o755
 
 
 def test_url_metadata_can_check_existing_file(tmp_path: Path) -> None:
