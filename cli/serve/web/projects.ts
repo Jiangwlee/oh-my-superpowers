@@ -71,11 +71,21 @@ async function reloadProjectSurfaces(): Promise<void> {
 
 export async function switchProject(id: string): Promise<void> {
   if (id === state.currentProjectId) return;
+  const prev = state.currentProjectId;
+  // The new id must be live before reloadProjectSurfaces so its project-scoped
+  // requests resolve correctly; renderTabs gives immediate feedback.
   state.currentProjectId = id;
-  persist();
   renderTabs();
   newSession(); // rotate the workspace-bound pi session, clear chat/terminal
-  await reloadProjectSurfaces();
+  try {
+    await reloadProjectSurfaces();
+    persist(); // only pin a project that actually loaded
+  } catch (err: any) {
+    // Roll back so a vanished/removed project never leaves a broken active tab.
+    state.currentProjectId = prev;
+    renderTabs();
+    $("file-list").innerHTML = `<div class="empty">${esc(err?.message || "failed to open project")}</div>`;
+  }
 }
 
 // Fetch the authoritative project list and reconcile the current selection:
@@ -105,6 +115,16 @@ export async function initProjects(): Promise<void> {
 async function removeProjectFlow(id: string): Promise<void> {
   const project = state.projects.find((p) => p.id === id);
   if (!project) return;
+  // Keep at least one project so the registry never empties and no request ever
+  // falls through to an unscoped state.
+  if (state.projects.length <= 1) {
+    openDialog({
+      title: "无法移除",
+      body: `<p class="omp-dialog-message">至少保留一个项目。先添加另一个项目，再移除「${esc(project.name)}」。</p>`,
+      actions: [{ label: "知道了", variant: "primary" }],
+    });
+    return;
+  }
   const ok = await confirmDialog({
     title: "移除项目",
     message: `从工作台移除「${project.name}」？只移除标签，不会删除磁盘上的任何文件。`,

@@ -4,7 +4,7 @@
 // a localStorage mirror for fast restore but reconciles against this on boot —
 // this file wins.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, statSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import type { Config, ProjectContext } from "../config.js";
@@ -49,9 +49,20 @@ function readRegistry(): RegistryFile {
   return { projects: [] };
 }
 
+// Atomic write: a reader sharing ~/.omp/serve/projects.json across processes
+// never observes a half-truncated file. (Cross-process lost-update on a manual
+// add is still possible but rare and non-corrupting.)
 function writeRegistry(reg: RegistryFile): void {
   mkdirSync(REGISTRY_DIR, { recursive: true });
-  writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2), "utf-8");
+  const tmp = `${REGISTRY_PATH}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(reg, null, 2), "utf-8");
+  renameSync(tmp, REGISTRY_PATH);
+}
+
+// Canonical real path: a stored project root must contain no symlink component,
+// so it cannot be retargeted outside the sandbox after registration.
+function realCanonical(p: string): string {
+  return realpathSync(resolve(p));
 }
 
 export function listProjects(): Project[] {
@@ -67,10 +78,13 @@ export function getProject(id: string): Project | undefined {
 // existing path returns the existing entry. Returns the project; throws on a
 // path that escapes the sandbox or is not a directory.
 export function addProject(absPath: string, addedAt: string): Project {
-  const target = resolve(absPath);
+  const lexical = resolve(absPath);
   const home = homedir();
+  if (!isDir(lexical)) throw new Error("not a directory");
+  // Store the fully-resolved real path (no symlink components) so a symlink
+  // that is safe at add time cannot be retargeted outside $HOME afterwards.
+  const target = realCanonical(lexical);
   if (!isSafe(home, target)) throw new Error("path is outside the home sandbox");
-  if (!isDir(target)) throw new Error("not a directory");
   const reg = readRegistry();
   const id = projectId(target);
   const existing = reg.projects.find((p) => p.id === id);
@@ -94,7 +108,7 @@ export function removeProject(id: string): boolean {
 // Ensure the CLI --workspace is registered so the page always has at least one
 // project on first run. Called once at server start.
 export function ensureBootstrap(workspace: string): Project {
-  const target = resolve(workspace);
+  const target = realCanonical(workspace);
   const reg = readRegistry();
   const id = projectId(target);
   const existing = reg.projects.find((p) => p.id === id);
@@ -110,17 +124,27 @@ export function ensureBootstrap(workspace: string): Project {
   return project;
 }
 
-// Resolve the project-scoped context for a request. Empty projectId falls back
-// to the bootstrap workspace (back-compat for requests issued before the page
-// has loaded the project list). Throws on an unknown or vanished project so the
-// route returns a clean error instead of silently serving the wrong tree.
+// Resolve the project-scoped context for a request. An explicit projectId must
+// exist in the registry; an empty projectId (only requests issued before the
+// page loads the project list) resolves to the first registered project so a
+// removed/unregistered directory is never served — the registry stays the SoT.
+// Throws on unknown project, empty registry, vanished path, or a path that has
+// since escaped the $HOME sandbox.
 export function resolveContext(cfg: Config, projectId: string): ProjectContext {
-  let workspace = cfg.bootstrapWorkspace;
+  let workspace: string;
   if (projectId) {
     const project = getProject(projectId);
     if (!project) throw new Error("unknown project");
     workspace = project.path;
+  } else {
+    const first = readRegistry().projects[0];
+    if (!first) throw new Error("no project registered");
+    workspace = first.path;
   }
   if (!isDir(workspace)) throw new Error("project path not found");
-  return contextFor(workspace, cfg.model);
+  // Re-canonicalize and re-check the sandbox on every request: a stored path
+  // whose target was retargeted outside $HOME after registration is rejected.
+  const real = realCanonical(workspace);
+  if (!isSafe(homedir(), real)) throw new Error("project path escaped sandbox");
+  return contextFor(real, cfg.model);
 }
