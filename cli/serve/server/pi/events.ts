@@ -167,14 +167,14 @@ export function createPiLineMapper(): PiLineMapper {
   // tool_execution_end can carry different toolCallId keys, so a single
   // stream-scoped holder (one render_ui per turn is the norm) reliably lets
   // tool_execution_end recover the final html and emit the run=true gen_ui.
-  const renderState = { lastHtml: "" };
+  const renderState = { lastHtml: "", lastTitle: "" };
   return { mapPiLine: (raw) => mapPiLine(raw, renderArgBuffers, renderState) };
 }
 
 function mapPiLine(
   raw: string,
   renderArgBuffers: Map<string, string>,
-  renderState: { lastHtml: string },
+  renderState: { lastHtml: string; lastTitle: string },
 ): { events: SseEvent[]; done: boolean } {
   const line = raw.trim();
   if (!line) return { events: [], done: false };
@@ -203,8 +203,10 @@ function mapPiLine(
     // fallback the end uses — this also covers fast streams with no toolcall_delta.
     if (name === "render_ui") {
       const a = event.args;
-      if (a && typeof a === "object" && !Array.isArray(a) && typeof (a as Record<string, unknown>).html === "string") {
-        renderState.lastHtml = (a as Record<string, unknown>).html as string;
+      if (a && typeof a === "object" && !Array.isArray(a)) {
+        const rec = a as Record<string, unknown>;
+        if (typeof rec.html === "string") renderState.lastHtml = rec.html;
+        if (typeof rec.title === "string") renderState.lastTitle = rec.title;
       }
     }
     out.push({
@@ -247,9 +249,11 @@ function mapPiLine(
       // last complete html seen during the gen_ui_delta phase so the definitive
       // run=true paint (which runs scripts/attaches listeners) is always emitted.
       if (!html) html = renderState.lastHtml;
+      if (!title) title = renderState.lastTitle;
       if (html) out.push({ type: "gen_ui", html, title });
       renderArgBuffers.delete(key);
       renderState.lastHtml = "";
+      renderState.lastTitle = "";
     }
     out.push({
       type: "tool_end",
@@ -262,6 +266,7 @@ function mapPiLine(
   } else if (t === "agent_end") {
     renderArgBuffers.clear(); // drop per-turn render_ui arg accumulators
     renderState.lastHtml = "";
+    renderState.lastTitle = "";
     out.push({ type: "done", returncode: 0 });
     return { events: out, done: true };
   }

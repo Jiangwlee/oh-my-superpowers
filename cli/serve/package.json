@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test": "node --test --experimental-strip-types server/pi/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
