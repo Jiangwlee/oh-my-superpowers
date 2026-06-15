@@ -173,6 +173,12 @@ class TestBuildReportHtml(unittest.TestCase):
             html_text = html_file.read_text(encoding="utf-8")
             self.assertNotIn("{{", html_text)
             self.assertIn("Example Report", html_text)
+            self.assertIn(
+                '<a href="https://example.com/report" target="_blank" rel="noreferrer">Example Report</a>',
+                html_text,
+            )
+            self.assertNotIn(">https://example.com/report</a>", html_text)
+            self.assertIn("overflow-wrap: anywhere", html_text)
             self.assertIn("证明来源表能填充证据价值", html_text)
             state = json.loads((workspace / "state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["report_files"]["html"], str(html_file))

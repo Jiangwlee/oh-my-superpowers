@@ -33,13 +33,13 @@ body {
 a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  gap: 44px;
-  max-width: 1180px;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 56px;
+  max-width: 1520px;
   margin: 0 auto;
-  padding: 48px 28px 72px;
+  padding: 48px 40px 72px;
 }
-.report { max-width: 66ch; }
+.report { max-width: 92ch; }
 .eyebrow {
   color: var(--muted);
   font-size: 12px;
@@ -102,6 +102,7 @@ h1 {
   gap: 12px;
 }
 .conclusion-card {
+  min-width: 0;
   border: 1px solid var(--border);
   background: var(--surface);
   padding: 14px 16px;
@@ -117,6 +118,11 @@ h1 {
   color: var(--muted);
   font-size: 13.5px;
   line-height: 1.55;
+}
+.conclusion-card p,
+.conclusion-card a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .source-table {
   width: 100%;

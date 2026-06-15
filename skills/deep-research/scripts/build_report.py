@@ -16,10 +16,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from common import dump_json, ensure_workspace_dirs, load_json, resolve_workspace
 
 URL_RE = re.compile(r"https?://[^\s)）>]+")
+TRAILING_URL_PUNCT = ".,;:!?，。；：！？、"
 LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)、]\s+)(.+?)\s*$")
 CHECKBOX_RE = re.compile(r"^\[[ xX✓-]\]\s*")
 
@@ -79,15 +81,69 @@ def _escape(value: Any) -> str:
     return html.escape(str(value or ""), quote=True)
 
 
-def _escape_with_links(text: str) -> str:
-    """Escape text and turn bare URLs into safe external links."""
+def _url_lookup_keys(url: str) -> list[str]:
+    """Return URL variants that should resolve to the same source title."""
+
+    cleaned = url.strip().rstrip(TRAILING_URL_PUNCT)
+    if not cleaned:
+        return []
+    keys = [cleaned]
+    if cleaned.endswith("/"):
+        keys.append(cleaned.rstrip("/"))
+    else:
+        keys.append(f"{cleaned}/")
+    return list(dict.fromkeys(keys))
+
+
+def _source_title_map(sources: list[dict[str, Any]]) -> dict[str, str]:
+    """Map source URLs to their recorded webpage titles."""
+
+    titles: dict[str, str] = {}
+    for source in sources:
+        url = str(source.get("url") or "").strip()
+        title = str(source.get("title") or "").strip()
+        if not url or not title or title in _url_lookup_keys(url):
+            continue
+        for key in _url_lookup_keys(url):
+            titles.setdefault(key, title)
+    return titles
+
+
+def _fallback_link_label(url: str) -> str:
+    """Return a readable non-URL label when source metadata lacks a title."""
+
+    parsed = urlsplit(url)
+    if not parsed.netloc:
+        return "Source link"
+    slug = unquote(parsed.path.rstrip("/").rsplit("/", 1)[-1]) if parsed.path.rstrip("/") else ""
+    if slug:
+        slug = re.sub(r"[-_]+", " ", slug).strip()
+        return f"{parsed.netloc} — {slug}" if slug else parsed.netloc
+    return parsed.netloc
+
+
+def _link_label(url: str, link_titles: dict[str, str] | None) -> str:
+    """Return the best visible label for a link."""
+
+    for key in _url_lookup_keys(url):
+        if link_titles and key in link_titles:
+            return link_titles[key]
+    return _fallback_link_label(url)
+
+
+def _escape_with_links(text: str, link_titles: dict[str, str] | None = None) -> str:
+    """Escape text and turn bare URLs into safe external links with title labels."""
 
     parts: list[str] = []
     last = 0
     for match in URL_RE.finditer(text):
         parts.append(_escape(text[last : match.start()]))
-        url = match.group(0)
-        parts.append(f'<a href="{_escape(url)}" target="_blank" rel="noreferrer">{_escape(url)}</a>')
+        raw_url = match.group(0)
+        url = raw_url.rstrip(TRAILING_URL_PUNCT)
+        trailing = raw_url[len(url) :]
+        label = _link_label(url, link_titles)
+        parts.append(f'<a href="{_escape(url)}" target="_blank" rel="noreferrer">{_escape(label)}</a>')
+        parts.append(_escape(trailing))
         last = match.end()
     parts.append(_escape(text[last:]))
     return "".join(parts)
@@ -164,27 +220,35 @@ def _first_clause(text: str) -> str:
     return _truncate(cleaned.strip(" .。；;，,"), 28) or "Conclusion"
 
 
-def _markdown_fragment(markdown: str, empty: str = "Not reported.") -> str:
+def _markdown_fragment(
+    markdown: str,
+    empty: str = "Not reported.",
+    link_titles: dict[str, str] | None = None,
+) -> str:
     """Render a small Markdown fragment as semantic HTML."""
 
     items = _list_items(markdown)
     if items:
-        return "<ul>" + "".join(f"<li>{_escape_with_links(item)}</li>" for item in items) + "</ul>"
+        return "<ul>" + "".join(f"<li>{_escape_with_links(item, link_titles)}</li>" for item in items) + "</ul>"
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", markdown) if part.strip()]
     if not paragraphs:
         return f"<p>{_escape(empty)}</p>"
-    return "".join(f"<p>{_escape_with_links(_plain_text(part))}</p>" for part in paragraphs)
+    return "".join(f"<p>{_escape_with_links(_plain_text(part), link_titles)}</p>" for part in paragraphs)
 
 
-def _list_items_html(items: list[str], empty: str = "Not reported.") -> str:
+def _list_items_html(
+    items: list[str],
+    empty: str = "Not reported.",
+    link_titles: dict[str, str] | None = None,
+) -> str:
     """Render list items for a template marker already inside a ul."""
 
     if not items:
         return f"<li>{_escape(empty)}</li>"
-    return "".join(f"<li>{_escape_with_links(item)}</li>" for item in items)
+    return "".join(f"<li>{_escape_with_links(item, link_titles)}</li>" for item in items)
 
 
-def _conclusion_cards(brief_text: str) -> str:
+def _conclusion_cards(brief_text: str, link_titles: dict[str, str] | None = None) -> str:
     """Render conclusion cards from the brief core-conclusions section."""
 
     section = _section(brief_text, ["核心结论", "Core Conclusions", "Conclusions"])
@@ -196,7 +260,7 @@ def _conclusion_cards(brief_text: str) -> str:
         cards.append(
             '<div class="conclusion-card">'
             f"<strong>{_escape(_first_clause(conclusion))}</strong>"
-            f"<p>{_escape_with_links(conclusion)}</p>"
+            f"<p>{_escape_with_links(_plain_text(conclusion), link_titles)}</p>"
             "</div>"
         )
     return "\n        ".join(cards)
@@ -276,6 +340,7 @@ def render_report_html(
     unresolved = _list_items(_section(full_report_text, ["未解决问题", "Open Questions", "Unresolved Questions"]))
     completed_at = str(state.get("completed_at") or datetime.now().isoformat(timespec="seconds"))
     deck = _truncate(_plain_text(goal), 180) if goal else "Readable projection of the completed deep-research workspace."
+    link_titles = _source_title_map(sources)
     audit_note = (
         "Canonical audit artifacts: plan.md, reports/brief.md, reports/full-report.md, state.json. "
         f"Workspace: {workspace.name}."
@@ -288,10 +353,10 @@ def render_report_html(
         "{{GENERATED_AT}}": _escape(completed_at),
         "{{SOURCE_COUNT}}": _escape(len(sources)),
         "{{STATUS}}": _escape(state.get("status") or "reported"),
-        "{{RESEARCH_GOAL}}": _markdown_fragment(goal),
-        "{{CONCLUSION_CARDS}}": _conclusion_cards(brief_text),
-        "{{RISK_ITEMS}}": _list_items_html(risks),
-        "{{UNRESOLVED_ITEMS}}": _list_items_html(unresolved),
+        "{{RESEARCH_GOAL}}": _markdown_fragment(goal, link_titles=link_titles),
+        "{{CONCLUSION_CARDS}}": _conclusion_cards(brief_text, link_titles),
+        "{{RISK_ITEMS}}": _list_items_html(risks, link_titles=link_titles),
+        "{{UNRESOLVED_ITEMS}}": _list_items_html(unresolved, link_titles=link_titles),
         "{{SOURCE_TABLE_ROWS}}": _source_rows(sources, full_report_text),
         "{{AUDIT_NOTE}}": _escape(audit_note),
     }
