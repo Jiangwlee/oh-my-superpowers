@@ -6,18 +6,37 @@ import { renderGitDiff } from "./diff.js";
 import { GENUI_SHELL, postGenUi } from "./genui.js";
 import { syncTreeSelection } from "./tree.js";
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 bytes";
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+}
+
 export function updateChrome(): void {
+  const isText = state.fileKind === "text";
   $("active-file").textContent = state.selectedPath || "Select a file";
-  $("file-status").textContent = state.selectedPath ? `${state.content.length} chars` : "no file";
+  $("file-status").textContent = state.selectedPath
+    ? isText
+      ? `${state.content.length} chars`
+      : `${formatBytes(state.fileSize)} · ${state.fileKind}`
+    : "no file";
   $("dirty-label").textContent = state.dirty ? "dirty" : "clean";
-  $("save-btn").classList.toggle("dirty", state.dirty);
+  const saveBtn = $("save-btn") as HTMLButtonElement;
+  saveBtn.classList.toggle("dirty", state.dirty);
+  saveBtn.disabled = !state.selectedPath || !isText;
   document
     .querySelectorAll("[data-mode]")
-    .forEach((btn) => btn.classList.toggle("active", (btn as HTMLElement).dataset.mode === state.mode));
+    .forEach((btn) => {
+      const el = btn as HTMLButtonElement;
+      el.classList.toggle("active", el.dataset.mode === state.mode);
+      if (el.dataset.mode === "edit") el.disabled = !isText;
+    });
   $("mode-label").textContent = `mode: ${state.mode}`;
 }
 
 export function setMode(mode: string): void {
+  if (mode === "edit" && state.fileKind !== "text") return;
   state.mode = mode;
   updateChrome();
   renderEditor();
@@ -49,6 +68,12 @@ export function renderEditor(): void {
     return;
   }
   if (state.mode === "edit") {
+    if (state.fileKind !== "text") {
+      state.mode = "preview";
+      updateChrome();
+      renderEditor();
+      return;
+    }
     root.innerHTML = `<textarea class="editor-text" spellcheck="false">${esc(state.content)}</textarea>`;
     const ta = root.querySelector("textarea")!;
     ta.addEventListener("input", () => {
@@ -60,7 +85,11 @@ export function renderEditor(): void {
     return;
   }
   if (state.mode === "preview") {
-    if (isMarkdown(state.selectedPath)) {
+    if (state.fileKind === "image") {
+      root.innerHTML = `<div class="preview image-preview"><img src="${esc(state.fileDataUrl)}" alt="${esc(state.selectedPath)}"><div class="image-caption">${esc(state.selectedPath)} · ${formatBytes(state.fileSize)}</div></div>`;
+    } else if (state.fileKind === "meta") {
+      root.innerHTML = `<div class="empty">Preview is unavailable.\n${esc(state.selectedPath)} · ${formatBytes(state.fileSize)}</div>`;
+    } else if (isMarkdown(state.selectedPath)) {
       root.innerHTML = `<div class="preview">${renderMarkdown(state.content)}</div>`;
     } else if (isHtml(state.selectedPath)) {
       root.innerHTML = `<iframe class="html-frame" sandbox="allow-scripts allow-forms allow-popups allow-modals" srcdoc="${esc(state.content)}"></iframe>`;
@@ -75,8 +104,11 @@ export async function selectFile(path: string): Promise<void> {
   if (state.dirty && !confirm("Discard unsaved changes?")) return;
   const data = await (await api(`/api/file?path=${encodeURIComponent(path)}`)).json();
   state.selectedPath = data.path;
-  state.original = data.content ?? "";
-  state.content = data.content ?? "";
+  state.fileKind = data.kind === "image" || data.kind === "meta" ? data.kind : "text";
+  state.fileSize = Number(data.size || 0);
+  state.fileDataUrl = String(data.dataUrl || "");
+  state.original = state.fileKind === "text" ? data.content ?? "" : "";
+  state.content = state.fileKind === "text" ? data.content ?? "" : "";
   state.dirty = false;
   state.mode = "preview";
   updateChrome();
@@ -88,6 +120,9 @@ export function clearSelectedFile(): void {
   state.selectedPath = "";
   state.original = "";
   state.content = "";
+  state.fileKind = "text";
+  state.fileSize = 0;
+  state.fileDataUrl = "";
   state.dirty = false;
   state.mode = "preview";
   updateChrome();
@@ -95,7 +130,7 @@ export function clearSelectedFile(): void {
 }
 
 export async function saveFile(): Promise<void> {
-  if (!state.selectedPath) return;
+  if (!state.selectedPath || state.fileKind !== "text") return;
   await api("/api/file", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

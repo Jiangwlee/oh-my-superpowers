@@ -19,6 +19,7 @@ deployment/docker/ashare-platform/data/
 .env
 **/.env
 docker/html-serve/data/
+uploads/
 
 .claude/
 .coverage

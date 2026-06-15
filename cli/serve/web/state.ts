@@ -22,6 +22,9 @@ export interface AppState {
   chatAttachments: string[];
   original: string;
   content: string;
+  fileKind: "text" | "image" | "meta";
+  fileSize: number;
+  fileDataUrl: string;
   mode: string;
   genUiHtml: string;
   genUiTitle: string;
@@ -63,6 +66,9 @@ export const state: AppState = {
   chatAttachments: [],
   original: "",
   content: "",
+  fileKind: "text",
+  fileSize: 0,
+  fileDataUrl: "",
   mode: "preview",
   genUiHtml: "",
   genUiTitle: "",

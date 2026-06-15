@@ -4,7 +4,7 @@
 // Source of truth is the backend registry (GET /api/projects). localStorage is
 // only a fast-restore mirror reconciled on boot — the server always wins.
 import { state, $, esc, newSessionId, type ProjectInfo } from "./state.js";
-import { api } from "./api.js";
+import { api, latestSession } from "./api.js";
 import { loadTree } from "./tree.js";
 import { renderEditor, updateChrome } from "./editor.js";
 import { newSession, bindSession } from "./session.js";
@@ -66,6 +66,9 @@ async function reloadProjectSurfaces(): Promise<void> {
   renderChatAttachments();
   state.original = "";
   state.content = "";
+  state.fileKind = "text";
+  state.fileSize = 0;
+  state.fileDataUrl = "";
   state.dirty = false;
   state.mode = "preview";
   await loadMeta();
@@ -83,8 +86,10 @@ export async function switchProject(id: string): Promise<void> {
   // requests resolve correctly; renderTabs gives immediate feedback.
   state.currentProjectId = id;
   renderTabs();
-  // Resume this project's last session, or start a fresh one the first time.
-  const resumed = state.projectSessions[id];
+  // Resume this project's session: the one used earlier in this page if any,
+  // else its most recent on-disk session, else a fresh one the first time.
+  let resumed = state.projectSessions[id];
+  if (!resumed) resumed = (await latestSession()) || ""; // project is now current, so this is scoped to it
   const sessionId = resumed || newSessionId();
   state.projectSessions[id] = sessionId;
   bindSession(sessionId); // reset chat/terminal UI, bind pi --session to it

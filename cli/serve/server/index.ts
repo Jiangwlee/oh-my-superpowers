@@ -15,7 +15,7 @@ import { handleChatRoute } from "./routes/chat.js";
 import { handleFileSearch } from "./routes/search.js";
 import { handleFileUpload } from "./routes/upload.js";
 import { handleDiff } from "./routes/diff.js";
-import { handleSessionHistory } from "./routes/session.js";
+import { handleSessionHistory, handleLatestSession } from "./routes/session.js";
 import { handleProjectsList, handleProjectAdd, handleProjectRemove } from "./routes/projects.js";
 import { handleBrowse } from "./routes/browse.js";
 import { handleTerminalUpgrade } from "./pi/terminal.js";
@@ -107,6 +107,10 @@ const server = createServer((req, res) => {
       }
       if (path === "/api/files/search") {
         handleFileSearch(res, ctxFor(url), url.searchParams.get("q") || "");
+        return;
+      }
+      if (path === "/api/sessions/latest") {
+        handleLatestSession(res, ctxFor(url));
         return;
       }
       if (path === "/api/session") {

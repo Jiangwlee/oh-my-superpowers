@@ -1,8 +1,18 @@
 import type { ServerResponse } from "node:http";
-import { statSync, lstatSync, openSync, writeSync, ftruncateSync, closeSync, constants as fsConstants, rmSync, unlinkSync } from "node:fs";
+import { statSync, lstatSync, readFileSync, openSync, writeSync, ftruncateSync, closeSync, constants as fsConstants, rmSync, unlinkSync } from "node:fs";
 import type { ProjectContext } from "../config.js";
 import { sendJson, sendErrorJson } from "../sse.js";
 import { resolveRel, readTextFile } from "../fs/workspace.js";
+
+const MAX_IMAGE_PREVIEW_BYTES = 25 * 1024 * 1024;
+const IMAGE_MIME_BY_EXT = new Map<string, string>([
+  [".gif", "image/gif"],
+  [".jpeg", "image/jpeg"],
+  [".jpg", "image/jpeg"],
+  [".png", "image/png"],
+  [".svg", "image/svg+xml"],
+  [".webp", "image/webp"],
+]);
 
 function isFile(p: string): boolean {
   try {
@@ -12,14 +22,30 @@ function isFile(p: string): boolean {
   }
 }
 
+function extOf(p: string): string {
+  const idx = p.lastIndexOf(".");
+  return idx === -1 ? "" : p.slice(idx).toLowerCase();
+}
+
 export function handleFileGet(res: ServerResponse, ctx: ProjectContext, rel: string): void {
   const path = resolveRel(ctx.workspace, rel);
   if (!isFile(path)) {
     sendErrorJson(res, 404, "file not found");
     return;
   }
+  const st = statSync(path);
+  const imageMime = IMAGE_MIME_BY_EXT.get(extOf(path));
+  if (imageMime) {
+    if (st.size > MAX_IMAGE_PREVIEW_BYTES) {
+      sendJson(res, { path: rel, kind: "meta", size: st.size, message: "image too large to preview" });
+      return;
+    }
+    const data = readFileSync(path).toString("base64");
+    sendJson(res, { path: rel, kind: "image", mimeType: imageMime, dataUrl: `data:${imageMime};base64,${data}`, size: st.size });
+    return;
+  }
   const content = readTextFile(path);
-  sendJson(res, { path: rel, content });
+  sendJson(res, { path: rel, kind: "text", content, size: st.size });
 }
 
 export function handleFilePut(res: ServerResponse, ctx: ProjectContext, body: string): void {

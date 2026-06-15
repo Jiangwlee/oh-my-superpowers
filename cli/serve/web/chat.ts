@@ -44,6 +44,7 @@ export function startAssistantTurn(): void {
   timeline.className = "timeline";
   article.querySelector(".turn-body")!.insertBefore(timeline, state.assistantTextEl);
   state.toolListEl = timeline;
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
 }
 
 export function appendAssistant(delta: string): void {
@@ -167,46 +168,65 @@ function chooseSuggestion(index: number): void {
   input.focus();
 }
 
-export async function updateFileSuggest(): Promise<void> {
-  const input = $("chat-input") as HTMLTextAreaElement;
-  const token = currentAtToken(input);
-  if (!token) {
-    hideFileSuggest();
-    return;
-  }
-  suggestToken = token;
-  const files = await searchFiles(token.query);
-  if (!suggestToken || suggestToken.start !== token.start || suggestToken.query !== token.query) return;
-  suggestItems = files;
-  suggestIndex = 0;
+function renderFileSuggest(query: string, files: { path: string; name: string }[]): void {
   const root = $("file-suggest");
-  if (!files.length) {
-    hideFileSuggest();
-    return;
-  }
-  root.innerHTML = files
-    .map(
-      (file, index) =>
-        `<button data-file-suggest="${index}" class="${index === suggestIndex ? "active" : ""}"><span>${esc(file.name)}</span><small>${esc(file.path)}</small></button>`,
-    )
-    .join("");
+  const keepSearchFocus = document.activeElement?.id === "file-suggest-search";
+  const items = files.length
+    ? files
+        .map(
+          (file, index) =>
+            `<button data-file-suggest="${index}" class="${index === suggestIndex ? "active" : ""}"><span>${esc(file.name)}</span><small>${esc(file.path)}</small></button>`,
+        )
+        .join("")
+    : `<div class="file-suggest-empty">No matching files</div>`;
+  root.innerHTML = `<div class="file-suggest-head"><span>@ files</span><input id="file-suggest-search" value="${esc(query)}" placeholder="Search files..." autocomplete="off"></div><div class="file-suggest-list">${items}</div>`;
   root.classList.add("active");
+
+  const search = root.querySelector<HTMLInputElement>("#file-suggest-search");
+  search?.addEventListener("input", () => updateFileSuggest(search.value).catch(() => {}));
+  search?.addEventListener("keydown", (event) => {
+    if (handleFileSuggestKeydown(event)) return;
+    event.stopPropagation();
+  });
+  if (keepSearchFocus && search) {
+    search.focus();
+    search.selectionStart = search.selectionEnd = search.value.length;
+  }
+
   root.querySelectorAll("[data-file-suggest]").forEach((btn) => {
     btn.addEventListener("mousedown", (event) => event.preventDefault());
     btn.addEventListener("click", () => chooseSuggestion(Number((btn as HTMLElement).dataset.fileSuggest || "0")));
   });
 }
 
+export async function updateFileSuggest(queryOverride?: string): Promise<void> {
+  const input = $("chat-input") as HTMLTextAreaElement;
+  const token = currentAtToken(input) || suggestToken;
+  if (!token) {
+    hideFileSuggest();
+    return;
+  }
+  const query = queryOverride ?? token.query;
+  suggestToken = { ...token, query };
+  const files = await searchFiles(query);
+  if (!suggestToken || suggestToken.start !== token.start || suggestToken.query !== query) return;
+  suggestItems = files;
+  suggestIndex = 0;
+  renderFileSuggest(query, files);
+}
+
 export function handleFileSuggestKeydown(event: KeyboardEvent): boolean {
-  if (!suggestItems.length) return false;
   if (event.key === "Escape") {
     hideFileSuggest();
     event.preventDefault();
     return true;
   }
+  if (!suggestItems.length) return false;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     suggestIndex = (suggestIndex + (event.key === "ArrowDown" ? 1 : -1) + suggestItems.length) % suggestItems.length;
-    $("file-suggest").querySelectorAll("button").forEach((btn, index) => btn.classList.toggle("active", index === suggestIndex));
+    $("file-suggest").querySelectorAll("[data-file-suggest]").forEach((btn, index) =>
+      btn.classList.toggle("active", index === suggestIndex),
+    );
     event.preventDefault();
     return true;
   }

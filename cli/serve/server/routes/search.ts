@@ -18,6 +18,21 @@ function visible(name: string): boolean {
   return !name.startsWith(".") && !DEFAULT_IGNORES.has(name);
 }
 
+function fuzzyScore(text: string, query: string): number {
+  let score = 0;
+  let pos = -1;
+  let streak = 0;
+  for (const ch of query) {
+    const idx = text.indexOf(ch, pos + 1);
+    if (idx === -1) return 0;
+    streak = idx === pos + 1 ? streak + 1 : 1;
+    score += 8 + streak * 4;
+    if (idx === 0 || "/_- .".includes(text[idx - 1] ?? "")) score += 6;
+    pos = idx;
+  }
+  return score - Math.min(text.length - query.length, 80) * 0.2;
+}
+
 function score(rel: string, query: string): number {
   const lower = rel.toLowerCase();
   const name = rel.split("/").pop()?.toLowerCase() ?? lower;
@@ -27,7 +42,9 @@ function score(rel: string, query: string): number {
   if (lower.startsWith(query)) return 70;
   if (name.includes(query)) return 50;
   if (lower.includes(query)) return 30;
-  return 0;
+  const nameScore = fuzzyScore(name, query);
+  const pathScore = fuzzyScore(lower, query);
+  return Math.max(nameScore ? 20 + nameScore : 0, pathScore ? 10 + pathScore : 0);
 }
 
 function walk(workspace: string, dir: string, relDir: string, query: string, out: Match[], depth: number): void {

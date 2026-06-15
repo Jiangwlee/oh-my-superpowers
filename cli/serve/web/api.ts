@@ -43,6 +43,18 @@ export async function searchFiles(query: string): Promise<{ path: string; name: 
   return Array.isArray(data.files) ? data.files : [];
 }
 
+// The id of the current project's most recently used session, or null when it
+// has no prior sessions. Used to resume the last conversation instead of always
+// opening a blank session on page load / first project switch.
+export async function latestSession(): Promise<string | null> {
+  try {
+    const data = await (await api("/api/sessions/latest")).json();
+    return typeof data.sessionId === "string" ? data.sessionId : null;
+  } catch {
+    return null;
+  }
+}
+
 export function websocketUrl(path: string): string {
   const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${scheme}//${window.location.host}${withProject(path)}`;

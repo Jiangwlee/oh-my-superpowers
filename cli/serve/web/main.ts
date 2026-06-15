@@ -1,8 +1,9 @@
 // omp-serve web app entry: boot + event wiring. Ported 1:1 from APP_HTML.
 import { state, $, esc, newSessionId } from "./state.js";
+import { latestSession } from "./api.js";
 import { loadTree, refreshTree } from "./tree.js";
 import { renderEditor, setMode, saveFile, selectFile, clearSelectedFile } from "./editor.js";
-import { handleFileSuggestKeydown, sendMessage, updateFileSuggest, uploadChatFiles } from "./chat.js";
+import { handleFileSuggestKeydown, sendMessage, updateFileSuggest, uploadChatFiles, loadSessionHistory } from "./chat.js";
 import { refreshGitDiff } from "./diff.js";
 import { setSideTab, fitTerminal } from "./terminal.js";
 import { newSession } from "./session.js";
@@ -122,15 +123,17 @@ window.addEventListener("resize", fitTerminal);
   try {
     setTheme(localStorage.getItem("ompServeTheme") || "dark");
     await initProjects(); // sets currentProjectId before any project-scoped request
-    // Fresh session for this page's initial project, remembered so switching
-    // away and back resumes it (page-local: a reload starts fresh again).
-    const sessionId = newSessionId();
+    // Resume the project's most recent session if it has one, else open a fresh
+    // one. Remembered so switching away and back resumes it.
+    const existing = state.currentProjectId ? await latestSession() : null;
+    const sessionId = existing || newSessionId();
     if (state.currentProjectId) state.projectSessions[state.currentProjectId] = sessionId;
     state.sessionId = sessionId;
     $("session-label").textContent = `session: ${sessionId.slice(0, 8)}`;
     await loadMeta();
     await loadTree();
     renderEditor();
+    if (existing) await loadSessionHistory(sessionId); // repaint the resumed transcript
   } catch (err: any) {
     $("file-list").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
   }

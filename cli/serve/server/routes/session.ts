@@ -2,7 +2,7 @@
 // chat panel can repaint history when a project (and its session) is resumed.
 // pi keeps full context via --session; this only rebuilds the visible transcript.
 import type { ServerResponse } from "node:http";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ProjectContext } from "../config.js";
 import { sendJson } from "../sse.js";
@@ -23,6 +23,33 @@ function visibleText(content: unknown): string {
     )
     .map((p) => p.text)
     .join("");
+}
+
+// GET /api/sessions/latest -> the id of the project's most recently modified
+// session jsonl, so a fresh page (or first switch to a project) resumes the last
+// conversation instead of always starting blank. Returns { sessionId: null }
+// when the project has no sessions yet.
+export function handleLatestSession(res: ServerResponse, ctx: ProjectContext): void {
+  let files: string[];
+  try {
+    files = readdirSync(ctx.sessionsDir).filter((f) => f.endsWith(".jsonl"));
+  } catch {
+    sendJson(res, { sessionId: null });
+    return;
+  }
+  let latest: { id: string; mtime: number } | null = null;
+  for (const file of files) {
+    let mtime: number;
+    try {
+      const st = statSync(join(ctx.sessionsDir, file));
+      if (st.size === 0) continue; // skip empty/never-used session files
+      mtime = st.mtimeMs;
+    } catch {
+      continue;
+    }
+    if (!latest || mtime > latest.mtime) latest = { id: file.slice(0, -".jsonl".length), mtime };
+  }
+  sendJson(res, { sessionId: latest?.id ?? null });
 }
 
 export function handleSessionHistory(res: ServerResponse, ctx: ProjectContext, sessionId: string): void {
