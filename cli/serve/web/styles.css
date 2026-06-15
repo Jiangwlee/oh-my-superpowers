@@ -551,9 +551,9 @@
     .proj .name { overflow: hidden; text-overflow: ellipsis; }
     .proj:hover { color: var(--ink); background: rgba(243,236,221,.06); }
     body[data-theme="light"] .proj:hover { background: rgba(42,37,27,.05); }
-    .proj.active { color: var(--green); background: rgba(164,216,111,.11); border-color: rgba(164,216,111,.28); }
+    .proj.active { color: #fff; background: var(--green); border-color: var(--green); font-weight: 850; }
     .proj .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex-shrink: 0; }
-    .proj.active .dot { background: var(--green); box-shadow: 0 0 8px rgba(164,216,111,.6); }
+    .proj.active .dot { background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.65); }
     .proj .close { color: var(--faint); font-size: 13px; line-height: 1; opacity: 0; transition: opacity .12s; }
     .proj:hover .close { opacity: .7; }
     .proj .close:hover { color: var(--red); opacity: 1; }

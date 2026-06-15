@@ -17,7 +17,11 @@
   <div class="app">
     <header class="top">
       <div class="brand"><span class="pulse"></span><span>omp-serve</span></div>
-      <div class="cmd" id="workspace-label">Loading workspace...</div>
+      <div class="bottom-left">
+        <span class="proj-label">Project</span>
+        <div class="proj-tabs" id="proj-tabs"></div>
+        <button class="proj-add" id="proj-add" title="Add project">+</button>
+      </div>
       <button class="theme-toggle" id="theme-toggle">Light</button>
       <div class="state">approved</div>
     </header>
@@ -67,11 +71,7 @@
       </aside>
     </main>
     <footer class="bottom">
-      <div class="bottom-left">
-        <span class="proj-label">Project</span>
-        <div class="proj-tabs" id="proj-tabs"></div>
-        <button class="proj-add" id="proj-add" title="Add project">+</button>
-      </div>
+      <div class="cmd" id="workspace-label">Loading workspace...</div>
       <div class="bottom-divider"></div>
       <div class="bottom-right">
         <span>Pi JSON mode</span><span id="session-label">session: project-local</span><span id="mode-label">mode: edit</span><span id="dirty-label">clean</span>
