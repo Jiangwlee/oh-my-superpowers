@@ -182,9 +182,22 @@
       box-shadow: none;
       outline: 0;
     }
-    sl-tree-item::part(label) { border: 0; box-shadow: none; outline: 0; font: 12px/1 var(--mono); }
+    sl-tree-item::part(label) { border: 0; box-shadow: none; outline: 0; font: 12px/1 var(--mono); width: 100%; }
     sl-tree-item.folder::part(label) { color: var(--amber); }
     sl-tree-item.empty::part(label) { color: var(--faint); font-style: italic; }
+    .tree-row { position: relative; display: inline-flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+    .tree-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-menu-toggle { display: none; margin-left: auto; margin-right: 6px; width: 20px; height: 20px; border: 0; border-radius: 6px; background: transparent; color: var(--faint); font: 700 14px/1 var(--mono); cursor: pointer; place-items: center; }
+    sl-tree-item.tree-selected > .tree-row .tree-menu-toggle,
+    sl-tree-item.menu-open > .tree-row .tree-menu-toggle { display: inline-grid; }
+    .tree-menu-toggle:hover { color: var(--ink); background: rgba(243,236,221,.08); }
+    .tree-menu { display: none; position: absolute; top: 24px; right: 0; z-index: 30; min-width: 108px; padding: 5px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); }
+    sl-tree-item.menu-open > .tree-row .tree-menu { display: grid; gap: 2px; }
+    .tree-menu button { height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); text-align: left; padding: 0 8px; font: 11px/1 var(--mono); cursor: pointer; }
+    .tree-menu button:hover { color: var(--ink); background: rgba(243,236,221,.08); }
+    .tree-menu button.danger:hover { color: var(--red); background: rgba(237,128,108,.10); }
+    .tree-menu button:disabled { opacity: .38; cursor: default; }
+    .tree-menu button:disabled:hover { color: var(--muted); background: transparent; }
     .badge { margin-left: auto; color: var(--green); background: rgba(164,216,111,.11); border-radius: 999px; padding: 3px 7px; font-size: 10px; }
     .editor-body { min-height: 0; display: grid; grid-template-rows: 34px 1fr; gap: 10px; padding: 0 10px 10px; }
     .editor-toolbar {

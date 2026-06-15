@@ -23,6 +23,10 @@ It provides the meta-skills, specs, and CLI tooling needed to design, build, rev
 
 It also includes **`omp serve`**, a project-local web workbench for Skill development: browse the current repository, preview or edit Markdown/HTML files, and talk to a Pi Agent from the same UI.
 
+## Workbench Preview
+
+![omp serve workbench](assets/images/UI.png)
+
 ## Repository Layout
 
 ```

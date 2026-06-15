@@ -23,6 +23,10 @@ oh-my-superpowers 聚焦两件事：
 
 项目还提供 **`omp serve`**：面向当前项目的 Skill 开发 Web 工作台。它可以浏览项目文件树、预览或编辑 Markdown/HTML 文件，并在同一个界面中与 Pi Agent 对话生成或修改 Skill。
 
+## 工作台预览
+
+![omp serve 工作台](assets/images/UI.png)
+
 ## 项目结构
 
 ```

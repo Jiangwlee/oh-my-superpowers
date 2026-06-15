@@ -1,5 +1,5 @@
 // Shoelace file tree: lazy load + selection. Ported 1:1 from APP_HTML.
-import { state, $ } from "./state.js";
+import { state, $, esc } from "./state.js";
 import { loadDirectory } from "./api.js";
 
 export async function loadTree(): Promise<void> {
@@ -10,13 +10,23 @@ export async function loadTree(): Promise<void> {
   for (const node of data.nodes) tree.appendChild(createTreeItem(node));
 }
 
+function renderItemLabel(item: HTMLElement, name: string): void {
+  const type = item.dataset.type || "file";
+  const isDirectory = type === "directory";
+  item.insertAdjacentHTML(
+    "afterbegin",
+    `<span class="tree-row"><span class="tree-name">${esc(name)}</span><button class="tree-menu-toggle" title="File actions" aria-label="File actions" data-tree-menu-toggle>⋯</button><span class="tree-menu"><button data-tree-action="upload">Upload</button><button data-tree-action="download" ${isDirectory ? "disabled title=\"Only files can be downloaded\"" : ""}>Download</button><button class="danger" data-tree-action="delete">Delete</button></span></span>`,
+  );
+}
+
 export function createTreeItem(node: any): HTMLElement {
   const item = document.createElement("sl-tree-item") as HTMLElement;
-  item.textContent = node.name;
   item.title = node.path;
   item.dataset.path = node.path;
   item.dataset.type = node.type;
   item.classList.add(node.type === "directory" ? "folder" : "file");
+  renderItemLabel(item, node.name);
+  if (node.path === state.treeSelectedPath) item.classList.add("tree-selected");
   if (node.type === "directory" && node.hasChildren) {
     item.setAttribute("lazy", "");
     item.addEventListener("sl-lazy-load", async (event) => {
@@ -33,7 +43,7 @@ export async function populateDirectory(item: HTMLElement): Promise<void> {
   try {
     const data = await loadDirectory(path);
     item.innerHTML = "";
-    item.textContent = item.title.split("/").pop() || item.title;
+    renderItemLabel(item, item.title.split("/").pop() || item.title);
     for (const node of data.nodes) item.appendChild(createTreeItem(node));
     if (!data.nodes.length) {
       const empty = document.createElement("sl-tree-item") as HTMLElement;
@@ -44,7 +54,7 @@ export async function populateDirectory(item: HTMLElement): Promise<void> {
     }
   } catch (err: any) {
     item.innerHTML = "";
-    item.textContent = item.title.split("/").pop() || item.title;
+    renderItemLabel(item, item.title.split("/").pop() || item.title);
     const empty = document.createElement("sl-tree-item") as HTMLElement;
     empty.textContent = err.message || "failed to load";
     (empty as any).disabled = true;
@@ -91,6 +101,9 @@ export async function refreshTree(): Promise<void> {
 
 export function syncTreeSelection(): void {
   document.querySelectorAll("sl-tree-item").forEach((item) => {
-    (item as any).selected = (item as HTMLElement).dataset.path === state.selectedPath;
+    const el = item as HTMLElement;
+    const selected = el.dataset.path === state.treeSelectedPath;
+    (item as any).selected = selected;
+    el.classList.toggle("tree-selected", selected);
   });
 }
