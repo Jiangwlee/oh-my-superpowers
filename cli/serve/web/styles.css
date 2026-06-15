@@ -65,7 +65,9 @@
     }
     .bottom { color: var(--faint); font: 11px/1 var(--mono); box-shadow: none; min-width: 0; }
     .brand { display: flex; align-items: center; gap: 9px; min-width: 150px; font-weight: 750; }
-    .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 18px rgba(164,216,111,.7); }
+    .logo-mark { width: 24px; height: 24px; flex: 0 0 auto; filter: drop-shadow(0 8px 16px rgba(0,0,0,.22)); }
+    .logo-mark rect { fill: #000; }
+    .logo-mark path, .logo-mark circle { fill: #fff; }
     .cmd {
       flex: 1;
       height: 28px;
