@@ -17,6 +17,9 @@ export interface AppState {
   // never runs two pi processes against the same session jsonl.
   projectSessions: Record<string, string>;
   selectedPath: string;
+  treeSelectedPath: string;
+  treeSelectedType: "file" | "directory" | "";
+  chatAttachments: string[];
   original: string;
   content: string;
   mode: string;
@@ -55,6 +58,9 @@ export const state: AppState = {
   sessionId: "",
   projectSessions: {},
   selectedPath: "",
+  treeSelectedPath: "",
+  treeSelectedType: "",
+  chatAttachments: [],
   original: "",
   content: "",
   mode: "preview",

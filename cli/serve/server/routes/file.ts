@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import { statSync, openSync, writeSync, ftruncateSync, closeSync, constants as fsConstants } from "node:fs";
+import { statSync, lstatSync, openSync, writeSync, ftruncateSync, closeSync, constants as fsConstants, rmSync, unlinkSync } from "node:fs";
 import type { ProjectContext } from "../config.js";
 import { sendJson, sendErrorJson } from "../sse.js";
 import { resolveRel, readTextFile } from "../fs/workspace.js";
@@ -50,5 +50,23 @@ export function handleFilePut(res: ServerResponse, ctx: ProjectContext, body: st
   } finally {
     closeSync(fd);
   }
+  sendJson(res, { ok: true, path: rel });
+}
+
+export function handleFileDelete(res: ServerResponse, ctx: ProjectContext, rel: string): void {
+  if (!rel) {
+    sendErrorJson(res, 400, "path is required");
+    return;
+  }
+  const path = resolveRel(ctx.workspace, rel);
+  let st;
+  try {
+    st = lstatSync(path);
+  } catch {
+    sendErrorJson(res, 404, "file not found");
+    return;
+  }
+  if (st.isDirectory()) rmSync(path, { recursive: true, force: false });
+  else unlinkSync(path);
   sendJson(res, { ok: true, path: rel });
 }

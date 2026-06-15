@@ -10,8 +10,10 @@ import type { ProjectContext } from "./config.js";
 import { sendErrorJson } from "./sse.js";
 import { handleMeta } from "./routes/meta.js";
 import { handleTree } from "./routes/tree.js";
-import { handleFileGet, handleFilePut } from "./routes/file.js";
+import { handleFileDelete, handleFileGet, handleFilePut } from "./routes/file.js";
 import { handleChatRoute } from "./routes/chat.js";
+import { handleFileSearch } from "./routes/search.js";
+import { handleFileUpload } from "./routes/upload.js";
 import { handleDiff } from "./routes/diff.js";
 import { handleSessionHistory } from "./routes/session.js";
 import { handleProjectsList, handleProjectAdd, handleProjectRemove } from "./routes/projects.js";
@@ -103,6 +105,10 @@ const server = createServer((req, res) => {
         handleFileGet(res, ctxFor(url), url.searchParams.get("path") || "");
         return;
       }
+      if (path === "/api/files/search") {
+        handleFileSearch(res, ctxFor(url), url.searchParams.get("q") || "");
+        return;
+      }
       if (path === "/api/session") {
         handleSessionHistory(res, ctxFor(url), url.searchParams.get("sessionId") || "");
         return;
@@ -153,6 +159,13 @@ const server = createServer((req, res) => {
           .catch((exc) => sendErrorJson(res, 400, String(exc?.message || exc)));
         return;
       }
+      if (path === "/api/files/upload") {
+        const ctx = ctxFor(url);
+        handleFileUpload(req, res, ctx).catch((exc) =>
+          sendErrorJson(res, 400, String((exc as Error)?.message || exc)),
+        );
+        return;
+      }
       if (path === "/api/projects") {
         readBody(req)
           .then((body) => handleProjectAdd(res, body))
@@ -165,6 +178,10 @@ const server = createServer((req, res) => {
     if (method === "DELETE") {
       if (path === "/api/projects") {
         handleProjectRemove(res, url.searchParams.get("id") || "");
+        return;
+      }
+      if (path === "/api/file") {
+        handleFileDelete(res, ctxFor(url), url.searchParams.get("path") || "");
         return;
       }
       sendErrorJson(res, 404, "not found");

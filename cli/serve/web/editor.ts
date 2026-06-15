@@ -84,6 +84,16 @@ export async function selectFile(path: string): Promise<void> {
   renderEditor();
 }
 
+export function clearSelectedFile(): void {
+  state.selectedPath = "";
+  state.original = "";
+  state.content = "";
+  state.dirty = false;
+  state.mode = "preview";
+  updateChrome();
+  renderEditor();
+}
+
 export async function saveFile(): Promise<void> {
   if (!state.selectedPath) return;
   await api("/api/file", {

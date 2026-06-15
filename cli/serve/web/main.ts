@@ -1,11 +1,13 @@
 // omp-serve web app entry: boot + event wiring. Ported 1:1 from APP_HTML.
 import { state, $, esc, newSessionId } from "./state.js";
 import { loadTree, refreshTree } from "./tree.js";
-import { renderEditor, setMode, saveFile, selectFile } from "./editor.js";
-import { sendMessage } from "./chat.js";
+import { renderEditor, setMode, saveFile, selectFile, clearSelectedFile } from "./editor.js";
+import { handleFileSuggestKeydown, sendMessage, updateFileSuggest, uploadChatFiles } from "./chat.js";
+import { refreshGitDiff } from "./diff.js";
 import { setSideTab, fitTerminal } from "./terminal.js";
 import { newSession } from "./session.js";
 import { initProjects, loadMeta, wireProjectFooter } from "./projects.js";
+import { deletePath, uploadFiles } from "./api.js";
 
 function setTheme(theme: string): void {
   const next = theme === "light" ? "light" : "dark";
@@ -16,6 +18,21 @@ function setTheme(theme: string): void {
 
 function toggleTheme(): void {
   setTheme(document.body.dataset.theme === "light" ? "dark" : "light");
+}
+
+function parentPath(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx === -1 ? "" : path.slice(0, idx);
+}
+
+function treeUploadDirectory(): string {
+  if (state.treeSelectedType === "directory") return state.treeSelectedPath;
+  if (state.treeSelectedType === "file") return parentPath(state.treeSelectedPath);
+  return "";
+}
+
+function deletedPathContainsSelected(path: string): boolean {
+  return state.selectedPath === path || state.selectedPath.startsWith(`${path}/`);
 }
 
 document
@@ -29,13 +46,61 @@ $("send-btn").addEventListener("click", sendMessage);
 $("theme-toggle").addEventListener("click", toggleTheme);
 $("chat-input").addEventListener("keydown", (event: Event) => {
   const e = event as KeyboardEvent;
+  if (handleFileSuggestKeydown(e)) return;
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") sendMessage();
+});
+$("chat-input").addEventListener("input", () => {
+  updateFileSuggest().catch(() => {});
 });
 $("file-tree").addEventListener("sl-selection-change", (event: Event) => {
   const selected = (event as CustomEvent).detail.selection?.[0];
+  state.treeSelectedPath = selected?.dataset?.path || "";
+  state.treeSelectedType = selected?.dataset?.type === "file" || selected?.dataset?.type === "directory" ? selected.dataset.type : "";
   if (selected?.dataset?.type === "file") selectFile(selected.dataset.path);
 });
 $("new-session").addEventListener("click", newSession);
+$("chat-upload").addEventListener("click", () => ($("chat-upload-input") as HTMLInputElement).click());
+$("chat-upload-input").addEventListener("change", async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  try {
+    await uploadChatFiles(files);
+    await refreshTree();
+    await refreshGitDiff();
+  } catch (err: any) {
+    $("chat-status").textContent = err.message || "upload failed";
+  }
+});
+$("tree-upload").addEventListener("click", () => ($("tree-upload-input") as HTMLInputElement).click());
+$("tree-upload-input").addEventListener("change", async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  if (!files.length) return;
+  try {
+    await uploadFiles(files, treeUploadDirectory());
+    await refreshTree();
+    await refreshGitDiff();
+  } catch (err: any) {
+    $("file-list").innerHTML = `<div class="empty">${esc(err.message || "upload failed")}</div>`;
+  }
+});
+$("tree-delete").addEventListener("click", async () => {
+  const target = state.treeSelectedPath;
+  if (!target) return;
+  if (!confirm(`Delete ${target}?`)) return;
+  try {
+    await deletePath(target);
+    if (deletedPathContainsSelected(target)) clearSelectedFile();
+    state.treeSelectedPath = "";
+    state.treeSelectedType = "";
+    await refreshTree();
+    await refreshGitDiff();
+  } catch (err: any) {
+    $("file-list").innerHTML = `<div class="empty">${esc(err.message || "delete failed")}</div>`;
+  }
+});
 wireProjectFooter();
 $("tree-refresh").addEventListener("click", async () => {
   const btn = $("tree-refresh") as HTMLButtonElement;

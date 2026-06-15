@@ -26,6 +26,23 @@ export async function loadDirectory(path: string): Promise<any> {
   return data;
 }
 
+export async function uploadFiles(files: File[], directory = ""): Promise<string[]> {
+  const form = new FormData();
+  form.set("directory", directory);
+  for (const file of files) form.append("files", file);
+  const data = await (await api("/api/files/upload", { method: "POST", body: form })).json();
+  return Array.isArray(data.files) ? data.files : [];
+}
+
+export async function deletePath(path: string): Promise<void> {
+  await api(`/api/file?path=${encodeURIComponent(path)}`, { method: "DELETE" });
+}
+
+export async function searchFiles(query: string): Promise<{ path: string; name: string }[]> {
+  const data = await (await api(`/api/files/search?q=${encodeURIComponent(query)}`)).json();
+  return Array.isArray(data.files) ? data.files : [];
+}
+
 export function websocketUrl(path: string): string {
   const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${scheme}//${window.location.host}${withProject(path)}`;

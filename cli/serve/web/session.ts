@@ -2,7 +2,7 @@
 // by switching projects (a project switch must not reuse the old project's
 // workspace-bound session).
 import { state, $, newSessionId } from "./state.js";
-import { clearChat } from "./chat.js";
+import { clearChat, renderChatAttachments } from "./chat.js";
 import { resetGenUiSeal } from "./genui.js";
 import { resetTerminal } from "./terminal.js";
 
@@ -18,6 +18,8 @@ export function bindSession(sessionId: string): void {
   state.sessionId = sessionId;
   $("session-label").textContent = `session: ${sessionId.slice(0, 8)}`;
   state.sending = false;
+  state.chatAttachments = [];
+  renderChatAttachments();
   ($("send-btn") as HTMLButtonElement).disabled = false;
   clearChat();
   resetGenUiSeal();

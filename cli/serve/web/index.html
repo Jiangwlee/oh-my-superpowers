@@ -23,7 +23,8 @@
     </header>
     <main class="shell">
       <aside class="files">
-        <div class="head"><span>Files</span><div class="head-actions"><span id="tree-count">0</span><button class="tree-refresh" id="tree-refresh" title="Refresh file tree">&#x21bb;</button></div></div>
+        <div class="head"><span>Files</span><div class="head-actions"><span id="tree-count">0</span><button class="tree-refresh" id="tree-upload" title="Upload files">&#x21e7;</button><button class="tree-refresh" id="tree-delete" title="Delete selected file or folder">&#x2715;</button><button class="tree-refresh" id="tree-refresh" title="Refresh file tree">&#x21bb;</button></div></div>
+        <input id="tree-upload-input" type="file" multiple hidden>
         <div class="file-list"><sl-tree id="file-tree" selection="single"></sl-tree></div>
       </aside>
       <section class="editor">
@@ -56,8 +57,11 @@
         </div>
         <div class="composer">
           <div class="input-box">
+            <div class="attachment-pills" id="chat-attachments"></div>
             <textarea class="chat" id="chat-input" placeholder="Ask the assistant to inspect or edit this skill..."></textarea>
-            <div class="compose-footer"><span>Message</span><button class="send" id="send-btn">Send</button></div>
+            <div class="file-suggest" id="file-suggest"></div>
+            <input id="chat-upload-input" type="file" multiple hidden>
+            <div class="compose-footer"><span><button class="attach-btn" id="chat-upload" title="Upload files">&#x1f4ce;</button> Message</span><button class="send" id="send-btn">Send</button></div>
           </div>
         </div>
       </aside>

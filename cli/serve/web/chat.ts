@@ -1,18 +1,30 @@
 // Chat: /api/chat SSE consumer + turns/timeline/steps. Ported 1:1 from APP_HTML.
 import { state, $, esc } from "./state.js";
 import { renderMarkdown } from "./markdown.js";
+import { refreshGitDiff } from "./diff.js";
 import { setMode } from "./editor.js";
 import { postGenUi, scheduleGenUiFrame, resetGenUiSeal } from "./genui.js";
 import { refreshTree } from "./tree.js";
-import { api, withProject } from "./api.js";
+import { api, searchFiles, uploadFiles, withProject } from "./api.js";
 
-export function addTurn(role: string, text: string): HTMLElement {
+let suggestItems: { path: string; name: string }[] = [];
+let suggestIndex = 0;
+let suggestToken: { start: number; end: number } | null = null;
+
+function attachmentsHtml(paths: string[]): string {
+  if (!paths.length) return "";
+  return `<div class="turn-attachments">${paths
+    .map((path) => `<span class="attachment-pill"><span>${esc(path)}</span></span>`)
+    .join("")}</div>`;
+}
+
+export function addTurn(role: string, text: string, attachments: string[] = []): HTMLElement {
   const article = document.createElement("article");
   article.className = `turn ${role === "User" ? "user" : "assistant"}`;
   const body =
     role === "Assistant"
       ? `<div class="assistant-md">${renderMarkdown(text || "")}</div>`
-      : `<p>${esc(text)}</p>`;
+      : `<p>${esc(text)}</p>${attachmentsHtml(attachments)}`;
   const status =
     role === "User"
       ? "prompt"
@@ -89,17 +101,138 @@ export async function loadSessionHistory(sessionId: string): Promise<void> {
   }
 }
 
+export function renderChatAttachments(): void {
+  const root = $("chat-attachments");
+  root.classList.toggle("active", state.chatAttachments.length > 0);
+  root.innerHTML = state.chatAttachments
+    .map(
+      (path, index) =>
+        `<span class="attachment-pill"><span title="${esc(path)}">${esc(path)}</span><button data-remove-attachment="${index}" title="Remove">×</button></span>`,
+    )
+    .join("");
+  root.querySelectorAll("[data-remove-attachment]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number((btn as HTMLElement).dataset.removeAttachment || "-1");
+      if (index >= 0) state.chatAttachments.splice(index, 1);
+      renderChatAttachments();
+    });
+  });
+}
+
+export function addChatAttachments(paths: string[]): void {
+  const known = new Set(state.chatAttachments);
+  for (const path of paths) if (!known.has(path)) state.chatAttachments.push(path);
+  renderChatAttachments();
+}
+
+export async function uploadChatFiles(files: File[]): Promise<void> {
+  if (!files.length) return;
+  $("chat-status").textContent = "uploading";
+  try {
+    const paths = await uploadFiles(files, "uploads");
+    addChatAttachments(paths);
+  } finally {
+    $("chat-status").textContent = state.sending ? "running" : "idle";
+  }
+}
+
+function currentAtToken(input: HTMLTextAreaElement): { start: number; end: number; query: string } | null {
+  const pos = input.selectionStart ?? input.value.length;
+  const before = input.value.slice(0, pos);
+  const match = before.match(/(?:^|\s)@([^\s@]*)$/);
+  if (!match) return null;
+  const token = match[0];
+  const start = pos - token.length + (token.startsWith(" ") || token.startsWith("\n") || token.startsWith("\t") ? 1 : 0);
+  return { start, end: pos, query: match[1] || "" };
+}
+
+function hideFileSuggest(): void {
+  suggestItems = [];
+  suggestIndex = 0;
+  suggestToken = null;
+  const root = $("file-suggest");
+  root.classList.remove("active");
+  root.innerHTML = "";
+}
+
+function chooseSuggestion(index: number): void {
+  const item = suggestItems[index];
+  const token = suggestToken;
+  const input = $("chat-input") as HTMLTextAreaElement;
+  if (!item || !token) return;
+  input.value = `${input.value.slice(0, token.start)}${input.value.slice(token.end)}`;
+  input.selectionStart = input.selectionEnd = token.start;
+  addChatAttachments([item.path]);
+  hideFileSuggest();
+  input.focus();
+}
+
+export async function updateFileSuggest(): Promise<void> {
+  const input = $("chat-input") as HTMLTextAreaElement;
+  const token = currentAtToken(input);
+  if (!token) {
+    hideFileSuggest();
+    return;
+  }
+  suggestToken = token;
+  const files = await searchFiles(token.query);
+  if (!suggestToken || suggestToken.start !== token.start || suggestToken.query !== token.query) return;
+  suggestItems = files;
+  suggestIndex = 0;
+  const root = $("file-suggest");
+  if (!files.length) {
+    hideFileSuggest();
+    return;
+  }
+  root.innerHTML = files
+    .map(
+      (file, index) =>
+        `<button data-file-suggest="${index}" class="${index === suggestIndex ? "active" : ""}"><span>${esc(file.name)}</span><small>${esc(file.path)}</small></button>`,
+    )
+    .join("");
+  root.classList.add("active");
+  root.querySelectorAll("[data-file-suggest]").forEach((btn) => {
+    btn.addEventListener("mousedown", (event) => event.preventDefault());
+    btn.addEventListener("click", () => chooseSuggestion(Number((btn as HTMLElement).dataset.fileSuggest || "0")));
+  });
+}
+
+export function handleFileSuggestKeydown(event: KeyboardEvent): boolean {
+  if (!suggestItems.length) return false;
+  if (event.key === "Escape") {
+    hideFileSuggest();
+    event.preventDefault();
+    return true;
+  }
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    suggestIndex = (suggestIndex + (event.key === "ArrowDown" ? 1 : -1) + suggestItems.length) % suggestItems.length;
+    $("file-suggest").querySelectorAll("button").forEach((btn, index) => btn.classList.toggle("active", index === suggestIndex));
+    event.preventDefault();
+    return true;
+  }
+  if (event.key === "Enter") {
+    chooseSuggestion(suggestIndex);
+    event.preventDefault();
+    return true;
+  }
+  return false;
+}
+
 export async function sendMessage(): Promise<void> {
   const input = $("chat-input") as HTMLTextAreaElement;
   const message = input.value.trim();
-  if (!message || state.sending) return;
+  const attachments = [...state.chatAttachments];
+  if ((!message && attachments.length === 0) || state.sending) return;
+  hideFileSuggest();
   state.sending = true;
   resetGenUiSeal(); // new turn: allow a fresh Gen UI render to paint partials again
   ($("send-btn") as HTMLButtonElement).disabled = true;
   $("chat-status").textContent = "running";
-  addTurn("User", message);
+  addTurn("User", message || "Attached files", attachments);
   startAssistantTurn();
   input.value = "";
+  state.chatAttachments = [];
+  renderChatAttachments();
   // Fence this turn to the session it started in: if New session rotates the id
   // (or aborts), stale events from this stream are ignored and the fetch stops.
   const turnSession = state.sessionId;
@@ -110,7 +243,7 @@ export async function sendMessage(): Promise<void> {
     const res = await fetch(withProject("/api/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, sessionId: turnSession }),
+      body: JSON.stringify({ message, sessionId: turnSession, attachments }),
       signal: abort.signal,
     });
     if (!res.ok) {
@@ -179,9 +312,11 @@ export async function sendMessage(): Promise<void> {
           const status = state.assistantEl?.querySelector(".turn-status");
           if (status) status.textContent = "done";
           input.focus();
-          // The turn may have created/edited/deleted files: refresh the tree,
-          // restoring expanded dirs so the view does not collapse each turn.
+          // The turn may have created/edited/deleted files: refresh the tree and
+          // the visible git diff, restoring expanded dirs so the view does not
+          // collapse each turn.
           refreshTree().catch(() => {});
+          refreshGitDiff().catch(() => {});
         }
       }
     }
@@ -190,6 +325,7 @@ export async function sendMessage(): Promise<void> {
     if (detached && state.sessionId === turnSession) {
       await loadSessionHistory(turnSession);
       refreshTree().catch(() => {});
+      refreshGitDiff().catch(() => {});
     }
   } catch (err: any) {
     // An abort (New session) or a session rotation is not an error to surface.

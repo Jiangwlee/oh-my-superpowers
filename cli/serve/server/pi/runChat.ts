@@ -26,6 +26,7 @@ export function handleChat(
   ctx: ProjectContext,
   message: string,
   sessionId: string,
+  attachments: string[] = [],
 ): void {
   startSse(res);
   // Per-stream pi-event mapper so concurrent chats never share render_ui state.
@@ -52,6 +53,7 @@ export function handleChat(
     session,
     "--model",
     ctx.model,
+    ...attachments.map((rel) => `@${rel}`),
     message,
   ];
 

@@ -2,7 +2,7 @@
 // Data comes from GET /api/diff (server/routes/diff.ts). Replaces the old
 // editor-local original-vs-content diff: the panel is now workspace-wide and
 // independent of the selected file.
-import { $, esc } from "./state.js";
+import { state, $, esc } from "./state.js";
 import { api } from "./api.js";
 
 interface DiffFile {
@@ -53,6 +53,11 @@ function fileCard(f: DiffFile): string {
     </div>
     <div class="file-card-body">${body}</div>
   </div>`;
+}
+
+export async function refreshGitDiff(): Promise<void> {
+  if (state.mode !== "diff") return;
+  await renderGitDiff($("editor-surface"));
 }
 
 export async function renderGitDiff(root: HTMLElement): Promise<void> {

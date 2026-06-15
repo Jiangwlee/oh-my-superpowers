@@ -8,7 +8,7 @@ import { api } from "./api.js";
 import { loadTree } from "./tree.js";
 import { renderEditor, updateChrome } from "./editor.js";
 import { newSession, bindSession } from "./session.js";
-import { loadSessionHistory } from "./chat.js";
+import { loadSessionHistory, renderChatAttachments } from "./chat.js";
 import { openDialog, confirmDialog } from "./dialog.js";
 
 const MIRROR_KEY = "ompServeProjects";
@@ -60,6 +60,10 @@ export function renderTabs(): void {
 // current project. The pi session is rotated separately by the caller.
 async function reloadProjectSurfaces(): Promise<void> {
   state.selectedPath = "";
+  state.treeSelectedPath = "";
+  state.treeSelectedType = "";
+  state.chatAttachments = [];
+  renderChatAttachments();
   state.original = "";
   state.content = "";
   state.dirty = false;
