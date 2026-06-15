@@ -1,6 +1,6 @@
 // Editor: Preview/Edit/Diff + Gen UI mode tab. Ported 1:1 from APP_HTML.
 import { state, $, esc, isMarkdown, isHtml } from "./state.js";
-import { api } from "./api.js";
+import { api, htmlPreviewUrl } from "./api.js";
 import { renderMarkdown } from "./markdown.js";
 import { renderGitDiff } from "./diff.js";
 import { GENUI_SHELL, postGenUi } from "./genui.js";
@@ -92,7 +92,7 @@ export function renderEditor(): void {
     } else if (isMarkdown(state.selectedPath)) {
       root.innerHTML = `<div class="preview">${renderMarkdown(state.content)}</div>`;
     } else if (isHtml(state.selectedPath)) {
-      root.innerHTML = `<iframe class="html-frame" sandbox="allow-scripts allow-forms allow-popups allow-modals" srcdoc="${esc(state.content)}"></iframe>`;
+      root.innerHTML = `<iframe class="html-frame" sandbox="allow-scripts allow-forms allow-popups allow-modals" src="${esc(htmlPreviewUrl(state.selectedPath))}"></iframe>`;
     } else {
       root.innerHTML = `<pre class="preview">${esc(state.content)}</pre>`;
     }

@@ -16,6 +16,7 @@ import { handleFileSearch } from "./routes/search.js";
 import { handleFileUpload } from "./routes/upload.js";
 import { handleDiff } from "./routes/diff.js";
 import { handleSessionHistory, handleLatestSession } from "./routes/session.js";
+import { handleHtmlPreview, handleRawFile } from "./routes/preview.js";
 import { handleProjectsList, handleProjectAdd, handleProjectRemove } from "./routes/projects.js";
 import { handleBrowse } from "./routes/browse.js";
 import { handleTerminalUpgrade } from "./pi/terminal.js";
@@ -29,6 +30,22 @@ ensureBootstrap(cfg.bootstrapWorkspace);
 // param. Throws on an unknown/vanished project; callers translate to a 400.
 function ctxFor(url: URL): ProjectContext {
   return resolveContext(cfg, url.searchParams.get("project") || "");
+}
+
+function decodeRawPath(pathname: string): { projectId: string; rel: string } | null {
+  const prefix = "/api/raw/";
+  if (!pathname.startsWith(prefix)) return null;
+  const rest = pathname.slice(prefix.length);
+  const slash = rest.indexOf("/");
+  if (slash < 0) return null;
+  const projectId = decodeURIComponent(rest.slice(0, slash));
+  const rel = rest
+    .slice(slash + 1)
+    .split("/")
+    .filter(Boolean)
+    .map((part) => decodeURIComponent(part))
+    .join("/");
+  return { projectId, rel };
 }
 
 const STATIC_TYPES: Record<string, string> = {
@@ -103,6 +120,16 @@ const server = createServer((req, res) => {
       }
       if (path === "/api/file") {
         handleFileGet(res, ctxFor(url), url.searchParams.get("path") || "");
+        return;
+      }
+      if (path === "/api/preview/html") {
+        const projectId = url.searchParams.get("project") || "";
+        handleHtmlPreview(res, ctxFor(url), projectId, url.searchParams.get("path") || "");
+        return;
+      }
+      const raw = decodeRawPath(path);
+      if (raw) {
+        handleRawFile(res, resolveContext(cfg, raw.projectId), raw.rel);
         return;
       }
       if (path === "/api/files/search") {

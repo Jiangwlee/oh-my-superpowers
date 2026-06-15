@@ -3,7 +3,7 @@
 //
 // Source of truth is the backend registry (GET /api/projects). localStorage is
 // only a fast-restore mirror reconciled on boot — the server always wins.
-import { state, $, esc, newSessionId, type ProjectInfo } from "./state.js";
+import { state, $, esc, newSessionId, type EditorSnapshot, type ProjectInfo } from "./state.js";
 import { api, latestSession } from "./api.js";
 import { loadTree } from "./tree.js";
 import { renderEditor, updateChrome } from "./editor.js";
@@ -56,23 +56,43 @@ export function renderTabs(): void {
   }
 }
 
+function captureEditorSnapshot(projectId: string): void {
+  if (!projectId) return;
+  state.projectEditors[projectId] = {
+    selectedPath: state.selectedPath,
+    treeSelectedPath: state.treeSelectedPath,
+    treeSelectedType: state.treeSelectedType,
+    original: state.original,
+    content: state.content,
+    fileKind: state.fileKind,
+    fileSize: state.fileSize,
+    fileDataUrl: state.fileDataUrl,
+    mode: state.mode === "genui" ? "preview" : state.mode,
+    dirty: state.dirty,
+  };
+}
+
+function applyEditorSnapshot(snapshot?: EditorSnapshot): void {
+  state.selectedPath = snapshot?.selectedPath || "";
+  state.treeSelectedPath = snapshot?.treeSelectedPath || "";
+  state.treeSelectedType = snapshot?.treeSelectedType || "";
+  state.original = snapshot?.original || "";
+  state.content = snapshot?.content || "";
+  state.fileKind = snapshot?.fileKind || "text";
+  state.fileSize = snapshot?.fileSize || 0;
+  state.fileDataUrl = snapshot?.fileDataUrl || "";
+  state.mode = snapshot?.mode || "preview";
+  state.dirty = snapshot?.dirty || false;
+}
+
 // Reset every project-scoped surface (top bar, file tree, editor) to the
 // current project. The pi session is rotated separately by the caller.
 async function reloadProjectSurfaces(): Promise<void> {
-  state.selectedPath = "";
-  state.treeSelectedPath = "";
-  state.treeSelectedType = "";
   state.chatAttachments = [];
   renderChatAttachments();
-  state.original = "";
-  state.content = "";
-  state.fileKind = "text";
-  state.fileSize = 0;
-  state.fileDataUrl = "";
-  state.dirty = false;
-  state.mode = "preview";
   await loadMeta();
   await loadTree();
+  applyEditorSnapshot(state.projectEditors[state.currentProjectId]);
   updateChrome();
   renderEditor();
 }
@@ -80,8 +100,12 @@ async function reloadProjectSurfaces(): Promise<void> {
 export async function switchProject(id: string): Promise<void> {
   if (id === state.currentProjectId) return;
   const prev = state.currentProjectId;
-  // Remember the session we are leaving so a later switch back resumes it.
-  if (prev) state.projectSessions[prev] = state.sessionId;
+  // Remember the session and editor state we are leaving so switching back
+  // restores both Agent context and the middle-pane working surface.
+  if (prev) {
+    state.projectSessions[prev] = state.sessionId;
+    captureEditorSnapshot(prev);
+  }
   // The new id must be live before reloadProjectSurfaces so its project-scoped
   // requests resolve correctly; renderTabs gives immediate feedback.
   state.currentProjectId = id;
@@ -157,6 +181,7 @@ async function removeProjectFlow(id: string): Promise<void> {
   if (!ok) return;
   const wasCurrent = state.currentProjectId === id;
   try {
+    delete state.projectEditors[id];
     await api(`/api/projects?id=${encodeURIComponent(id)}`, { method: "DELETE" });
   } catch {
     // Another tab may have removed projects concurrently (e.g. server refuses

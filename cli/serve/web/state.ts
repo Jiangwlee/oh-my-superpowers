@@ -6,6 +6,19 @@ export interface ProjectInfo {
   path: string;
 }
 
+export interface EditorSnapshot {
+  selectedPath: string;
+  treeSelectedPath: string;
+  treeSelectedType: "file" | "directory" | "";
+  original: string;
+  content: string;
+  fileKind: "text" | "image" | "meta";
+  fileSize: number;
+  fileDataUrl: string;
+  mode: string;
+  dirty: boolean;
+}
+
 export interface AppState {
   workspace: string;
   projects: ProjectInfo[];
@@ -16,6 +29,7 @@ export interface AppState {
   // the page-local session invariant — a reload or another tab starts fresh and
   // never runs two pi processes against the same session jsonl.
   projectSessions: Record<string, string>;
+  projectEditors: Record<string, EditorSnapshot>;
   selectedPath: string;
   treeSelectedPath: string;
   treeSelectedType: "file" | "directory" | "";
@@ -60,6 +74,7 @@ export const state: AppState = {
   currentProjectId: "",
   sessionId: "",
   projectSessions: {},
+  projectEditors: {},
   selectedPath: "",
   treeSelectedPath: "",
   treeSelectedType: "",

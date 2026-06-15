@@ -43,6 +43,10 @@ export async function searchFiles(query: string): Promise<{ path: string; name: 
   return Array.isArray(data.files) ? data.files : [];
 }
 
+export function htmlPreviewUrl(path: string): string {
+  return withProject(`/api/preview/html?path=${encodeURIComponent(path)}`);
+}
+
 // The id of the current project's most recently used session, or null when it
 // has no prior sessions. Used to resume the last conversation instead of always
 // opening a blank session on page load / first project switch.
