@@ -124,6 +124,9 @@ wait_for_baidu_selector "$TARGET" '.result.c-container'
 # Extract results
 PAGE_RESULTS="$(cdp_eval "$TARGET" "$EXTRACT_EXPR")"
 
+# Guard against non-JSON (page change / CDP error) before jq --argjson.
+PAGE_RESULTS="$(json_or_empty "$PAGE_RESULTS" "baidu extraction")"
+
 # Apply limit
 RESULTS=$(jq -n \
   --argjson page "$PAGE_RESULTS" \

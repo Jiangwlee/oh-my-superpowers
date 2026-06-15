@@ -74,7 +74,7 @@ TITLE=$(cdp_eval "$DOC_TARGET" "document.title")
 
 # Extract word count from accessibility tree status bar.
 WORD_COUNT=$(cdp snap "$DOC_TARGET" 2>/dev/null \
-  | grep -oP '(?<=\[StaticText\] )\d+' \
+  | sed -n 's/^.*\[StaticText\] \([0-9][0-9]*\).*$/\1/p' \
   | tail -1 || echo "0")
 
 # Extract visible document text.

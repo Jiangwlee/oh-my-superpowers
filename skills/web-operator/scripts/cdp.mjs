@@ -22,7 +22,7 @@
 // Errors are returned as plain text so they can be surfaced by skill wrappers.
 // See ../references/core/cli-reference.md and ../references/core/troubleshooting.md.
 
-import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, openSync, closeSync, statSync, renameSync } from 'fs';
 import { homedir } from 'os';
 import { resolve } from 'path';
 import { spawn } from 'child_process';
@@ -49,6 +49,13 @@ function sockPath(targetId) {
     ? `\\\\.\\pipe\\cdp-${targetId}`
     : resolve(RUNTIME_DIR, `cdp-${targetId}.sock`);
 }
+
+function lockPath(targetId) {
+  return resolve(RUNTIME_DIR, `cdp-${targetId}.lock`);
+}
+
+// A lock older than the whole spawn-wait window must be from a crashed spawner.
+const LOCK_STALE_MS = DAEMON_CONNECT_RETRIES * DAEMON_CONNECT_DELAY + 5000;
 
 async function getWsUrl() {
   const home = homedir();
@@ -155,15 +162,27 @@ class CDP {
       this.#ws.onerror = (e) => rej(new Error('WebSocket error: ' + (e.message || e.type)));
       this.#ws.onclose = () => this.#closeHandlers.forEach(h => h());
       this.#ws.onmessage = (ev) => {
-        const msg = JSON.parse(ev.data);
-        if (msg.id && this.#pending.has(msg.id)) {
+        // A malformed frame or a throwing handler must not kill the socket:
+        // otherwise the dispatch loop dies and every pending request hangs
+        // until its 120s timeout. Isolate parsing and each handler call.
+        let msg;
+        try {
+          msg = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (msg.id != null && this.#pending.has(msg.id)) {
           const { resolve, reject } = this.#pending.get(msg.id);
           this.#pending.delete(msg.id);
           if (msg.error) reject(new Error(msg.error.message));
           else resolve(msg.result);
         } else if (msg.method && this.#eventHandlers.has(msg.method)) {
           for (const handler of [...this.#eventHandlers.get(msg.method)]) {
-            handler(msg.params || {}, msg);
+            try {
+              handler(msg.params || {}, msg);
+            } catch (e) {
+              process.stderr.write(`Event handler for ${msg.method} threw: ${e.message}\n`);
+            }
           }
         }
       };
@@ -173,16 +192,20 @@ class CDP {
   send(method, params = {}, sessionId) {
     const id = ++this.#id;
     return new Promise((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
-      const msg = { id, method, params };
-      if (sessionId) msg.sessionId = sessionId;
-      this.#ws.send(JSON.stringify(msg));
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (this.#pending.has(id)) {
           this.#pending.delete(id);
           reject(new Error(`Timeout: ${method}`));
         }
       }, TIMEOUT);
+      // Clear the timer on settle so it does not keep the event loop alive.
+      this.#pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
+      const msg = { id, method, params };
+      if (sessionId) msg.sessionId = sessionId;
+      this.#ws.send(JSON.stringify(msg));
     });
   }
 
@@ -193,36 +216,6 @@ class CDP {
     return () => {
       handlers.delete(handler);
       if (handlers.size === 0) this.#eventHandlers.delete(method);
-    };
-  }
-
-  waitForEvent(method, timeout = TIMEOUT) {
-    let settled = false;
-    let off;
-    let timer;
-    const promise = new Promise((resolve, reject) => {
-      off = this.onEvent(method, (params) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        off();
-        resolve(params);
-      });
-      timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        off();
-        reject(new Error(`Timeout waiting for event: ${method}`));
-      }, timeout);
-    });
-    return {
-      promise,
-      cancel() {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        off?.();
-      },
     };
   }
 
@@ -371,31 +364,27 @@ async function htmlStr(cdp, sid, selector) {
   return evalStr(cdp, sid, expr);
 }
 
-async function waitForDocumentReady(cdp, sid, timeoutMs = NAVIGATION_TIMEOUT) {
-  const deadline = Date.now() + timeoutMs;
-  let lastState = '';
-  let lastError;
-  while (Date.now() < deadline) {
-    try {
-      const state = await evalStr(cdp, sid, 'document.readyState');
-      lastState = state;
-      if (state === 'complete') return;
-    } catch (e) {
-      lastError = e;
-    }
-    await sleep(200);
-  }
+// Map of public waitUntil names to CDP Page.lifecycleEvent names.
+// networkidle0/2 are computed by Chrome itself (0 / <=2 connections for 500ms)
+// and pushed as lifecycle events — we just subscribe, no request counting needed.
+const WAIT_UNTIL_TO_LIFECYCLE = {
+  load: 'load',
+  domcontentloaded: 'DOMContentLoaded',
+  networkidle0: 'networkIdle',
+  networkidle2: 'networkAlmostIdle',
+};
 
-  if (lastState) {
-    throw new Error(`Timed out waiting for navigation to finish (last readyState: ${lastState})`);
-  }
-  if (lastError) {
-    throw new Error(`Timed out waiting for navigation to finish (${lastError.message})`);
-  }
-  throw new Error('Timed out waiting for navigation to finish');
-}
-
-async function navStr(cdp, sid, url) {
+// Navigate and wait for page render using Puppeteer's core logic:
+//   1. Page.navigate returns an immediate errorText -> fail fast (no waiting).
+//   2. A timeout signal races against the success signal the whole time, so a
+//      page that never fires the expected event still returns at the deadline
+//      instead of hanging forever.
+//   3. "Loaded" is decided by accumulating CDP lifecycle events per frame; a
+//      frame's event set is cleared on its "init" event (new document).
+//   4. Completion requires the main frame AND every child frame that actually
+//      started loading to have all expected events (recursive coverage).
+// waitUntil: comma-separated subset of load,domcontentloaded,networkidle0,networkidle2
+async function navStr(cdp, sid, url, waitUntilArg) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
@@ -404,20 +393,114 @@ async function navStr(cdp, sid, url) {
     if (e.message.startsWith('Only')) throw e;
     throw new Error(`Invalid URL: ${url}`);
   }
+
+  const waitUntil = waitUntilArg || 'load';
+  const expected = String(waitUntil).split(',').map(s => s.trim()).filter(Boolean).map(w => {
+    const ev = WAIT_UNTIL_TO_LIFECYCLE[w];
+    if (!ev) throw new Error(`Unknown waitUntil "${w}". Use: ${Object.keys(WAIT_UNTIL_TO_LIFECYCLE).join(', ')}`);
+    return ev;
+  });
+
   await cdp.send('Page.enable', {}, sid);
-  const loadEvent = cdp.waitForEvent('Page.loadEventFired', NAVIGATION_TIMEOUT);
-  const result = await cdp.send('Page.navigate', { url }, sid);
-  if (result.errorText) {
-    loadEvent.cancel();
-    throw new Error(result.errorText);
+  try { await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true }, sid); } catch {}
+
+  // Identify the main frame and its CURRENT loaderId before navigating. A new
+  // document is recognized by the main frame's loaderId changing — this is how
+  // we tell "the navigation we asked for has begun" apart from stale events,
+  // without discarding events that legitimately arrive before Page.navigate
+  // resolves (which can happen on fast/cache navigations).
+  let mainFrameId, initialLoaderId;
+  try {
+    const { frameTree } = await cdp.send('Page.getFrameTree', {}, sid);
+    mainFrameId = frameTree.frame.id;
+    initialLoaderId = frameTree.frame.loaderId;
+  } catch {}
+
+  const lifecycleByFrame = new Map(); // frameId -> Set(lifecycle event names)
+  const startedLoading = new Set();   // frames that emitted frameStartedLoading
+  const detached = new Set();         // frames that went away mid-navigation
+  const setFor = (fid) => {
+    let s = lifecycleByFrame.get(fid);
+    if (!s) { s = new Set(); lifecycleByFrame.set(fid, s); }
+    return s;
+  };
+
+  let committed = false;
+  let isNewDocument = false;  // set from the navigate response (loaderId present)
+  let newDocStarted = false;  // main frame's new-document lifecycle has begun
+  let resolveDone;
+  const donePromise = new Promise(r => { resolveDone = r; });
+
+  const frameDone = (fid) => {
+    const s = lifecycleByFrame.get(fid);
+    return !!s && expected.every(e => s.has(e));
+  };
+  const allComplete = () => {
+    if (!mainFrameId || !frameDone(mainFrameId)) return false;
+    for (const fid of startedLoading) {
+      if (fid === mainFrameId || detached.has(fid)) continue;
+      if (!frameDone(fid)) return false;
+    }
+    return true;
+  };
+  // For a new document, don't resolve until the main frame's fresh lifecycle has
+  // actually started (loaderId changed) — otherwise a stale "load" left over
+  // from the previous page could satisfy allComplete() prematurely.
+  const check = () => {
+    if (!committed) return;
+    // Same-document navigation (anchor/history): the document is already loaded
+    // and no fresh lifecycle events will fire, so there is nothing to wait for.
+    if (!isNewDocument) { resolveDone(); return; }
+    if (!newDocStarted) return;
+    if (allComplete()) resolveDone();
+  };
+
+  const offs = [];
+  offs.push(cdp.onEvent('Page.lifecycleEvent', (p) => {
+    // The main frame's "init" with a new loaderId marks the start of the
+    // navigation we're waiting on. "init" also resets that frame's event set,
+    // so leftover events from the previous document are cleared naturally
+    // without a blanket clear that would drop already-arrived fresh events.
+    if (p.frameId === mainFrameId && p.name === 'init'
+        && p.loaderId && p.loaderId !== initialLoaderId) {
+      newDocStarted = true;
+    }
+    if (p.name === 'init') lifecycleByFrame.set(p.frameId, new Set());
+    else setFor(p.frameId).add(p.name);
+    check();
+  }));
+  offs.push(cdp.onEvent('Page.frameStartedLoading', (p) => { startedLoading.add(p.frameId); }));
+  offs.push(cdp.onEvent('Page.frameDetached', (p) => { detached.add(p.frameId); check(); }));
+
+  const cleanup = () => { for (const off of offs) off(); };
+
+  // The timeout must bound the whole operation, including Page.navigate itself:
+  // if the renderer stalls and never acks the navigate command, we still want to
+  // fail at NAVIGATION_TIMEOUT rather than the generic 120s CDP send timeout.
+  let timer;
+  const timeout = new Promise((_, rej) => {
+    timer = setTimeout(() => rej(new Error(
+      `Navigation timeout of ${NAVIGATION_TIMEOUT} ms exceeded (waitUntil: ${waitUntil})`)), NAVIGATION_TIMEOUT);
+  });
+
+  try {
+    // 1 + 2: immediate navigate receipt races the timeout from the very start.
+    const result = await Promise.race([cdp.send('Page.navigate', { url }, sid), timeout]);
+    if (result.errorText && result.errorText !== 'net::ERR_HTTP_RESPONSE_CODE_FAILURE') {
+      throw new Error(`${result.errorText} at ${url}`);
+    }
+    // loaderId present => a new document is loading; absent => same-document
+    // navigation (anchor/history), which needs no new-document lifecycle.
+    isNewDocument = !!result.loaderId;
+    committed = true;
+    check();
+
+    await Promise.race([donePromise, timeout]);
+  } finally {
+    clearTimeout(timer);
+    cleanup();
   }
-  if (result.loaderId) {
-    await loadEvent.promise;
-  } else {
-    loadEvent.cancel();
-  }
-  await waitForDocumentReady(cdp, sid, 5000);
-  return `Navigated to ${url}`;
+  return `Navigated to ${url} (${waitUntil})`;
 }
 
 // Reset tab state: clear storage for the current origin, then navigate to about:blank#read-worker.
@@ -460,21 +543,38 @@ async function netStr(cdp, sid) {
   ).join('\n');
 }
 
-// Click element by CSS selector
+// Dispatch a real (isTrusted) mouse click at CSS pixel coordinates.
+async function dispatchClickAt(cdp, sid, cx, cy) {
+  const base = { x: cx, y: cy, button: 'left', clickCount: 1, modifiers: 0 };
+  await cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mouseMoved' }, sid);
+  await cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mousePressed' }, sid);
+  await sleep(50);
+  await cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mouseReleased' }, sid);
+}
+
+// Click element by CSS selector. Resolves the element's viewport-center CSS
+// coordinates, then dispatches a real mouse event sequence there — unlike
+// el.click() this produces isTrusted events (mousedown/up/pointer/focus) that
+// frameworks relying on real input will honor.
 async function clickStr(cdp, sid, selector) {
   if (!selector) throw new Error('CSS selector required');
   const expr = `
     (function() {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return { ok: false, error: 'Element not found: ' + ${JSON.stringify(selector)} };
-      el.scrollIntoView({ block: 'center' });
-      el.click();
-      return { ok: true, tag: el.tagName, text: el.textContent.trim().substring(0, 80) };
+      el.scrollIntoView({ block: 'center', inline: 'center' });
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0)
+        return { ok: false, error: 'Element not visible (zero size): ' + ${JSON.stringify(selector)} };
+      return {
+        ok: true, x: r.left + r.width / 2, y: r.top + r.height / 2,
+        tag: el.tagName, text: (el.textContent || '').trim().substring(0, 80),
+      };
     })()
   `;
-  const result = await evalStr(cdp, sid, expr);
-  const r = JSON.parse(result);
+  const r = JSON.parse(await evalStr(cdp, sid, expr));
   if (!r.ok) throw new Error(r.error);
+  await dispatchClickAt(cdp, sid, r.x, r.y);
   return `Clicked <${r.tag}> "${r.text}"`;
 }
 
@@ -483,11 +583,7 @@ async function clickXyStr(cdp, sid, x, y) {
   const cx = parseFloat(x);
   const cy = parseFloat(y);
   if (isNaN(cx) || isNaN(cy)) throw new Error('x and y must be numbers (CSS pixels)');
-  const base = { x: cx, y: cy, button: 'left', clickCount: 1, modifiers: 0 };
-  await cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mouseMoved' }, sid);
-  await cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mousePressed' }, sid);
-  await sleep(50);
-  await cdp.send('Input.dispatchMouseEvent', { ...base, type: 'mouseReleased' }, sid);
+  await dispatchClickAt(cdp, sid, cx, cy);
   return `Clicked at CSS (${cx}, ${cy})`;
 }
 
@@ -574,12 +670,45 @@ async function runDaemon(targetId) {
     process.exit(1);
   }
 
-  // Shutdown helpers
+  // Auto-attach to out-of-process iframes (OOPIFs). Cross-origin frames run in a
+  // separate session whose Page.lifecycleEvent never reaches the main session.
+  // By auto-attaching (flattened, same WebSocket) and enabling lifecycle events
+  // on each child session, navStr's frame-coverage check can see them complete
+  // instead of waiting out the navigation timeout. Best-effort: failures here
+  // must not stop the daemon from serving the main frame.
+  const childSessions = new Set();
+  async function enableLifecycleOn(sid) {
+    try { await cdp.send('Page.enable', {}, sid); } catch {}
+    try { await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true }, sid); } catch {}
+    // Recurse so nested OOPIFs also attach.
+    try {
+      await cdp.send('Target.setAutoAttach', {
+        autoAttach: true, waitForDebuggerOnStart: false, flatten: true,
+      }, sid);
+    } catch {}
+  }
+  cdp.onEvent('Target.attachedToTarget', (params) => {
+    if (params.targetInfo?.type !== 'iframe') return;
+    childSessions.add(params.sessionId);
+    enableLifecycleOn(params.sessionId);
+  });
+  cdp.onEvent('Target.detachedFromTarget', (params) => {
+    childSessions.delete(params.sessionId);
+  });
+  await enableLifecycleOn(sessionId);
+
+  // Shutdown helpers. idleTimer/server are declared up front so that a
+  // target-close / disconnect handler firing during startup can't hit the
+  // temporal dead zone when shutdown() touches them (clearTimeout(null) is a
+  // no-op; server?.close() guards the not-yet-listening case).
+  let idleTimer = null;
+  let server = null;
   let alive = true;
   function shutdown() {
     if (!alive) return;
     alive = false;
-    server.close();
+    clearTimeout(idleTimer);
+    server?.close();
     if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
     cdp.close();
     process.exit(0);
@@ -597,7 +726,7 @@ async function runDaemon(targetId) {
   process.on('SIGINT', shutdown);
 
   // Idle timer
-  let idleTimer = setTimeout(shutdown, IDLE_TIMEOUT);
+  idleTimer = setTimeout(shutdown, IDLE_TIMEOUT);
   function resetIdle() {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(shutdown, IDLE_TIMEOUT);
@@ -623,7 +752,7 @@ async function runDaemon(targetId) {
         case 'eval': result = await evalStr(cdp, sessionId, args[0]); break;
         case 'shot': case 'screenshot': result = await shotStr(cdp, sessionId, args[0], targetId); break;
         case 'html': result = await htmlStr(cdp, sessionId, args[0]); break;
-        case 'nav': case 'navigate': result = await navStr(cdp, sessionId, args[0]); break;
+        case 'nav': case 'navigate': result = await navStr(cdp, sessionId, args[0], args[1]); break;
         case 'net': case 'network': result = await netStr(cdp, sessionId); break;
         case 'click': result = await clickStr(cdp, sessionId, args[0]); break;
         case 'clickxy': result = await clickXyStr(cdp, sessionId, args[0], args[1]); break;
@@ -646,7 +775,7 @@ async function runDaemon(targetId) {
   // Request:  { "id": <number>, "cmd": "<command>", "args": ["arg1", "arg2", ...] }
   // Response: { "id": <number>, "ok": <boolean>, "result": "<string>" }
   //           or { "id": <number>, "ok": false, "error": "<message>" }
-  const server = net.createServer((conn) => {
+  server = net.createServer((conn) => {
     let buf = '';
     conn.on('data', (chunk) => {
       buf += chunk.toString();
@@ -671,11 +800,24 @@ async function runDaemon(targetId) {
   });
 
   server.on('error', (e) => {
+    // Another daemon won the race for this socket — yield quietly.
+    if (e.code === 'EADDRINUSE') { cdp.close(); process.exit(0); }
     process.stderr.write(`Daemon server listen failed: ${e.message}\n`);
     process.exit(1);
   });
 
-  if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
+  // Don't blindly unlink: if a live daemon already owns this socket, defer to
+  // it. Only remove a stale socket file (no one listening) before binding.
+  if (!IS_WINDOWS) {
+    try {
+      const probe = await connectToSocket(sp);
+      probe.end();
+      cdp.close();
+      process.exit(0); // live daemon already serving this tab
+    } catch {
+      try { unlinkSync(sp); } catch {}
+    }
+  }
   server.listen(sp);
 }
 
@@ -691,25 +833,54 @@ function connectToSocket(sp) {
   });
 }
 
+// Acquire an exclusive spawn lock. Returns true if this process should spawn
+// the daemon; false if another process already is (we then just wait).
+function tryAcquireSpawnLock(lock) {
+  try { closeSync(openSync(lock, 'wx')); return true; }
+  catch {
+    // Lock exists. Only take over if it's stale (a crashed spawner), and do the
+    // takeover ATOMICALLY: renameSync moves the stale file aside, and only one
+    // racing process can succeed — the loser's source is already gone and
+    // throws, so two callers can never both reclaim the same stale lock.
+    let st;
+    try { st = statSync(lock); }
+    catch { // vanished between open and stat — try a fresh acquire once
+      try { closeSync(openSync(lock, 'wx')); return true; } catch { return false; }
+    }
+    if (Date.now() - st.mtimeMs <= LOCK_STALE_MS) return false; // still fresh
+    const aside = `${lock}.stale.${process.pid}`;
+    try { renameSync(lock, aside); } catch { return false; } // lost the takeover race
+    try { unlinkSync(aside); } catch {}
+    // Re-create our own lock; O_EXCL still guards against a concurrent fresh acquirer.
+    try { closeSync(openSync(lock, 'wx')); return true; } catch { return false; }
+  }
+}
+
 async function getOrStartTabDaemon(targetId) {
   const sp = sockPath(targetId);
   // Try existing daemon
   try { return await connectToSocket(sp); } catch {}
 
-  // Clean stale socket
-  if (!IS_WINDOWS) try { unlinkSync(sp); } catch {}
-
-  // Spawn daemon
-  const child = spawn(process.execPath, [process.argv[1], '_daemon', targetId], {
-    detached: true,
-    stdio: 'ignore',
-  });
-  child.unref();
+  // Gate the spawn so concurrent first-access CLIs don't each start a daemon
+  // (which would trigger duplicate "Allow debugging?" prompts and orphans).
+  const lock = lockPath(targetId);
+  const haveLock = tryAcquireSpawnLock(lock);
+  if (haveLock) {
+    const child = spawn(process.execPath, [process.argv[1], '_daemon', targetId], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+  }
 
   // Wait for socket (includes time for user to click Allow)
-  for (let i = 0; i < DAEMON_CONNECT_RETRIES; i++) {
-    await sleep(DAEMON_CONNECT_DELAY);
-    try { return await connectToSocket(sp); } catch {}
+  try {
+    for (let i = 0; i < DAEMON_CONNECT_RETRIES; i++) {
+      await sleep(DAEMON_CONNECT_DELAY);
+      try { return await connectToSocket(sp); } catch {}
+    }
+  } finally {
+    if (haveLock) try { unlinkSync(lock); } catch {}
   }
   throw new Error('Daemon failed to start — did you click Allow in Chrome?');
 }
@@ -802,7 +973,11 @@ Usage: cdp <command> [args]
   eval  <target> <expr>             Evaluate JS expression
   shot  <target> [file]             Screenshot (default: screenshot-<target>.png in runtime dir); prints coordinate mapping
   html  <target> [selector]         Get HTML (full page or CSS selector)
-  nav   <target> <url>              Navigate to URL and wait for load completion
+  nav   <target> <url> [waitUntil]  Navigate to URL and wait for render completion
+                                    waitUntil: load (default), domcontentloaded,
+                                    networkidle0, networkidle2, or comma-separated
+                                    (e.g. "load,networkidle2"). Races a timeout so a
+                                    page that never settles fails fast, not hangs.
   net   <target>                    Network performance entries
   click   <target> <selector>       Click an element by CSS selector
   clickxy <target> <x> <y>          Click at CSS pixel coordinates (see coordinate note below)

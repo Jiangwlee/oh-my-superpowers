@@ -212,7 +212,7 @@ wait_for_kdocs_ai_answer() {
 kdocs_snap_text() {
   local target="$1"
   cdp snap "$target" 2>/dev/null \
-    | grep -oP '(?<=\[StaticText\] ).*' \
+    | sed -n 's/^.*\[StaticText\] //p' \
     | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
     | grep -v '^$' \
     | grep -Evx \

@@ -29,9 +29,15 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --limit)
       LIMIT="${2:-}"
+      if [[ -n "$LIMIT" && ! "$LIMIT" =~ ^[0-9]+$ ]]; then
+        echo "error: --limit must be a non-negative integer, got '$LIMIT'" >&2; exit 1
+      fi
       shift 2 ;;
     --comments)
       COMMENTS="${2:-}"
+      if [[ -n "$COMMENTS" && ! "$COMMENTS" =~ ^[0-9]+$ ]]; then
+        echo "error: --comments must be a non-negative integer, got '$COMMENTS'" >&2; exit 1
+      fi
       shift 2 ;;
     --json)
       JSON_MODE=true
@@ -61,7 +67,7 @@ fi
 
 domain="${URL#*://}"
 domain="${domain%%/*}"
-domain="${domain,,}"  # lowercase
+domain="$(printf '%s' "$domain" | tr '[:upper:]' '[:lower:]')"  # lowercase (bash 3.2 safe)
 
 COMMENT_LIMIT="${COMMENTS:-20}"
 
@@ -134,11 +140,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Navigate to URL (waits for load)
-cdp_nav "$TARGET" "$URL"
-
-# Extra wait for dynamic content (SPA pages may need JS execution time)
-sleep 2
+# Navigate to URL and wait for the network to settle (condition-based, bounded
+# by nav's own timeout) so SPA content is in place — replaces a fixed sleep.
+cdp nav "$TARGET" "$URL" networkidle2 >/dev/null 2>&1 || cdp_nav "$TARGET" "$URL"
 
 # Tier 3: CDP html → defuddle (if available)
 if command -v defuddle >/dev/null 2>&1; then

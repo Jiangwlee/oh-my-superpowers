@@ -25,7 +25,7 @@ resolve_stock_url() {
   fi
 
   if [[ "$input" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    printf 'https://xueqiu.com/S/%s\n' "${input^^}"
+    printf 'https://xueqiu.com/S/%s\n' "$(printf '%s' "$input" | tr '[:lower:]' '[:upper:]')"
     return 0
   fi
 

@@ -87,6 +87,9 @@ wait_for_sogou_selector "$TARGET" 'ul.news-list li' 15000
 # Extract results
 PAGE_RESULTS="$(cdp_eval "$TARGET" "$EXTRACT_EXPR")"
 
+# Guard against non-JSON (page change / CDP error) before jq --argjson.
+PAGE_RESULTS="$(json_or_empty "$PAGE_RESULTS" "weixin-sogou extraction")"
+
 # Apply limit
 RESULTS=$(jq -n \
   --argjson page "$PAGE_RESULTS" \

@@ -38,6 +38,35 @@ cdp() {
   "$CDP_SCRIPT" "$@"
 }
 
+# Validate a search limit: must be a positive integer, capped at max.
+# Usage: LIMIT="$(validate_search_limit "$LIMIT" 20)" || exit 1
+# Echoes the (possibly capped) limit on success; prints error + returns 1 otherwise.
+validate_search_limit() {
+  local value="$1" max="${2:-50}"
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    printf 'limit must be an integer\n' >&2; return 1
+  fi
+  if (( value <= 0 )); then
+    printf 'limit must be greater than zero\n' >&2; return 1
+  fi
+  (( value > max )) && value="$max"
+  printf '%s' "$value"
+}
+
+# Echo $1 if it is valid JSON, otherwise echo '[]' and warn on stderr.
+# Guards every cdp_eval result before it is fed to jq --argjson under set -e,
+# so a page change / CDP error yields empty results instead of a hard crash.
+# Usage: PAGE_RESULTS="$(json_or_empty "$PAGE_RESULTS" "google extraction")"
+json_or_empty() {
+  local value="$1" label="${2:-extraction}"
+  if jq empty <<<"$value" 2>/dev/null; then
+    printf '%s' "$value"
+  else
+    printf 'warning: %s returned non-JSON, yielding empty results\n' "$label" >&2
+    printf '[]'
+  fi
+}
+
 # Get raw page list as JSON
 cdp_list_raw() {
   cdp list_raw
@@ -85,10 +114,10 @@ create_tab() {
   target=$(cdp open "about:blank" 2>/dev/null | grep -oE '[A-F0-9]{8,}' | head -1)
   [[ -n "$target" ]] || { printf 'failed to create new tab\n' >&2; return 1; }
   
-  # Navigate to homepage
-  cdp nav "$target" "$homepage" >/dev/null 2>&1 || true
-  sleep 2
-  
+  # Navigate to homepage and wait for the network to settle (condition-based,
+  # bounded by nav's own timeout) instead of a fixed sleep.
+  cdp nav "$target" "$homepage" networkidle2 >/dev/null 2>&1 || true
+
   printf '%s\n' "$target"
 }
 

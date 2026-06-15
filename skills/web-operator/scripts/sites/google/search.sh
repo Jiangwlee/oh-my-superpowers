@@ -115,6 +115,7 @@ _google_search() {
 
     local PAGE_RESULTS
     PAGE_RESULTS="$(cdp_eval "$TARGET" "$EXTRACT_EXPR")"
+    PAGE_RESULTS="$(json_or_empty "$PAGE_RESULTS" "google extraction")"
 
     _RESULTS=$(jq -n \
       --argjson acc "$_RESULTS" \

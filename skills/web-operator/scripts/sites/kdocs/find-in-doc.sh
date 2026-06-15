@@ -86,7 +86,7 @@ sleep 1.0
 MATCH_RAW=$(cdp_eval "$DOC_TARGET" \
   "document.querySelector('.find-result')?.innerText || '0/0'" | jq -r '.')
 
-MATCH_COUNT=$(echo "$MATCH_RAW" | grep -oP '[0-9]+$' || echo "0")
+MATCH_COUNT=$(echo "$MATCH_RAW" | grep -oE '[0-9]+$' || echo "0")
 
 if [[ "$MATCH_COUNT" == "0" ]]; then
   jq -n \
