@@ -23,6 +23,8 @@ specific reference file to load and the `scripts/cdp.mjs` command to run.
   Stable SOPs and script entrypoints for `google.com` search result extraction.
 - [../sites/kdocs/workflows.md](../sites/kdocs/workflows.md)
   Stable SOPs and script entrypoints for `365.kdocs.cn` document search, open, find, AI QA, and close.
+- [../sites/chatgpt/workflows.md](../sites/chatgpt/workflows.md)
+  Stable SOPs and script entrypoints for `chatgpt.com/images` prompt-to-image generation and local download.
 - [../sites/x/workflows.md](../sites/x/workflows.md)
   Stable SOPs and script entrypoints for `x.com` search and single-post extraction.
 - [../sites/reddit/workflows.md](../sites/reddit/workflows.md)
@@ -55,6 +57,7 @@ specific reference file to load and the `scripts/cdp.mjs` command to run.
   [../../scripts/sites/kdocs/ask-ai.sh](../../scripts/sites/kdocs/ask-ai.sh),
   [../../scripts/sites/kdocs/close-doc.sh](../../scripts/sites/kdocs/close-doc.sh),
   [../../scripts/sites/kdocs/common.sh](../../scripts/sites/kdocs/common.sh),
+  [../../scripts/sites/chatgpt/generate-image.sh](../../scripts/sites/chatgpt/generate-image.sh),
   [../../scripts/sites/x/search.sh](../../scripts/sites/x/search.sh),
   [../../scripts/sites/x/open-post.sh](../../scripts/sites/x/open-post.sh),
   [../../scripts/sites/x/common.sh](../../scripts/sites/x/common.sh),

@@ -169,6 +169,19 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 - `omp web-operator open-post taoguba <url> [target]`
   Open one Taoguba post and extract the main post body.
 
+### ChatGPT Images
+
+- `omp web-operator generate-image chatgpt <prompt> [--out PATH] [--target TARGET] [--timeout SEC] [--overwrite] [--json]`
+  Generate an image on `chatgpt.com/images` and save it locally. Requires a
+  signed-in ChatGPT Chrome session. Uses the authenticated page context for the
+  final image download because direct shell downloads of the rendered image URL
+  may return `403 Forbidden`.
+
+  Example:
+  ```bash
+  omp web-operator generate-image chatgpt "a blue circle on a white background" --out ./circle.png --json
+  ```
+
 ### WPS 365 (365.kdocs.cn)
 
 - Prefer `omp web-operator kdocs ask-ai <question> [target]` for document Q&A, summaries, fuzzy lookup, and multi-doc questions.

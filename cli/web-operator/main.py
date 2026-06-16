@@ -111,6 +111,44 @@ def search_multi(ctx: typer.Context) -> None:
 
 
 # ---------------------------------------------------------------------------
+# generate-image
+# ---------------------------------------------------------------------------
+
+GENERATE_IMAGE_SITES = ["chatgpt"]
+
+
+@app.command("generate-image")
+def generate_image(
+    site: str = typer.Argument(..., help=f"Image generation site ({', '.join(GENERATE_IMAGE_SITES)})."),
+    prompt: str = typer.Argument(..., help="Image generation prompt."),
+    out: str | None = typer.Option(None, "--out", help="Output image path; default ~/Downloads/chatgpt-image-<timestamp>.png."),
+    target: str | None = typer.Option(None, "--target", help="CDP target prefix; auto-opens chatgpt.com/images if omitted."),
+    timeout: int = typer.Option(180, "--timeout", help="Max seconds to wait for image generation."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite the output file if it exists."),
+    json_output: bool = typer.Option(False, "--json", help="Output structured JSON."),
+) -> None:
+    """Generate an image on a supported site and save it locally.
+
+    Example:
+        omp web-operator generate-image chatgpt "a blue circle on white background" --out ./circle.png --json
+    """
+    script = SITES_DIR / site / "generate-image.sh"
+    if not script.is_file():
+        typer.echo(f"error: unknown image generation site '{site}'", err=True)
+        raise typer.Exit(2)
+    cmd = ["bash", str(script), prompt, "--timeout", str(timeout)]
+    if out:
+        cmd += ["--out", out]
+    if target:
+        cmd += ["--target", target]
+    if overwrite:
+        cmd.append("--overwrite")
+    if json_output:
+        cmd.append("--json")
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
 # read-url
 # ---------------------------------------------------------------------------
 

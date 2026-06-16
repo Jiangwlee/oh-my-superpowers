@@ -88,6 +88,8 @@ Load site references for website-specific workflows:
   `weixin.sogou.com` WeChat article search: returns title, summary, account, and link (search only, no full content).
 - [references/sites/kdocs/workflows.md](references/sites/kdocs/workflows.md)
   `365.kdocs.cn` / WPS 365 document search, open, find-in-doc, AI QA, and close workflows.
+- [references/sites/chatgpt/workflows.md](references/sites/chatgpt/workflows.md)
+  `chatgpt.com/images` prompt-to-image generation and authenticated local image download.
 - [references/sites/reddit/workflows.md](references/sites/reddit/workflows.md)
   `reddit.com` search and post-plus-comments workflows.
 - [references/sites/taoguba/workflows.md](references/sites/taoguba/workflows.md)
@@ -111,6 +113,7 @@ Load site references for website-specific workflows:
 - Treat `google.com` and `weixin.sogou.com` the same way for search tasks: prefer `omp web-operator search ...` over `curl`, because the browser workflow is far more reliable for rendered results, anti-bot handling, and stable extraction.
 - For `365.kdocs.cn`, prefer `omp web-operator kdocs ask-ai` when the task is question answering, summarization, document lookup, or cross-document synthesis. Use `kdocs search`, `open-doc`, and `find-in-doc` when the task explicitly needs direct document inspection or keyword verification.
 - For `feishu.cn` admin backend (`approval` / 审批后台 on `www.feishu.cn`, `attendance` / 考勤后台 on `oa.feishu.cn`), the user must already be signed in as the corresponding administrator on a tab of that host. The CLI calls Feishu admin internal HTTP APIs from inside the tab (cookies + CSRF carried automatically) and does not interact with any UI element.
+- For `chatgpt.com/images`, the user must already be signed in to ChatGPT in Chrome. The CLI drives the image composer and downloads generated image bytes from inside the authenticated page context; direct shell downloads of the rendered image URL may return 403.
 
 ## read-url 参数说明
 
@@ -137,6 +140,7 @@ When a supported site appears in the task, start from these commands before cons
 | 雪球 / Xueqiu | `omp web-operator search xueqiu <query> [limit]`、`omp web-operator xueqiu hot [limit]`、`omp web-operator open-post xueqiu <url> [comment_limit]` |
 | 淘股吧 / Taoguba / TGB | `omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
 | 金山文档 / KDocs / WPS 365 | `omp web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
+| ChatGPT Images / 图片生成 | `omp web-operator generate-image chatgpt "<prompt>" --out <file.png> [--json]`（前置：Chrome 已登录 ChatGPT） |
 | 飞书审批 / Feishu Approval / 审批数据导出 | `omp web-operator feishu approval export --start <YYYY-MM-DD> --end <YYYY-MM-DD>`（前置：任一 feishu.cn tab 已登录管理员账号） |
 | 飞书考勤 / Feishu Attendance / 考勤月度汇总导出 | `omp web-operator feishu attendance export --start <YYYY-MM-DD> --end <YYYY-MM-DD>`（前置：任一 oa.feishu.cn tab 已登录考勤管理员账号；跨度 ≤31 天，超过请调用方自行切片） |
 
