@@ -112,7 +112,12 @@ Static generated pages usually need:
 - Generic placeholder copy, sample content, or invented metrics.
 - Emoji as icons in headings, buttons, or feature lists.
 - Decorative SVG waves, blobs, or bokeh.
-- Colored left-border callout cards with rounded corners.
+- **Accent-colored left "bracket" border on a card/callout/list item — FORBIDDEN.**
+  A vertical colored bar (`border-left: 3px solid <brand/blue>`) down the left edge of
+  a container is a hallmark AI-generated look. Do NOT use it for callouts, "needs
+  attention" boxes, featured cards, escalations, or list rows. Convey emphasis with a
+  full subtle border + surface tint, a tag/badge, or typography instead — never a left
+  accent rule. (This is a strict redline, not a soft preference.)
 - Page text that explains how the page is designed rather than presenting the
   result.
 - Personal filesystem paths or network addresses in committed templates.
