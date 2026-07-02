@@ -25,7 +25,12 @@ def test_normalize_relative_path_rejects_escape() -> None:
     with pytest.raises(HtmlServeError):
         normalize_relative_path("/report.html")
     with pytest.raises(HtmlServeError):
-        normalize_relative_path("reports/report.md")
+        normalize_relative_path("reports/report.txt")
+
+
+def test_normalize_relative_path_accepts_data_sidecars() -> None:
+    assert normalize_relative_path("reports/report.md") == "reports/report.md"
+    assert normalize_relative_path("reports/report.json") == "reports/report.json"
 
 
 def test_publish_file_returns_localhost_and_tailscale_urls(tmp_path: Path) -> None:

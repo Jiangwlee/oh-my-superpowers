@@ -79,8 +79,8 @@ def _fail(exc: HtmlServeError) -> None:
 
 @app.command()
 def publish(
-    input_html: str = typer.Argument(..., help="Local HTML file to publish."),
-    to: str = typer.Option(..., "--to", help="Relative output path under HTML_SERVE_DATA_DIR, ending in .html."),
+    input_html: str = typer.Argument(..., help="Local HTML/Markdown/JSON file to publish."),
+    to: str = typer.Option(..., "--to", help="Relative output path under HTML_SERVE_DATA_DIR, ending in .html, .md, or .json."),
     data_dir: str | None = typer.Option(None, "--data-dir", help="Override HTML_SERVE_DATA_DIR."),
     localhost_base_url: str | None = typer.Option(None, "--localhost-base-url", help="Override localhost URL base."),
     tailscale_base_url: str | None = typer.Option(None, "--tailscale-base-url", help="Override Tailscale URL base."),

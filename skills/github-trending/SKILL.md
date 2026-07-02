@@ -94,7 +94,28 @@ Replace all `{{MARKER}}` placeholders. Generate escaped HTML fragments using the
 Write the rendered HTML to a temporary local file. Filename convention:
 `<YYYY-MM-DD>.html` (weekly/monthly runs: `<YYYY-MM-DD>-<since>.html`).
 
-Done when: local HTML file exists, no `{{` markers remain, and every visible repo contains 项目目的 / 项目内容 / 项目价值.
+Also write the analyzed data to a sibling `<same-name>.json` so later agents can
+query the report structurally instead of parsing HTML:
+
+```json
+{
+  "date": "<YYYY-MM-DD>",
+  "since": "daily",
+  "highlight": "<今日看点 paragraph>",
+  "repos": [
+    {
+      "name": "owner/repo", "url": "https://github.com/owner/repo",
+      "lang": "...", "stars_today": 0, "stars": 0, "topics": ["..."],
+      "desc": "...", "purpose": "...", "content": "...", "value": "...",
+      "trend_reason": "...", "summary": "..."
+    }
+  ]
+}
+```
+
+Keep `repos` in the same stars-today order as the HTML.
+
+Done when: local HTML and JSON files exist, no `{{` markers remain in the HTML, and every repo in the JSON carries purpose/content/value.
 
 ### Stage 5: Publish
 
@@ -102,11 +123,12 @@ Publish through html-serve CLI:
 
 ```bash
 omp html-serve publish <tmp.html> --to github-trending/<filename>.html --source github-trending --tag github --tag trending
+omp html-serve publish <tmp.json> --to github-trending/<filename>.json --source github-trending --tag github --tag trending --tag data --title "GitHub Trending <YYYY-MM-DD> data"
 ```
 
-Tell the user both returned URLs: `localhost_url` and `tailscale_url`.
+Tell the user both returned URLs of the HTML: `localhost_url` and `tailscale_url`.
 
-Done when: `omp html-serve publish` succeeds and both URLs are given to user.
+Done when: both `omp html-serve publish` calls succeed and the HTML URLs are given to user.
 
 ## Hard Gate
 

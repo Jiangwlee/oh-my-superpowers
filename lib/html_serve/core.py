@@ -139,6 +139,9 @@ def resolve_config(
     )
 
 
+PUBLISHABLE_SUFFIXES = {".html", ".md", ".json"}
+
+
 def normalize_relative_path(relative_path: str, require_html: bool = True) -> str:
     """Validate and normalize a publish path under html-serve root."""
 
@@ -151,8 +154,8 @@ def normalize_relative_path(relative_path: str, require_html: bool = True) -> st
         raise HtmlServeError("--to must name an output file", 2)
     if any(part in {"", ".", ".."} for part in path.parts):
         raise HtmlServeError("--to must not contain empty, '.', or '..' path segments", 2)
-    if require_html and path.suffix.lower() != ".html":
-        raise HtmlServeError("--to must end with .html", 2)
+    if require_html and path.suffix.lower() not in PUBLISHABLE_SUFFIXES:
+        raise HtmlServeError("--to must end with .html, .md, or .json", 2)
     return path.as_posix()
 
 
