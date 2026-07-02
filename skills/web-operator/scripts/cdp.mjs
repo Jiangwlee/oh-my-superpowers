@@ -967,6 +967,7 @@ const USAGE = `cdp - lightweight Chrome DevTools Protocol CLI (no Puppeteer)
 
 Usage: cdp <command> [args]
 
+  health                            Probe the browser CDP endpoint (exit 0 = ready, 1 = unreachable)
   list                              List open pages (shows unique target prefixes)
   list_raw                          List open pages as JSON for scripting
   snap  <target>                    Accessibility tree snapshot
@@ -1040,6 +1041,24 @@ async function main() {
 
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     console.log(USAGE); process.exit(0);
+  }
+
+  // Health probe: resolve the live endpoint and prove a browser-level CDP
+  // connection actually works. Covers stale DevToolsActivePort fallback paths
+  // that resolve to a URL but no longer accept connections. No launch logic.
+  if (cmd === 'health' || cmd === 'ping') {
+    try {
+      const cdp = new CDP();
+      await cdp.connect(await getWsUrl());
+      await cdp.send('Target.getTargets');
+      cdp.close();
+    } catch (e) {
+      console.error(`unhealthy: ${e.message}`);
+      process.exit(1);
+    }
+    console.log('ok');
+    setTimeout(() => process.exit(0), 50);
+    return;
   }
 
   if (cmd === 'list' || cmd === 'ls' || cmd === 'list_raw') {

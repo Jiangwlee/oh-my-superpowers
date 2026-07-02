@@ -7,6 +7,7 @@
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import typer
@@ -56,6 +57,109 @@ def page(ctx: typer.Context) -> None:
         omp web-operator page snap
     """
     sys.exit(subprocess.call(["node", str(SCRIPTS_DIR / "cdp.mjs")] + ctx.args))
+
+
+# ---------------------------------------------------------------------------
+# up / ensure (browser bootstrap)
+# ---------------------------------------------------------------------------
+#
+# The browser lifecycle's source of truth is an OS service (a systemd user unit
+# by default). `up` never spawns Chrome itself — it only probes health and nudges
+# that service — so the unit file stays the single owner of how Chrome launches
+# (profile, proxy, GL, DISPLAY). Launcher backend and service name are config,
+# not hard-coded, leaving a clean extension point for launchd/other hosts.
+
+WEB_OPERATOR_SERVICE = os.environ.get("WEB_OPERATOR_SERVICE", "chrome-cdp.service")
+WEB_OPERATOR_LAUNCHER = os.environ.get("WEB_OPERATOR_LAUNCHER", "systemd")
+
+
+def _cdp_health() -> bool:
+    """True if the browser CDP endpoint accepts a real connection."""
+    return subprocess.call(
+        ["node", str(SCRIPTS_DIR / "cdp.mjs"), "health"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ) == 0
+
+
+class _SystemdLauncher:
+    """Defers Chrome lifecycle to a systemd --user unit (the SoT)."""
+
+    def __init__(self, unit: str) -> None:
+        self.unit = unit
+
+    def _run(self, action: str) -> int:
+        return subprocess.call(["systemctl", "--user", action, self.unit])
+
+    def start(self) -> int:
+        return self._run("start")
+
+    def restart(self) -> int:
+        return self._run("restart")
+
+
+def _make_launcher():
+    if WEB_OPERATOR_LAUNCHER == "systemd":
+        return _SystemdLauncher(WEB_OPERATOR_SERVICE)
+    # Extension point: 'launchd' (macOS), 'spawn' (raw) backends go here.
+    raise typer.BadParameter(
+        f"Unsupported WEB_OPERATOR_LAUNCHER={WEB_OPERATOR_LAUNCHER!r} (supported: systemd)"
+    )
+
+
+def _up_impl(restart: bool, timeout: int) -> None:
+    launcher = _make_launcher()
+
+    if restart:
+        typer.echo(f"Restarting {WEB_OPERATOR_SERVICE} ...")
+        launcher.restart()
+    elif _cdp_health():
+        typer.echo("Browser ready.")
+        raise typer.Exit(0)
+    else:
+        typer.echo(f"Browser down — starting {WEB_OPERATOR_SERVICE} ...")
+        rc = launcher.start()
+        if rc != 0:
+            typer.echo(
+                "Launcher failed. If 'systemctl --user' has no session bus over "
+                "SSH, enable lingering: loginctl enable-linger \"$USER\"",
+                err=True,
+            )
+            raise typer.Exit(rc)
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _cdp_health():
+            typer.echo("Browser ready.")
+            raise typer.Exit(0)
+        time.sleep(1)
+
+    typer.echo(
+        f"Browser still unreachable after {timeout}s. "
+        f"Try: omp web-operator up --restart",
+        err=True,
+    )
+    raise typer.Exit(1)
+
+
+@app.command("up")
+def up(
+    restart: bool = typer.Option(
+        False, "--restart", help="Force-restart the service instead of only starting it when down."
+    ),
+    timeout: int = typer.Option(20, "--timeout", help="Seconds to wait for the browser to become ready."),
+) -> None:
+    """Ensure the CDP browser is running, starting its service if needed."""
+    _up_impl(restart, timeout)
+
+
+@app.command("ensure", hidden=True)
+def ensure(
+    restart: bool = typer.Option(False, "--restart"),
+    timeout: int = typer.Option(20, "--timeout"),
+) -> None:
+    """Alias for `up`."""
+    _up_impl(restart, timeout)
 
 
 # ---------------------------------------------------------------------------
