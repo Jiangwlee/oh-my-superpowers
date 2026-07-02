@@ -138,7 +138,7 @@ omp install agent <name> --global
 
 `omp serve` 启动一个项目本地 Web 工作台，用于开发当前仓库内的 Skills。
 
-> 静态 HTML artifact 发布使用 `omp html-serve publish <file.html> --to <relative/path.html>`；它写入 `HTML_SERVE_DATA_DIR` 并返回 `localhost_url` 与 `tailscale_url`。publish 必须携带 `--source` 与至少一个 `--tag`（`--title` 可选，默认取 HTML `<title>`），元数据，记录在 `$OMP_HOME/runtime/html-serve/manifest.jsonl`；检索已发布内容用 `omp html-serve list [--under DIR] [--since/--until YYYY-MM-DD] [--grep REGEX] [--tag TAG]`，历史文件用 `omp html-serve reindex` 一次性重建 manifest。
+> 静态 HTML artifact 发布使用 `omp html-serve publish <file.html> --to <relative/path.html>`；它写入 `HTML_SERVE_DATA_DIR` 并返回 `localhost_url` 与 `tailscale_url`。publish 必须携带 `--source` 与至少一个 `--tag`（`--title` 可选，默认取 HTML `<title>`），元数据记录在 `$OMP_HOME/runtime/html-serve/manifest.jsonl`；检索已发布内容用 `omp html-serve list [--under DIR] [--since/--until YYYY-MM-DD] [--grep REGEX] [--tag TAG]`，历史文件用 `omp html-serve reindex` 一次性重建 manifest。
 
 定位：从单一 Skill 工作台演进为通用 vibe coding 工作台，可同时挂载并切换多个项目。
 
