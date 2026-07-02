@@ -30,7 +30,7 @@ If input sections are missing, render neutral placeholders. Do not invent missin
 Publish only when html-serve is configured:
 
 ```bash
-omp html-serve publish reports/report.html --to deep-research/<workspace-name>.html
+omp html-serve publish reports/report.html --to deep-research/<workspace-name>.html --source deep-research --tag research --tag <topic-tag>
 ```
 
 Use the workspace directory name unless the user asks for a specific report name. Return both `localhost_url` and `tailscale_url`.

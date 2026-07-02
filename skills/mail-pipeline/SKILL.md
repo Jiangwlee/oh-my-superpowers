@@ -47,7 +47,7 @@ judges every message by content.
 4. Render the report page from `assets/report-template.html` (replace the
    sample markers with this run's data; follow the template's section and
    merge rules) to a temporary local HTML file, then publish it with:
-   `omp html-serve publish <tmp.html> --to mail-brief/<YYYY-MM-DD>-mail-brief.html`.
+   `omp html-serve publish <tmp.html> --to mail-brief/<YYYY-MM-DD>-mail-brief.html --source mail-pipeline --tag mail --tag brief`.
    Keep one page per day, merged across same-day runs and all accounts (account
    markers per the template's multi-account rule). Give the user both returned
    URLs: `localhost_url` and `tailscale_url`.

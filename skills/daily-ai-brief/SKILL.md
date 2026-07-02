@@ -69,7 +69,7 @@ Load `assets/brief-template.html`.
 1. Replace template markers with real content (see template comments)
 2. Write rendered HTML to a temporary local file
 3. Publish it with:
-   `omp html-serve publish <tmp.html> --to ai-daily/<date>-daily-ai-brief.html`
+   `omp html-serve publish <tmp.html> --to ai-daily/<date>-daily-ai-brief.html --source daily-ai-brief --tag ai --tag daily-brief` (add 1-3 extra `--tag` for the day's dominant topics, e.g. `--tag agent`)
 4. Generate Markdown archive under `$HTML_SERVE_DATA_DIR/ai-daily/` (`.md` extension)
 5. Tell user both returned URLs: `localhost_url` and `tailscale_url`
 

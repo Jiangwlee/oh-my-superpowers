@@ -61,13 +61,13 @@ Read `references/cli.md` before the first CLI call or when parameters are unclea
 After `omp deep-research build-report` creates `reports/report.html`, publish the HTML report to the `deep-research/` directory:
 
 ```bash
-omp html-serve publish /tmp/report.html --to deep-research/2026-06-13.html
+omp html-serve publish /tmp/report.html --to deep-research/2026-06-13.html --source deep-research --tag research --tag <topic-tag>
 ```
 
 In real runs, replace `/tmp/report.html` with the generated `reports/report.html` path and use the workspace/report name for the target file, for example:
 
 ```bash
-omp html-serve publish "<workspace>/reports/report.html" --to "deep-research/<workspace-name>.html"
+omp html-serve publish "<workspace>/reports/report.html" --to "deep-research/<workspace-name>.html" --source deep-research --tag research --tag <topic-tag>
 ```
 
 Return the `localhost_url` and `tailscale_url`. If publishing fails, report the error and still return the local `reports/report.html` path.

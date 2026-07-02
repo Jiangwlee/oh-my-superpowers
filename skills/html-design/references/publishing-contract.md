@@ -72,7 +72,7 @@ Recommended values:
 Example publish command:
 
 ```bash
-omp html-serve publish <prototype.html> --to <project>/html-design/<filename>.html
+omp html-serve publish <prototype.html> --to <project>/html-design/<filename>.html --source html-design --tag prototype --tag <project>
 ```
 
 Use the returned `localhost_url` and `tailscale_url`. Do not compute a different

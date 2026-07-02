@@ -88,8 +88,8 @@ def publish(
     overwrite: bool = typer.Option(True, "--overwrite/--no-overwrite", help="Overwrite an existing target file."),
     verify: bool = typer.Option(True, "--verify/--no-verify", help="Verify returned URLs with HTTP HEAD."),
     title: str | None = typer.Option(None, "--title", help="Manifest title; defaults to the HTML <title>."),
-    tag: list[str] = typer.Option([], "--tag", help="Manifest tag; repeatable."),
-    source: str | None = typer.Option(None, "--source", help="Manifest source name (e.g. the publishing skill)."),
+    tag: list[str] = typer.Option(..., "--tag", help="Manifest tag; repeatable, at least one required."),
+    source: str = typer.Option(..., "--source", help="Manifest source name (e.g. the publishing skill)."),
 ) -> None:
     """Copy one HTML file into html-serve and print localhost + Tailscale URLs.
 

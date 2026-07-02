@@ -101,7 +101,7 @@ Done when: local HTML file exists, no `{{` markers remain, and every visible rep
 Publish through html-serve CLI:
 
 ```bash
-omp html-serve publish <tmp.html> --to github-trending/<filename>.html
+omp html-serve publish <tmp.html> --to github-trending/<filename>.html --source github-trending --tag github --tag trending
 ```
 
 Tell the user both returned URLs: `localhost_url` and `tailscale_url`.

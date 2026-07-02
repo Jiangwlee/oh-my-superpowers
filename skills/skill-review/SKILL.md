@@ -103,7 +103,7 @@ Done when: `omp skill-review validate /tmp/review-<skill>.md` 退出 0。
 
 ```
 omp skill-review render-html /tmp/review-<skill>.md --output /tmp/review-<skill>.html
-omp html-serve publish /tmp/review-<skill>.html --to oh-my-superpowers/skill-review/review-<skill>.html
+omp html-serve publish /tmp/review-<skill>.html --to oh-my-superpowers/skill-review/review-<skill>.html --source skill-review --tag skill-review --tag <skill>
 ```
 
 第一条命令先校验报告完整性，再把已填写报告渲染成 Minimal Review HTML artifact；第二条命令发布到 html-serve 并返回 `localhost_url` 与 `tailscale_url`。Markdown 仍是事实来源；HTML 是便于分享和扫描 findings 的增强视图。

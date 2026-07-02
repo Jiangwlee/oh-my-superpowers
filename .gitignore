@@ -37,3 +37,6 @@ stories/
 
 .handover.md
 .omp/
+
+# Local runtime state (html-serve manifest, chromium profile, ...)
+runtime/
