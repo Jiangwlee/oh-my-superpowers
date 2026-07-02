@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -12,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 
@@ -25,6 +27,7 @@ class HtmlServeConfig:
     tailscale_base_url: str | None
     compose_dir: Path
     warnings: tuple[str, ...] = ()
+    manifest_path: Path | None = None
 
 
 class HtmlServeError(RuntimeError):
@@ -132,6 +135,7 @@ def resolve_config(
         tailscale_base_url=tail_base.rstrip("/") if tail_base else None,
         compose_dir=compose_dir,
         warnings=tuple(warnings),
+        manifest_path=omp_home / "runtime" / "html-serve" / "manifest.jsonl",
     )
 
 
@@ -169,12 +173,158 @@ def verify_url(url: str, timeout: float = 3.0) -> bool:
         return False
 
 
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_MD_H1_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+
+
+def extract_title(path: Path) -> str:
+    """Best-effort title: HTML <title> or first Markdown H1."""
+
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    match = _MD_H1_RE.search(text) if path.suffix.lower() in {".md", ".markdown"} else _TITLE_RE.search(text)
+    return re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+
+
+def _append_manifest_entry(config: HtmlServeConfig, entry: dict[str, object]) -> None:
+    """Append one publish record to the manifest (JSONL, last entry wins)."""
+
+    if config.manifest_path is None:
+        return
+    config.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with config.manifest_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def load_manifest(config: HtmlServeConfig) -> dict[str, dict[str, object]]:
+    """Read the manifest into {relative_path: entry}; later lines win."""
+
+    entries: dict[str, dict[str, object]] = {}
+    if config.manifest_path is None or not config.manifest_path.is_file():
+        return entries
+    for line in config.manifest_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        path = entry.get("relative_path")
+        if isinstance(path, str) and path:
+            entries[path] = entry
+    return entries
+
+
+def _scan_data_dir(data_dir: Path) -> list[Path]:
+    """List served files under data_dir, skipping dotfiles and temp artifacts."""
+
+    files: list[Path] = []
+    for path in sorted(data_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(data_dir)
+        if any(part.startswith(".") for part in rel.parts) or path.suffix == ".tmp":
+            continue
+        files.append(path)
+    return files
+
+
+def _fs_entry(data_dir: Path, path: Path) -> dict[str, object]:
+    """Build a manifest entry from filesystem facts alone."""
+
+    stat = path.stat()
+    return {
+        "relative_path": path.relative_to(data_dir).as_posix(),
+        "title": extract_title(path),
+        "tags": [],
+        "source": "",
+        "published_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+    }
+
+
+def reindex_manifest(config: HtmlServeConfig) -> dict[str, object]:
+    """Rebuild the manifest from the files currently under data_dir."""
+
+    if config.data_dir is None or not config.data_dir.is_dir():
+        raise HtmlServeError("HTML_SERVE_DATA_DIR does not exist; nothing to reindex", 4)
+    if config.manifest_path is None:
+        raise HtmlServeError("manifest path is not configured", 4)
+    previous = load_manifest(config)
+    entries = []
+    for path in _scan_data_dir(config.data_dir):
+        entry = _fs_entry(config.data_dir, path)
+        old = previous.get(entry["relative_path"])
+        if old:  # keep richer metadata from real publishes
+            entry["tags"] = old.get("tags") or []
+            entry["source"] = old.get("source") or ""
+            entry["title"] = entry["title"] or old.get("title") or ""
+        entries.append(entry)
+    config.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = config.manifest_path.with_suffix(".jsonl.tmp")
+    tmp.write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in entries), encoding="utf-8")
+    os.replace(tmp, config.manifest_path)
+    return {"status": "ok", "indexed": len(entries), "manifest_path": str(config.manifest_path)}
+
+
+def list_entries(
+    config: HtmlServeConfig,
+    under: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    grep: str | None = None,
+    tags: list[str] | None = None,
+) -> list[dict[str, object]]:
+    """List published files: manifest metadata + filesystem fallback, filtered."""
+
+    if config.data_dir is None or not config.data_dir.is_dir():
+        raise HtmlServeError("HTML_SERVE_DATA_DIR does not exist; nothing to list", 4)
+    manifest = load_manifest(config)
+    merged: list[dict[str, object]] = []
+    for path in _scan_data_dir(config.data_dir):
+        rel = path.relative_to(config.data_dir).as_posix()
+        entry = dict(manifest.get(rel) or _fs_entry(config.data_dir, path))
+        merged.append(entry)
+
+    grep_re = re.compile(grep, re.IGNORECASE) if grep else None
+    results: list[dict[str, object]] = []
+    for entry in merged:
+        rel = str(entry["relative_path"])
+        published = str(entry.get("published_at") or "")
+        if under and not rel.startswith(under.rstrip("/") + "/") and rel != under:
+            continue
+        if since and published[:10] < since:
+            continue
+        if until and published[:10] > until:
+            continue
+        if tags and not set(tags) & set(entry.get("tags") or []):
+            continue
+        if grep_re:
+            try:
+                text = (config.data_dir / rel).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if not (grep_re.search(text) or grep_re.search(str(entry.get("title") or ""))):
+                continue
+        entry["abs_path"] = str(config.data_dir / rel)
+        entry["localhost_url"] = build_url(config.localhost_base_url, rel)
+        entry["tailscale_url"] = build_url(config.tailscale_base_url, rel) if config.tailscale_base_url else ""
+        results.append(entry)
+    results.sort(key=lambda e: str(e.get("published_at") or ""), reverse=True)
+    return results
+
+
 def publish_file(
     input_path: Path,
     config: HtmlServeConfig,
     relative_path: str,
     overwrite: bool = True,
     verify: bool = True,
+    title: str | None = None,
+    tags: list[str] | None = None,
+    source_name: str | None = None,
 ) -> dict[str, object]:
     """Publish an HTML file under html-serve and return URL metadata."""
 
@@ -220,6 +370,15 @@ def publish_file(
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
+
+    manifest_entry = {
+        "relative_path": normalized,
+        "title": title or extract_title(target),
+        "tags": tags or [],
+        "source": source_name or "",
+        "published_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    _append_manifest_entry(config, manifest_entry)
 
     localhost_url = build_url(config.localhost_base_url, normalized)
     tailscale_url = build_url(config.tailscale_base_url, normalized) if config.tailscale_base_url else ""

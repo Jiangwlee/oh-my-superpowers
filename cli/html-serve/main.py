@@ -30,7 +30,9 @@ sys.path.insert(0, str(OMP_HOME / "lib"))
 from html_serve.core import (  # noqa: E402
     HtmlServeConfig,
     HtmlServeError,
+    list_entries,
     publish_file,
+    reindex_manifest,
     resolve_config,
     run_compose,
     status_metadata,
@@ -85,6 +87,9 @@ def publish(
     port: int | None = typer.Option(None, "--port", help="Override HTML_SERVE_PORT for generated URLs."),
     overwrite: bool = typer.Option(True, "--overwrite/--no-overwrite", help="Overwrite an existing target file."),
     verify: bool = typer.Option(True, "--verify/--no-verify", help="Verify returned URLs with HTTP HEAD."),
+    title: str | None = typer.Option(None, "--title", help="Manifest title; defaults to the HTML <title>."),
+    tag: list[str] = typer.Option([], "--tag", help="Manifest tag; repeatable."),
+    source: str | None = typer.Option(None, "--source", help="Manifest source name (e.g. the publishing skill)."),
 ) -> None:
     """Copy one HTML file into html-serve and print localhost + Tailscale URLs.
 
@@ -99,6 +104,9 @@ def publish(
             relative_path=to,
             overwrite=overwrite,
             verify=verify,
+            title=title,
+            tags=tag,
+            source_name=source,
         )
     except HtmlServeError as exc:
         _fail(exc)
@@ -128,6 +136,45 @@ def build_url(
             check=check,
             verify=verify,
         )
+    except HtmlServeError as exc:
+        _fail(exc)
+    _print_json(payload)
+
+
+@app.command("list")
+def list_published(
+    under: str | None = typer.Option(None, "--under", help="Only entries under this relative directory."),
+    since: str | None = typer.Option(None, "--since", help="Only entries published on/after this date (YYYY-MM-DD)."),
+    until: str | None = typer.Option(None, "--until", help="Only entries published on/before this date (YYYY-MM-DD)."),
+    grep: str | None = typer.Option(None, "--grep", help="Case-insensitive regex matched against file content and title."),
+    tag: list[str] = typer.Option([], "--tag", help="Only entries carrying any of these tags; repeatable."),
+    data_dir: str | None = typer.Option(None, "--data-dir", help="Override HTML_SERVE_DATA_DIR."),
+) -> None:
+    """List published files with paths, URLs, and manifest metadata.
+
+    Example:
+        omp html-serve list --under ai-daily --since 2026-06-01 --grep 知识库
+    """
+
+    try:
+        entries = list_entries(_config(data_dir), under=under, since=since, until=until, grep=grep, tags=tag)
+    except HtmlServeError as exc:
+        _fail(exc)
+    _print_json({"status": "ok", "count": len(entries), "entries": entries})
+
+
+@app.command()
+def reindex(
+    data_dir: str | None = typer.Option(None, "--data-dir", help="Override HTML_SERVE_DATA_DIR."),
+) -> None:
+    """Rebuild the manifest from files currently on disk, keeping known tags/sources.
+
+    Example:
+        omp html-serve reindex
+    """
+
+    try:
+        payload = reindex_manifest(_config(data_dir))
     except HtmlServeError as exc:
         _fail(exc)
     _print_json(payload)
