@@ -90,16 +90,22 @@ export function renderHistoryTurns(turns: { role: string; text: string }[]): voi
   }
 }
 
+type ChatTurn = { role: string; text: string };
+
 // Fetch a session's past turns and repaint them. Best-effort: a missing or
 // unreadable session leaves a clean panel. Shared by project-switch resume and
 // by background-run completion.
-export async function loadSessionHistory(sessionId: string): Promise<void> {
+export async function loadSessionHistory(sessionId: string): Promise<ChatTurn[]> {
   try {
     const data = await (await api(`/api/session?sessionId=${encodeURIComponent(sessionId)}`)).json();
-    if (Array.isArray(data.turns)) renderHistoryTurns(data.turns);
+    if (Array.isArray(data.turns)) {
+      renderHistoryTurns(data.turns);
+      return data.turns;
+    }
   } catch {
     /* leave the cleared panel as-is */
   }
+  return [];
 }
 
 export function renderChatAttachments(): void {
@@ -275,69 +281,88 @@ export async function sendMessage(): Promise<void> {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let turnAssistantRaw = "";
     // Once the user switches away from this turn's session, stop rendering but
-    // keep draining the stream so pi runs to completion and persists to its
-    // jsonl — the background run is never killed. We do not re-attach a
-    // mid-stream turn; the transcript is reloaded from disk on return instead.
+    // keep draining and parsing the stream so pi runs to completion and
+    // persists to its jsonl. If the user returns mid-stream, reload persisted
+    // history and replay the assistant text received while detached.
     let detached = false;
+    let wasActive = true;
+    const handleEvent = (event: any, render: boolean): void => {
+      if (event.type === "assistant_delta") {
+        turnAssistantRaw += event.delta || "";
+        if (render) appendAssistant(event.delta || "");
+      }
+      if (!render) return;
+      if (event.type === "tool_start") {
+        const label = [event.name || "tool", event.detail].filter(Boolean).join(": ");
+        state.toolSteps.set(event.id || label, addStep(label));
+      }
+      if (event.type === "tool_end") {
+        const id = event.id || event.name || "tool";
+        const step = state.toolSteps.get(id);
+        if (step) {
+          step.classList.remove("patch");
+          step.classList.add("done");
+        } else {
+          const label = [event.name || "tool done", event.detail].filter(Boolean).join(": ");
+          addStep(label, true);
+        }
+      }
+      if (event.type === "gen_ui_delta") {
+        state.genUiHtml = event.html || "";
+        state.genUiFinal = false; // partial stream — shell must not run scripts yet
+        if (state.mode !== "genui") setMode("genui"); // build shell once, paint partial (run=false)
+        else scheduleGenUiFrame();
+      }
+      if (event.type === "gen_ui") {
+        // Definitive, fully-assembled HTML — final paint that also runs scripts.
+        state.genUiHtml = event.html || "";
+        state.genUiTitle = event.title || "";
+        state.genUiFinal = true; // shell's load handler may now run scripts
+        addStep(`render_ui${event.title ? ": " + event.title : ""}`, true);
+        if (state.mode !== "genui") setMode("genui"); // builds shell; load handler runs scripts
+        else postGenUi(true); // already live: run scripts in place
+      }
+      if (event.type === "error") appendAssistant(`\n\n${event.message}`);
+      if (event.type === "done") {
+        state.sending = false;
+        ($("send-btn") as HTMLButtonElement).disabled = false;
+        $("chat-status").textContent = "idle";
+        // Turn finished: replace the animated working dots with a static label.
+        const status = state.assistantEl?.querySelector(".turn-status");
+        if (status) status.textContent = "done";
+        input.focus();
+        // The turn may have created/edited/deleted files: refresh the tree and
+        // the visible git diff, restoring expanded dirs so the view does not
+        // collapse each turn.
+        refreshTree().catch(() => {});
+        refreshGitDiff().catch(() => {});
+      }
+    };
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
-      if (!detached && state.sessionId !== turnSession) detached = true;
-      if (detached) continue; // drain silently, render nothing
+      const active = state.sessionId === turnSession;
+      if (!active) detached = true;
+      if (active && !wasActive && detached) {
+        await loadSessionHistory(turnSession);
+        if (turnAssistantRaw) {
+          startAssistantTurn();
+          appendAssistant(turnAssistantRaw);
+          $("chat-status").textContent = "running";
+          ($("send-btn") as HTMLButtonElement).disabled = true;
+        }
+      }
+      wasActive = active;
       for (const chunk of chunks) {
         const line = chunk.split("\n").find((l) => l.startsWith("data: "));
         if (!line) continue;
         const event = JSON.parse(line.slice(6));
-        if (event.type === "assistant_delta") appendAssistant(event.delta || "");
-        if (event.type === "tool_start") {
-          const label = [event.name || "tool", event.detail].filter(Boolean).join(": ");
-          state.toolSteps.set(event.id || label, addStep(label));
-        }
-        if (event.type === "tool_end") {
-          const id = event.id || event.name || "tool";
-          const step = state.toolSteps.get(id);
-          if (step) {
-            step.classList.remove("patch");
-            step.classList.add("done");
-          } else {
-            const label = [event.name || "tool done", event.detail].filter(Boolean).join(": ");
-            addStep(label, true);
-          }
-        }
-        if (event.type === "gen_ui_delta") {
-          state.genUiHtml = event.html || "";
-          state.genUiFinal = false; // partial stream — shell must not run scripts yet
-          if (state.mode !== "genui") setMode("genui"); // build shell once, paint partial (run=false)
-          else scheduleGenUiFrame();
-        }
-        if (event.type === "gen_ui") {
-          // Definitive, fully-assembled HTML — final paint that also runs scripts.
-          state.genUiHtml = event.html || "";
-          state.genUiTitle = event.title || "";
-          state.genUiFinal = true; // shell's load handler may now run scripts
-          addStep(`render_ui${event.title ? ": " + event.title : ""}`, true);
-          if (state.mode !== "genui") setMode("genui"); // builds shell; load handler runs scripts
-          else postGenUi(true); // already live: run scripts in place
-        }
-        if (event.type === "error") appendAssistant(`\n\n${event.message}`);
-        if (event.type === "done") {
-          state.sending = false;
-          ($("send-btn") as HTMLButtonElement).disabled = false;
-          $("chat-status").textContent = "idle";
-          // Turn finished: replace the animated working dots with a static label.
-          const status = state.assistantEl?.querySelector(".turn-status");
-          if (status) status.textContent = "done";
-          input.focus();
-          // The turn may have created/edited/deleted files: refresh the tree and
-          // the visible git diff, restoring expanded dirs so the view does not
-          // collapse each turn.
-          refreshTree().catch(() => {});
-          refreshGitDiff().catch(() => {});
-        }
+        handleEvent(event, active);
       }
     }
     // The run finished. If it completed while detached and the user is back on

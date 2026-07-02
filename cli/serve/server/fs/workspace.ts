@@ -56,7 +56,7 @@ export function resolveRel(workspace: string, relPath: string): string {
   return canonical(lexical);
 }
 
-function isVisibleEntry(name: string): boolean {
+export function isVisibleEntry(name: string): boolean {
   return !DEFAULT_IGNORES.has(name) && !name.startsWith(".");
 }
 
