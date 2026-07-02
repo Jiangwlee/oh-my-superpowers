@@ -4,12 +4,11 @@ description: >-
   Use when an agent needs lightweight structural navigation of a local codebase:
   index JS/TS/Python/Bash projects, find symbols, inspect callers/callees,
   retrieve snippets, and check whether an index is stale.
-  Do NOT use as a precise LSP replacement or for languages outside the MVP scope.
 ---
 
 # code-graph
 
-Build and query an agent-friendly project map for Linux repositories containing JavaScript, TypeScript, Python, or Bash.
+Build and query an agent-friendly project map for repositories containing JavaScript, TypeScript, Python, or Bash.
 
 ## Workflow
 

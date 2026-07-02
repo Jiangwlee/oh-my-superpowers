@@ -21,7 +21,7 @@ from html.parser import HTMLParser
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("github-trending")
 
-TIMEOUT = 30
+TIMEOUT = 120
 Repo = dict[str, object]
 
 

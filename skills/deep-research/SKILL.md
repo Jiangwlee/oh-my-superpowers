@@ -26,6 +26,10 @@ A completed run must produce:
 
 Do not declare the report complete if `reports/report.html` is missing, still contains `{{MARKER}}` placeholders, or has not been published/attempted with `omp html-serve publish`.
 
+**The HTML is not a generic markdown render — it extracts specific level-2 headings by name.** Before writing `brief.md` / `full-report.md` you MUST load `references/reporting.md` and use its exact headings (`## 核心结论`, `## 关键分歧 / 风险`, `## 研究目标`, `## 未解决问题`, `## 关键来源汇总`). Mismatched headings make those blocks render as "Not reported" on a blank-looking page even though the files have content.
+
+After `build-report`, verify it did NOT return `status: incomplete` and that `empty_sections` is empty; then confirm the rendered `reports/report.html` body contains no `Not reported` (e.g. `grep -c "Not reported" reports/report.html`). A `status: ok` from the CLI alone is not proof the page is populated.
+
 ## Workflow
 
 | Phase | Required action | Load |

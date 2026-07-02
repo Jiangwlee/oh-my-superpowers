@@ -390,6 +390,27 @@ def main() -> None:
     if not sources:
         print("warning: no sources provided, report audit trail will be incomplete", file=sys.stderr)
 
+    # Section-coverage guard: the HTML template extracts specific level-2
+    # headings by name. If the reports use different headings, those blocks
+    # silently render as "Not reported". Detect that here so the failure is
+    # loud instead of producing a blank-looking page that still returns ok.
+    missing_sections: list[str] = []
+    if not _list_items(_section(brief_text, ["核心结论", "Core Conclusions", "Conclusions"])):
+        missing_sections.append("brief.md: ## 核心结论")
+    if not _list_items(_section(brief_text, ["关键分歧 / 风险", "关键分歧", "风险", "Risks"])):
+        missing_sections.append("brief.md: ## 关键分歧 / 风险")
+    if not _section(full_report_text, ["研究目标", "Research Goal", "Goal"]).strip():
+        missing_sections.append("full-report.md: ## 研究目标")
+    if not _list_items(_section(full_report_text, ["未解决问题", "Open Questions", "Unresolved Questions"])):
+        missing_sections.append("full-report.md: ## 未解决问题")
+    if missing_sections:
+        print(
+            "warning: these template sections are empty and will render as "
+            "'Not reported' in the HTML — check heading names against "
+            "references/reporting.md:\n  - " + "\n  - ".join(missing_sections),
+            file=sys.stderr,
+        )
+
     state = load_json(paths.state_file, default={})
     state["sources"] = sources
     state["completed_at"] = datetime.now().isoformat(timespec="seconds")
@@ -412,11 +433,12 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "status": "ok",
+                "status": "incomplete" if missing_sections else "ok",
                 "brief_file": str(brief_file),
                 "full_report_file": str(full_report_file),
                 "html_file": str(html_file),
                 "sources_count": len(sources),
+                "empty_sections": missing_sections,
             },
             ensure_ascii=False,
         )
