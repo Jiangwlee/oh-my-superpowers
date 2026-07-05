@@ -1,7 +1,7 @@
 # 浏览器自动化容器 — 设计文档
 
 > 日期：2026-07-05 · 来源：mindora ADR 0056（交付物 3）· 需求单：`/tmp/omp-browser-container-requirements.md`
-> 状态：已定方案，待实现
+> 状态：✅ 已实现（v0.2.0）。含后续增强：click 走可信 CDP 事件、dom 文本不吞子树、单焦点 tab 不变量（新 tab 自动收养 + 回收 + bringToFront）。
 
 ## 1. 定位与边界
 

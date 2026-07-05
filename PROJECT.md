@@ -173,6 +173,22 @@ omp serve stop
 
 ---
 
+## 浏览器自动化容器
+
+`docker/browser-container/` 是一个**常驻、单用户**的浏览器自动化容器：自带 Chrome + Xvfb + noVNC，对外提供 **indexed 的 REST/MCP 接口**（读带编号的可交互元素、按编号执行 act）和 VNC 直播/接管，供外部 daemon 消费。容器无 LLM，认知工作归调用方 agent。设计见 `docs/brainstorming/specs/2026-07-05-browser-container.md`，对接契约见 `docker/browser-container/README.md`。
+
+容器生命周期由统一入口 `omp container` 管理（同时管 `html-serve` 与 `browser`）：
+
+```bash
+omp container up browser        # 构建并启动
+omp container health browser
+omp container down browser
+```
+
+> 容器 lifecycle 已从各工具 CLI 收拢到 `omp container`——`omp html-serve` 不再有 `start/stop/restart`，改用 `omp container up/down html-serve`。
+
+---
+
 ## 环境变量
 
 | 变量 | 用途 | 默认值 |
@@ -182,6 +198,7 @@ omp serve stop
 | `HTML_SERVE_DATA_DIR` | `omp html-serve publish` 的静态文件根目录 | 无，通常写在 `docker/html-serve/.env` |
 | `HTML_SERVE_PORT` | html-serve 本地端口 | `8888` |
 | `HTML_SERVE_TAILSCALE_BASE_URL` | 发布结果中的 Tailscale URL base | 自动从 Tailscale 探测，或手动配置 |
+| `OMP_BROWSER_TOKEN` | browser-container REST/MCP 的 Bearer 鉴权（空=不鉴权） | 无 |
 
 **默认模型原则**：所有需要调用 LLM 的组件（CLI、skill 脚本）统一通过 `OMP_DEFAULT_MODEL_PI` 环境变量获取默认模型，不在代码中硬编码模型名。优先级：`--model 命令行 > agents.json 显式声明 > OMP_DEFAULT_MODEL_PI > 硬编码 fallback`。
 
