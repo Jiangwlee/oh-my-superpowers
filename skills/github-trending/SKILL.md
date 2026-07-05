@@ -49,7 +49,7 @@ Read the JSON before writing. Use `readme`, `full_desc`, `topics`, `homepage`, l
 Only clone when the three lenses are still unclear and the repo ranks in the top 4:
 
 ```bash
-git clone --depth 1 https://github.com/<owner>/<repo> /tmp/<repo>
+gh repo clone <owner>/<repo> /tmp/<repo> -- --depth 1
 ```
 
 Inspect README, docs, examples, package metadata, and top-level structure. Never clone more than 3 repos.
