@@ -43,7 +43,8 @@ RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
 COPY pyproject.toml /opt/omp-browser/pkg/pyproject.toml
 COPY app /opt/omp-browser/pkg/app
 RUN python3 -m venv /opt/omp-browser/venv \
-    && /opt/omp-browser/venv/bin/pip install --no-cache-dir /opt/omp-browser/pkg
+    && /opt/omp-browser/venv/bin/pip install --no-cache-dir \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple /opt/omp-browser/pkg
 
 COPY supervisord.conf /etc/supervisor/conf.d/omp-browser.conf
 COPY entrypoint.sh /entrypoint.sh
