@@ -47,13 +47,26 @@ _COLLECT_JS_TEMPLATE = r"""
     els.push(el);
   }
   window.__OMP_GLOBAL__ = els;
-  const name = (el) => (
-    el.getAttribute('aria-label') ||
-    (el.innerText || el.textContent || '').trim() ||
-    el.getAttribute('placeholder') ||
-    el.getAttribute('title') ||
-    el.value || ''
-  ).replace(/\s+/g, ' ').slice(0, 120);
+  const name = (el) => {
+    // A leaf control (no interactive descendant) can safely use its full text,
+    // covering the common <button><span>登录</span></button> case. A wrapper
+    // that contains other interactive elements (e.g. a <li> holding several
+    // links) uses only its own direct text nodes, so it does not swallow the
+    // whole subtree's text into one noisy line.
+    const ownText = [...el.childNodes]
+      .filter(n => n.nodeType === 3)
+      .map(n => n.textContent).join('').trim();
+    const text = el.querySelector(SEL)
+      ? ownText
+      : (el.innerText || el.textContent || '').trim();
+    return (
+      el.getAttribute('aria-label') ||
+      text ||
+      el.getAttribute('placeholder') ||
+      el.getAttribute('title') ||
+      el.value || ''
+    ).replace(/\s+/g, ' ').slice(0, 120);
+  };
   return JSON.stringify(els.map((el, i) => ({
     i,
     tag: el.tagName.toLowerCase(),
