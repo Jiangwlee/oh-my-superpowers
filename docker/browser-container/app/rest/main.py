@@ -123,14 +123,20 @@ async def act(session_id: str, body: ActRequest) -> dict[str, Any]:
 async def _dispatch(session, action: str, args: dict[str, Any]) -> dict[str, Any]:
     cdp = manager.cdp
     if action == "navigate":
-        return await actions.navigate(cdp, session, args["url"])
-    if action == "click":
-        return await actions.click(cdp, session, int(args["index"]))
-    if action == "type":
-        return await actions.type_text(cdp, session, int(args["index"]), str(args["text"]))
-    if action == "scroll":
-        return await actions.scroll(cdp, session, int(args.get("dy", 600)))
-    raise ActFailure("cdp-error", f"unknown action: {action}")
+        result = await actions.navigate(cdp, session, args["url"])
+    elif action == "click":
+        result = await actions.click(cdp, session, int(args["index"]))
+    elif action == "type":
+        result = await actions.type_text(cdp, session, int(args["index"]), str(args["text"]))
+    elif action == "scroll":
+        result = await actions.scroll(cdp, session, int(args.get("dy", 600)))
+    else:
+        raise ActFailure("cdp-error", f"unknown action: {action}")
+    # Keep one focus tab: adopt any tab this action spawned, recycle the rest,
+    # and foreground it. New-tab spawning is a click concern, so only click pays
+    # the detection wait.
+    await manager.reconcile_focus(session, detect_new=(action == "click"))
+    return result
 
 
 @app.get("/session/{session_id}/shot", dependencies=[Depends(require_token)])

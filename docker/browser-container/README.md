@@ -86,6 +86,16 @@ Base URL：`http://<container-host>:8080`
 - **失效**：`navigate` 是 hard reload，吞掉页面态（input 值、JS 变量、注入全局），并清空编号表——导航前的编号一律作废。
 - 编号表随每次 `/dom` 刷新；不追求跨快照永久稳定（做不到，也无必要）。
 
+### 单焦点 tab 不变量（容器内部，无需 agent 感知）
+
+容器任何时刻只维护**一个焦点 tab**，`/dom` 读的、`/act` 作用的、VNC 前台显示的始终是同一个：
+
+- 每次 `navigate` / `act` 执行后，对焦点 tab 调 `Page.bringToFront`——VNC 立即显示 agent 刚操作的页面。
+- 某次 `click` 触发浏览器新开 tab（`target=_blank` / `window.open`，淘宝/京东常见）时，容器**自动收养**新 tab 为焦点：下一次 `/dom` 自然读到新页面，agent 无需感知。
+- 焦点切走后，非焦点 tab 由容器**关闭回收**，存活 tab 数保持 ≈1，不随点击线性增长。
+
+这些全是容器内部行为，REST 契约**不新增** list/switch/close tab 端点。可调 `OMP_NEW_TAB_WAIT`（秒，默认 0.8）调整点击后等待新 tab 出现的时长。
+
 ## 6. VNC 只读↔交互（方案 A：服务端强制）
 
 两个端口各自对应一路 x11vnc，连**同一个** Chrome 会话（用户接管后登录态即刻对自动化生效）：

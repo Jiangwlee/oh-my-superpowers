@@ -13,10 +13,14 @@ longer resolves, is reported as ``stale`` / ``not-found`` so the caller re-reads
 from __future__ import annotations
 
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass, field
 
 from .cdp_client import CDPClient, CDPError
+
+# How long to wait for a click to spawn a new tab before concluding none opened.
+_NEW_TAB_WAIT = float(os.environ.get("OMP_NEW_TAB_WAIT", "0.8"))
 
 
 @dataclass
@@ -104,11 +108,69 @@ class SessionManager:
         return self._sessions.get(session_id)
 
     async def _ensure_page_target(self) -> str:
-        targets = await self._cdp.send("Target.getTargets")
-        for info in targets.get("targetInfos", []):
-            if info.get("type") == "page":
-                return info["targetId"]
+        for tid in await self._page_target_ids():
+            return tid
         created = await self._cdp.send(
             "Target.createTarget", {"url": "about:blank"}
         )
         return created["targetId"]
+
+    async def _page_target_ids(self) -> list[str]:
+        targets = await self._cdp.send("Target.getTargets")
+        return [
+            t["targetId"]
+            for t in targets.get("targetInfos", [])
+            if t.get("type") == "page"
+        ]
+
+    async def _adopt(self, session: Session, target_id: str) -> None:
+        """Make ``target_id`` the session's focus tab (new page ⇒ map cleared)."""
+        attached = await self._cdp.send(
+            "Target.attachToTarget", {"targetId": target_id, "flatten": True}
+        )
+        session.cdp_session_id = attached["sessionId"]
+        session.target_id = target_id
+        session.index_map.clear()
+        for domain in ("Page", "DOM", "Runtime"):
+            await self._cdp.send(f"{domain}.enable", session_id=session.cdp_session_id)
+
+    async def reconcile_focus(self, session: Session, detect_new: bool = False) -> None:
+        """Maintain the single-focus-tab invariant after an action.
+
+        Adopts a tab the action spawned (target=_blank / window.open) as the new
+        focus, closes every other page target (recycling old/stray tabs), and
+        brings the focus tab to the VNC foreground. Transparent to the agent:
+        the next /dom naturally reads the focus tab. Call under the session lock.
+        """
+        new_target = None
+        if detect_new:
+            deadline = asyncio.get_running_loop().time() + _NEW_TAB_WAIT
+            while True:
+                others = [t for t in await self._page_target_ids() if t != session.target_id]
+                if others:
+                    new_target = others[-1]
+                    break
+                if asyncio.get_running_loop().time() >= deadline:
+                    break
+                await asyncio.sleep(0.1)
+        else:
+            others = [t for t in await self._page_target_ids() if t != session.target_id]
+            if others:
+                new_target = others[-1]
+
+        if new_target is not None:
+            await self._adopt(session, new_target)
+
+        # Recycle every non-focus page target so tabs do not pile up.
+        for tid in await self._page_target_ids():
+            if tid != session.target_id:
+                try:
+                    await self._cdp.send("Target.closeTarget", {"targetId": tid})
+                except CDPError:
+                    pass
+
+        # Foreground the focus tab so VNC shows exactly what the agent operates on.
+        try:
+            await self._cdp.send("Page.bringToFront", session_id=session.cdp_session_id)
+        except CDPError:
+            pass
