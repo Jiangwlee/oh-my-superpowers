@@ -104,7 +104,7 @@ omp html-serve status
 If it is not running, tell the user to start it:
 
 ```bash
-omp html-serve start
+omp container up html-serve
 ```
 
 Use localhost for service checks even when the final shared link uses

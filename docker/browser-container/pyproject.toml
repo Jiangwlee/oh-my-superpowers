@@ -1,0 +1,18 @@
+[project]
+name = "omp-browser-container"
+version = "0.1.0"
+description = "Indexed browser automation engine + REST/MCP facade for omp browser-container."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "websockets>=12.0",
+    "pydantic>=2.6",
+    "fastmcp>=2.0",
+]
+
+# Single top-level package `app`; the MCP adapter lives at `app.mcp` so it does
+# not collide with the MCP SDK's top-level `mcp` package.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

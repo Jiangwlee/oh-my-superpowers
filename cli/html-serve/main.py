@@ -34,7 +34,6 @@ from html_serve.core import (  # noqa: E402
     publish_file,
     reindex_manifest,
     resolve_config,
-    run_compose,
     status_metadata,
     url_metadata,
 )
@@ -197,57 +196,9 @@ def status(
     _print_json(status_metadata(_config(data_dir, localhost_base_url, tailscale_base_url, port), verify=verify))
 
 
-@app.command()
-def start() -> None:
-    """Start the docker/html-serve nginx container.
-
-    Example:
-        omp html-serve start
-    """
-
-    try:
-        payload = run_compose(_config(), ["up", "-d"])
-    except HtmlServeError as exc:
-        _fail(exc)
-    _print_json(payload)
-    if payload["returncode"] != 0:
-        raise typer.Exit(1)
-
-
-@app.command()
-def stop() -> None:
-    """Stop the docker/html-serve nginx container.
-
-    Example:
-        omp html-serve stop
-    """
-
-    try:
-        payload = run_compose(_config(), ["down"])
-    except HtmlServeError as exc:
-        _fail(exc)
-    _print_json(payload)
-    if payload["returncode"] != 0:
-        raise typer.Exit(1)
-
-
-@app.command()
-def restart() -> None:
-    """Restart the docker/html-serve nginx container.
-
-    Example:
-        omp html-serve restart
-    """
-
-    try:
-        down = run_compose(_config(), ["down"])
-        up = run_compose(_config(), ["up", "-d"])
-    except HtmlServeError as exc:
-        _fail(exc)
-    payload = {"status": "ok" if down["returncode"] == 0 and up["returncode"] == 0 else "error", "down": down, "up": up}
-    _print_json(payload)
-    if payload["status"] != "ok":
-        raise typer.Exit(1)
+# Container lifecycle (start/stop/restart) moved to `omp container` — a single
+# entry point owns up/down for all omp containers. Use:
+#   omp container up html-serve   /   omp container down html-serve
 
 
 if __name__ == "__main__":

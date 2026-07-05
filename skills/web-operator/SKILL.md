@@ -145,3 +145,17 @@ When a supported site appears in the task, start from these commands before cons
 | 飞书考勤 / Feishu Attendance / 考勤月度汇总导出 | `omp web-operator feishu attendance export --start <YYYY-MM-DD> --end <YYYY-MM-DD>`（前置：任一 oa.feishu.cn tab 已登录考勤管理员账号；跨度 ≤31 天，超过请调用方自行切片） |
 
 > 不确定参数时，先运行 `omp web-operator <subcommand> --help` 查看完整用法。
+
+## Browser Container (远端 indexed 自动化)
+
+以上命令连的是**本机 Chrome**（宿主 CDP），是本地默认路径。另有一个独立的**常驻容器**，自带浏览器并对外提供 indexed 的 REST/MCP 接口，供外部 daemon（如 mindora）消费；本地命令不经过它。
+
+管理容器生命周期用 `omp container`（统一入口，非 web-operator 子命令）：
+
+```bash
+omp container up browser        # 构建并启动
+omp container health browser    # 探活
+omp container down browser
+```
+
+REST/MCP 端点契约、session 语义、VNC 接管、curl 序列见 `$OMP_HOME/docker/browser-container/README.md`。

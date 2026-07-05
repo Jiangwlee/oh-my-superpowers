@@ -139,7 +139,7 @@ Done when: both `omp html-serve publish` calls succeed and the HTML URLs are giv
 | More than half of repos carry `error` | Warn user about API rate limit; suggest `gh auth login` or retry later. |
 | A repo's purpose/content/value cannot be inferred | Mark the specific lens as `证据不足`; do not hallucinate. Clone only if it is top 4 and clone budget remains. |
 | `omp html-serve publish` reports missing `HTML_SERVE_DATA_DIR` | Ask user to configure `docker/html-serve/.env` or export it; do not write to a hardcoded path. |
-| html-serve container not running | Tell user: `omp html-serve start`. |
+| html-serve container not running | Tell user: `omp container up html-serve`. |
 | Template file missing | Abort; tell user to reinstall the skill. |
 
 ## Command Hierarchy

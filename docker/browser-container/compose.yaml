@@ -1,0 +1,34 @@
+# omp browser-container — resident, single-user.
+#
+#   omp container up browser      # build + start
+#   omp container down browser
+#
+# Login state persists in the named volume `omp-browser-profile`.
+
+services:
+  browser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omp-browser-container:local
+    container_name: omp-browser
+    restart: unless-stopped
+    shm_size: "1gb"
+    environment:
+      # Set a non-empty token to require Authorization: Bearer on every request.
+      OMP_BROWSER_TOKEN: "${OMP_BROWSER_TOKEN:-}"
+    # Bound to loopback by default. The interactive VNC port drives a live,
+    # password-less browser session — never publish it on 0.0.0.0. To reach the
+    # container from another host, set BIND_ADDR to a trusted interface (e.g. a
+    # Tailscale IP) or, preferably, tunnel; REST/MCP additionally require the
+    # bearer token, but VNC has no auth of its own.
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${REST_PORT:-8080}:8080"   # REST facade
+      - "${BIND_ADDR:-127.0.0.1}:${MCP_PORT:-9223}:9223"    # MCP (FastMCP over HTTP)
+      - "${BIND_ADDR:-127.0.0.1}:${VNC_VIEWONLY_PORT:-6080}:6080"     # noVNC read-only
+      - "${BIND_ADDR:-127.0.0.1}:${VNC_INTERACTIVE_PORT:-6081}:6081"  # noVNC interactive (takeover)
+    volumes:
+      - omp-browser-profile:/data/profile
+
+volumes:
+  omp-browser-profile:

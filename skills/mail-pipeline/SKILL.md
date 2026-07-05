@@ -23,7 +23,7 @@ judges every message by content.
 | User asks for MCP integration | Explain that v1 is an IMAP pipeline; MCP is out of scope. |
 | A script would judge message content (classify, pick what to flag or move) | Stop. Scripts never call an LLM; classification and every mailbox action are agent decisions. |
 | `omp html-serve publish` reports missing `HTML_SERVE_DATA_DIR` when publishing the report | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; deliver the chat summary regardless. |
-| html-serve container not running when publishing the report | Tell user: `omp html-serve start`; deliver the chat summary regardless. |
+| html-serve container not running when publishing the report | Tell user: `omp container up html-serve`; deliver the chat summary regardless. |
 
 ## Main Loop
 

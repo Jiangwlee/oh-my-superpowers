@@ -85,4 +85,4 @@ Done when: HTML published through `omp html-serve publish`, and both URLs are gi
 | Fewer than 3 items pass editorial filter | Warn user, offer to lower threshold or expand sources |
 | Template file missing | Abort, tell user to reinstall skill |
 | `omp html-serve publish` reports missing `HTML_SERVE_DATA_DIR` | Ask user to configure `docker/html-serve/.env` or export `HTML_SERVE_DATA_DIR`; do not write to a hardcoded path. |
-| html-serve container not running | Tell user: `omp html-serve start` |
+| html-serve container not running | Tell user: `omp container up html-serve` |
