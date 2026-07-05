@@ -8,6 +8,7 @@ or the page navigated) is ``stale``. Both push the caller to re-read ``/dom``.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 from .cdp_client import CDPClient, CDPError
@@ -50,18 +51,34 @@ async def _resolve_object_id(cdp: CDPClient, session: Session, index: int) -> st
 
 async def click(cdp: CDPClient, session: Session, index: int) -> dict[str, Any]:
     object_id = await _resolve_object_id(cdp, session, index)
-    await cdp.send(
+    # Scroll into view and read the viewport-relative center. Coordinates come
+    # from JS, but the click itself is dispatched via CDP Input events so it is
+    # a trusted mouse sequence (isTrusted=true) — this drives hover menus and
+    # pointer-event-dependent widgets that a JS this.click() cannot.
+    rect_json = await cdp.send(
         "Runtime.callFunctionOn",
         {
             "objectId": object_id,
             "functionDeclaration": (
                 "function(){ this.scrollIntoView({block:'center',inline:'center'}); "
-                "this.click(); }"
+                "const r=this.getBoundingClientRect(); "
+                "return JSON.stringify({x:r.left+r.width/2, y:r.top+r.height/2, "
+                "w:r.width, h:r.height}); }"
             ),
-            "awaitPromise": True,
+            "returnByValue": True,
         },
         session_id=session.cdp_session_id,
     )
+    rect = json.loads(rect_json.get("result", {}).get("value") or "{}")
+    if not rect or (rect.get("w", 0) == 0 and rect.get("h", 0) == 0):
+        raise StaleElement(f"index {index} has no clickable box")
+    x, y = rect["x"], rect["y"]
+    sid = session.cdp_session_id
+    # Move first so hover state settles, then a full press/release pair.
+    await cdp.send("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y}, session_id=sid)
+    base = {"x": x, "y": y, "button": "left", "clickCount": 1}
+    await cdp.send("Input.dispatchMouseEvent", {**base, "type": "mousePressed"}, session_id=sid)
+    await cdp.send("Input.dispatchMouseEvent", {**base, "type": "mouseReleased"}, session_id=sid)
     return {"ok": True, "action": "click", "index": index}
 
 
