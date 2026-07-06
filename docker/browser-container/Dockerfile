@@ -23,7 +23,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg \
-        xvfb x11vnc openbox dbus-x11 \
+        xvfb x11vnc openbox dbus dbus-x11 \
         novnc websockify \
         python3 python3-venv python3-pip \
         fonts-liberation fonts-noto-cjk \
