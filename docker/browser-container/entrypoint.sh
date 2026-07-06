@@ -5,12 +5,18 @@ set -euo pipefail
 mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root
 mkdir -p /var/run/dbus /var/log/omp-browser
 
-# A machine-id must exist before Chrome/dbus start. The image ships none, and an
-# empty /etc/machine-id makes Chrome read the profile lock as "from another
-# machine" and refuse to launch. Generate a stable id for both the system and
-# dbus locations (idempotent: --ensure only writes when the file is missing).
-dbus-uuidgen --ensure=/etc/machine-id
-dbus-uuidgen --ensure  # /var/lib/dbus/machine-id
+# A machine-id must exist before Chrome/dbus start. ubuntu:24.04 ships an EMPTY
+# /etc/machine-id (0 bytes), and an empty machine-id makes dbus/Chrome refuse to
+# launch ("UUID file should contain a hex string of length 32, not length 0").
+# `dbus-uuidgen --ensure` only writes when the file is *missing*, so it never
+# fixes the empty file — generate explicitly when the id is empty or absent.
+if [ ! -s /etc/machine-id ]; then
+  dbus-uuidgen > /etc/machine-id
+fi
+mkdir -p /var/lib/dbus
+if [ ! -s /var/lib/dbus/machine-id ]; then
+  cp /etc/machine-id /var/lib/dbus/machine-id
+fi
 
 # Login state lives on the mounted volume (Chrome profile).
 mkdir -p /data/profile
