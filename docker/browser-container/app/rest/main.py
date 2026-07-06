@@ -90,8 +90,19 @@ async def _get_session(session_id: str):
 
 
 @app.get("/session/{session_id}/dom", dependencies=[Depends(require_token)])
-async def get_dom(session_id: str) -> dict[str, Any]:
-    """Return numbered interactive elements and refresh the index map."""
+async def get_dom(
+    session_id: str,
+    q: str | None = None,
+    role: str | None = None,
+) -> dict[str, Any]:
+    """Return a bounded subset of numbered interactive elements and refresh the
+    index map.
+
+    Default scope is the current viewport (agent scrolls to reveal more). Pass
+    ``q`` (name substring) or ``role`` to search the whole page instead. ``total``
+    reports the page's full interactive-element count; the listing carries a
+    trailing hint on how to reach anything not shown.
+    """
     from ..engine import dom_index
 
     session = await _get_session(session_id)
@@ -99,11 +110,13 @@ async def get_dom(session_id: str) -> dict[str, Any]:
         # Serialize extraction+store so overlapping /dom calls cannot leave the
         # returned listing and the stored map describing different snapshots.
         async with session.lock:
-            listing, index_map = await dom_index.extract(manager.cdp, session.cdp_session_id)
+            listing, index_map, total = await dom_index.extract(
+                manager.cdp, session.cdp_session_id, q=q, role=role
+            )
             session.index_map = index_map
     except Exception as exc:  # noqa: BLE001
         raise classify(exc) from exc
-    return {"ok": True, "count": len(index_map), "dom": listing}
+    return {"ok": True, "count": len(index_map), "total": total, "dom": listing}
 
 
 @app.post("/session/{session_id}/act", dependencies=[Depends(require_token)])

@@ -10,12 +10,19 @@ Extraction runs in-page JS (DOM API), not regex over HTML.
 
 from __future__ import annotations
 
+import os
+
 from .cdp_client import CDPClient, CDPError
 
 # Monotonic counter → unique per-call global name, so a concurrent /dom call or
 # a page script cannot overwrite the element array between descriptor generation
 # and backendNodeId extraction.
 _counter = 0
+
+# Hard ceiling on returned elements — the container's own last-resort bound, so
+# a single /dom never dumps a whole aggregator page even without q/viewport
+# narrowing. mindora's tool-output-cap stays a pure fallback below this.
+_DEFAULT_MAX = int(os.environ.get("OMP_DOM_MAX", "200"))
 
 
 def _collect_js(global_name: str) -> str:
@@ -36,6 +43,7 @@ _COLLECT_JS_TEMPLATE = r"""
   ].join(',');
   const seen = new Set();
   const els = [];
+  const rects = [];
   for (const el of document.querySelectorAll(SEL)) {
     if (seen.has(el)) continue;
     seen.add(el);
@@ -45,6 +53,9 @@ _COLLECT_JS_TEMPLATE = r"""
     const style = window.getComputedStyle(el);
     if (style.visibility === 'hidden' || style.display === 'none') continue;
     els.push(el);
+    // Viewport-relative box; the bounded-subset selection (viewport / q / role)
+    // runs Python-side off these numbers, so no CSS selectors leak to the caller.
+    rects.push({top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right});
   }
   window.__OMP_GLOBAL__ = els;
   const name = (el) => {
@@ -67,29 +78,85 @@ _COLLECT_JS_TEMPLATE = r"""
       el.value || ''
     ).replace(/\s+/g, ' ').slice(0, 120);
   };
-  return JSON.stringify(els.map((el, i) => ({
-    i,
-    tag: el.tagName.toLowerCase(),
-    role: el.getAttribute('role') || '',
-    type: el.getAttribute('type') || '',
-    name: name(el),
-    disabled: !!el.disabled,
-  })));
+  return JSON.stringify({
+    viewport: {w: window.innerWidth, h: window.innerHeight},
+    elements: els.map((el, i) => ({
+      tag: el.tagName.toLowerCase(),
+      role: el.getAttribute('role') || '',
+      type: el.getAttribute('type') || '',
+      name: name(el),
+      disabled: !!el.disabled,
+      rect: rects[i],
+    })),
+  });
 })()
 """
 
 
-async def extract(cdp: CDPClient, cdp_session_id: str) -> tuple[str, dict[int, int]]:
-    """Extract interactive elements from the current page.
+def select_survivors(
+    elements: list[dict],
+    viewport: dict,
+    q: str | None,
+    role: str | None,
+    cap: int,
+) -> tuple[list[int], int]:
+    """Choose which elements to return, by original index, plus the pre-cap
+    match count.
+
+    Scope: when ``q`` or ``role`` is given the whole page is searched (the target
+    control may be off-screen); otherwise only elements intersecting the current
+    viewport are kept. The two filters, when both present, must both match.
+
+    Returns ``(indices, matched)`` where ``indices`` are original positions in
+    document order truncated to ``cap``, and ``matched`` is the in-scope count
+    before truncation (drives the "more" hint).
+    """
+    scoped = bool(q) or bool(role)
+    q_lower = q.lower() if q else None
+    survivors: list[int] = []
+    for i, el in enumerate(elements):
+        if scoped:
+            if q_lower is not None and q_lower not in el.get("name", "").lower():
+                continue
+            if role and el.get("role") != role and el.get("tag") != role:
+                continue
+        else:
+            r = el.get("rect") or {}
+            if not (
+                r.get("top", 0) < viewport.get("h", 0)
+                and r.get("bottom", 0) > 0
+                and r.get("left", 0) < viewport.get("w", 0)
+                and r.get("right", 0) > 0
+            ):
+                continue
+        survivors.append(i)
+    matched = len(survivors)
+    return survivors[:cap], matched
+
+
+async def extract(
+    cdp: CDPClient,
+    cdp_session_id: str,
+    *,
+    q: str | None = None,
+    role: str | None = None,
+    max_elements: int = _DEFAULT_MAX,
+) -> tuple[str, dict[int, int], int]:
+    """Extract a bounded subset of interactive elements from the current page.
 
     Args:
         cdp: Connected CDP client.
         cdp_session_id: Flattened session bound to the page target.
+        q: Optional substring filter on element name (whole-page scope).
+        role: Optional role/tag filter (whole-page scope).
+        max_elements: Hard ceiling on returned elements.
 
     Returns:
-        ``(listing, index_map)`` where ``listing`` is LLM-readable text
-        (one line per element) and ``index_map`` maps each number to a
-        backendNodeId for later resolution.
+        ``(listing, index_map, total)`` where ``listing`` is LLM-readable text
+        (one renumbered line per returned element, with a trailing "more" hint
+        when the page holds elements not shown), ``index_map`` maps each returned
+        number ``0..k-1`` to a backendNodeId, and ``total`` is the whole page's
+        visible interactive-element count.
     """
     global _counter
     _counter += 1
@@ -100,11 +167,17 @@ async def extract(cdp: CDPClient, cdp_session_id: str) -> tuple[str, dict[int, i
         {"expression": _collect_js(global_name), "returnByValue": True},
         session_id=cdp_session_id,
     )
-    descriptors = _unwrap_json(result)
+    payload = _unwrap_json(result)
+    elements: list[dict] = payload.get("elements", [])
+    viewport: dict = payload.get("viewport", {})
+    total = len(elements)
+
+    survivors, matched = select_survivors(elements, viewport, q, role, max_elements)
 
     index_map: dict[int, int] = {}
+    descriptors: list[dict] = []
     try:
-        # Grab the live element array so we can resolve each to a backendNodeId.
+        # Grab the live element array so we can resolve survivors to backendNodeIds.
         arr = await cdp.send(
             "Runtime.evaluate",
             {"expression": f"window.{global_name}", "returnByValue": False},
@@ -117,12 +190,22 @@ async def extract(cdp: CDPClient, cdp_session_id: str) -> tuple[str, dict[int, i
                 {"objectId": arr_object_id, "ownProperties": True},
                 session_id=cdp_session_id,
             )
+            # Map original index -> live element objectId (cheap; one call). The
+            # expensive per-node describeNode below runs only for survivors.
+            object_ids: dict[int, str] = {}
             for prop in props.get("result", []):
                 if not prop.get("name", "").isdigit():
                     continue  # skip 'length' and non-index props
-                idx = int(prop["name"])
-                obj = prop.get("value", {})
-                object_id = obj.get("objectId")
+                obj_id = prop.get("value", {}).get("objectId")
+                if obj_id:
+                    object_ids[int(prop["name"])] = obj_id
+
+            # Renumber survivors to a contiguous 0..k-1; an element that fails to
+            # resolve is skipped WITHOUT leaving a hole, so listing numbers and
+            # index_map keys stay one-to-one (the click/type contract).
+            next_i = 0
+            for orig in survivors:
+                object_id = object_ids.get(orig)
                 if not object_id:
                     continue
                 described = await cdp.send(
@@ -131,8 +214,11 @@ async def extract(cdp: CDPClient, cdp_session_id: str) -> tuple[str, dict[int, i
                     session_id=cdp_session_id,
                 )
                 backend = described.get("node", {}).get("backendNodeId")
-                if backend is not None:
-                    index_map[idx] = backend
+                if backend is None:
+                    continue
+                index_map[next_i] = backend
+                descriptors.append({**elements[orig], "i": next_i})
+                next_i += 1
     finally:
         # Drop the temporary global so it does not leak across snapshots. Never
         # let cleanup failure mask the real extraction error (e.g. a timeout).
@@ -145,20 +231,55 @@ async def extract(cdp: CDPClient, cdp_session_id: str) -> tuple[str, dict[int, i
         except CDPError:
             pass
 
-    listing = _format(descriptors)
-    return listing, index_map
+    listing = _format(descriptors, total, q, role, matched)
+    return listing, index_map, total
 
 
-def _unwrap_json(evaluate_result: dict) -> list[dict]:
+def _unwrap_json(evaluate_result: dict) -> dict:
     import json
 
     value = evaluate_result.get("result", {}).get("value")
     if not value:
-        return []
+        return {}
     return json.loads(value)
 
 
-def _format(descriptors: list[dict]) -> str:
+def _more_hint(
+    count: int, matched: int, total: int, q: str | None, role: str | None
+) -> str | None:
+    """Trailing guidance so a bounded listing is never a dead end (redline ③).
+
+    Tells the agent what was withheld and how to reach it: scroll for the
+    viewport default, narrow the query for a scoped search.
+    """
+    truncated = matched > count
+    if q or role:
+        label = q if q else f"role={role}"
+        parts = [f'匹配 "{label}" 命中 {matched} 项']
+        if truncated:
+            parts.append(f"仅显示前 {count}")
+        parts.append(f"全页共 {total} 项，缩小关键词或 scroll 定位")
+        return "— " + "；".join(parts) + " —"
+    if count >= total:
+        return None  # viewport already shows every interactive element
+    if truncated:
+        return (
+            f"— 视口内匹配 {matched} 项，仅显示前 {count}；全页共 {total} 项。"
+            "scroll 或缩小范围 —"
+        )
+    return (
+        f"— 视口内 {count} 项，全页共 {total} 项。"
+        "scroll 向下揭开更多，或 /dom?q=<关键词> 定位具体控件 —"
+    )
+
+
+def _format(
+    descriptors: list[dict],
+    total: int,
+    q: str | None = None,
+    role: str | None = None,
+    matched: int | None = None,
+) -> str:
     lines = []
     for d in descriptors:
         tag = d["tag"]
@@ -172,4 +293,8 @@ def _format(descriptors: list[dict]) -> str:
         if d["disabled"]:
             label += " (disabled)"
         lines.append(label)
+    count = len(descriptors)
+    hint = _more_hint(count, matched if matched is not None else count, total, q, role)
+    if hint:
+        lines.append(hint)
     return "\n".join(lines)

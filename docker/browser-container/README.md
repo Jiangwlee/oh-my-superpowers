@@ -34,7 +34,7 @@ Base URL：`http://<container-host>:8080`
 |--------|------|--------|------|
 | GET  | `/health` | — | `{ok, browser}` — `browser` 为浏览器 CDP 可达性 |
 | POST | `/session` | — | `{sessionId}` — 建或复用（单用户复用同一浏览器上下文） |
-| GET  | `/session/{id}/dom` | — | `{ok, count, dom}` — `dom` 为带编号的可交互元素文本 |
+| GET  | `/session/{id}/dom` | `?q=&role=`（可选） | `{ok, count, total, dom}` — `dom` 为带编号的可交互元素文本 |
 | POST | `/session/{id}/act` | `{action, args}` | 动作结果，见下 |
 | GET  | `/session/{id}/shot` | — | `{ok, format:"png", base64}` — 可选，多模态用 |
 | GET  | `/session/{id}/downloads` | — | `{ok, count, downloads}` — 浏览器触发过的下载清单 |
@@ -74,14 +74,28 @@ curl -s -X DELETE $BASE/session/$SID/download/<downloadId>
 
 成功响应形如 `{"ok": true, "action": "click", "index": 7}`。
 
+### `/dom` 有界返回（永不一次吐整页）
+
+`/dom` 只返回**有界子集**，避免聚合页（如 tophub 3000+ 元素）撑爆调用方 context：
+
+- **默认作用域 = 当前视口**：只返回与视口相交的元素；agent 用 `act scroll` 揭开更多。
+- **`?q=<关键词>`**：改为**全页**搜索，按元素名做大小写不敏感子串过滤（目标控件可能在视口外）。
+- **`?role=<role|tag>`**：改为全页搜索，按 `role` 或标签名过滤。`q`、`role` 同时给出则须都命中。
+- **硬上限**：作用域过滤后截前 `OMP_DOM_MAX`（默认 200）个，容器自身最后兜底。
+
+响应新增 `total` = **全页可见可交互元素总数**（作用域无关），`count` = 本次返回数。当有元素未展示时，`dom` 文本**末尾附一行提示**告诉 agent 如何拿更多（scroll / 缩小关键词），不留死路。忽略 `total` 的旧消费端仍可正常解析 `count`/`dom`。
+
 ### `/dom` 输出样例
 
 ```
 [0] <a> "首页"
 [1] <input:text> "搜索"
 [2] <button> "登录"
-[5] <button> role=tab "消息"
+[3] <button> role=tab "消息"
+— 视口内 4 项，全页共 42 项。scroll 向下揭开更多，或 /dom?q=<关键词> 定位具体控件 —
 ```
+
+> 编号在返回子集内**连续重排为 `0..k-1`**，`act {index}` 即按此编号解析；`total`/提示行只是元数据，不参与编号。
 
 ## 3. 编号契约（关键，务必按此实现消费端）
 
