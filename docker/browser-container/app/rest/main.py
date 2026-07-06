@@ -189,6 +189,15 @@ def _parse_range(header: str | None, total: int) -> tuple[int, int] | None:
     return (start, end)
 
 
+def _content_disposition(filename: str) -> str:
+    """RFC 5987 attachment header. HTTP header values are latin-1, so a CJK
+    filename must be percent-encoded via filename*=UTF-8'' or starlette raises
+    UnicodeEncodeError building the response."""
+    from urllib.parse import quote
+
+    return f"attachment; filename*=UTF-8''{quote(filename)}"
+
+
 def _stream_file(path: str, start: int, end: int):
     """Yield ``[start, end]`` (inclusive) of ``path`` in bounded blocks."""
     remaining = end - start + 1
@@ -236,7 +245,7 @@ async def fetch_download(session_id: str, download_id: str, request: Request) ->
 
     headers = {
         "Accept-Ranges": "bytes",
-        "Content-Disposition": f'attachment; filename="{rec.filename or download_id}"',
+        "Content-Disposition": _content_disposition(rec.filename or download_id),
         "X-Content-SHA256": manager.downloads.sha256(download_id),
     }
     rng = _parse_range(request.headers.get("range"), total)

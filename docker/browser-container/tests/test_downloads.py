@@ -13,7 +13,7 @@ from app.engine.downloads import (
     DownloadNotReady,
     DownloadRegistry,
 )
-from app.rest.main import _parse_range
+from app.rest.main import _content_disposition, _parse_range
 
 
 @pytest.fixture()
@@ -110,3 +110,11 @@ def test_get_unknown_raises(reg):
 )
 def test_parse_range(header, total, expected):
     assert _parse_range(header, total) == expected
+
+
+def test_content_disposition_encodes_cjk_and_stays_latin1():
+    # A CJK filename must survive latin-1 header encoding (regression: 500 on 招标 zip).
+    cd = _content_disposition("招标公告附件（新系统）.zip")
+    cd.encode("latin-1")  # must not raise
+    assert cd.startswith("attachment; filename*=UTF-8''")
+    assert "%E6%8B%9B" in cd  # 招 percent-encoded
