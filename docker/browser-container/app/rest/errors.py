@@ -28,6 +28,8 @@ _STATUS = {
     "timeout": 504,
     "no-session": 404,
     "cdp-error": 502,
+    "no-download": 404,
+    "not-ready": 409,
 }
 
 

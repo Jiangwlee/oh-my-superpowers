@@ -37,6 +37,31 @@ Base URL：`http://<container-host>:8080`
 | GET  | `/session/{id}/dom` | — | `{ok, count, dom}` — `dom` 为带编号的可交互元素文本 |
 | POST | `/session/{id}/act` | `{action, args}` | 动作结果，见下 |
 | GET  | `/session/{id}/shot` | — | `{ok, format:"png", base64}` — 可选，多模态用 |
+| GET  | `/session/{id}/downloads` | — | `{ok, count, downloads}` — 浏览器触发过的下载清单 |
+| GET  | `/session/{id}/download/{downloadId}` | — | 裸字节（`application/octet-stream`），支持 Range |
+| DELETE | `/session/{id}/download/{downloadId}` | — | `{ok, deleted}` — 取回后清理 |
+
+### 下载取回（容器只下载，抽取归 mindora）
+
+浏览器点下载后，Chrome 以 `allowAndName` 落盘到容器 tmpfs `/data/downloads/{guid}`，容器经
+`Browser.downloadWillBegin/downloadProgress`（**Browser 域**，不绑 tab，避免单焦点 tab 回收丢记录）记账。
+
+- `GET /downloads` 返回 `[{ downloadId, filename, totalBytes, receivedBytes, state, sha256? }]`；
+  `state ∈ inProgress|completed|canceled`，`sha256` 仅 completed 时给出。
+- `GET /download/{id}`：`application/octet-stream` + `Accept-Ranges: bytes`。
+  带 `Range: bytes=start-end` → `206` + `Content-Range`；不带 → `200` 全量流。响应头 `X-Content-SHA256`
+  供完整性校验。**未完成**下载取回返回 `not-ready`(409)，**未知** id 返回 `no-download`(404)。
+- `DELETE /download/{id}`：mindora 取回后删除文件与记录（tmpfs 本就瞬态，保留期归容器侧）。
+- **传输为裸字节 + Range，非 base64-JSON**：下载物可达数百 MB，`/shot` 的 base64 只适合小截图；
+  两端内存均有界。抽取（unzip/pdf/office→text）一律在 mindora 侧，容器保持"无脑"。
+
+```bash
+# 列出下载 → 取第一个的 id
+curl -s $BASE/session/$SID/downloads
+# 分块拉取前 8MB
+curl -s -H "Range: bytes=0-8388607" $BASE/session/$SID/download/<downloadId> -o part0.bin
+# 取回后清理
+curl -s -X DELETE $BASE/session/$SID/download/<downloadId>
 
 ### act 动作
 

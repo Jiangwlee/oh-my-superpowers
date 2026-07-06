@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 import websockets
 
@@ -41,6 +41,17 @@ class CDPClient:
         self._reader_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
         self._connect_lock = asyncio.Lock()
+        # method -> callbacks for browser/session events (mid is None frames).
+        # Downloads land here via Browser.downloadWillBegin / downloadProgress.
+        self._event_listeners: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
+
+    def on(self, method: str, callback: Callable[[dict[str, Any]], None]) -> None:
+        """Subscribe a synchronous callback to a CDP event method.
+
+        The callback runs inside the reader loop, so it must be non-blocking
+        (dict/record updates only) — never await or do I/O in it.
+        """
+        self._event_listeners.setdefault(method, []).append(callback)
 
     # -- connection lifecycle ------------------------------------------------
 
@@ -91,7 +102,13 @@ class CDPClient:
                 msg = json.loads(raw)
                 mid = msg.get("id")
                 if mid is None:
-                    continue  # event; this client does not subscribe to events
+                    # Event frame: fan out to any listeners for this method.
+                    for cb in self._event_listeners.get(msg.get("method", ""), ()):
+                        try:
+                            cb(msg.get("params", {}))
+                        except Exception:  # noqa: BLE001 — a bad listener must not kill the reader
+                            pass
+                    continue
                 fut = self._pending.pop(mid, None)
                 if fut is not None and not fut.done():
                     fut.set_result(msg)

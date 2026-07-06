@@ -18,6 +18,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from .cdp_client import CDPClient, CDPError
+from .downloads import DOWNLOAD_DIR, DownloadRegistry
 
 # How long to wait for a click to spawn a new tab before concluding none opened.
 _NEW_TAB_WAIT = float(os.environ.get("OMP_NEW_TAB_WAIT", "0.8"))
@@ -44,10 +45,16 @@ class SessionManager:
         self._cdp = CDPClient(host, port)
         self._sessions: dict[str, Session] = {}
         self._lock = asyncio.Lock()
+        self._downloads = DownloadRegistry()
+        self._downloads_armed = False
 
     @property
     def cdp(self) -> CDPClient:
         return self._cdp
+
+    @property
+    def downloads(self) -> DownloadRegistry:
+        return self._downloads
 
     async def startup(self) -> None:
         """Ensure the CDP connection is live, reconnecting if it dropped.
@@ -57,7 +64,32 @@ class SessionManager:
         """
         if not self._cdp.connected:
             self._sessions.clear()
+            self._downloads_armed = False
             await self._cdp.connect()
+        await self._arm_downloads()
+
+    async def _arm_downloads(self) -> None:
+        """Route downloads to a deterministic dir and capture their events.
+
+        Browser-level (no session_id): the single-focus-tab invariant recycles
+        page targets, so capturing per target would lose downloads. Registered
+        once per live connection; safe to call on every startup.
+        """
+        if self._downloads_armed:
+            return
+        self._cdp.on("Browser.downloadWillBegin", self._downloads.on_will_begin)
+        self._cdp.on("Browser.downloadProgress", self._downloads.on_progress)
+        # allowAndName writes each download to {downloadPath}/{guid}; eventsEnabled
+        # turns on downloadWillBegin/downloadProgress on the Browser domain.
+        await self._cdp.send(
+            "Browser.setDownloadBehavior",
+            {
+                "behavior": "allowAndName",
+                "downloadPath": DOWNLOAD_DIR,
+                "eventsEnabled": True,
+            },
+        )
+        self._downloads_armed = True
 
     async def shutdown(self) -> None:
         await self._cdp.close()

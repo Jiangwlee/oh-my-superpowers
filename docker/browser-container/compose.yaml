@@ -29,6 +29,10 @@ services:
       - "${BIND_ADDR:-127.0.0.1}:${VNC_INTERACTIVE_PORT:-6081}:6081"  # noVNC interactive (takeover)
     volumes:
       - omp-browser-profile:/data/profile
+    # Downloads are transient: captured, streamed to mindora by range, then
+    # dropped. tmpfs keeps them off the host disk and out of any backup/SoT.
+    tmpfs:
+      - /data/downloads
 
 volumes:
   omp-browser-profile:

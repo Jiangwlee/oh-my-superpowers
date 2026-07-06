@@ -15,10 +15,11 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..engine import act as actions
+from ..engine.downloads import DownloadNotFound
 from ..engine.session import SessionManager
 from .errors import ActFailure, classify, error_body
 
@@ -153,3 +154,118 @@ async def screenshot(session_id: str) -> dict[str, Any]:
     # Validate it decodes; keep the base64 string as the wire format.
     base64.b64decode(data)
     return {"ok": True, "format": "png", "base64": data}
+
+
+# -- downloads (交付物3 ①': capture in container, extract in mindora) ---------
+
+# Bytes read per disk block when streaming a download; bounds server memory
+# regardless of how large a range the client asks for.
+_STREAM_BLOCK = 1 << 20  # 1 MiB
+
+
+def _parse_range(header: str | None, total: int) -> tuple[int, int] | None:
+    """Parse a single ``bytes=start-end`` range against a known total size.
+
+    Returns an inclusive ``(start, end)`` clamped to ``[0, total-1]``, or None
+    when there is no/!bytes/unsatisfiable range (caller then serves full body).
+    Supports ``bytes=start-``, ``bytes=start-end`` and suffix ``bytes=-N``.
+    """
+    if not header or not header.startswith("bytes=") or total <= 0:
+        return None
+    spec = header[len("bytes="):].split(",")[0].strip()
+    if "-" not in spec:
+        return None
+    lo, hi = spec.split("-", 1)
+    if lo == "":  # suffix: last N bytes
+        if hi == "":
+            return None
+        n = min(int(hi), total)
+        return (total - n, total - 1)
+    start = int(lo)
+    end = int(hi) if hi != "" else total - 1
+    end = min(end, total - 1)
+    if start > end:
+        return None
+    return (start, end)
+
+
+def _stream_file(path: str, start: int, end: int):
+    """Yield ``[start, end]`` (inclusive) of ``path`` in bounded blocks."""
+    remaining = end - start + 1
+    with open(path, "rb") as f:
+        f.seek(start)
+        while remaining > 0:
+            chunk = f.read(min(_STREAM_BLOCK, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
+@app.get("/session/{session_id}/downloads", dependencies=[Depends(require_token)])
+async def list_downloads(session_id: str) -> dict[str, Any]:
+    """List downloads captured since the browser came up (browser-level)."""
+    await _get_session(session_id)  # validate session; downloads are global
+    out = []
+    for rec in manager.downloads.list():
+        item = {
+            "downloadId": rec.guid,
+            "filename": rec.filename,
+            "totalBytes": rec.total_bytes,
+            "receivedBytes": rec.received_bytes,
+            "state": rec.state,
+        }
+        if rec.state == "completed":
+            item["sha256"] = manager.downloads.sha256(rec.guid)
+        out.append(item)
+    return {"ok": True, "count": len(out), "downloads": out}
+
+
+@app.get("/session/{session_id}/download/{download_id}", dependencies=[Depends(require_token)])
+async def fetch_download(session_id: str, download_id: str, request: Request) -> Response:
+    """Stream a completed download's raw bytes; honors HTTP Range for chunking."""
+    await _get_session(session_id)
+    try:
+        rec = manager.downloads.get(download_id)
+        if rec.state != "completed":
+            raise ActFailure("not-ready", f"download {download_id} state={rec.state}")
+        total = manager.downloads.size_on_disk(download_id)
+        path = manager.downloads.path(download_id)
+    except DownloadNotFound as exc:
+        raise ActFailure("no-download", str(exc)) from exc
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'attachment; filename="{rec.filename or download_id}"',
+        "X-Content-SHA256": manager.downloads.sha256(download_id),
+    }
+    rng = _parse_range(request.headers.get("range"), total)
+    from fastapi.responses import StreamingResponse
+
+    if rng is None:
+        headers["Content-Length"] = str(total)
+        return StreamingResponse(
+            _stream_file(path, 0, total - 1),
+            media_type="application/octet-stream",
+            headers=headers,
+        )
+    start, end = rng
+    headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+    headers["Content-Length"] = str(end - start + 1)
+    return StreamingResponse(
+        _stream_file(path, start, end),
+        status_code=206,
+        media_type="application/octet-stream",
+        headers=headers,
+    )
+
+
+@app.delete("/session/{session_id}/download/{download_id}", dependencies=[Depends(require_token)])
+async def delete_download(session_id: str, download_id: str) -> dict[str, Any]:
+    """Drop a download's file + record after mindora has fetched it."""
+    await _get_session(session_id)
+    try:
+        manager.downloads.delete(download_id)
+    except DownloadNotFound as exc:
+        raise ActFailure("no-download", str(exc)) from exc
+    return {"ok": True, "deleted": download_id}
