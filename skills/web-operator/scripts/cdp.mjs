@@ -587,6 +587,152 @@ async function clickXyStr(cdp, sid, x, y) {
   return `Clicked at CSS (${cx}, ${cy})`;
 }
 
+// ── Indexed DOM (ported from browser-container app/engine/dom_index.py) ────────
+// Read interactive elements → numbered listing + {index → backendNodeId} map.
+// The number → backendNodeId map is held per-tab by the daemon so `click-index`
+// can resolve a number to a real node via DOM.resolveNode. Numbers are
+// per-snapshot; navigation/element removal invalidates them (→ stale, re-read).
+
+// Collects interactive elements into window[<unique>] (same order as the
+// returned descriptors) and returns a JSON array of descriptors. Visibility is
+// checked so hidden/zero-size controls are skipped. Extraction is in-page DOM
+// API, not regex over HTML; no attributes are injected into the page.
+const DOM_COLLECT_JS = String.raw`
+(() => {
+  const SEL = [
+    'a[href]', 'button', 'input', 'select', 'textarea',
+    '[role=button]', '[role=link]', '[role=tab]', '[role=menuitem]',
+    '[role=checkbox]', '[role=radio]', '[onclick]',
+    '[contenteditable=""]', '[contenteditable=true]', '[tabindex]'
+  ].join(',');
+  const seen = new Set();
+  const els = [];
+  for (const el of document.querySelectorAll(SEL)) {
+    if (seen.has(el)) continue;
+    seen.add(el);
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue;
+    if (el.hidden || el.getAttribute('aria-hidden') === 'true') continue;
+    const style = window.getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    els.push(el);
+  }
+  window.__OMP_GLOBAL__ = els;
+  const name = (el) => {
+    // A leaf control (no interactive descendant) can safely use its full text,
+    // covering the common <button><span>登录</span></button> case. A wrapper
+    // that contains other interactive elements uses only its own direct text
+    // nodes, so it does not swallow the whole subtree's text into one line.
+    const ownText = [...el.childNodes]
+      .filter(n => n.nodeType === 3)
+      .map(n => n.textContent).join('').trim();
+    const text = el.querySelector(SEL)
+      ? ownText
+      : (el.innerText || el.textContent || '').trim();
+    return (
+      el.getAttribute('aria-label') ||
+      text ||
+      el.getAttribute('placeholder') ||
+      el.getAttribute('title') ||
+      el.value || ''
+    ).replace(/\s+/g, ' ').slice(0, 120);
+  };
+  return JSON.stringify(els.map((el, i) => ({
+    i,
+    tag: el.tagName.toLowerCase(),
+    role: el.getAttribute('role') || '',
+    type: el.getAttribute('type') || '',
+    name: name(el),
+    disabled: !!el.disabled,
+  })));
+})()
+`;
+
+// Monotonic counter → unique per-call global name, so a concurrent dom call or a
+// page script cannot overwrite the element array between descriptor generation
+// and backendNodeId extraction.
+let _domCounter = 0;
+
+function formatDomListing(descriptors) {
+  const lines = [];
+  for (const d of descriptors) {
+    let tag = d.type ? `${d.tag}:${d.type}` : d.tag;
+    let label = `[${d.i}] <${tag}>`;
+    if (d.role) label += ` role=${d.role}`;
+    if (d.name) label += ` "${d.name}"`;
+    if (d.disabled) label += ' (disabled)';
+    lines.push(label);
+  }
+  return lines.join('\n');
+}
+
+// Returns { listing, indexMap } where listing is LLM-readable text (one line per
+// element) and indexMap maps each number to a backendNodeId for later resolution.
+async function domIndexStr(cdp, sid) {
+  await cdp.send('Runtime.enable', {}, sid);
+  await cdp.send('DOM.enable', {}, sid);
+  _domCounter += 1;
+  const globalName = `__omp_els_${_domCounter}`;
+  const collectJs = DOM_COLLECT_JS.replaceAll('__OMP_GLOBAL__', globalName);
+
+  const res = await cdp.send('Runtime.evaluate', { expression: collectJs, returnByValue: true }, sid);
+  if (res.exceptionDetails) {
+    throw new Error(res.exceptionDetails.text || res.exceptionDetails.exception?.description || 'dom collect failed');
+  }
+  const descriptors = JSON.parse(res.result.value || '[]');
+
+  const indexMap = {};
+  try {
+    // Grab the live element array so we can resolve each to a backendNodeId.
+    const arr = await cdp.send('Runtime.evaluate', { expression: `window.${globalName}`, returnByValue: false }, sid);
+    const arrObjectId = arr.result?.objectId;
+    if (arrObjectId) {
+      const props = await cdp.send('Runtime.getProperties', { objectId: arrObjectId, ownProperties: true }, sid);
+      for (const prop of props.result || []) {
+        if (!/^\d+$/.test(prop.name)) continue; // skip 'length' and non-index props
+        const objectId = prop.value?.objectId;
+        if (!objectId) continue;
+        const described = await cdp.send('DOM.describeNode', { objectId }, sid);
+        const backend = described.node?.backendNodeId;
+        if (backend != null) indexMap[parseInt(prop.name)] = backend;
+      }
+    }
+  } finally {
+    // Drop the temporary global so it does not leak across snapshots. Never let
+    // cleanup failure mask the real extraction error.
+    try { await cdp.send('Runtime.evaluate', { expression: `delete window.${globalName}` }, sid); } catch {}
+  }
+
+  return { listing: formatDomListing(descriptors), indexMap };
+}
+
+// Resolve a snapshot number to its node via backendNodeId and click its center.
+// Throws `not-found` (number absent from last dom) or `stale` (node no longer
+// resolves / has no box) so the agent knows to re-read `dom`.
+async function clickIndexStr(cdp, sid, n, indexMap) {
+  if (!Number.isInteger(n)) throw new Error('index must be an integer');
+  if (!indexMap || !(n in indexMap)) {
+    throw new Error(`not-found: index ${n} not in last dom snapshot — re-run 'dom <target>' first`);
+  }
+  const backendNodeId = indexMap[n];
+  await cdp.send('DOM.enable', {}, sid);
+
+  let box;
+  try {
+    box = await cdp.send('DOM.getBoxModel', { backendNodeId }, sid);
+  } catch {
+    throw new Error(`stale: index ${n} no longer resolves (page changed?) — re-run 'dom <target>'`);
+  }
+  const quad = box.model?.content;
+  if (!quad || quad.length < 8) {
+    throw new Error(`stale: index ${n} has no visible box (removed/hidden?) — re-run 'dom <target>'`);
+  }
+  const cx = (quad[0] + quad[2] + quad[4] + quad[6]) / 4;
+  const cy = (quad[1] + quad[3] + quad[5] + quad[7]) / 4;
+  await dispatchClickAt(cdp, sid, cx, cy);
+  return `Clicked [${n}] at CSS (${cx.toFixed(1)}, ${cy.toFixed(1)})`;
+}
+
 // Scroll up/down by viewport heights.
 // amount is a multiplier of viewport height (default 3).
 async function scrollStr(cdp, sid, direction, amount) {
@@ -704,6 +850,11 @@ async function runDaemon(targetId) {
   let idleTimer = null;
   let server = null;
   let alive = true;
+  // Per-tab {index → backendNodeId} from the most recent `dom` snapshot, held in
+  // this daemon process so a later `click-index` on the same tab can resolve a
+  // number. Lost on daemon restart (idle/tab-close) → click-index returns
+  // not-found → agent re-reads `dom`. Same contract as navigation-stale.
+  let lastDomIndex = null;
   function shutdown() {
     if (!alive) return;
     alive = false;
@@ -749,6 +900,13 @@ async function runDaemon(targetId) {
           break;
         }
         case 'snap': case 'snapshot': result = await snapshotStr(cdp, sessionId, true); break;
+        case 'dom': {
+          const { listing, indexMap } = await domIndexStr(cdp, sessionId);
+          lastDomIndex = indexMap;
+          result = listing;
+          break;
+        }
+        case 'click-index': result = await clickIndexStr(cdp, sessionId, parseInt(args[0], 10), lastDomIndex); break;
         case 'eval': result = await evalStr(cdp, sessionId, args[0]); break;
         case 'shot': case 'screenshot': result = await shotStr(cdp, sessionId, args[0], targetId); break;
         case 'html': result = await htmlStr(cdp, sessionId, args[0]); break;
@@ -971,6 +1129,12 @@ Usage: cdp <command> [args]
   list                              List open pages (shows unique target prefixes)
   list_raw                          List open pages as JSON for scripting
   snap  <target>                    Accessibility tree snapshot
+  dom   <target>                    Numbered interactive elements (a/button/input/[role]...).
+                                    Output: one line per element, e.g. [2] <button> "登录".
+                                    Numbers are per-snapshot; act on them with click-index.
+  click-index <target> <n>          Click element [n] from the most recent dom snapshot.
+                                    Resolves via backendNodeId (not CSS). Errors:
+                                    not-found (n absent → re-run dom) / stale (page changed → re-run dom).
   eval  <target> <expr>             Evaluate JS expression
   shot  <target> [file]             Screenshot (default: screenshot-<target>.png in runtime dir); prints coordinate mapping
   html  <target> [selector]         Get HTML (full page or CSS selector)
@@ -1012,10 +1176,13 @@ COORDINATE SYSTEM
   If your viewer rescales the image further, account for that scaling too.
 
 EVAL SAFETY NOTE
-  Avoid index-based DOM selection (querySelectorAll(...)[i]) across multiple
-  eval calls when the list can change between calls (e.g. after clicking
-  "Ignore" buttons on a feed — indices shift). Prefer stable selectors or
-  collect all data in a single eval.
+  Avoid ad-hoc index-based DOM selection (querySelectorAll(...)[i]) across
+  multiple eval calls when the list can change between calls (e.g. after
+  clicking "Ignore" buttons on a feed — indices shift). Prefer stable selectors
+  or collect all data in a single eval.
+  For indexed INTERACTION, use 'dom' + 'click-index' instead: they are safe
+  because numbers map to backendNodeId (stable per document) and a changed page
+  yields a stale error, not a wrong click.
 
 DAEMON IPC (for advanced use / scripting)
   Each tab runs a persistent daemon at Unix socket in the runtime dir (see below).
@@ -1023,7 +1190,7 @@ DAEMON IPC (for advanced use / scripting)
     Request:  {"id":<number>, "cmd":"<command>", "args":["arg1","arg2",...]}
     Response: {"id":<number>, "ok":true,  "result":"<string>"}
            or {"id":<number>, "ok":false, "error":"<message>"}
-  Commands mirror the CLI: snap, eval, shot, html, nav, net, click, clickxy,
+  Commands mirror the CLI: snap, dom, click-index, eval, shot, html, nav, net, click, clickxy,
   type, scroll, loadall, evalraw, reset, stop. Use evalraw to send arbitrary CDP methods.
   The socket disappears after 20 min of inactivity or when the tab closes.
 `;
@@ -1031,6 +1198,7 @@ DAEMON IPC (for advanced use / scripting)
 const NEEDS_TARGET = new Set([
   'snap','snapshot','eval','shot','screenshot','html','nav','navigate',
   'net','network','click','clickxy','type','scroll','loadall','evalraw','reset',
+  'dom','click-index',
 ]);
 
 async function main() {

@@ -105,7 +105,7 @@ Load site references for website-specific workflows:
 
 - The `<target>` argument is a unique `targetId` prefix from `omp web-operator page list`.
 - Prefer `nav` over click-driven navigation when a stable URL is known.
-- Prefer one `eval` that collects all needed data over multiple DOM-indexed `eval` calls.
+- Prefer one `eval` that collects all needed data over multiple DOM-indexed `eval` calls. For clicking by number (not data extraction), use the `dom` → `click-index` loop below instead of ad-hoc `querySelectorAll[i]`.
 - Use `type` instead of `eval` for text entry in cross-origin iframes.
 - Expect one Chrome "Allow debugging" prompt per tab daemon on first access.
 - Keep browser primitives in the core layer. Do not bury general CDP logic inside a site-specific workflow unless the behavior is truly site-bound.
@@ -114,6 +114,20 @@ Load site references for website-specific workflows:
 - For `365.kdocs.cn`, prefer `omp web-operator kdocs ask-ai` when the task is question answering, summarization, document lookup, or cross-document synthesis. Use `kdocs search`, `open-doc`, and `find-in-doc` when the task explicitly needs direct document inspection or keyword verification.
 - For `feishu.cn` admin backend (`approval` / 审批后台 on `www.feishu.cn`, `attendance` / 考勤后台 on `oa.feishu.cn`), the user must already be signed in as the corresponding administrator on a tab of that host. The CLI calls Feishu admin internal HTTP APIs from inside the tab (cookies + CSRF carried automatically) and does not interact with any UI element.
 - For `chatgpt.com/images`, the user must already be signed in to ChatGPT in Chrome. The CLI drives the image composer and downloads generated image bytes from inside the authenticated page context; direct shell downloads of the rendered image URL may return 403.
+
+## Indexed DOM interaction（读编号 → 按编号点击）
+
+When you must click something but a stable CSS selector is hard to derive (dynamic class names, feed items, unlabeled icons), use the indexed loop instead of guessing selectors or coordinates:
+
+```bash
+omp web-operator page dom <target>                # numbered interactive elements
+omp web-operator page click-index <target> <n>    # click element [n] from the last dom
+```
+
+- `dom` lists interactive elements (links, buttons, inputs, `[role]`, ...) as `[n] <tag> "name"`. Numbers are **per-snapshot**, not permanent.
+- `click-index` clicks `[n]` from the **most recent** `dom` on that tab, resolving via `backendNodeId` — not CSS, not stored coordinates.
+- **Re-read `dom` before each `click-index`** after any navigation or DOM change. An unknown number returns `not-found`; a changed/removed element returns `stale`. Both mean: re-run `dom`.
+- Prefer `nav` (stable URL) and `click <selector>` (stable selector) when either is reliable; use the indexed loop when neither is. This mirrors the browser-container `/dom` → `act` model.
 
 ## read-url 参数说明
 

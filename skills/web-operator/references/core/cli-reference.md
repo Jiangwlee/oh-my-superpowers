@@ -38,6 +38,10 @@ is the CLI command list below and the target-prefix workflow.
   Navigates to an `http` or `https` URL and waits for load completion.
 - `net <target>`
   Returns resource timing entries from the page.
+- `dom <target>`
+  Lists interactive elements as `[n] <tag> "name"` (per-snapshot numbers). Numbers map to `backendNodeId`, held per-tab for the next `click-index`.
+- `click-index <target> <n>`
+  Clicks element `[n]` from the most recent `dom` snapshot on that tab (resolved via `backendNodeId`, not CSS). Returns `not-found` if `n` is absent or `stale` if the page changed — re-run `dom`.
 - `click <target> <selector>`
   Clicks an element resolved by CSS selector.
 - `clickxy <target> <x> <y>`
