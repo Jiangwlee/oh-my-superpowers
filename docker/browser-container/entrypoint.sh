@@ -5,7 +5,7 @@ set -euo pipefail
 mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root
 mkdir -p /var/run/dbus /var/log/omp-browser
 
-# A machine-id must exist before Chrome/dbus start. ubuntu:24.04 ships an EMPTY
+# A machine-id must exist before Chrome/dbus start. Base images may ship an EMPTY
 # /etc/machine-id (0 bytes), and an empty machine-id makes dbus/Chrome refuse to
 # launch ("UUID file should contain a hex string of length 32, not length 0").
 # `dbus-uuidgen --ensure` only writes when the file is *missing*, so it never

@@ -1,14 +1,17 @@
-# syntax=docker/dockerfile:1.7
-#
 # omp browser-container: resident, single-user browser automation container.
-# Bundles Chrome + Xvfb + openbox + dual x11vnc (viewonly/interactive) + noVNC
+# Bundles Chromium + Xvfb + openbox + dual x11vnc (viewonly/interactive) + noVNC
 # + the indexed automation engine exposing REST (9222 CDP internal, 8080 REST)
 # and MCP (9223).
+#
+# Multi-arch by design: debian's chromium ships native amd64 AND arm64 debs, so
+# the same Dockerfile builds natively on Linux/amd64 (docker) and on Apple
+# Silicon via apple/container — no Rosetta, no google-chrome (amd64-only, and
+# dl.google.com is unreliable from CN networks).
 #
 #   docker build -f docker/browser-container/Dockerfile \
 #     -t omp-browser-container:local docker/browser-container
 
-FROM ubuntu:24.04
+FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -21,22 +24,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CDP_HOST=127.0.0.1 \
     CDP_PORT=9222
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg \
         xvfb x11vnc openbox dbus dbus-x11 \
         novnc websockify \
         python3 python3-venv python3-pip \
         fonts-liberation fonts-noto-cjk \
         supervisor procps net-tools \
-    && rm -rf /var/lib/apt/lists/*
-
-# Google Chrome stable (apt chromium on 24.04 is a snap shim; avoid it).
-RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
-        | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] \
-        http://dl.google.com/linux/chrome/deb/ stable main" \
-        > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
+        chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # Application: engine + REST + MCP (installed as the `app` package).

@@ -1,6 +1,6 @@
 # omp browser-container — 对接契约（交付给 mindora）
 
-常驻、单用户浏览器自动化容器。自带 Chrome + Xvfb + noVNC，对外提供 **indexed** 的 REST/MCP 接口和 VNC 直播/接管。容器**无脑**：只做「读结构化 DOM → 按编号执行动作」，登录墙检测、接管决策归调用方 agent。
+常驻、单用户浏览器自动化容器。自带 Chromium + Xvfb + noVNC，对外提供 **indexed** 的 REST/MCP 接口和 VNC 直播/接管。容器**无脑**：只做「读结构化 DOM → 按编号执行动作」，登录墙检测、接管决策归调用方 agent。
 
 对应 mindora ADR 0056 交付物 3。mindora 收到后按本文档逐条核对，再落 browser Capability + preview renderer + ask 接管。
 
@@ -9,7 +9,7 @@
 ## 1. 启动 / 生命周期
 
 ```bash
-omp container up browser        # 构建镜像并启动（首次约需拉取 Chrome）
+omp container up browser        # 构建镜像并启动（首次构建约需数分钟）
 omp container health browser    # compose ps + /health 探活
 omp container logs browser --tail 200
 omp container down browser
