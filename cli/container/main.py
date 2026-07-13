@@ -65,13 +65,45 @@ def _compose_dir(name: str) -> Path:
     return OMP_HOME / str(REGISTRY[name]["dir"])
 
 
+def _docker_usable() -> bool:
+    # PATH presence is not enough: on macOS the docker CLI often lingers while
+    # Docker Desktop is stopped, and the compose plugin may be missing. Probe
+    # the daemon so an unusable docker falls through to the apple backend.
+    try:
+        for argv in (
+            ["docker", "info", "--format", "{{.ServerVersion}}"],
+            ["docker", "compose", "version"],
+        ):
+            probe = subprocess.run(
+                argv, check=False, capture_output=True, text=True, timeout=10
+            )
+            if probe.returncode != 0:
+                return False
+        return True
+    except subprocess.TimeoutExpired:
+        return False
+
+
 def _runtime() -> str:
-    if shutil.which("docker"):
+    forced = os.environ.get("OMP_CONTAINER_RUNTIME", "")
+    if forced in ("docker", "apple"):
+        binary = "docker" if forced == "docker" else "container"
+        if shutil.which(binary) is None:
+            typer.echo(
+                json.dumps({"status": "error",
+                            "message": f"OMP_CONTAINER_RUNTIME={forced} but {binary} not on PATH"}),
+                err=True,
+            )
+            raise typer.Exit(4)
+        return forced
+    if shutil.which("docker") and _docker_usable():
         return "docker"
     if shutil.which("container"):
         return "apple"
     typer.echo(
-        json.dumps({"status": "error", "message": "neither docker nor container (apple) found"}),
+        json.dumps({"status": "error",
+                    "message": "no usable container runtime (docker daemon down/absent, "
+                               "container (apple) not found); set OMP_CONTAINER_RUNTIME to force"}),
         err=True,
     )
     raise typer.Exit(4)
@@ -121,8 +153,15 @@ _APPLE_SPECS: dict[str, dict[str, Any]] = {
 }
 
 
+def _env_or(name: str, default: str) -> str:
+    # compose ${VAR:-default} semantics: empty counts as unset. A plain
+    # environ.get would let BIND_ADDR="" publish password-less VNC on all
+    # interfaces.
+    return os.environ.get(name) or default
+
+
 def _apple_run_argv(spec: dict[str, Any]) -> list[str]:
-    bind = os.environ.get("BIND_ADDR", "127.0.0.1")
+    bind = _env_or("BIND_ADDR", "127.0.0.1")
     volume_name, volume_path = spec["volume"]
     argv = [
         "container", "run", "-d",
@@ -134,12 +173,14 @@ def _apple_run_argv(spec: dict[str, Any]) -> list[str]:
     for env_name in spec["env_passthrough"]:
         argv += ["-e", f"{env_name}={os.environ.get(env_name, '')}"]
     for env_name, default, container_port in spec["ports"]:
-        argv += ["-p", f"{bind}:{os.environ.get(env_name, default)}:{container_port}"]
+        argv += ["-p", f"{bind}:{_env_or(env_name, default)}:{container_port}"]
     argv.append(spec["image"])
     return argv
 
 
-def _apple_lifecycle(name: str, action: str, build: bool = True) -> dict[str, Any]:
+def _apple_lifecycle(
+    name: str, action: str, build: bool = True, tail: int | None = None
+) -> dict[str, Any]:
     spec = _APPLE_SPECS.get(name)
     if spec is None:
         typer.echo(
@@ -160,21 +201,29 @@ def _apple_lifecycle(name: str, action: str, build: bool = True) -> dict[str, An
         )
         raise typer.Exit(4)
 
-    # (argv, tolerate_failure) — stop/rm before run make `up` idempotent, and
-    # volume create fails harmlessly when the volume already exists.
-    steps: list[tuple[list[str], bool]] = []
+    # (argv, tolerate) — tolerate names the ONLY failure a step may swallow:
+    # "exists" for volume create on an existing volume, "absent" for stop/rm
+    # on a missing container. Any other failure aborts the step chain — an
+    # operational volume-create error must not proceed to stop/rm and take a
+    # working service offline.
+    steps: list[tuple[list[str], bool | str]] = []
     if action in ("up", "restart"):
         if build and action == "up":
             steps.append((["container", "build", "-t", spec["image"], "."], False))
-        steps.append((["container", "volume", "create", spec["volume"][0]], True))
-        steps.append((["container", "stop", spec["container"]], True))
-        steps.append((["container", "rm", spec["container"]], True))
+        steps.append((["container", "volume", "create", spec["volume"][0]], "exists"))
+        steps.append((["container", "stop", spec["container"]], "absent"))
+        steps.append((["container", "rm", spec["container"]], "absent"))
         steps.append((_apple_run_argv(spec), False))
     elif action == "down":
-        steps.append((["container", "stop", spec["container"]], True))
-        steps.append((["container", "rm", spec["container"]], False))
+        # down on an absent container is a no-op success, matching
+        # `docker compose down` semantics (and keeping restart sane).
+        steps.append((["container", "stop", spec["container"]], "absent"))
+        steps.append((["container", "rm", spec["container"]], "absent"))
     elif action == "logs":
-        steps.append((["container", "logs", spec["container"]], False))
+        argv = ["container", "logs"]
+        if tail is not None:
+            argv += ["-n", str(tail)]
+        steps.append((argv + [spec["container"]], False))
     elif action == "ps":
         steps.append((["container", "inspect", spec["container"]], False))
 
@@ -187,11 +236,18 @@ def _apple_lifecycle(name: str, action: str, build: bool = True) -> dict[str, An
         )
         if result.stdout.strip():
             stdout_parts.append(result.stdout.strip())
-        if result.returncode != 0 and not tolerate:
-            returncode = result.returncode
-            if result.stderr.strip():
-                stderr_parts.append(result.stderr.strip())
-            break
+        if result.returncode != 0:
+            stderr_lower = result.stderr.lower()
+            tolerated = (
+                tolerate is True
+                or (tolerate == "absent" and "notfound" in stderr_lower)
+                or (tolerate == "exists" and "already exists" in stderr_lower)
+            )
+            if not tolerated:
+                returncode = result.returncode
+                if result.stderr.strip():
+                    stderr_parts.append(result.stderr.strip())
+                break
     return {
         "status": "ok" if returncode == 0 else "error",
         "returncode": returncode,
@@ -259,8 +315,7 @@ def logs(
 ) -> None:
     """Show recent container logs."""
     if _runtime() == "apple":
-        payload = _apple_lifecycle(name, "logs")
-        payload["stdout"] = "\n".join(payload["stdout"].splitlines()[-tail:])
+        payload = _apple_lifecycle(name, "logs", tail=tail)
     else:
         payload = _run_compose(name, ["logs", "--tail", str(tail)])
     _print(payload)
@@ -278,7 +333,7 @@ def health(name: str = typer.Argument(..., help="Container name.")) -> None:
     health_url = REGISTRY[name]["health"]
     probe: dict[str, Any] | None = None
     if health_url:
-        url = str(health_url).replace("{REST_PORT}", os.environ.get("REST_PORT", "8080"))
+        url = str(health_url).replace("{REST_PORT}", _env_or("REST_PORT", "8080"))
         try:
             with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: S310 (localhost)
                 probe = {"url": url, "status": resp.status, "body": json.loads(resp.read())}
