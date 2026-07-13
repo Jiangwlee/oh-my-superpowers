@@ -1,7 +1,6 @@
 {
   "reviewer": {
     "agent": "@agents/reviewer.md",
-    "model": "litellm-local/gemma4",
     "skills": [
       "@skills/skill-review/SKILL.md",
       "@skills/agent-review/SKILL.md",
@@ -10,7 +9,6 @@
   },
   "media-editor": {
     "agent": "@agents/media-editor.md",
-    "model": "litellm-local/gemma4",
     "skills": [
       "@skills/media-editor/SKILL.md",
       "@skills/web-operator/SKILL.md"
@@ -18,7 +16,6 @@
   },
   "researcher": {
     "agent": "@agents/researcher.md",
-    "model": "litellm-local/gemma4",
     "skills": [
       "@skills/web-operator/SKILL.md",
       "@skills/deep-research/SKILL.md"
@@ -26,18 +23,15 @@
   },
   "wps-assistant": {
     "agent": "@agents/wps-assistant.md",
-    "model": "litellm-local/gemma4",
     "skills": [
       "@skills/web-operator/SKILL.md"
     ]
   },
   "oss-researcher": {
-    "agent": "@agents/oss-researcher.md",
-    "model": "claude-sonnet-4-6"
+    "agent": "@agents/oss-researcher.md"
   },
   "ux-engineer": {
     "agent": "@agents/ux-engineer.md",
-    "model": "litellm-local/gemma4",
     "skills": [
       "~/Github/impeccable/source/skills/frontend-design/SKILL.md",
       "~/Github/impeccable/source/skills/audit/SKILL.md",

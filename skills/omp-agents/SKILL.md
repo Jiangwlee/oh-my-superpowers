@@ -15,30 +15,25 @@ description: >-
 | `ux-engineer` | UI audit, frontend design, style optimization | "Audit UI issues on this page", "Generate Tailwind component" |
 | `oss-researcher` | 开源项目代码研究与知识库沉淀 | "pi-mono 如何加载 skill？", "langchain memory 模块怎么设计的？" |
 
-Above is a high-frequency subset. Get the full agent list:
+Above is a high-frequency subset. Get the full agent list (JSON on stdout):
 
 ```bash
-omp list agent
+omp list agent --json
 ```
 
 ## Invocation
 
 ```bash
-# Recommended: stream mode for real-time progress
-omp run <agent-name> --mode stream "task description"
-
-# Specify model
-omp run <agent-name> --mode stream -m <model> "task description"
+# text mode: final assistant text only — clean output for programmatic consumption
+omp run <agent-name> --mode text "task description"
 ```
 
-### Recommended Models
+Each agent runs on the model configured in `agents.json`. Do not pass `-m` unless
+the task specifically requires overriding it.
 
-| Model | When to Use |
-|-------|-------------|
-| `litellm-local/qwen3.5-27b` | Default choice, local inference, zero cost |
-| `openai-codex/gpt-5.4` | When higher quality is needed |
-
-Do not use other models.
+> `--mode stream` targets human terminals (colored progress). When an agent
+> delegates and consumes the result, use `text` (final answer only) or `json`
+> (raw event stream for structured parsing).
 
 ## When to Delegate
 

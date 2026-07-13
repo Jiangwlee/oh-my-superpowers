@@ -41,6 +41,17 @@ if _env_file.is_file():
             os.environ.setdefault(_key.strip(), _value.strip())
 
 sys.path.insert(0, str(OMP_HOME / "lib"))
+try:
+    from omp_output import EXIT_ENV, EXIT_USAGE, emit  # noqa: E402
+except ModuleNotFoundError:
+    # $OMP_HOME/lib 不可达 = 安装损坏/环境缺失，等价于 _check_home 的 EXIT_ENV 场景。
+    # 干净报错 + exit 4，不泄漏 traceback。
+    print(
+        "[omp] ERROR: ~/.oh-my-superpowers not found or corrupted. Run install.sh first.",
+        file=sys.stderr,
+    )
+    raise SystemExit(4)
+
 SKILLS_SRC = OMP_HOME / "skills"
 AGENTS_SRC = OMP_HOME / "agents"
 AGENTS_CFG = AGENTS_SRC / "agents.json"
@@ -168,7 +179,7 @@ def _check_home() -> None:
     """检查 OMP_HOME 存在，否则 exit 1。"""
     if not OMP_HOME.exists():
         console.print("[red][omp] ERROR:[/red] ~/.oh-my-superpowers not found. Run install.sh first.")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_ENV)
 
 
 def _symlink(src: Path, dst: Path) -> None:
@@ -310,6 +321,68 @@ def _list_available_agents() -> None:
         console.print(f"  {name:<25} model={model}  agent={resolved}  ({skills_display})")
 
 
+def _collect_dir(directory: Path) -> list[dict]:
+    """收集目录条目为结构化列表（symlink 带 target）。"""
+    if not directory.is_dir():
+        return []
+    items: list[dict] = []
+    for item in sorted(directory.iterdir()):
+        entry = {"name": item.name}
+        if item.is_symlink():
+            entry["target"] = str(item.resolve())
+        items.append(entry)
+    return items
+
+
+def _collect_list_data(base: Path, show_skills: bool, show_agents: bool) -> dict:
+    """收集 list 数据为结构化 dict（带 count），供 --json 输出。"""
+    data: dict = {}
+    if show_skills:
+        pi = _collect_dir(base / ".agents" / "skills")
+        claude = _collect_dir(base / ".claude" / "skills")
+        installed = {p["name"] for p in pi}
+        available = (
+            sorted(p.name for p in SKILLS_SRC.iterdir() if p.is_dir())
+            if SKILLS_SRC.is_dir()
+            else []
+        )
+        not_installed = [
+            {"name": s, "description": _read_skill_description(SKILLS_SRC / s / "SKILL.md")}
+            for s in available
+            if s not in installed
+        ]
+        data["skills"] = {
+            "pi": {"count": len(pi), "items": pi},
+            "claude": {"count": len(claude), "items": claude},
+            "not_installed": {"count": len(not_installed), "items": not_installed},
+        }
+    if show_agents:
+        pi_agents = _collect_dir(base / ".pi" / "agents")
+        cfg = _read_agents_cfg()
+        available_agents = []
+        for name, entry in cfg.items():
+            agent_path = _resolve_path(entry["agent"]) if entry.get("agent") else None
+            description = (
+                _read_skill_description(agent_path)
+                if agent_path and agent_path.is_file()
+                else ""
+            )
+            available_agents.append(
+                {
+                    "name": name,
+                    "description": description,
+                    "model": entry.get("model", ""),
+                    "agent": str(agent_path) if agent_path else "",
+                    "skills": len(entry.get("skills", [])),
+                }
+            )
+        data["agents"] = {
+            "pi": {"count": len(pi_agents), "items": pi_agents},
+            "available": {"count": len(available_agents), "items": available_agents},
+        }
+    return data
+
+
 def _supports_color() -> bool:
     """是否为当前 stdout 启用 ANSI 颜色。"""
     return sys.stdout.isatty()
@@ -387,8 +460,8 @@ def _build_run_context(name: str, model: Optional[str]) -> dict:
         console.print(f"[red][omp] ERROR:[/red] agent file '{agent_path}' not found")
         raise typer.Exit(1)
 
-    default_model = os.environ.get("OMP_DEFAULT_MODEL_PI", "openai-codex/gpt-5.4-mini")
-    effective_model = model or entry.get("model", default_model)
+    # 未指定 model（-m 或 agents.json）时留空，_build_pi_cmd 省略 --model，交给 pi 默认。
+    effective_model = model or entry.get("model", "")
     skill_flags: list[str] = []
     for skill in entry.get("skills", []):
         path = _resolve_path(skill)
@@ -409,11 +482,10 @@ def _build_run_context(name: str, model: Optional[str]) -> dict:
 
 def _build_pi_cmd(run_ctx: dict, mode: str, prompt_str: str) -> list[str]:
     """根据 mode 构建对应的 pi 命令。"""
-    base = [
-        "pi",
-        "--no-session",
-        "--model",
-        run_ctx["model"],
+    base = ["pi", "--no-session"]
+    if run_ctx["model"]:
+        base += ["--model", run_ctx["model"]]
+    base += [
         "--tools",
         run_ctx["tools"],
         *run_ctx["skill_flags"],
@@ -614,7 +686,7 @@ def _validate_run_mode(mode: str) -> str:
         console.print(
             f"[red][omp] ERROR:[/red] unknown mode '{mode}': use one of {', '.join(sorted(RUN_MODES))}"
         )
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_USAGE)
     return normalized
 
 
@@ -656,7 +728,7 @@ def install(
         _symlink(src, base / ".pi" / "agents" / f"{name}.md")
     else:
         console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_USAGE)
 
 
 @app.command()
@@ -683,7 +755,7 @@ def remove(
         _remove_link(base / ".pi" / "agents" / f"{name}.md")
     else:
         console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_USAGE)
 
 
 @app.command(name="list")
@@ -693,6 +765,7 @@ def list_cmd(
         typer.Argument(metavar="[skill|agent]", help="只列出 skill 或 agent（省略则全列）"),
     ] = None,
     global_: Annotated[bool, typer.Option("--global", "-g", help="显示全局安装")] = False,
+    json_: Annotated[bool, typer.Option("--json", help="以 JSON 单行输出到 stdout（机器可读，带 count）")] = False,
 ) -> None:
     """列出已安装的 skills 和 agents。"""
     _check_home()
@@ -700,10 +773,14 @@ def list_cmd(
 
     if type_ is not None and type_.lower() not in {"skill", "agent"}:
         console.print(f"[red][omp] ERROR:[/red] unknown type '{type_}': use 'skill' or 'agent'")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_USAGE)
 
     show_skills = type_ is None or type_.lower() == "skill"
     show_agents = type_ is None or type_.lower() == "agent"
+
+    if json_:
+        emit(_collect_list_data(base, show_skills, show_agents))
+        return
 
     if show_skills:
         _list_not_installed_skills(base / ".agents" / "skills")
@@ -734,13 +811,13 @@ def run(
     prompt_str = " ".join(prompt or []).strip()
     if run_mode != "interactive" and not prompt_str:
         console.print(f"[red][omp] ERROR:[/red] prompt is required in {run_mode} mode")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_USAGE)
 
     run_ctx = _build_run_context(name, model)
     skills_count = len(run_ctx["skill_flags"]) // 2
     skills_display = f"{skills_count} agent-specific skills" if skills_count else "no agent-specific skills"
     console.print(
-        f"[omp] agent: [bold]{name}[/bold] | mode: {run_mode} | model: {run_ctx['model']} | "
+        f"[omp] agent: [bold]{name}[/bold] | mode: {run_mode} | model: {run_ctx['model'] or 'pi-default'} | "
         f"tools: {run_ctx['tools']} | {skills_display}"
     )
     console.print("")
