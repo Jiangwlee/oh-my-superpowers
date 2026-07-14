@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Chrome launcher. Wraps the static supervisord command so proxy flags can be
+# Chromium launcher. Wraps the static supervisord command so proxy flags can be
 # added conditionally: --proxy-server is only valid when a proxy is configured,
 # and Chromium (GUI) does not honour http_proxy env vars, so the flag is the
 # only reliable path.

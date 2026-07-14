@@ -43,7 +43,7 @@ Base URL：`http://<container-host>:8080`
 
 ### 下载取回（容器只下载，抽取归 mindora）
 
-浏览器点下载后，Chrome 以 `allowAndName` 落盘到容器 tmpfs `/data/downloads/{guid}`，容器经
+浏览器点下载后，Chromium 以 `allowAndName` 落盘到容器 tmpfs `/data/downloads/{guid}`，容器经
 `Browser.downloadWillBegin/downloadProgress`（**Browser 域**，不绑 tab，避免单焦点 tab 回收丢记录）记账。
 
 - `GET /downloads` 返回 `[{ downloadId, filename, totalBytes, receivedBytes, state, sha256? }]`；
@@ -137,7 +137,7 @@ curl -s -X DELETE $BASE/session/$SID/download/<downloadId>
 
 ## 6. VNC 只读↔交互（方案 A：服务端强制）
 
-两个端口各自对应一路 x11vnc，连**同一个** Chrome 会话（用户接管后登录态即刻对自动化生效）：
+两个端口各自对应一路 x11vnc，连**同一个** Chromium 会话（用户接管后登录态即刻对自动化生效）：
 
 ```
 默认（自动化运行中）：preview 连 6080（-viewonly）→ 用户只能看，误碰不影响自动化
@@ -151,7 +151,7 @@ curl -s -X DELETE $BASE/session/$SID/download/<downloadId>
 
 ## 7. 登录态持久化
 
-- Chrome profile（cookie / session / storage）在容器内 `/data/profile`，挂载到命名卷 `omp-browser-profile`。
+- Chromium profile（cookie / session / storage）在容器内 `/data/profile`，挂载到命名卷 `omp-browser-profile`。
 - 清除登录态：`docker volume rm <project>_omp-browser-profile`（容器需先 `omp container down browser`）。
 
 ## 8. 可跑 curl 序列

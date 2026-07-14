@@ -1,6 +1,6 @@
 """Download capture and range serving.
 
-Chrome is put in ``allowAndName`` download mode against ``DOWNLOAD_DIR``: each
+Chromium is put in ``allowAndName`` download mode against ``DOWNLOAD_DIR``: each
 download is written to ``{DOWNLOAD_DIR}/{guid}`` and reported via
 ``Browser.downloadWillBegin`` (suggested filename) and ``Browser.downloadProgress``
 (bytes + terminal state). We keep one record per guid and serve its bytes by
@@ -47,7 +47,7 @@ class DownloadRegistry:
     """In-memory index of downloads captured from the Browser domain."""
 
     def __init__(self, download_dir: str = DOWNLOAD_DIR) -> None:
-        # The dir is created by entrypoint.sh and written by Chrome, not here —
+        # The dir is created by entrypoint.sh and written by Chromium, not here —
         # the registry only indexes and serves. No eager mkdir at construction.
         self._dir = download_dir
         self._records: dict[str, DownloadRecord] = {}

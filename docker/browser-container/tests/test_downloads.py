@@ -23,7 +23,7 @@ def reg(tmp_path):
 
 def _complete_download(reg: DownloadRegistry, guid: str, data: bytes, filename="f.zip"):
     reg.on_will_begin({"guid": guid, "suggestedFilename": filename})
-    # Chrome writes {downloadPath}/{guid}; simulate that on the registry's dir.
+    # Chromium writes {downloadPath}/{guid}; simulate that on the registry's dir.
     with open(os.path.join(reg._dir, guid), "wb") as f:
         f.write(data)
     reg.on_progress(
