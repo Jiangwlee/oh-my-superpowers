@@ -44,7 +44,8 @@ RUN python3 -m venv /opt/omp-browser/venv \
 
 COPY supervisord.conf /etc/supervisor/conf.d/omp-browser.conf
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY chrome-launch.sh /usr/local/bin/chrome-launch.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/chrome-launch.sh
 
 # REST 8080, MCP 9223, noVNC viewonly 6080, noVNC interactive 6081.
 EXPOSE 8080 9223 6080 6081

@@ -17,6 +17,9 @@ services:
     environment:
       # Set a non-empty token to require Authorization: Bearer on every request.
       OMP_BROWSER_TOKEN: "${OMP_BROWSER_TOKEN:-}"
+      # Optional upstream proxy for the browser (empty = direct connection).
+      OMP_BROWSER_PROXY: "${OMP_BROWSER_PROXY:-}"
+      OMP_BROWSER_NO_PROXY: "${OMP_BROWSER_NO_PROXY:-}"
     # Bound to loopback by default. The interactive VNC port drives a live,
     # password-less browser session — never publish it on 0.0.0.0. To reach the
     # container from another host, set BIND_ADDR to a trusted interface (e.g. a
