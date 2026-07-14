@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# supervisord.conf 用 %(ENV_OMP_BROWSER_PROXY)s / %(ENV_OMP_BROWSER_NO_PROXY)s
+# 展开,变量缺失(≠空值)时 supervisord 直接 fatal 退出——docker compose 侧有
+# ${VAR:-} 兜底,但 apple/container/裸 docker run 由调用方注入,漏传即整容器
+# 秒死。此处兜底保证两变量永远存在。
+export OMP_BROWSER_PROXY="${OMP_BROWSER_PROXY:-}"
+export OMP_BROWSER_NO_PROXY="${OMP_BROWSER_NO_PROXY:-}"
+
 # X runtime + dbus dirs.
 mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root
 mkdir -p /var/run/dbus /var/log/omp-browser
