@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML Serve</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --card: #fff;
+    --border: #e2e8f0;
+    --text: #1a202c;
+    --text2: #64748b;
+    --accent: #3b82f6;
+    --accent-light: #eff6ff;
+    --tag-purpose: #3b82f6;
+    --tag-scope: #22c55e;
+    --tag-behavior: #a855f7;
+    --tag-edge: #f97316;
+    --tag-tech: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 40px 20px;
+  }
+
+  header {
+    margin-bottom: 32px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  header p {
+    color: var(--text2);
+    font-size: 14px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--text2);
+    margin-bottom: 24px;
+  }
+
+  .breadcrumb a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .breadcrumb a:hover {
+    text-decoration: underline;
+  }
+
+  .breadcrumb .sep {
+    color: var(--border);
+  }
+
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .project-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+
+  .project-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  }
+
+  .project-card .name {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .project-card .name::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .project-card .count {
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .search-bar {
+    margin-bottom: 16px;
+  }
+
+  .search-bar input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    background: var(--card);
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+
+  .search-bar input:focus {
+    border-color: var(--accent);
+  }
+
+  .search-bar input::placeholder {
+    color: var(--text2);
+  }
+
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .file-item {
+    background: var(--card);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.1s;
+    gap: 12px;
+  }
+
+  .file-item:hover {
+    background: var(--accent-light);
+  }
+
+  .file-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-title {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .file-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text2);
+  }
+
+  .empty .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text2);
+  }
+
+  .status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 10px;
+    color: var(--text2);
+    font-size: 12px;
+  }
+
+  .status-line::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tag-scope);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    min-width: 0;
+    padding: 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .stat-label {
+    color: var(--text2);
+    font-size: 12px;
+  }
+
+  .stat-value {
+    display: block;
+    margin-top: 8px;
+    overflow: hidden;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stat-note {
+    display: block;
+    margin-top: 5px;
+    overflow: hidden;
+    color: var(--text2);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+    gap: 18px;
+    margin-bottom: 32px;
+  }
+
+  .panel {
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .panel-header, .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .panel-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-header h2, .section-header h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .panel-header span, .section-header span {
+    color: var(--text2);
+    font-size: 12px;
+  }
+
+  .section-header { margin-bottom: 12px; }
+
+  .activity-item, .active-project {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: inherit;
+    text-decoration: none;
+    transition: background 0.1s;
+  }
+
+  .activity-item:last-child, .active-project:last-child { border-bottom: 0; }
+  .activity-item:hover, .active-project:hover { background: var(--accent-light); }
+
+  .activity-main, .active-project-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .activity-title, .active-project-name {
+    display: block;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .activity-path, .active-project-meta {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    color: var(--text2);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .activity-project {
+    max-width: 120px;
+    overflow: hidden;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--accent-light);
+    color: var(--accent);
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .activity-time {
+    color: var(--text2);
+    flex: 0 0 auto;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .projects-section { margin-top: 6px; }
+
+  @media (max-width: 760px) {
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dashboard-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 520px) {
+    .container { padding: 24px 12px; }
+    .stats-grid { gap: 8px; }
+    .stat-card { padding: 14px; }
+    .activity-project { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>页面监控与入口</h1>
+    <p>查看最近更新，或按项目进入全部 HTML 页面。</p>
+    <span class="status-line">实时读取发布目录</span>
+  </header>
+  <nav class="breadcrumb" id="breadcrumb"></nav>
+  <main id="content">
+    <div class="loading">Loading...</div>
+  </main>
+</div>
+<script>
+const BASE_PATH = location.pathname.startsWith('/services/html') ? '/services/html' : '';
+const API_BASE = BASE_PATH + '/_api';
+const RECENT_LIMIT = 12;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
+function encodePath(path) {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
+function getPathFromHash() {
+  const hash = location.hash.slice(1);
+  return hash ? decodeURIComponent(hash) : null;
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function formatDate(mtime) {
+  const d = new Date(mtime);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function parseFileName(name) {
+  const match = name.match(/^(\d{4}-\d{2}-\d{2})T(\d{4})-(.+)\.html$/);
+  if (!match) return { date: null, time: null, topic: name, tag: null };
+
+  const date = match[1];
+  const time = match[2].slice(0,2) + ':' + match[2].slice(2);
+  const rest = match[3];
+
+  const tagMap = {
+    'clarify': { label: 'Clarify', color: 'var(--tag-purpose)' },
+    'explore': { label: 'Explore', color: 'var(--tag-scope)' },
+    'review':  { label: 'Review',  color: 'var(--tag-behavior)' },
+    'report':  { label: 'Report',  color: 'var(--tag-edge)' },
+    'proto':   { label: 'Proto',   color: 'var(--tag-tech)' },
+  };
+
+  let tag = null;
+  let topic = rest;
+  for (const [prefix, info] of Object.entries(tagMap)) {
+    if (rest.startsWith(prefix + '-')) {
+      tag = info;
+      topic = rest.slice(prefix.length + 1);
+      break;
+    }
+  }
+
+  topic = topic.replace(/-/g, ' ');
+  return { date, time, topic, tag };
+}
+
+async function fetchListing(path) {
+  const url = API_BASE + (path || '/');
+  const resp = await fetch(url, { cache: 'no-store' });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+function renderBreadcrumb(path) {
+  const bc = document.getElementById('breadcrumb');
+  if (!path) {
+    bc.innerHTML = '';
+    return;
+  }
+  const parts = path.split('/');
+  let html = `<a href="#">Home</a>`;
+  parts.forEach((p, i) => {
+    html += `<span class="sep">/</span>`;
+    if (i < parts.length - 1) {
+      const sub = parts.slice(0, i + 1).join('/');
+      html += `<a href="#${encodeURIComponent(sub)}">${p}</a>`;
+    } else {
+      html += `<span>${p}</span>`;
+    }
+  });
+  bc.innerHTML = html;
+}
+
+async function scanDirectory(path, project) {
+  const items = await fetchListing('/' + encodePath(path) + '/');
+  const pages = items
+    .filter(item => item.type === 'file' && item.name.endsWith('.html'))
+    .map(item => ({ ...item, project, path: path + '/' + item.name }));
+  const directories = items.filter(item => item.type === 'directory' && !item.name.startsWith('_'));
+  const nested = await Promise.all(directories.map(dir => scanDirectory(path + '/' + dir.name, project)));
+  return pages.concat(...nested);
+}
+
+function relativeTime(mtime) {
+  const seconds = Math.round((new Date(mtime).getTime() - Date.now()) / 1000);
+  const formatter = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
+  if (Math.abs(seconds) < 60) return formatter.format(seconds, 'second');
+  const minutes = Math.round(seconds / 60);
+  if (Math.abs(minutes) < 60) return formatter.format(minutes, 'minute');
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return formatter.format(hours, 'hour');
+  return formatter.format(Math.round(hours / 24), 'day');
+}
+
+function displayTitle(name) {
+  const withoutExtension = name.replace(/\.html$/i, '');
+  return withoutExtension
+    .replace(/^\d{4}-\d{2}-\d{2}(?:T\d{2}-?\d{2})?[-_]?/, '')
+    .replace(/[-_]+/g, ' ')
+    .trim() || withoutExtension;
+}
+
+function buildActivityRow(file) {
+  const href = BASE_PATH + '/' + encodePath(file.path);
+  return `<a class="activity-item" href="${href}" target="_blank" rel="noopener">
+    <div class="activity-main">
+      <span class="activity-title">${escapeHtml(displayTitle(file.name))}</span>
+      <span class="activity-path">${escapeHtml(file.path)}</span>
+    </div>
+    <span class="activity-project">${escapeHtml(file.project)}</span>
+    <span class="activity-time" title="${escapeHtml(formatDate(file.mtime))}">${escapeHtml(relativeTime(file.mtime))}</span>
+  </a>`;
+}
+
+function buildActiveProject(project) {
+  return `<a class="active-project" href="#${encodeURIComponent(project.name)}">
+    <div class="active-project-main">
+      <span class="active-project-name">${escapeHtml(project.name)}</span>
+      <span class="active-project-meta">最近更新 ${escapeHtml(formatDate(project.latest))}</span>
+    </div>
+    <span class="activity-time">${project.files.length} 个页面</span>
+  </a>`;
+}
+
+async function renderProjects() {
+  renderBreadcrumb(null);
+  const content = document.getElementById('content');
+
+  try {
+    const items = await fetchListing('/');
+    const projects = items.filter(i => i.type === 'directory' && !i.name.startsWith('_'));
+
+    if (projects.length === 0) {
+      content.innerHTML = `<div class="empty"><div class="icon">📂</div><p>No projects yet.<br>Generate an HTML artifact to get started.</p></div>`;
+      return;
+    }
+
+    const projectData = await Promise.all(projects.map(async project => {
+      try {
+        const files = await scanDirectory(project.name, project.name);
+        const latest = files.reduce((max, file) => Math.max(max, new Date(file.mtime).getTime()), 0);
+        return { name: project.name, files, latest: new Date(latest) };
+      } catch (error) {
+        return { name: project.name, files: [], latest: new Date(0) };
+      }
+    }));
+
+    projectData.sort((a, b) => b.latest - a.latest);
+    const files = projectData.flatMap(project => project.files)
+      .sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = Date.now() - 7 * DAY_MS;
+    const todayCount = files.filter(file => new Date(file.mtime) >= today).length;
+    const activeCount = projectData.filter(project => project.latest.getTime() >= sevenDaysAgo).length;
+    const latest = files[0];
+    const recentRows = files.slice(0, RECENT_LIMIT).map(buildActivityRow).join('');
+    const activeRows = projectData.slice(0, 8).map(buildActiveProject).join('');
+    const cards = projectData.map(project => `<a class="project-card" href="#${encodeURIComponent(project.name)}">
+      <div class="name">${escapeHtml(project.name)}</div>
+      <div class="count">${project.files.length} 个页面 · ${project.files.length ? escapeHtml(relativeTime(project.latest)) : '暂无页面'}</div>
+    </a>`).join('');
+
+    content.innerHTML = `
+      <section class="stats-grid" aria-label="页面统计">
+        <article class="stat-card"><span class="stat-label">今日更新</span><strong class="stat-value">${todayCount}</strong><span class="stat-note">从本地零点起</span></article>
+        <article class="stat-card"><span class="stat-label">近 7 日活跃项目</span><strong class="stat-value">${activeCount}</strong><span class="stat-note">共 ${projectData.length} 个项目</span></article>
+        <article class="stat-card"><span class="stat-label">页面总数</span><strong class="stat-value">${files.length}</strong><span class="stat-note">仅统计 HTML 页面</span></article>
+        <article class="stat-card"><span class="stat-label">最后更新</span><strong class="stat-value">${latest ? escapeHtml(relativeTime(latest.mtime)) : '—'}</strong><span class="stat-note">${latest ? escapeHtml(latest.path) : '暂无页面'}</span></article>
+      </section>
+      <section class="dashboard-grid">
+        <div class="panel">
+          <div class="panel-header"><h2>最近更新</h2><span>最新 ${Math.min(files.length, RECENT_LIMIT)} 个页面</span></div>
+          ${recentRows || '<div class="empty">暂无页面更新</div>'}
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2>活跃项目</h2><span>按更新时间排序</span></div>
+          ${activeRows || '<div class="empty">暂无项目</div>'}
+        </div>
+      </section>
+      <section class="projects-section">
+        <div class="section-header"><h2>全部项目</h2><span>${projectData.length} 个入口</span></div>
+        <div class="project-grid">${cards}</div>
+      </section>`;
+  } catch(e) {
+    content.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>Failed to load: ${e.message}</p></div>`;
+  }
+}
+
+let cachedFiles = [];
+let cachedProject = null;
+
+function buildDirRow(dir, path) {
+  return `<a class="file-item" href="#${encodeURIComponent(path + '/' + dir.name)}" data-search="${dir.name.toLowerCase()}">
+    <div class="file-left"><span class="file-tag" style="background:var(--text2)">DIR</span><span class="file-title">${dir.name}/</span></div>
+    <div class="file-right"><span>${formatDate(dir.mtime)}</span></div>
+  </a>`;
+}
+
+function buildFileRow(f, path) {
+  const info = parseFileName(f.name);
+  const tagHtml = info.tag
+    ? `<span class="file-tag" style="background:${info.tag.color}">${info.tag.label}</span>`
+    : '';
+  const dateStr = info.date ? `${info.date} ${info.time}` : formatDate(f.mtime);
+
+  return `<a class="file-item" href="${BASE_PATH}/${path}/${f.name}" target="_blank" data-search="${(info.topic + ' ' + (info.tag?.label || '') + ' ' + f.name).toLowerCase()}">
+    <div class="file-left">${tagHtml}<span class="file-title">${info.topic}</span></div>
+    <div class="file-right"><span>${dateStr}</span><span>${formatSize(f.size)}</span></div>
+  </a>`;
+}
+
+function filterFiles(keyword) {
+  const items = document.querySelectorAll('.file-item');
+  const q = keyword.toLowerCase().trim();
+  let visible = 0;
+  items.forEach(el => {
+    const match = !q || el.dataset.search.includes(q);
+    el.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const empty = document.getElementById('filter-empty');
+  if (empty) empty.style.display = visible === 0 ? '' : 'none';
+}
+
+async function renderFiles(path) {
+  renderBreadcrumb(path);
+  const content = document.getElementById('content');
+
+  try {
+    const items = await fetchListing('/' + path + '/');
+    const dirs = items.filter(i => i.type === 'directory' && !i.name.startsWith('_'));
+    const files = items
+      .filter(i => i.type === 'file' && i.name.endsWith('.html'))
+      .sort((a, b) => b.name.localeCompare(a.name));
+
+    if (dirs.length === 0 && files.length === 0) {
+      content.innerHTML = `<div class="empty"><div class="icon">📄</div><p>No artifacts in this directory yet.</p></div>`;
+      return;
+    }
+
+    const dirRows = dirs.map(d => buildDirRow(d, path)).join('');
+    const fileRows = files.map(f => buildFileRow(f, path)).join('');
+
+    content.innerHTML = `
+      <div class="search-bar"><input type="text" id="search-input" placeholder="Filter by keyword..." autocomplete="off"></div>
+      <div class="file-list">${dirRows}${fileRows}</div>
+      <div id="filter-empty" class="empty" style="display:none"><p>No matching artifacts.</p></div>`;
+
+    document.getElementById('search-input').addEventListener('input', e => filterFiles(e.target.value));
+  } catch(e) {
+    content.innerHTML = `<div class="empty"><div class="icon">⚠️</div><p>Failed to load: ${e.message}</p></div>`;
+  }
+}
+
+function route() {
+  const path = getPathFromHash();
+  if (path) {
+    renderFiles(path);
+  } else {
+    renderProjects();
+  }
+}
+
+window.addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>
