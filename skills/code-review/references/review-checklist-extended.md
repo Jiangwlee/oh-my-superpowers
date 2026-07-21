@@ -3,6 +3,12 @@
 # 按变更风险加载，与 core checklist 配合使用。
 # 加载时机：涉及性能、并发、I/O、公共接口、类/模块设计或其他非平凡结构风险时加载
 
+## Review Standard
+
+- Treat maintainability and design checks as investigation signals, not automatic findings.
+- Mark a maintainability issue `BLOCKING` only when it causes a current contract violation or demonstrably wrong behavior and includes complete blocking evidence.
+- Keep concrete future maintenance cost as non-blocking `FOLLOW_UP`. Keep wording polish, stylistic alternatives, and unsupported future risk as `ADVISORY`.
+
 ## 3. Performance
 
 - [ ] N+1 查询：循环内是否有数据库查询或网络请求？能否批量化？

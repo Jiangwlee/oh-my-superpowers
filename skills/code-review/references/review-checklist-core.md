@@ -8,6 +8,7 @@
 - Treat checklist items and heuristics as investigation signals, not automatic findings.
 - Apply repository-specific instructions and conventions before generic guidance.
 - Report an issue only when the change causes a concrete correctness, security, performance, or maintainability impact.
+- Assign `BLOCKING` only when the current change violates a contract or produces demonstrably wrong behavior. Keep non-blocking improvements as `FOLLOW_UP` or `ADVISORY`.
 
 ## 1. Correctness
 

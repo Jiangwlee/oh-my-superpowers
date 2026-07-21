@@ -4,13 +4,13 @@ description: >-
   Review and improve local code changes: uncommitted work (staged, unstaged,
   or untracked) or recent commits (latest one by default, or a user-selected
   count). Use when code needs independent review, verification, and iterative
-  fixes until no new confirmed issues remain.
+  fixes until no new verified blockers remain.
   Do NOT use for PR review or branch comparison.
 ---
 
 ## Review Flow
 
-Create a run-scoped temporary directory, set `review_round` to `1`, then track each step and complete them in order. A review round may use one or more batches and counts once only after the entire review target has been covered and all batch results have been collected. The executor may be a subagent or the inline fallback.
+Create a run-scoped temporary directory, set `review_round` to `1`, and initialize an empty finding ledger. Track each step and complete them in order. A review round may use one or more batches and counts once only after the entire review target has been covered and all batch results have been collected. The executor may be a subagent or the inline fallback.
 
 ```bash
 review_run_dir=$(mktemp -d /tmp/code-review.XXXXXX)
@@ -18,19 +18,28 @@ review_run_dir=$(mktemp -d /tmp/code-review.XXXXXX)
 
 1. **Get diff** — determine review target, inventory every changed path, and collect changes
 2. **Assess risk and scope** — identify relevant review dimensions and decide whether the diff needs batching
-3. **Gather context** — collect project instructions, module contracts, original requirements, and results from the previous validation cycle
+3. **Gather context** — collect project instructions, module contracts, original requirements, the current finding ledger, and results from the previous validation cycle; include the ledger in `{context}` so the executor can distinguish new findings from previously reviewed root causes
 4. **Load checklist** — always read the core checklist; load the extended checklist when the change or its risks require it
 5. **Load output format** — read `references/output-format.md`
 6. **Assemble review prompts** — number the round's batches from `1`; use batch `1` when no split is needed. For each batch, set `review_prompt_file="$review_run_dir/prompt-round-${review_round}-batch-${review_batch}.md"`, then fill `assets/review-prompt-template.md` with `{context}`, that batch's `{diff}`, `{checklist}`, and `{output_format}` and write it to that file
 7. **Select executor** — choose execution method (see Executor Selection)
 8. **Dispatch review** — send every batch required to cover the review target to the executor
-9. **Collect candidates** — confirm that every changed path is covered, then aggregate and parse all batch findings and provisional Verdicts for the round
+9. **Collect candidates** — confirm that every changed path is covered, then aggregate and parse all batch findings, Dispositions, and provisional Verdicts for the round
 10. **Validate output contract** — require the sections and fields defined in `references/output-format.md`. If the output is malformed or incomplete, ask the same executor once to correct only the format without adding, removing, or changing findings. Do not count this correction as a review round. If the corrected output is still invalid, treat the executor as failed and follow the degradation strategy
-11. **Verify findings** — independently check every candidate against the code, surrounding context, and project requirements; reject unsupported findings
-12. **Validate current state** — run the relevant tests, type checks, lint, or build commands for the reviewed scope; treat failures caused by the reviewed changes as verified issues and record every command and result
-13. **Fix and re-review** — if verified P0-P2 issues or relevant validation failures remain and `review_round < 7`, fix them, increment `review_round`, and return to step 1 with the validation results
-14. **Stop on non-convergence** — if verified P0-P2 issues or relevant validation failures remain in round 7, stop without starting another cycle and report the remaining findings, completed fixes, validation results, and non-convergence
-15. **Finish** — when no new verified P0-P2 issues remain and relevant validation passes, present the final result, fixes applied, and validation results; if a relevant check cannot run, report the limitation explicitly
+11. **Verify findings** — independently check every candidate against the code, surrounding context, and project requirements; reject unsupported findings, correct its Severity or Disposition when necessary, and update the finding ledger
+12. **Validate current state** — run the relevant tests, type checks, lint, or build commands for the reviewed scope; record failures caused by the reviewed changes as verified `BLOCKING` issues and record every command and result
+13. **Fix and re-review** — if verified blockers or relevant validation failures remain and `review_round < 7`, fix only the blockers, increment `review_round`, and return to step 1 with the finding ledger and validation results
+14. **Stop on non-convergence** — stop early when two consecutive completed review rounds repeat the same root-cause fingerprints without reducing the verified blocker set or identifying a distinct failure mode. Also stop if verified blockers remain in round 7. Report the remaining blockers, non-blocking findings, completed fixes, validation results, and reason for non-convergence
+15. **Finish** — when no verified blockers remain and relevant validation passes, finish with `APPROVE` or `APPROVE_WITH_FOLLOWUPS`; present the final finding ledger, fixes applied, and validation results. If a relevant check cannot run, report the limitation explicitly
+
+## Finding Ledger
+
+Record every independently verified finding with its file and line, violated contract, failure mode, Severity, Disposition, first-seen round, and current status.
+
+- Build the fingerprint from the normalized location, violated contract, and failure mode. Do not include reviewer wording in the fingerprint.
+- Merge reworded reports of the same root cause into the existing entry. Do not count them as new findings.
+- Preserve `FOLLOW_UP` and `ADVISORY` entries for the final report, but never fix them automatically or let them trigger another review round.
+- Reopen a resolved entry only when current code evidence shows that the failure still exists.
 
 ## Review Target
 
@@ -128,10 +137,11 @@ Native subagent fails (as the default executor or as a fallback)
 - **Initiator prepares context** — executor receives a self-contained prompt with all necessary information
 - **Executor works independently** — no access to initiator's conversation history
 - **Initiator owns verification** — never forward executor findings or accept its Verdict without independently checking the evidence
-- **Verified issues are fixed automatically** — before the round limit, fix every verified P0-P2 issue and relevant validation failure, then dispatch another independent review
+- **Verified blockers are fixed automatically** — before the round limit, fix every verified `BLOCKING` issue and relevant validation failure, then dispatch another independent review
 - **Validation gate** — run relevant project checks in every completed review round; record commands and results, and never claim a clean result when a required check failed
-- **Seven-round limit** — run at most 7 completed review rounds; if round 7 still has verified P0-P2 issues or relevant validation failures, stop and report non-convergence
-- **Review until clean** — stop only when a review cycle produces no new verified P0-P2 issues and validation passes or unavailable checks are explicitly documented, the seven-round limit is reached, or a fix is blocked
+- **Seven-round limit** — run at most 7 completed review rounds; if round 7 still has verified blockers or relevant validation failures, stop and report non-convergence
+- **Blocker-based completion** — finish when a completed review round leaves no verified blockers and validation passes or unavailable checks are explicitly documented. `FOLLOW_UP` and `ADVISORY` findings do not prevent completion
+- **Early non-convergence** — stop before round 7 when two consecutive completed rounds repeat the same root causes without reducing blockers or identifying a distinct failure mode
 - **Escalate blocked fixes** — if a verified issue requires a product decision, external authority, or scope expansion, stop and ask the user
 - **Every degradation notifies user** — state the reason and current execution method
 - **Run-scoped resources** — use unique prompt paths and session identifiers for every run; never reuse or clean up another review's resources
