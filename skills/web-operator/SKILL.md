@@ -155,6 +155,7 @@ When a supported site appears in the task, start from these commands before cons
 | 淘股吧 / Taoguba / TGB | `omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
 | 金山文档 / KDocs / WPS 365 | `omp web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
 | ChatGPT Images / 图片生成 | `omp web-operator generate-image chatgpt "<prompt>" --out <file.png> [--json]`（前置：Chrome 已登录 ChatGPT） |
+| 图片生成队列服务 / Image Serve | `omp web-operator image-serve [--port 8320] [--out-dir DIR]`（串行任务队列 HTTP 服务：`POST /jobs` 入队、`GET /jobs/{id}` 看状态与排队位置、`DELETE /jobs/{id}` 取消、`GET /jobs/{id}/image` 取图；前置同上） |
 | 飞书审批 / Feishu Approval / 审批数据导出 | `omp web-operator feishu approval export --start <YYYY-MM-DD> --end <YYYY-MM-DD>`（前置：任一 feishu.cn tab 已登录管理员账号） |
 | 飞书考勤 / Feishu Attendance / 考勤月度汇总导出 | `omp web-operator feishu attendance export --start <YYYY-MM-DD> --end <YYYY-MM-DD>`（前置：任一 oa.feishu.cn tab 已登录考勤管理员账号；跨度 ≤31 天，超过请调用方自行切片） |
 

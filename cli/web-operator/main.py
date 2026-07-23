@@ -253,6 +253,31 @@ def generate_image(
 
 
 # ---------------------------------------------------------------------------
+# image-serve
+# ---------------------------------------------------------------------------
+
+
+@app.command("image-serve")
+def image_serve(
+    port: int = typer.Option(8320, "--port", help="Listen port."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    out_dir: str | None = typer.Option(None, "--out-dir", help="Directory for generated images; default $OMP_HOME/data/chatgpt-images."),
+) -> None:
+    """Run a local FastAPI service that queues image-generation jobs serially.
+
+    Jobs run one at a time over the host Chrome CDP. Endpoints: POST /jobs,
+    GET /jobs, GET /jobs/{id}, DELETE /jobs/{id}, GET /jobs/{id}/image, /health.
+
+    Example:
+        omp web-operator image-serve --port 8320
+    """
+    cmd = ["uv", "run", "--script", str(SCRIPTS_DIR / "image_service.py"), "--port", str(port), "--host", host]
+    if out_dir:
+        cmd += ["--out-dir", out_dir]
+    sys.exit(subprocess.call(cmd))
+
+
+# ---------------------------------------------------------------------------
 # read-url
 # ---------------------------------------------------------------------------
 

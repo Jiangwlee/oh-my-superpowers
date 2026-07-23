@@ -534,7 +534,7 @@ def _run_stream(cmd: list[str], run_ctx: dict) -> int:
     usage_totals = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0}
 
     header = (
-        f"{_ansi(f'[{time.strftime('%H:%M:%S')}]', '90')} "
+        f"{_ansi('[' + time.strftime('%H:%M:%S') + ']', '90')} "
         f"agent={_ansi(run_ctx['name'], '1;36')} "
         f"model={_ansi(run_ctx['model'], '90')} "
         f"tools={_ansi(run_ctx['tools'], '90')} "
@@ -607,7 +607,7 @@ def _run_stream(cmd: list[str], run_ctx: dict) -> int:
             if evt_type == "text_delta":
                 flush_trailing_newlines(compact=not assistant_stream_open)
                 if not in_text_stream:
-                    prefix = f"{_ansi(f'[{run_ctx['name']}]', '1;34')} "
+                    prefix = f"{_ansi('[' + run_ctx['name'] + ']', '1;34')} "
                     _write_stdout(prefix)
                     in_text_stream = True
                     line_open = True
@@ -665,7 +665,7 @@ def _run_stream(cmd: list[str], run_ctx: dict) -> int:
     status_code = "32" if proc.returncode == 0 else "31"
     footer = (
         "\n"
-        f"{_ansi(f'[{status_label}]', status_code)} "
+        f"{_ansi('[' + status_label + ']', status_code)} "
         f"{duration:.1f}s  "
         f"tools={tools_started}  "
         f"errors={tool_errors}  "
