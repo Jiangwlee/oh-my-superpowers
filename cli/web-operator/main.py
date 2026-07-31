@@ -406,6 +406,30 @@ def taoguba_login(
     sys.exit(subprocess.call(cmd))
 
 
+@taoguba_app.command("read")
+def taoguba_read(
+    url: str = typer.Argument(..., help="Taoguba main-post URL."),
+    target: str | None = typer.Option(
+        None,
+        "--target",
+        help="CDP target prefix; auto-discovered if omitted.",
+    ),
+) -> None:
+    """Read one Taoguba main post and metadata as compact JSON.
+
+    Example:
+        omp web-operator taoguba read "https://www.tgb.cn/a/2d85kP2xQdI"
+    """
+    cmd = [
+        "bash",
+        str(SITES_DIR / "taoguba" / "open-post.sh"),
+        url,
+    ]
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
 @taoguba_app.command()
 def jinghua(
     hours: str | None = typer.Option(None, "--hours", help="Hours to look back."),

@@ -441,31 +441,33 @@ const tests = [
     },
   },
   {
-    name: 'site.taoguba.open_post.smoke',
+    name: 'site.taoguba.read.smoke',
     scope: 'site',
     site: 'taoguba',
-    workflow: 'open_post',
+    workflow: 'read',
     level: 'smoke',
     setupHint: 'Open a usable Taoguba tab in Chrome before running Taoguba smoke tests.',
     failHint: 'Check scripts/sites/taoguba/open-post.sh and references/sites/taoguba/workflows.md.',
     async run() {
-      const listScript = resolve(SITE_SCRIPTS_DIR, 'taoguba', 'jinghua.sh');
       const openScript = resolve(SITE_SCRIPTS_DIR, 'taoguba', 'open-post.sh');
-      const listRun = await runJsonCommand('bash', [listScript, String(TAOGUBA_HOURS), String(TAOGUBA_LIMIT)], 60000);
-      const results = listRun.value;
-      assert(Array.isArray(results) && results.length > 0, 'taoguba jinghua must return at least one result before open-post');
-      const postUrl = results[0].url;
+      const postUrl = 'https://www.tgb.cn/a/2d85kP2xQdI';
       const openRun = await runJsonCommand('bash', [openScript, postUrl], 60000);
-      const post = openRun.value;
-      assert(post && typeof post === 'object' && !Array.isArray(post), 'taoguba open-post should return a JSON object');
-      assert(typeof post.title === 'string' && post.title.length > 0, 'taoguba open-post should include a title');
-      assert(typeof post.url === 'string' && post.url.startsWith('https://www.tgb.cn/a/'), 'taoguba open-post should include the navigated post URL');
+      const payload = openRun.value;
+      assert(payload && typeof payload === 'object' && !Array.isArray(payload), 'taoguba read should return a JSON object');
+      assert(payload.ok === true && payload.site === 'taoguba', 'taoguba read should report success');
+      assert(typeof payload.post?.title === 'string' && payload.post.title.length > 0, 'taoguba read should include a title');
+      assert(typeof payload.post?.url === 'string' && payload.post.url.startsWith('https://www.tgb.cn/a/'), 'taoguba read should include the navigated post URL');
+      assert(typeof payload.post?.content === 'string' && payload.post.content.length > 100, 'taoguba read should include main-post content');
+      assert(
+        payload.post?.published_at_asia_shanghai?.endsWith('+08:00'),
+        'taoguba read should normalize publication time to Asia/Shanghai',
+      );
       return {
         status: 'pass',
         command: openRun.result.command,
-        commands: [listRun.result.command, openRun.result.command],
+        commands: [openRun.result.command],
         stdout_excerpt: openRun.result.stdout.slice(0, 400),
-        data: { url: post.url },
+        data: { url: payload.post.url, content_length: payload.post.content.length },
       };
     },
   },

@@ -76,7 +76,7 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 - `omp web-operator read-url <url> [--limit N] [--comments N] [--json]`
   Read the main text content of any URL. Returns Markdown (when defuddle is available) or plain text.
   Four-tier strategy (HTTP-first + CDP fallback):
-  1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to `open-post` for structured extraction
+  1. **Known sites** (reddit, x, xueqiu, taoguba) → delegates to the canonical site reader for structured extraction
   2. **HTTP-first** → `defuddle parse <URL> --markdown` directly fetches and parses (~200ms, no browser needed). Covers ~80% of static content (blogs, docs, papers)
   3. **CDP + defuddle** → navigates worker tab to URL, extracts HTML, converts via defuddle. For JS-heavy/SPA pages where HTTP-first fails quality gate
   4. **CDP fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
@@ -173,6 +173,10 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 
 - `omp web-operator taoguba login [--target TARGET] [--timeout SECONDS]`
   Sign in using account credentials already stored in Chrome.
+- `omp web-operator taoguba read <url> [--target TARGET]`
+  Read one authenticated Taoguba main post and metadata as a compact JSON
+  object. This is the preferred direct entrypoint; `read-url` for Taoguba URLs
+  and `open-post taoguba` reuse the same implementation.
 - `omp web-operator search taoguba <query> [limit] --year YYYY [--sort hot|latest] [--target TARGET]`
   Search logged-in discussion results for one explicit year. The workflow
   verifies the visible year and sorting controls, defaults to hottest first,
@@ -183,7 +187,7 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 - `omp web-operator taoguba following [hours] [limit] [target]`
   Extract followed-content updates from the last 12 hours by default.
 - `omp web-operator open-post taoguba <url> [target]`
-  Open one Taoguba post and extract the main post body.
+  Generic compatibility entrypoint for the same Taoguba reader.
 
 ### ChatGPT Images
 

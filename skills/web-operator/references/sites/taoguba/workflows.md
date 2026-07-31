@@ -29,7 +29,9 @@ search, `jinghua.sh`, `following.sh`, and `open-post.sh`.
   time, action, text, source post title, and URL.
 - [../../scripts/sites/taoguba/open-post.sh](../../scripts/sites/taoguba/open-post.sh)
   Inputs: one Taoguba post URL, optional target prefix.
-  Output: JSON object with title, author, publish time, stats, text, and URL.
+  Output: compact JSON object with schema version, post ID, URL, title, author,
+  displayed and Shanghai publication times, main-post content, stats, and
+  collection-source metadata.
 - [../../scripts/sites/taoguba/login.sh](../../scripts/sites/taoguba/login.sh)
   Inputs: optional timeout and target prefix.
   Output: JSON object with `ok`, `site`, and `status`.
@@ -57,3 +59,9 @@ search, `jinghua.sh`, `following.sh`, and `open-post.sh`.
 - Search result fields remain compatible with the earlier eastmoney collector:
   title, URL, author, displayed time, abstract, likes, views, comments, rank,
   and normalized `published_at_asia_shanghai`.
+- `taoguba read`, generic `open-post taoguba`, and `read-url` for Taoguba URLs
+  all invoke `open-post.sh`; there is only one main-post extraction
+  implementation.
+- `read` always emits one compact JSON object. It reads only the main post,
+  stops before reply floors, treats post-page timestamps as `Asia/Shanghai`,
+  and fails closed when login or required content is missing.
