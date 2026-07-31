@@ -349,6 +349,47 @@ const tests = [
     },
   },
   {
+    name: 'site.taoguba.search.smoke',
+    scope: 'site',
+    site: 'taoguba',
+    workflow: 'search',
+    level: 'smoke',
+    setupHint: 'Sign in to Taoguba in the CDP Chrome profile before running this smoke test.',
+    failHint: 'Check scripts/sites/taoguba/search.sh and references/sites/taoguba/workflows.md.',
+    async run() {
+      const script = resolve(SITE_SCRIPTS_DIR, 'taoguba', 'search.sh');
+      const { result, value } = await runJsonCommand(
+        'bash',
+        [script, '1112 复盘', '5', '--year', '2024', '--sort', 'hot'],
+        60000,
+      );
+      assert(value && typeof value === 'object' && !Array.isArray(value), 'taoguba search should return a JSON object');
+      assert(value.ok === true, 'taoguba search should report success');
+      assert(value.applied_filters?.year === '2024', 'taoguba search should verify the requested year');
+      assert(value.applied_filters?.sort === 'hot', 'taoguba search should verify hot sorting');
+      assert(Array.isArray(value.results) && value.results.length > 0, 'taoguba search should return result cards');
+      assert(
+        value.results.every((item) => item.displayed_time?.startsWith('2024-')),
+        'taoguba search results should stay inside the requested year',
+      );
+      assert(
+        value.results.every((item) => item.url?.startsWith('https://www.tgb.cn/a/')),
+        'taoguba search results should contain Taoguba post URLs',
+      );
+      return {
+        status: 'pass',
+        command: result.command,
+        commands: [result.command],
+        stdout_excerpt: result.stdout.slice(0, 400),
+        data: {
+          result_count: value.result_count,
+          year: value.applied_filters.year,
+          sort: value.applied_filters.sort,
+        },
+      };
+    },
+  },
+  {
     name: 'site.taoguba.login.smoke',
     scope: 'site',
     site: 'taoguba',

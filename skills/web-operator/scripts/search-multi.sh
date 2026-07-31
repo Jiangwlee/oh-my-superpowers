@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # search-multi — run searches on multiple platforms in parallel.
-# Input:  --<platform> "<query>" pairs + optional --limit N
+# Input:  --<platform> "<query>" pairs + optional --limit N and Taoguba filters
 # Output: JSON array of { platform, query, results } objects.
 #
 # Example:
@@ -21,11 +21,17 @@ MAX_PARALLEL=5
 
 declare -A QUERIES=()
 LIMIT=""
+TAOGUBA_YEAR=""
+TAOGUBA_SORT="hot"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --limit)
       LIMIT="${2:-}"; shift 2 ;;
+    --taoguba-year)
+      TAOGUBA_YEAR="${2:-}"; shift 2 ;;
+    --taoguba-sort)
+      TAOGUBA_SORT="${2:-}"; shift 2 ;;
     --baidu|--google|--github|--reddit|--weixin-sogou|--x|--xueqiu|--taoguba|--duckduckgo)
       platform="${1#--}"
       query="${2:-}"
@@ -42,6 +48,14 @@ done
 if [[ ${#QUERIES[@]} -eq 0 ]]; then
   echo "error: at least one --<platform> <query> pair is required" >&2
   exit 1
+fi
+if [[ -v 'QUERIES[taoguba]' && ! "$TAOGUBA_YEAR" =~ ^[0-9]{4}$ ]]; then
+  echo "error: Taoguba multi-search requires --taoguba-year YYYY" >&2
+  exit 2
+fi
+if [[ "$TAOGUBA_SORT" != "hot" && "$TAOGUBA_SORT" != "latest" ]]; then
+  echo "error: --taoguba-sort must be hot or latest" >&2
+  exit 2
 fi
 
 # --- run searches in parallel --------------------------------------------------
@@ -60,6 +74,10 @@ for platform in "${!QUERIES[@]}"; do
   if [[ -n "$LIMIT" ]]; then
     limit_args=("$LIMIT")
   fi
+  site_args=()
+  if [[ "$platform" == "taoguba" ]]; then
+    site_args=(--year "$TAOGUBA_YEAR" --sort "$TAOGUBA_SORT")
+  fi
 
   # find the search script
   script="${SKILL}/scripts/sites/${platform}/search.sh"
@@ -69,7 +87,7 @@ for platform in "${!QUERIES[@]}"; do
   fi
 
   # launch in background
-  bash "$script" "$query" "${limit_args[@]}" > "$outfile" 2>/dev/null &
+  bash "$script" "$query" "${limit_args[@]}" "${site_args[@]}" > "$outfile" 2>/dev/null &
   PIDS+=($!)
   PLATFORMS+=("$platform")
 
@@ -97,7 +115,7 @@ done
 
     # default to empty array if search failed
     if [[ -f "$outfile" ]] && jq empty "$outfile" 2>/dev/null; then
-      results="$(cat "$outfile")"
+      results="$(jq -c 'if type == "object" and (.results | type) == "array" then .results else . end' "$outfile")"
     else
       results="[]"
     fi
@@ -115,4 +133,4 @@ done
       '{ platform: $platform, query: $query, results: $results }'
   done
   echo "]"
-} | jq '.'
+} | jq -c '.'

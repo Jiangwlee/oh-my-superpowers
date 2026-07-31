@@ -41,7 +41,10 @@ omp web-operator search <site> "<query>" [limit]
 - `<site>` is a positional argument: `google`, `baidu`, `duckduckgo`, `github`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, or `taoguba`.
 - `<query>` is a positional argument. Quote it when it contains spaces.
 - `[limit]` is a positional argument. Use `5`, not `--limit 5`.
-- `search` does not accept `--platform` or `--query`. The only search option is `--target`.
+- `search` does not accept `--platform`, `--query`, or `--limit`.
+- Taoguba search additionally requires `--year YYYY` and accepts
+  `--sort hot|latest`; its default sort is `hot`.
+- `--target` is available for browser-backed searches.
 
 | Use case | Command |
 |---|---|
@@ -49,6 +52,7 @@ omp web-operator search <site> "<query>" [limit]
 | Baidu search | `omp web-operator search baidu "Claude Code 记忆机制" 5` |
 | Reddit search | `omp web-operator search reddit "Claude Code memory" 5` |
 | X search | `omp web-operator search x "Claude Code memory" 5` |
+| Taoguba historical search | `omp web-operator search taoguba "1112 复盘" 10 --year 2024 --sort hot` |
 | Multi-platform search | `omp web-operator search-multi --google "Claude Code memory" --baidu "Claude Code 记忆机制" --limit 5` |
 
 Do not invent option-style parameters for `search`:
@@ -152,7 +156,7 @@ When a supported site appears in the task, start from these commands before cons
 | Reddit | `omp web-operator search reddit <query> [limit]` → `omp web-operator open-post reddit <url> [comment_limit]` |
 | X / Twitter / 推特 | `omp web-operator search x <query> [limit]` → `omp web-operator open-post x <url> [comment_limit]` (0 = all comments) |
 | 雪球 / Xueqiu | `omp web-operator search xueqiu <query> [limit]`、`omp web-operator xueqiu hot [limit]`、`omp web-operator open-post xueqiu <url> [comment_limit]` |
-| 淘股吧 / Taoguba / TGB | `omp web-operator taoguba login`、`omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
+| 淘股吧 / Taoguba / TGB | `omp web-operator taoguba login`、`omp web-operator search taoguba <query> [limit] --year YYYY [--sort hot]`、`omp web-operator taoguba jinghua [hours] [limit]`、`omp web-operator taoguba following [hours] [limit]`、`omp web-operator open-post taoguba <url>` |
 | 金山文档 / KDocs / WPS 365 | `omp web-operator kdocs ask-ai <question>`、`kdocs search/open-doc/find-in-doc` |
 | ChatGPT Images / 图片生成 | `omp web-operator generate-image chatgpt "<prompt>" --out <file.png> [--json]`（前置：Chrome 已登录 ChatGPT） |
 | 图片生成队列服务 / Image Serve | `omp web-operator image-serve [--port 8320] [--out-dir DIR]`（串行任务队列 HTTP 服务：`POST /jobs` 入队、`GET /jobs/{id}` 看状态与排队位置、`DELETE /jobs/{id}` 取消、`GET /jobs/{id}/image` 取图；前置同上） |

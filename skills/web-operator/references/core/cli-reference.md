@@ -101,8 +101,9 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 
 ### Single-Platform Search
 
-- `omp web-operator search <site> "<query>" [limit] [--target TARGET]`
-  Search one supported site and return a JSON array of results.
+- `omp web-operator search <site> "<query>" [limit] [--target TARGET] [--year YYYY] [--sort hot|latest]`
+  Search one supported site and return compact JSON. `--year` and `--sort`
+  apply only to Taoguba; Taoguba requires an explicit year and defaults to hot.
   Supported sites: `baidu`, `duckduckgo`, `github`, `google`, `reddit`, `taoguba`, `weixin-sogou`, `x`, `xueqiu`.
 
   The `search` command uses positional arguments. Do not use `--platform`, `--query`, or `--limit` with `search`.
@@ -113,6 +114,7 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
   omp web-operator search baidu "AI 智能体" 5
   omp web-operator search reddit "Claude Code memory" 5
   omp web-operator search x "Claude Code" 5 --target 0
+  omp web-operator search taoguba "1112 复盘" 10 --year 2024 --sort hot
   ```
 
   Anti-examples:
@@ -128,10 +130,13 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
   Run searches on multiple platforms in parallel and return merged results.
   Supported platforms: `baidu`, `google`, `github`, `reddit`, `weixin-sogou`, `x`, `xueqiu`, `taoguba`, `duckduckgo`.
   Max 5 concurrent searches (CDP connection limit).
+  Taoguba requires `--taoguba-year YYYY` and optionally accepts
+  `--taoguba-sort hot|latest`.
 
   Example:
   ```bash
   omp web-operator search-multi --google "AI agents" --baidu "AI 智能体" --reddit "AI agents" --limit 5
+  omp web-operator search-multi --taoguba "1112 复盘" --taoguba-year 2024 --limit 5
   ```
 
   Output format:
@@ -168,6 +173,11 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 
 - `omp web-operator taoguba login [--target TARGET] [--timeout SECONDS]`
   Sign in using account credentials already stored in Chrome.
+- `omp web-operator search taoguba <query> [limit] --year YYYY [--sort hot|latest] [--target TARGET]`
+  Search logged-in discussion results for one explicit year. The workflow
+  verifies the visible year and sorting controls, defaults to hottest first,
+  follows pagination to the requested limit, and returns filter evidence plus
+  result cards in a compact JSON object.
 - `omp web-operator taoguba jinghua [hours] [limit] [target]`
   Extract Taoguba `jinghua` posts from the last 24 hours by default.
 - `omp web-operator taoguba following [hours] [limit] [target]`

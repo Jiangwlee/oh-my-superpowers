@@ -3,8 +3,8 @@
 This file describes the repeatable `tgb.cn` / Taoguba workflows bundled with
 the skill. Input is either a time-windowed list task or a single Taoguba post
 URL. Output is structured JSON from the helper scripts under
-`../../scripts/sites/taoguba/`. Public entrypoints are `jinghua.sh`,
-`following.sh`, and `open-post.sh`.
+`../../scripts/sites/taoguba/`. Public entrypoints include authenticated
+search, `jinghua.sh`, `following.sh`, and `open-post.sh`.
 
 ## Scope
 
@@ -12,7 +12,9 @@ URL. Output is structured JSON from the helper scripts under
 - Extract followed-content updates from the last 12 hours by default.
 - Open one Taoguba post and return the main post body.
 - Sign in using credentials already stored and autofilled by Chrome.
-- Do not expand pagination or follow reply floors.
+- Search discussions for one explicit year, sorted by hottest by default.
+- Search may follow result pagination up to the requested limit; list feeds do
+  not expand pagination, and post reading does not follow reply floors.
 - Do not read, persist, or print account credentials, cookies, or usernames.
 
 ## Script entrypoints
@@ -31,6 +33,11 @@ URL. Output is structured JSON from the helper scripts under
 - [../../scripts/sites/taoguba/login.sh](../../scripts/sites/taoguba/login.sh)
   Inputs: optional timeout and target prefix.
   Output: JSON object with `ok`, `site`, and `status`.
+- [../../scripts/sites/taoguba/search.sh](../../scripts/sites/taoguba/search.sh)
+  Inputs: query, optional limit, required year, optional hot/latest sort and
+  target prefix.
+  Output: compact JSON object with requested/applied filters, source and
+  timezone metadata, pagination evidence, and result cards.
 
 ## Workflow notes
 
@@ -44,3 +51,9 @@ URL. Output is structured JSON from the helper scripts under
   is present. Otherwise it opens the account-login tab, checks only whether
   Chrome autofilled both fields, submits once, and verifies the signed-in
   header. Missing autofill or interactive verification fails closed.
+- `search` fails closed unless the signed-in state, discussion content type,
+  requested year, and requested sort are all visibly confirmed. It reads only
+  `.topic_Item` cards, excluding unrelated sidebar recommendations.
+- Search result fields remain compatible with the earlier eastmoney collector:
+  title, URL, author, displayed time, abstract, likes, views, comments, rank,
+  and normalized `published_at_asia_shanghai`.

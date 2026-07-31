@@ -178,21 +178,47 @@ def search(
     query: str = typer.Argument(..., help="Search query."),
     limit: str | None = typer.Argument(None, help="Max results."),
     target: str | None = typer.Option(None, "--target", help="CDP target (page URL or index)."),
+    year: str | None = typer.Option(
+        None,
+        "--year",
+        help="Taoguba only: required four-digit result year.",
+    ),
+    sort: str | None = typer.Option(
+        None,
+        "--sort",
+        help="Taoguba only: hot or latest (default: hot).",
+    ),
 ) -> None:
-    """Search a platform (returns JSON array).
+    """Search a platform (returns JSON).
 
     Example:
         omp web-operator search google "AI agents" 10
         omp web-operator search x "Claude Code" --target 0
+        omp web-operator search taoguba "1112 复盘" 20 --year 2024 --sort hot
     """
     script = SITES_DIR / site / "search.sh"
     if not script.is_file():
         typer.echo(f"error: unknown search site '{site}'", err=True)
         raise typer.Exit(2)
+    if site != "taoguba" and (year is not None or sort is not None):
+        typer.echo(
+            '{"ok":false,"error":{"code":"unsupported_search_filter",'
+            '"message":"--year and --sort are only supported for taoguba",'
+            '"hint":"Remove these options or use site taoguba."}}',
+            err=True,
+        )
+        raise typer.Exit(2)
     cmd = ["bash", str(script), query]
     if limit:
         cmd.append(limit)
-    if target:
+    if site == "taoguba":
+        if year is not None:
+            cmd += ["--year", year]
+        if sort is not None:
+            cmd += ["--sort", sort]
+        if target:
+            cmd += ["--target", target]
+    elif target:
         cmd.append(target)
     sys.exit(subprocess.call(cmd))
 
