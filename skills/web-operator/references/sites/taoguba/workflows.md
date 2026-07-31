@@ -28,10 +28,12 @@ search, `jinghua.sh`, `following.sh`, and `open-post.sh`.
   Output: JSON array of recent followed-content updates with actor, update
   time, action, text, source post title, and URL.
 - [../../scripts/sites/taoguba/open-post.sh](../../scripts/sites/taoguba/open-post.sh)
-  Inputs: one Taoguba post URL, optional target prefix.
+  Inputs: one Taoguba post URL, optional Unicode character limit (default 500,
+  0 for full content), and optional target prefix.
   Output: compact JSON object with schema version, post ID, URL, title, author,
   displayed and Shanghai publication times, main-post content, stats, and
-  collection-source metadata.
+  collection-source metadata. Content metadata reports the full length,
+  returned length, requested limit, and whether the body was truncated.
 - [../../scripts/sites/taoguba/login.sh](../../scripts/sites/taoguba/login.sh)
   Inputs: optional timeout and target prefix.
   Output: JSON object with `ok`, `site`, and `status`.
@@ -65,3 +67,6 @@ search, `jinghua.sh`, `following.sh`, and `open-post.sh`.
 - `read` always emits one compact JSON object. It reads only the main post,
   stops before reply floors, treats post-page timestamps as `Asia/Shanghai`,
   and fails closed when login or required content is missing.
+- `read` returns at most 500 Unicode characters by default to protect agent
+  context. Use `--limit N` for a larger prefix or `--limit 0` for the full
+  main post on a deliberate second read.

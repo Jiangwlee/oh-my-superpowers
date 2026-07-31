@@ -42,6 +42,27 @@ class TaogubaReadContractTest(unittest.TestCase):
         self.assertEqual(payload["site"], "taoguba")
         self.assertEqual(payload["error"]["code"], "invalid_url")
 
+    def test_invalid_limit_is_compact_json_on_stderr(self) -> None:
+        result = subprocess.run(
+            [
+                "bash",
+                str(READ_SCRIPT),
+                "https://www.tgb.cn/a/2d85kP2xQdI",
+                "--limit",
+                "-1",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(len(result.stderr.splitlines()), 1)
+        payload = json.loads(result.stderr)
+        self.assertEqual(payload["error"]["code"], "invalid_limit")
+
     def test_public_cli_help_documents_read_command(self) -> None:
         environment = os.environ.copy()
         environment["OMP_HOME"] = str(ROOT)
@@ -57,6 +78,9 @@ class TaogubaReadContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("taoguba read", result.stdout)
         self.assertIn("main-post URL", result.stdout)
+        self.assertIn("--limit", result.stdout)
+        self.assertIn("500", result.stdout)
+        self.assertIn("0 = full", result.stdout)
         self.assertIn("--target", result.stdout)
         self.assertIn("compact JSON", result.stdout)
 
@@ -65,10 +89,8 @@ class TaogubaReadContractTest(unittest.TestCase):
         read_url_source = READ_URL_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('str(SITES_DIR / "taoguba" / "open-post.sh")', cli_source)
-        self.assertIn(
-            'scripts/sites/taoguba/open-post.sh" "$URL"',
-            read_url_source,
-        )
+        self.assertIn('scripts/sites/taoguba/open-post.sh"', read_url_source)
+        self.assertIn('taoguba_args+=(--limit "$LIMIT")', read_url_source)
 
     def test_reader_does_not_export_browser_secrets(self) -> None:
         source = READ_SCRIPT.read_text(encoding="utf-8")
@@ -79,6 +101,10 @@ class TaogubaReadContractTest(unittest.TestCase):
         self.assertNotIn("password:", source)
         self.assertIn("jq -c .", source)
         self.assertIn("published_at_asia_shanghai", source)
+        self.assertIn("content_length:", source)
+        self.assertIn("content_returned_length:", source)
+        self.assertIn("content_truncated:", source)
+        self.assertIn("content_limit:", source)
 
 
 if __name__ == "__main__":

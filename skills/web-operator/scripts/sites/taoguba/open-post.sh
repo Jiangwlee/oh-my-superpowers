@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Read one authenticated Taoguba main post and its metadata.
-# Input: a Taoguba post URL and an optional CDP target prefix.
+# Input: a Taoguba post URL, optional content limit, and optional CDP target.
 # Output: one compact JSON object with the main post, metadata, and source facts.
-# Public interface: open-post.sh <post_url> [target_prefix].
+# Public interface: open-post.sh <post_url> [--limit N] [--target TARGET].
 #
 # This is the single Taoguba post-reading implementation used by:
 # - omp web-operator taoguba read
@@ -21,9 +21,6 @@ source "${TAOGUBA_READ_DIR}/common.sh"
 
 require_cmd jq
 
-POST_URL="${1:-}"
-TARGET="${2:-}"
-
 emit_error() {
   local code="$1"
   local message="$2"
@@ -35,11 +32,66 @@ emit_error() {
     '{ok:false,site:"taoguba",error:{code:$code,message:$message,hint:$hint}}' >&2
 }
 
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  echo "usage: open-post.sh <post_url> [--limit N] [--target TARGET]" >&2
+  exit 0
+fi
+
+POST_URL="${1:-}"
+LIMIT=500
+TARGET=""
+[[ $# -gt 0 ]] && shift
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --limit)
+      if [[ $# -lt 2 ]]; then
+        emit_error \
+          "invalid_limit" \
+          "Taoguba content limit is missing" \
+          "Pass --limit 500 for a prefix or --limit 0 for the full post."
+        exit 2
+      fi
+      LIMIT="${2:-}"
+      shift 2
+      ;;
+    --target)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        emit_error \
+          "invalid_target" \
+          "Taoguba CDP target is missing" \
+          "Pass --target TARGET or omit the option for auto-discovery."
+        exit 2
+      fi
+      TARGET="${2:-}"
+      shift 2
+      ;;
+    --help|-h)
+      echo "usage: open-post.sh <post_url> [--limit N] [--target TARGET]" >&2
+      exit 0
+      ;;
+    *)
+      emit_error \
+        "invalid_argument" \
+        "Unknown Taoguba read argument: $1" \
+        "Use --limit N or --target TARGET."
+      exit 2
+      ;;
+  esac
+done
+
 [[ -n "$POST_URL" ]] || {
   emit_error \
     "missing_url" \
     "Taoguba read requires a post URL" \
     "Pass https://www.tgb.cn/a/<post-id> as the URL."
+  exit 2
+}
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || {
+  emit_error \
+    "invalid_limit" \
+    "Taoguba content limit must be a non-negative integer" \
+    "Pass --limit 500 for a prefix or --limit 0 for the full post."
   exit 2
 }
 [[ "$POST_URL" =~ ^https://www\.tgb\.cn/a/[A-Za-z0-9]+([/?#].*)?$ ]] || {
@@ -86,6 +138,7 @@ fi
 read -r -d '' READ_EXPR <<'EOF' || true
 (async () => {
   const requestedPostId = POST_ID_VALUE;
+  const requestedLimit = LIMIT_VALUE;
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   const visible = (element) =>
     Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden');
@@ -205,6 +258,12 @@ read -r -d '' READ_EXPR <<'EOF' || true
     );
   }
 
+  const contentCharacters = Array.from(content);
+  const returnedContent = requestedLimit === 0
+    ? content
+    : contentCharacters.slice(0, requestedLimit).join('');
+  const returnedContentLength = Array.from(returnedContent).length;
+
   return {
     schema_version: 1,
     ok: true,
@@ -216,7 +275,11 @@ read -r -d '' READ_EXPR <<'EOF' || true
       author: author || null,
       displayed_time: displayedTime || null,
       published_at_asia_shanghai: publishedAtShanghai,
-      content,
+      content: returnedContent,
+      content_length: contentCharacters.length,
+      content_returned_length: returnedContentLength,
+      content_truncated: returnedContentLength < contentCharacters.length,
+      content_limit: requestedLimit,
       stats: {
         likes: likesMatch ? Number(likesMatch[1]) : null,
         views: viewsMatch ? Number(viewsMatch[1]) : null,
@@ -233,6 +296,7 @@ read -r -d '' READ_EXPR <<'EOF' || true
 })()
 EOF
 READ_EXPR="${READ_EXPR/POST_ID_VALUE/$(jq -Rn --arg value "$POST_ID" '$value')}"
+READ_EXPR="${READ_EXPR/LIMIT_VALUE/${LIMIT}}"
 
 if ! READ_RESULT="$(cdp_eval "$TARGET" "$READ_EXPR" 2>/dev/null)"; then
   emit_error \

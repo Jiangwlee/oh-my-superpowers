@@ -79,7 +79,11 @@ case "$domain" in
   *xueqiu.com)
     exec bash "${SKILL}/scripts/sites/xueqiu/open-post.sh" "$URL" "$COMMENT_LIMIT" ;;
   *tgb.cn|*taoguba.com.cn)
-    exec bash "${SKILL}/scripts/sites/taoguba/open-post.sh" "$URL" ;;
+    taoguba_args=("$URL")
+    if [[ -n "$LIMIT" ]]; then
+      taoguba_args+=(--limit "$LIMIT")
+    fi
+    exec bash "${SKILL}/scripts/sites/taoguba/open-post.sh" "${taoguba_args[@]}" ;;
 esac
 
 # --- output helper -----------------------------------------------------------

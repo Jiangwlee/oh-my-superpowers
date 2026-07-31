@@ -82,7 +82,8 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
   4. **CDP fallback** → extracts `innerText` from semantic elements (`article` > `main` > `body`), stripping nav/header/footer
 
   Options:
-  - `--limit N` — truncate output to N bytes
+  - `--limit N` — truncate generic URL output to N bytes; for Taoguba URLs,
+    limit main-post content by Unicode characters (default 500, 0 = full post)
   - `--comments N` — comment count for supported sites (default 20, 0 = all)
   - `--json` — output `{title, url, domain, description, content}` JSON. Content is still markdown. Useful for ingest pipelines needing structured metadata.
 
@@ -173,10 +174,13 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 
 - `omp web-operator taoguba login [--target TARGET] [--timeout SECONDS]`
   Sign in using account credentials already stored in Chrome.
-- `omp web-operator taoguba read <url> [--target TARGET]`
+- `omp web-operator taoguba read <url> [--limit N] [--target TARGET]`
   Read one authenticated Taoguba main post and metadata as a compact JSON
   object. This is the preferred direct entrypoint; `read-url` for Taoguba URLs
-  and `open-post taoguba` reuse the same implementation.
+  and `open-post taoguba` reuse the same implementation. Main-post content is
+  limited to 500 Unicode characters by default; pass `--limit 0` for the full
+  post. The response reports `content_length`, `content_returned_length`,
+  `content_truncated`, and `content_limit`.
 - `omp web-operator search taoguba <query> [limit] --year YYYY [--sort hot|latest] [--target TARGET]`
   Search logged-in discussion results for one explicit year. The workflow
   verifies the visible year and sorting controls, defaults to hottest first,
@@ -186,7 +190,7 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
   Extract Taoguba `jinghua` posts from the last 24 hours by default.
 - `omp web-operator taoguba following [hours] [limit] [target]`
   Extract followed-content updates from the last 12 hours by default.
-- `omp web-operator open-post taoguba <url> [target]`
+- `omp web-operator open-post taoguba <url> [--target TARGET]`
   Generic compatibility entrypoint for the same Taoguba reader.
 
 ### ChatGPT Images

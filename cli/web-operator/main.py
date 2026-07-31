@@ -356,10 +356,13 @@ def open_post(
         typer.echo(f"error: unknown open-post site '{site}'", err=True)
         raise typer.Exit(2)
     cmd = ["bash", str(script), url]
-    if comment_limit:
+    if comment_limit and site != "taoguba":
         cmd.append(comment_limit)
     if target:
-        cmd.append(target)
+        if site == "taoguba":
+            cmd += ["--target", target]
+        else:
+            cmd.append(target)
     sys.exit(subprocess.call(cmd))
 
 
@@ -409,6 +412,12 @@ def taoguba_login(
 @taoguba_app.command("read")
 def taoguba_read(
     url: str = typer.Argument(..., help="Taoguba main-post URL."),
+    limit: int = typer.Option(
+        500,
+        "--limit",
+        min=0,
+        help="Maximum main-post characters (0 = full content).",
+    ),
     target: str | None = typer.Option(
         None,
         "--target",
@@ -424,9 +433,11 @@ def taoguba_read(
         "bash",
         str(SITES_DIR / "taoguba" / "open-post.sh"),
         url,
+        "--limit",
+        str(limit),
     ]
     if target:
-        cmd.append(target)
+        cmd += ["--target", target]
     sys.exit(subprocess.call(cmd))
 
 

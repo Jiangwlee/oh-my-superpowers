@@ -457,7 +457,14 @@ const tests = [
       assert(payload.ok === true && payload.site === 'taoguba', 'taoguba read should report success');
       assert(typeof payload.post?.title === 'string' && payload.post.title.length > 0, 'taoguba read should include a title');
       assert(typeof payload.post?.url === 'string' && payload.post.url.startsWith('https://www.tgb.cn/a/'), 'taoguba read should include the navigated post URL');
-      assert(typeof payload.post?.content === 'string' && payload.post.content.length > 100, 'taoguba read should include main-post content');
+      assert(
+        typeof payload.post?.content === 'string' && [...payload.post.content].length === 500,
+        'taoguba read should default to 500 Unicode characters',
+      );
+      assert(payload.post?.content_length > 500, 'taoguba read should report the full content length');
+      assert(payload.post?.content_returned_length === 500, 'taoguba read should report its returned content length');
+      assert(payload.post?.content_truncated === true, 'taoguba read should report default truncation');
+      assert(payload.post?.content_limit === 500, 'taoguba read should report the requested content limit');
       assert(
         payload.post?.published_at_asia_shanghai?.endsWith('+08:00'),
         'taoguba read should normalize publication time to Asia/Shanghai',
@@ -467,7 +474,11 @@ const tests = [
         command: openRun.result.command,
         commands: [openRun.result.command],
         stdout_excerpt: openRun.result.stdout.slice(0, 400),
-        data: { url: payload.post.url, content_length: payload.post.content.length },
+        data: {
+          url: payload.post.url,
+          content_length: payload.post.content_length,
+          content_returned_length: payload.post.content_returned_length,
+        },
       };
     },
   },
