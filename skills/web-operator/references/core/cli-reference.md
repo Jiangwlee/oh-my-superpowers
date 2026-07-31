@@ -166,6 +166,8 @@ All browser actions route through `omp web-operator`. The underlying CDP engine 
 
 ### Taoguba
 
+- `omp web-operator taoguba login [--target TARGET] [--timeout SECONDS]`
+  Sign in using account credentials already stored in Chrome.
 - `omp web-operator taoguba jinghua [hours] [limit] [target]`
   Extract Taoguba `jinghua` posts from the last 24 hours by default.
 - `omp web-operator taoguba following [hours] [limit] [target]`

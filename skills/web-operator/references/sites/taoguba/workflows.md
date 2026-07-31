@@ -11,7 +11,9 @@ URL. Output is structured JSON from the helper scripts under
 - Extract `jinghua` posts from the last 24 hours by default.
 - Extract followed-content updates from the last 12 hours by default.
 - Open one Taoguba post and return the main post body.
+- Sign in using credentials already stored and autofilled by Chrome.
 - Do not expand pagination or follow reply floors.
+- Do not read, persist, or print account credentials, cookies, or usernames.
 
 ## Script entrypoints
 
@@ -26,6 +28,9 @@ URL. Output is structured JSON from the helper scripts under
 - [../../scripts/sites/taoguba/open-post.sh](../../scripts/sites/taoguba/open-post.sh)
   Inputs: one Taoguba post URL, optional target prefix.
   Output: JSON object with title, author, publish time, stats, text, and URL.
+- [../../scripts/sites/taoguba/login.sh](../../scripts/sites/taoguba/login.sh)
+  Inputs: optional timeout and target prefix.
+  Output: JSON object with `ok`, `site`, and `status`.
 
 ## Workflow notes
 
@@ -35,3 +40,7 @@ URL. Output is structured JSON from the helper scripts under
   `跟帖了` or `发布了`.
 - Taoguba pages can keep loading after the visible content is ready, so the
   scripts use tolerant navigation plus explicit waits on visible text.
+- `login` is idempotent: it returns `already_logged_in` when a signed-in header
+  is present. Otherwise it opens the account-login tab, checks only whether
+  Chrome autofilled both fields, submits once, and verifies the signed-in
+  header. Missing autofill or interactive verification fails closed.

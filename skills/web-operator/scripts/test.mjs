@@ -82,6 +82,8 @@ function isSetupIssue(text) {
     /could not connect/i,
     /failed to fetch/i,
     /websocket/i,
+    /credentials_not_autofilled/i,
+    /verification_required/i,
   ].some((pattern) => pattern.test(text));
 }
 
@@ -343,6 +345,34 @@ const tests = [
         commands: [searchRun.result.command, openRun.result.command],
         stdout_excerpt: openRun.result.stdout.slice(0, 400),
         data: { url: post.url, comment_count: post.comments.length },
+      };
+    },
+  },
+  {
+    name: 'site.taoguba.login.smoke',
+    scope: 'site',
+    site: 'taoguba',
+    workflow: 'login',
+    level: 'smoke',
+    setupHint: 'Save Taoguba account credentials in the CDP Chrome profile before running this smoke test.',
+    failHint: 'Check scripts/sites/taoguba/login.sh and references/sites/taoguba/workflows.md.',
+    async run() {
+      const script = resolve(SITE_SCRIPTS_DIR, 'taoguba', 'login.sh');
+      const { result, value } = await runJsonCommand('bash', [script, '15'], 30000);
+      assert(value && typeof value === 'object' && !Array.isArray(value), 'taoguba login should return a JSON object');
+      assert(value.ok === true, 'taoguba login should report success');
+      assert(
+        value.status === 'logged_in' || value.status === 'already_logged_in',
+        'taoguba login should return a stable success status',
+      );
+      assert(!Object.hasOwn(value, 'username'), 'taoguba login must not return a username');
+      assert(!Object.hasOwn(value, 'password'), 'taoguba login must not return a password');
+      return {
+        status: 'pass',
+        command: result.command,
+        commands: [result.command],
+        stdout_excerpt: result.stdout.slice(0, 400),
+        data: { status: value.status },
       };
     },
   },

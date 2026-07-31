@@ -350,6 +350,36 @@ taoguba_app = typer.Typer(
 app.add_typer(taoguba_app, name="taoguba")
 
 
+@taoguba_app.command("login")
+def taoguba_login(
+    target: str | None = typer.Option(
+        None,
+        "--target",
+        help="CDP target prefix; auto-discovered if omitted.",
+    ),
+    timeout: int = typer.Option(
+        15,
+        "--timeout",
+        min=1,
+        max=60,
+        help="Seconds to wait for autofill and login confirmation.",
+    ),
+) -> None:
+    """Sign in with Taoguba credentials already stored in Chrome.
+
+    Example:
+        omp web-operator taoguba login
+    """
+    cmd = [
+        "bash",
+        str(SITES_DIR / "taoguba" / "login.sh"),
+        str(timeout),
+    ]
+    if target:
+        cmd.append(target)
+    sys.exit(subprocess.call(cmd))
+
+
 @taoguba_app.command()
 def jinghua(
     hours: str | None = typer.Option(None, "--hours", help="Hours to look back."),
