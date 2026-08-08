@@ -1,10 +1,8 @@
 ---
 name: debug-issues
 description: >-
-  Systematic debugging for failing tests, runtime errors, and unexpected
-  behavior. Use when investigating bugs, finding root causes, or before
-  attempting fixes. Do NOT use for feature design, task orchestration, or
-  speculative rewrites.
+  Use when investigating bugs, finding bug root causes, or before attempting fixes. 
+  Do NOT use for feature design, review, task orchestration, or speculative rewrites.
 ---
 
 # Debug Issues
